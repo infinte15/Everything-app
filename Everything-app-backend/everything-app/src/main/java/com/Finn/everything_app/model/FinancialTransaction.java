@@ -34,8 +34,8 @@ public class FinancialTransaction {
 
     private String paymentMethod;
 
-    @ElementCollection
-    private List<String> tags;
+    //@ElementCollection
+   // private List<String> tags;
 }
 
 enum TransactionType {
