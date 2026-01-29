@@ -48,6 +48,3 @@ public class CalendarEvent {
     private String notes;
 }
 
-enum EventType {
-    TASK, HABIT, WORKOUT, CLASS, FIXED, OTHER
-}

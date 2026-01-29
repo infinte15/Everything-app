@@ -58,10 +58,3 @@ public class Task {
     }
 }
 
-enum TaskStatus {
-    OPEN, IN_PROGRESS, COMPLETED, CANCELLED
-}
-
-enum SpaceType {
-    STUDY, SPORTS, TASKS, RECIPES, FINANCE
-}

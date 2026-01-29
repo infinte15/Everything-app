@@ -4,6 +4,7 @@ import jakarta.persistence.*;
 import lombok.Data;
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.util.List;
 
 @Entity
 @Table(name = "financial_transactions")
@@ -34,10 +35,7 @@ public class FinancialTransaction {
 
     private String paymentMethod;
 
-    //@ElementCollection
-   // private List<String> tags;
+    @ElementCollection
+   private List<String> tags;
 }
 
-enum TransactionType {
-    INCOME, EXPENSE
-}

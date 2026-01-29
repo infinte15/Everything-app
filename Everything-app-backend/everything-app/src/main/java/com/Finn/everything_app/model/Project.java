@@ -41,6 +41,3 @@ public class Project {
     private Integer tasksCompleted;
 }
 
-enum ProjectStatus {
-    PLANNING, IN_PROGRESS, ON_HOLD, COMPLETED
-}
