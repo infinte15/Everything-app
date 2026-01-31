@@ -41,8 +41,3 @@ public class UserPreferences {
     private Boolean darkMode;
 }
 
-enum ProductivityPeakTime {
-    MORNING,
-    AFTERNOON,
-    EVENING
-}
