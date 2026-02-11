@@ -55,16 +55,6 @@ public class RecipeController {
         );
     }
 
-    @GetMapping("/cuisine/{cuisine}")
-    public ResponseEntity<List<RecipeDTO>> getRecipesByCuisine(
-            @CurrentUser Long userId,
-            @PathVariable String cuisine) {
-
-        List<Recipe> recipes = recipeService.getRecipesByCuisine(userId, cuisine);
-        return ResponseEntity.ok(
-                recipes.stream().map(recipeMapper::toDTO).collect(Collectors.toList())
-        );
-    }
 
 
     @GetMapping("/favorites")
@@ -182,7 +172,7 @@ public class RecipeController {
         );
     }
 
-    /
+
     @PostMapping("/meal-plan/generate")
     public ResponseEntity<List<MealPlanDTO>> generateWeeklyMealPlan(
             @CurrentUser Long userId,

@@ -195,15 +195,6 @@ public class SportsController {
     }
 
 
-    @GetMapping("/exercises/equipment/{equipment}")
-    public ResponseEntity<List<ExerciseDTO>> getExercisesByEquipment(@PathVariable String equipment) {
-        List<Exercise> exercises = exerciseService.getExercisesByEquipment(equipment);
-        return ResponseEntity.ok(
-                exercises.stream().map(exerciseMapper::toDTO).collect(Collectors.toList())
-        );
-    }
-
-
     @PostMapping("/exercises")
     public ResponseEntity<ExerciseDTO> createExercise(
             @CurrentUser Long userId,

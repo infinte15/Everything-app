@@ -54,7 +54,7 @@ public class User {
     private List<Recipe> recipes;
 
     @OneToMany(mappedBy = "user", cascade = CascadeType.ALL)
-    private List<FinancialTransaction> financialTransactions;
+    private List<FinanceTransaction> financialTransactions;
 
     @OneToOne(mappedBy = "user", cascade = CascadeType.ALL)
     private UserPreferences preferences;

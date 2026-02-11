@@ -3,7 +3,7 @@ package com.Finn.everything_app.controller;
 import com.Finn.everything_app.dto.*;
 import com.Finn.everything_app.mapper.*;
 import com.Finn.everything_app.model.*;
-import com.Finn.everything_app.model.security.CurrentUser;
+import com.Finn.everything_app.security.CurrentUser;
 import com.Finn.everything_app.service.*;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;

@@ -68,7 +68,7 @@ public class BudgetCategory {
     private User user;
 
     @OneToMany(mappedBy = "budgetCategory", cascade = CascadeType.ALL)
-    private List<FinancialTransaction> transactions;
+    private List<FinanceTransaction> transactions;
 
     @PrePersist
     protected void onCreate() {
