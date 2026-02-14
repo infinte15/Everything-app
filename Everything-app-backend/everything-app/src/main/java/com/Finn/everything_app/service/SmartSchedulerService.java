@@ -69,7 +69,7 @@ public class SmartSchedulerService {
         input.setTasks(taskService.getUnscheduledTasks(userId));                                                                                                                //Uneingeplante Tasks
         input.setFixedEvents(calendarEventService.getFixedEvents(userId, start, end));                                                                                          //Fixe Events
         input.setHabits(habitRepository.findActiveHabits(userId,startDate));                                                                                                    //Habits
-        input.setWorkouts(workoutSessionRepository.findByUserIdAndScheduledDateTimeBetween(userId, start, end));                                                                //Workouts
+        input.setWorkouts(workoutSessionRepository.findByUserIdAndStartTimeBetween(userId, start, end));                                                                //Workouts
         input.setCourseSchedules(courseScheduleRepository.findByUserId(userId));                                                                                                //Kurse
 
         log.debug("Input gesammelt: {} Tasks, {} fixe Events, {} Habits, {} Workouts, {} Kurse",

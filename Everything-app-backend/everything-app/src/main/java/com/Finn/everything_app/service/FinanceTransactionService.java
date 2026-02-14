@@ -35,7 +35,7 @@ public class FinanceTransactionService {
     }
 
     public List<FinanceTransaction> getUserTransactions(Long userId) {
-        return transactionRepository.findByUserIdOrderByDateDesc(userId);
+        return transactionRepository.findByUserIdOrderByTransactionDateDesc(userId);
     }
 
     public FinanceTransaction getTransactionById(Long id) {
@@ -44,11 +44,11 @@ public class FinanceTransactionService {
     }
 
     public List<FinanceTransaction> getTransactionsInDateRange(Long userId, LocalDate start, LocalDate end) {
-        return transactionRepository.findByUserIdAndDateBetween(userId, start, end);
+        return transactionRepository.findByUserIdAndTransactionDateBetween(userId, start, end);
     }
 
     public List<FinanceTransaction> getTransactionsByType(Long userId, String type) {
-        return transactionRepository.findByUserIdAndType(userId, TransactionType.valueOf(type));
+        return transactionRepository.findByUserIdAndType(userId, String.valueOf(TransactionType.valueOf(type)));
     }
 
     public List<FinanceTransaction> getTransactionsByCategory(Long userId, String category) {

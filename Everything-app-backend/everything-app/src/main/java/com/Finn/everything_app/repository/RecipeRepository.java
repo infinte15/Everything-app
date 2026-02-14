@@ -16,32 +16,17 @@ public interface RecipeRepository extends JpaRepository<Recipe, Long> {
     // Rezepte nach Name
     List<Recipe> findByUserIdAndNameContainingIgnoreCase(Long userId, String name);
 
-    // Rezepte nach Tag
-    @Query("SELECT r FROM Recipe r JOIN r.tags t " +
-            "WHERE r.user.id = :userId AND t = :tag")
-    List<Recipe> findByUserIdAndTag(
-            @Param("userId") Long userId,
-            @Param("tag") String tag
-    );
-
+    // Rezepte nach Kategorie
     List<Recipe> findByUserIdAndCategory(Long userId, String category);
+
+    // Favoriten
+    List<Recipe> findByUserIdAndIsFavoriteTrue(Long userId);
 
     // Rezepte nach Zubereitungszeit
     @Query("SELECT r FROM Recipe r " +
             "WHERE r.user.id = :userId " +
             "ORDER BY (r.prepTimeMinutes + r.cookTimeMinutes) ASC")
     List<Recipe> findByUserIdOrderByTotalTimeAsc(@Param("userId") Long userId);
-
-    List<Recipe> findByUserIdAndIsFavoriteTrue(Long userId);
-
-    // Rezepte nach Rating
-    List<Recipe> findByUserIdOrderByRatingDesc(Long userId);
-
-    // Rezepte mit Bild
-    @Query("SELECT r FROM Recipe r " +
-            "WHERE r.user.id = :userId " +
-            "AND r.imageUrl IS NOT NULL")
-    List<Recipe> findRecipesWithImages(@Param("userId") Long userId);
 
     // Schnelle Rezepte
     @Query("SELECT r FROM Recipe r " +
@@ -52,16 +37,8 @@ public interface RecipeRepository extends JpaRepository<Recipe, Long> {
             @Param("maxMinutes") Integer maxMinutes
     );
 
-    List<Recipe> findByUserIdAndNameContaining(Long userId, String query);
-
-    List<Recipe> findByUserIdAndPrepTimeMinutesLessThanEqual(Long userId, Integer maxTime);
-
-    List<Recipe> findByUserIdAndDifficulty(Long userId, String difficulty);
-
-    List<Recipe> findByUserIdAndCaloriesLessThanEqual(Long userId, Integer maxCalories);
-
-    // Rezepte nach Portionen
-    List<Recipe> findByUserIdAndServings(Long userId, Integer servings);
+    // Rezepte nach Name erstellt
+    List<Recipe> findByUserIdOrderByCreatedAtDesc(Long userId);
 
     // Alphabetisch sortiert
     List<Recipe> findByUserIdOrderByNameAsc(Long userId);

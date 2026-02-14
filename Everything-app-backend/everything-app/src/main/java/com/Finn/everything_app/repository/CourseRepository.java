@@ -15,19 +15,13 @@ public interface CourseRepository extends JpaRepository<Course, Long> {
     List<Course> findByUserId(Long userId);
 
     // Kurs nach Code
-    Optional<Course> findByUserIdAndCourseCode(Long userId, String courseCode);
+    Optional<Course> findByUserIdAndCode(Long userId, String code);
 
     // Kurse nach Name
     List<Course> findByUserIdAndNameContainingIgnoreCase(Long userId, String name);
 
     // Kurse mit Professor
-    List<Course> findByUserIdAndProfessor(Long userId, String professor);
-
-    // Aktive Kurse
-    @Query("SELECT DISTINCT c FROM Course c " +
-            "JOIN c.schedules s " +
-            "WHERE c.user.id = :userId")
-    List<Course> findActiveCourses(@Param("userId") Long userId);
+    List<Course> findByUserIdAndInstructor(Long userId, String instructor);
 
     // Kurse alphabetisch
     List<Course> findByUserIdOrderByNameAsc(Long userId);

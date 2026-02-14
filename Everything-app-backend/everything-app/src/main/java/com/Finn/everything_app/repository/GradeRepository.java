@@ -20,10 +20,10 @@ public interface GradeRepository extends JpaRepository<Grade, Long> {
     List<Grade> findByUserIdAndCourseId(Long userId, Long courseId);
 
     // Noten chronologisch
-    List<Grade> findByUserIdOrderByDateDesc(Long userId);
+    List<Grade> findByUserIdOrderByExamDateDesc(Long userId);
 
     // Durchschnitt berechnen (gewichtet)
-    @Query("SELECT SUM(g.score * g.weight) / SUM(g.weight) " +
+    @Query("SELECT SUM(g.grade * g.weight) / SUM(g.weight) " +
             "FROM Grade g " +
             "WHERE g.course.id = :courseId")
     Double calculateWeightedAverage(@Param("courseId") Long courseId);
@@ -33,11 +33,11 @@ public interface GradeRepository extends JpaRepository<Grade, Long> {
     Double getTotalWeight(@Param("courseId") Long courseId);
 
     // Beste Note
-    @Query("SELECT MIN(g.score) FROM Grade g WHERE g.course.id = :courseId")
+    @Query("SELECT MIN(g.grade) FROM Grade g WHERE g.course.id = :courseId")
     Double getBestGrade(@Param("courseId") Long courseId);
 
     // Schlechteste Note
-    @Query("SELECT MAX(g.score) FROM Grade g WHERE g.course.id = :courseId")
+    @Query("SELECT MAX(g.grade) FROM Grade g WHERE g.course.id = :courseId")
     Double getWorstGrade(@Param("courseId") Long courseId);
 
     // Noten pro Kurs

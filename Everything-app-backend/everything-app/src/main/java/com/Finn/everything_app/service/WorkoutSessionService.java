@@ -55,7 +55,7 @@ public class WorkoutSessionService {
         LocalDateTime startDateTime = start.atStartOfDay();
         LocalDateTime endDateTime = end.atTime(23, 59, 59);
 
-        return workoutSessionRepository.findByUserIdAndScheduledDateTimeBetween(userId, startDateTime, endDateTime);
+        return workoutSessionRepository.findByUserIdAndStartTimeBetween(userId, startDateTime, endDateTime);
     }
 
     @Transactional

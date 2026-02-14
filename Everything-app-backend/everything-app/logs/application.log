@@ -1,0 +1,22 @@
+2026-02-14 10:30:58 [main] INFO  c.F.e.EverythingAppApplicationTests - Starting EverythingAppApplicationTests using Java 17.0.18 with PID 10308 (started by finn in /home/finn/Dokumente/Projekte/Everything-app/Everything-app-backend/everything-app)
+2026-02-14 10:30:58 [main] DEBUG c.F.e.EverythingAppApplicationTests - Running with Spring Boot v3.2.0, Spring v6.1.1
+2026-02-14 10:30:58 [main] INFO  c.F.e.EverythingAppApplicationTests - The following 1 profile is active: "development"
+2026-02-14 10:30:58 [main] INFO  o.s.d.r.c.RepositoryConfigurationDelegate - Bootstrapping Spring Data JPA repositories in DEFAULT mode.
+2026-02-14 10:30:59 [main] INFO  o.s.d.r.c.RepositoryConfigurationDelegate - Finished Spring Data repository scanning in 51 ms. Found 21 JPA repository interfaces.
+2026-02-14 10:30:59 [main] INFO  o.h.jpa.internal.util.LogHelper - HHH000204: Processing PersistenceUnitInfo [name: default]
+2026-02-14 10:30:59 [main] INFO  org.hibernate.Version - HHH000412: Hibernate ORM core version 6.3.1.Final
+2026-02-14 10:30:59 [main] INFO  o.h.c.i.RegionFactoryInitiator - HHH000026: Second-level cache disabled
+2026-02-14 10:30:59 [main] INFO  o.s.o.j.p.SpringPersistenceUnitInfo - No LoadTimeWeaver setup: ignoring JPA class transformer
+2026-02-14 10:30:59 [main] INFO  com.zaxxer.hikari.HikariDataSource - HikariPool-1 - Starting...
+2026-02-14 10:30:59 [main] INFO  com.zaxxer.hikari.pool.HikariPool - HikariPool-1 - Added connection org.postgresql.jdbc.PgConnection@3355168
+2026-02-14 10:30:59 [main] INFO  com.zaxxer.hikari.HikariDataSource - HikariPool-1 - Start completed.
+2026-02-14 10:30:59 [main] WARN  org.hibernate.orm.deprecation - HHH90000025: PostgreSQLDialect does not need to be specified explicitly using 'hibernate.dialect' (remove the property setting and it will be selected by default)
+2026-02-14 10:31:00 [main] INFO  o.h.e.t.j.p.i.JtaPlatformInitiator - HHH000489: No JTA platform available (set 'hibernate.transaction.jta.platform' to enable JTA platform integration)
+2026-02-14 10:31:00 [main] INFO  o.s.o.j.LocalContainerEntityManagerFactoryBean - Initialized JPA EntityManagerFactory for persistence unit 'default'
+2026-02-14 10:31:01 [main] INFO  o.s.d.j.r.query.QueryEnhancerFactory - Hibernate is in classpath; If applicable, HQL parser will be used.
+2026-02-14 10:31:02 [main] WARN  o.s.b.a.o.j.JpaBaseConfiguration$JpaWebConfiguration - spring.jpa.open-in-view is enabled by default. Therefore, database queries may be performed during view rendering. Explicitly configure spring.jpa.open-in-view to disable this warning
+2026-02-14 10:31:02 [main] INFO  o.s.s.web.DefaultSecurityFilterChain - Will secure any request with [org.springframework.security.web.session.DisableEncodeUrlFilter@1ffed69a, org.springframework.security.web.context.request.async.WebAsyncManagerIntegrationFilter@158a50a1, org.springframework.security.web.context.SecurityContextHolderFilter@3b6b0bf4, org.springframework.security.web.header.HeaderWriterFilter@17a2d74c, org.springframework.web.filter.CorsFilter@47b0bffc, org.springframework.security.web.authentication.logout.LogoutFilter@7e6565c9, com.Finn.everything_app.security.JwtAuthenticationFilter@3b9d85c2, org.springframework.security.web.savedrequest.RequestCacheAwareFilter@556f00f1, org.springframework.security.web.servletapi.SecurityContextHolderAwareRequestFilter@fb8adcf, org.springframework.security.web.authentication.AnonymousAuthenticationFilter@6ae0e411, org.springframework.security.web.session.SessionManagementFilter@698dd40c, org.springframework.security.web.access.ExceptionTranslationFilter@40d4d0fe, org.springframework.security.web.access.intercept.AuthorizationFilter@36e7932f]
+2026-02-14 10:31:02 [main] INFO  c.F.e.EverythingAppApplicationTests - Started EverythingAppApplicationTests in 4.364 seconds (process running for 4.961)
+2026-02-14 10:31:03 [SpringApplicationShutdownHook] INFO  o.s.o.j.LocalContainerEntityManagerFactoryBean - Closing JPA EntityManagerFactory for persistence unit 'default'
+2026-02-14 10:31:03 [SpringApplicationShutdownHook] INFO  com.zaxxer.hikari.HikariDataSource - HikariPool-1 - Shutdown initiated...
+2026-02-14 10:31:03 [SpringApplicationShutdownHook] INFO  com.zaxxer.hikari.HikariDataSource - HikariPool-1 - Shutdown completed.

@@ -49,6 +49,9 @@ public class WorkoutSession {
     @Column(name = "created_at")
     private LocalDateTime createdAt;
 
+    @Column(name = "completed_at")
+    private LocalDateTime completedAt;
+
     @Column(name = "updated_at")
     private LocalDateTime updatedAt;
 
@@ -63,6 +66,15 @@ public class WorkoutSession {
 
     @OneToMany(mappedBy = "workoutSession", cascade = CascadeType.ALL, orphanRemoval = true)
     private List<ExerciseSet> exerciseSets;
+
+    @Column(name = "scheduled_date_time")
+    private LocalDateTime scheduledDateTime;
+
+    @Column(name = "actual_duration_minutes")
+    private Integer actualDurationMinutes;
+
+    @Column(name = "distance_km")
+    private Double distanceKm;
 
     @PrePersist
     protected void onCreate() {
