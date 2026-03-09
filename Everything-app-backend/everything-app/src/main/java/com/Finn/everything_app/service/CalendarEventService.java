@@ -5,6 +5,8 @@ import com.Finn.everything_app.repository.*;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.context.ApplicationEventPublisher;
+import com.Finn.everything_app.event.ScheduleChangedEvent;
 import java.time.LocalDateTime;
 import java.util.List;
 
@@ -19,7 +21,7 @@ public class CalendarEventService {
     private final TaskRepository taskRepository;
     private final HabitRepository habitRepository;
     private final WorkoutSessionRepository workoutSessionRepository;
-
+    private final ApplicationEventPublisher eventPublisher;
 
     public List<CalendarEvent> getEventsInRange(Long userId, LocalDateTime start, LocalDateTime end) {
         return calendarEventRepository.findByUserIdAndStartTimeBetween(userId, start, end);
@@ -49,7 +51,9 @@ public class CalendarEventService {
             event.setEventType(EventType.OTHER);
         }
 
-        return calendarEventRepository.save(event);
+        CalendarEvent savedEvent = calendarEventRepository.save(event);
+        eventPublisher.publishEvent(new ScheduleChangedEvent(this, userId));
+        return savedEvent;
     }
 
     public CalendarEvent getEventById(Long id) {
@@ -89,13 +93,22 @@ public class CalendarEventService {
             event.setNotes(updatedEvent.getNotes());
         }
 
-        return calendarEventRepository.save(event);
+        // Wenn ein Task manuell aktualisiert (verschoben) wird, pinnen wir ihn
+        if (event.getEventType() == EventType.TASK) {
+            event.setIsFixed(true);
+        }
+
+        CalendarEvent savedEvent = calendarEventRepository.save(event);
+        eventPublisher.publishEvent(new ScheduleChangedEvent(this, event.getUser().getId()));
+        return savedEvent;
     }
 
     @Transactional
     public void deleteEvent(Long id) {
         CalendarEvent event = getEventById(id);
+        Long userId = event.getUser().getId();
         calendarEventRepository.delete(event);
+        eventPublisher.publishEvent(new ScheduleChangedEvent(this, userId));
     }
 
     @Transactional
@@ -160,9 +173,10 @@ public class CalendarEventService {
 
     @Transactional
     public void clearScheduledEvents(Long userId) {
-        List<CalendarEvent> events = calendarEventRepository.findByUserIdAndEventType(
+        List<CalendarEvent> events = calendarEventRepository.findByUserIdAndEventTypeAndIsFixed(
                 userId,
-                EventType.TASK
+                EventType.TASK,
+                false
         );
         calendarEventRepository.deleteAll(events);
     }

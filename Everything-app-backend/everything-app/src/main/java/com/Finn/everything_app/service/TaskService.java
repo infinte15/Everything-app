@@ -8,6 +8,8 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Repository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.context.ApplicationEventPublisher;
+import com.Finn.everything_app.event.ScheduleChangedEvent;
 import java.time.LocalDateTime;
 import java.util.List;
 
@@ -17,6 +19,7 @@ import java.util.List;
 public class TaskService {
     private final TaskRepository taskRepository;
     private final UserService userService;
+    private final ApplicationEventPublisher eventPublisher;
 
     public List<Task> getAllUserTasks(Long userId) {
         return taskRepository.findByUserId(userId);
@@ -27,7 +30,7 @@ public class TaskService {
     }
 
     public List<Task> getUnscheduledTasks(Long userId) {
-        return taskRepository.findByUserIdAndScheduledStartTimeIsNull(userId);
+        return taskRepository.findTasksForAutoScheduling(userId);
     }
 
     public Task getTaskById(Long id) {
@@ -55,7 +58,9 @@ public class TaskService {
             task.setEstimatedDurationMinutes(60);  // Standard
         }
 
-        return taskRepository.save(task);
+        Task savedTask = taskRepository.save(task);
+        eventPublisher.publishEvent(new ScheduleChangedEvent(this, userId));
+        return savedTask;
     }
 
     @Transactional
@@ -83,7 +88,9 @@ public class TaskService {
 
         existing.setUpdatedAt(LocalDateTime.now());
 
-        return taskRepository.save(existing);
+        Task savedTask = taskRepository.save(existing);
+        eventPublisher.publishEvent(new ScheduleChangedEvent(this, existing.getUser().getId()));
+        return savedTask;
     }
 
     @Transactional
@@ -91,15 +98,18 @@ public class TaskService {
         Task task = getTaskById(taskId);
         task.setStatus(TaskStatus.COMPLETED);
         task.setCompletedAt(LocalDateTime.now());
-        return taskRepository.save(task);
+        Task savedTask = taskRepository.save(task);
+        eventPublisher.publishEvent(new ScheduleChangedEvent(this, task.getUser().getId()));
+        return savedTask;
     }
 
     @Transactional
     public void deleteTask(Long taskId) {
-        if (!taskRepository.existsById(taskId)) {
-            throw new RuntimeException("Task nicht gefunden");
-        }
+        Task task = taskRepository.findById(taskId)
+                .orElseThrow(() -> new RuntimeException("Task nicht gefunden"));
+        Long userId = task.getUser().getId();
         taskRepository.deleteById(taskId);
+        eventPublisher.publishEvent(new ScheduleChangedEvent(this, userId));
     }
 
     @Transactional

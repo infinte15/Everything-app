@@ -87,8 +87,7 @@ class CalendarProvider with ChangeNotifier {
       final created = await _calendarService.createEvent(event);
       
       if (created != null) {
-        _events.add(created);
-        notifyListeners();
+        await loadEventsForMonth(_focusedDay);
         return true;
       }
       return false;
@@ -105,11 +104,7 @@ class CalendarProvider with ChangeNotifier {
       final updated = await _calendarService.updateEvent(event);
       
       if (updated != null) {
-        final index = _events.indexWhere((e) => e.id == event.id);
-        if (index != -1) {
-          _events[index] = updated;
-          notifyListeners();
-        }
+        await loadEventsForMonth(_focusedDay);
         return true;
       }
       return false;
@@ -126,8 +121,7 @@ class CalendarProvider with ChangeNotifier {
       final success = await _calendarService.deleteEvent(id);
       
       if (success) {
-        _events.removeWhere((e) => e.id == id);
-        notifyListeners();
+        await loadEventsForMonth(_focusedDay);
         return true;
       }
       return false;

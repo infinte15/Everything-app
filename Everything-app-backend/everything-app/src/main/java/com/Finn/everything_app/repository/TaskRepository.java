@@ -28,6 +28,9 @@ public interface TaskRepository extends JpaRepository<Task, Long> {
     //  ungeplante Tasks
     List<Task> findByUserIdAndScheduledStartTimeIsNull(Long userId);
 
+    @Query("SELECT t FROM Task t WHERE t.user.id = :userId AND t.status = 'TODO' AND NOT EXISTS (SELECT e FROM CalendarEvent e WHERE e.relatedTask = t AND e.isFixed = true)")
+    List<Task> findTasksForAutoScheduling(@Param("userId") Long userId);
+
     // Custom JPQL Query
     @Query("SELECT t FROM Task t WHERE t.user.id = :userId " +
             "AND t.status = :status " +

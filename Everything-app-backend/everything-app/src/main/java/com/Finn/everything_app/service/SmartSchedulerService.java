@@ -6,6 +6,8 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.context.event.EventListener;
+import com.Finn.everything_app.event.ScheduleChangedEvent;
 
 import java.sql.Time;
 import java.time.LocalDate;
@@ -31,6 +33,14 @@ public class SmartSchedulerService {
     private final UserService userService;
     private final CalendarEventService calendarEventService;
     private final TaskService taskService;
+
+    @EventListener
+    public void onScheduleChanged(ScheduleChangedEvent event) {
+        log.info("ScheduleChangedEvent empfangen für User {}", event.getUserId());
+        LocalDate start = LocalDate.now();
+        LocalDate end = start.plusDays(14); // Next 14 days
+        generateOptimalSchedule(event.getUserId(), start, end);
+    }
 
     @Transactional
     public ScheduleResult generateOptimalSchedule(Long userId, LocalDate startDate, LocalDate endDate){

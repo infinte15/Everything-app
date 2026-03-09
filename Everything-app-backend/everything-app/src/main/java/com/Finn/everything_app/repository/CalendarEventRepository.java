@@ -39,4 +39,7 @@ public interface CalendarEventRepository extends JpaRepository<CalendarEvent, Lo
 
     // Events nach Typ
     List<CalendarEvent> findByUserIdAndEventType(Long userId, EventType eventType);
+
+    // Events nach Typ und isFixed Status (für Auto-Scheduling)
+    List<CalendarEvent> findByUserIdAndEventTypeAndIsFixed(Long userId, EventType eventType, Boolean isFixed);
 }
