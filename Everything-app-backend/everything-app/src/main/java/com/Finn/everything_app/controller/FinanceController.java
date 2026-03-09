@@ -44,6 +44,14 @@ public class FinanceController {
         return ResponseEntity.ok(transactionMapper.toDTO(transaction));
     }
 
+    @GetMapping("/contracts")
+    public ResponseEntity<List<FinanceTransactionDTO>> getContracts(@CurrentUser Long userId) {
+        List<FinanceTransaction> contracts = transactionService.getContracts(userId);
+        return ResponseEntity.ok(
+                contracts.stream().map(transactionMapper::toDTO).collect(Collectors.toList())
+        );
+    }
+
 
     @GetMapping("/transactions/date-range")
     public ResponseEntity<List<FinanceTransactionDTO>> getTransactionsByDateRange(

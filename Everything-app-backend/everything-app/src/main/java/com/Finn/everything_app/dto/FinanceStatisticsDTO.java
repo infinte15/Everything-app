@@ -12,6 +12,8 @@ public class FinanceStatisticsDTO {
     private Double totalIncome;
     private Double totalExpenses;
     private Double netBalance;
+    private Double disposableIncome;
+    private Double totalFixedCosts;
 
     private Double monthlyIncome;
     private Double monthlyExpenses;

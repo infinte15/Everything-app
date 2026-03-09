@@ -55,6 +55,12 @@ public class FinanceTransactionService {
         return transactionRepository.findByUserIdAndCategory(userId, category);
     }
 
+    public List<FinanceTransaction> getContracts(Long userId) {
+        return getUserTransactions(userId).stream()
+                .filter(t -> "AUSGABE".equals(t.getType()) && Boolean.TRUE.equals(t.getIsRecurring()))
+                .collect(Collectors.toList());
+    }
+
     public List<FinanceTransaction> searchTransactions(Long userId, String query) {
         return transactionRepository.findByUserIdAndTag(userId, query);
     }
@@ -169,6 +175,13 @@ public class FinanceTransactionService {
 
         double monthlySavings = monthlyIncome - monthlyExpenses;
 
+        double totalFixedCosts = monthTransactions.stream()
+                .filter(t -> "AUSGABE".equals(t.getType()) && Boolean.TRUE.equals(t.getIsRecurring()))
+                .mapToDouble(FinanceTransaction::getAmount)
+                .sum();
+
+        double disposableIncome = monthlyIncome - totalFixedCosts;
+
         Map<String, Double> expensesByCategory = monthTransactions.stream()
                 .filter(t -> "AUSGABE".equals(t.getType()))
                 .collect(Collectors.groupingBy(
@@ -184,6 +197,8 @@ public class FinanceTransactionService {
         stats.setMonthlySavings(monthlySavings);
         stats.setExpensesByCategory(expensesByCategory);
         stats.setAverageDailyExpenses(averageDailyExpenses);
+        stats.setTotalFixedCosts(totalFixedCosts);
+        stats.setDisposableIncome(disposableIncome);
 
         return stats;
     }
