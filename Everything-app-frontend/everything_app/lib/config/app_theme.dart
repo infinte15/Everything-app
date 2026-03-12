@@ -10,7 +10,7 @@ class AppTheme {
   static const Color studyColor = Color(0xFF2196F3);    
   static const Color sportsColor = Color(0xFF9C27B0);   
   static const Color tasksColor = Color(0xFFFF5722);    
-  static const Color recipesColor = Color(0xFF4CAF50);
+  static const Color recipesColor = Color(0xFF1BA34A); // Chefkoch-like Green
   static const Color financeColor = Color(0xFFFFC107); 
   
   // Light Theme
