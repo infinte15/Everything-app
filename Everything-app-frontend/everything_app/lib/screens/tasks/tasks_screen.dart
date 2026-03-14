@@ -477,15 +477,15 @@ class _TaskSearchDelegate extends SearchDelegate<String> {
 
   @override
   Widget buildLeading(BuildContext context) =>
-      IconButton(icon: const Icon(Icons.arrow_back), onPressed: close);
+      IconButton(icon: const Icon(Icons.arrow_back), onPressed: () => close(context, ''));
 
   @override
-  Widget buildResults(BuildContext context) => _buildList();
+  Widget buildResults(BuildContext context) => _buildList(context);
 
   @override
-  Widget buildSuggestions(BuildContext context) => _buildList();
+  Widget buildSuggestions(BuildContext context) => _buildList(context);
 
-  Widget _buildList() {
+  Widget _buildList(BuildContext context) {
     final filtered = tasks
         .where((t) => t.title.toLowerCase().contains(query.toLowerCase()))
         .toList();
@@ -495,10 +495,8 @@ class _TaskSearchDelegate extends SearchDelegate<String> {
         title: Text(filtered[i].title),
         subtitle: Text(filtered[i].status),
         leading: const Icon(Icons.task_alt),
-        onTap: () => close(filtered[i].title),
+        onTap: () => close(context, filtered[i].title),
       ),
     );
   }
-
-  void close(String value) => close(value);
 }
