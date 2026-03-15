@@ -5,11 +5,11 @@ import '../services/auth_service.dart';
 class AuthProvider with ChangeNotifier {
   final AuthService _authService = AuthService();
   
-  bool _isLoggedIn = false;
+  bool _isLoggedIn = true; // CHANGED FOR TESTING
   bool _isLoading = false;
-  String? _username;
-  String? _email;
-  int? _userId;
+  String? _username = "TestUser"; // CHANGED FOR TESTING
+  String? _email = "test@example.com"; // CHANGED FOR TESTING
+  int? _userId = 1; // CHANGED FOR TESTING
   String? _error;
 
   // Getters
@@ -25,7 +25,8 @@ class AuthProvider with ChangeNotifier {
     _isLoading = true;
     notifyListeners();
 
-    _isLoggedIn = await _authService.isLoggedIn();
+    // CHANGED FOR TESTING: Always logged in
+    _isLoggedIn = true;
     
     _isLoading = false;
     notifyListeners();
