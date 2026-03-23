@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:intl/date_symbol_data_local.dart';
 
 import 'config/app_theme.dart';
 import 'config/routes.dart';
@@ -12,9 +13,9 @@ import 'providers/sports_provider.dart';
 import 'providers/recipe_provider.dart';
 import 'providers/finance_provider.dart';
 
-void main() {
+void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  
+  await initializeDateFormatting('de_DE', null);
   runApp(const MyApp());
 }
 
