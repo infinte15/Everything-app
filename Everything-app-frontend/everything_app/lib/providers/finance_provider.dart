@@ -22,6 +22,28 @@ class FinanceProvider with ChangeNotifier {
   String? get error => _error;
   DateTime get currentMonth => _currentMonth;
 
+  double get totalIncome => _transactions
+      .where((t) => t.type == 'EINNAHME')
+      .fold(0.0, (sum, t) => sum + t.amount);
+
+  double get totalExpenses => _transactions
+      .where((t) => t.type == 'AUSGABE')
+      .fold(0.0, (sum, t) => sum + t.amount);
+
+  double get balance => totalIncome - totalExpenses;
+
+  Map<String, double> get spendingByCategory {
+    final map = <String, double>{};
+    for (final t in _transactions.where((t) => t.type == 'AUSGABE')) {
+      map[t.category] = (map[t.category] ?? 0) + t.amount;
+    }
+    return map;
+  }
+
+  List<FinanceTransaction> get recentTransactions =>
+      _transactions.take(5).toList();
+
+
   Future<void> loadMonthlyData(DateTime month) async {
     _currentMonth = month;
     _isLoading = true;
