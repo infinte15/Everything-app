@@ -1,14 +1,29 @@
-
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
+import 'package:google_fonts/google_fonts.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/task_provider.dart';
 import '../../providers/calendar_provider.dart';
-import '../../config/app_theme.dart';
 import '../../models/task.dart';
 import '../../models/calendar_event.dart';
+
+// Stitch Design System: "The Digital Curator"
+const _surfaceColor = Color(0xFFFCF9F8);
+const _surfaceContainerLow = Color(0xFFF6F3F2);
+const _surfaceContainerLowest = Color(0xFFFFFFFF);
+const _onSurface = Color(0xFF323232);
+const _onSurfaceVariant = Color(0xFF5F5F5F);
+const _primary = Color(0xFF4F4CCD);
+// const _primaryDim = Color(0xFF423FC0);
+const _outlineVariant = Color(0xFFB3B2B1);
+
+final _cardShadow = BoxShadow(
+  color: _onSurface.withOpacity(0.04),
+  blurRadius: 32,
+  offset: const Offset(0, 8),
+);
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -25,8 +40,10 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Future<void> _loadData() async {
-    await context.read<TaskProvider>().loadTasks();
-    await context.read<CalendarProvider>().loadEventsForMonth(DateTime.now());
+    final taskProvider = context.read<TaskProvider>();
+    final calendarProvider = context.read<CalendarProvider>();
+    await taskProvider.loadTasks();
+    await calendarProvider.loadEventsForMonth(DateTime.now());
   }
 
   String _getGreeting() {
@@ -39,7 +56,6 @@ class _HomeScreenState extends State<HomeScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
     final auth = context.watch<AuthProvider>();
     final tasks = context.watch<TaskProvider>();
     final calendar = context.watch<CalendarProvider>();
@@ -47,525 +63,376 @@ class _HomeScreenState extends State<HomeScreen> {
     final todayEvents = calendar.getEventsForDay(now);
 
     return Scaffold(
-      backgroundColor: theme.colorScheme.surface,
+      backgroundColor: _surfaceContainerLow, // Soft minimal background
       body: RefreshIndicator(
         onRefresh: _loadData,
+        color: _primary,
         child: CustomScrollView(
+          physics: const AlwaysScrollableScrollPhysics(),
           slivers: [
-            // App Bar
+            // Custom Editorial AppBar
             SliverAppBar(
-              expandedHeight: 180,
+              backgroundColor: _surfaceContainerLow,
+              expandedHeight: 140,
               floating: false,
               pinned: true,
               elevation: 0,
               flexibleSpace: FlexibleSpaceBar(
-                background: Container(
-                  decoration: BoxDecoration(
-                    gradient: LinearGradient(
-                      begin: Alignment.topLeft,
-                      end: Alignment.bottomRight,
-                      colors: [
-                        AppTheme.primaryColor,
-                        AppTheme.primaryColor.withOpacity(0.8),
-                      ],
-                    ),
-                  ),
-                  child: SafeArea(
-                    child: Padding(
-                      padding: const EdgeInsets.all(20),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        mainAxisAlignment: MainAxisAlignment.end,
-                        children: [
-                          Text(
-                            '${_getGreeting()}, ${auth.username ?? 'User'}! 👋',
-                            style: theme.textTheme.headlineSmall?.copyWith(
-                              color: Colors.white,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                          const SizedBox(height: 4),
-                          Text(
-                            DateFormat('EEEE, dd. MMMM yyyy', 'de_DE')
-                                .format(now),
-                            style: theme.textTheme.bodyMedium?.copyWith(
-                              color: Colors.white70,
-                            ),
-                          ),
-                        ],
+                titlePadding: const EdgeInsets.only(left: 24, bottom: 16, right: 24),
+                title: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      DateFormat('EEEE, d. MMMM', 'de_DE').format(now).toUpperCase(),
+                      style: GoogleFonts.inter(
+                        color: _onSurfaceVariant,
+                        fontSize: 10,
+                        fontWeight: FontWeight.w600,
+                        letterSpacing: 1.2,
                       ),
                     ),
-                  ),
+                    const SizedBox(height: 4),
+                    Text(
+                      '${_getGreeting()}, ${auth.username ?? 'User'}',
+                      style: GoogleFonts.manrope(
+                        color: _onSurface,
+                        fontWeight: FontWeight.w800,
+                        fontSize: 22,
+                        letterSpacing: -0.5,
+                      ),
+                    ),
+                  ],
                 ),
               ),
               actions: [
-                IconButton(
-                  icon: const Icon(Icons.notifications_outlined,
-                      color: Colors.white),
-                  onPressed: () {},
-                ),
-                IconButton(
-                  icon: const Icon(Icons.settings_outlined,
-                      color: Colors.white),
-                  onPressed: () {},
+                Container(
+                  margin: const EdgeInsets.only(right: 16),
+                  decoration: BoxDecoration(
+                    color: _surfaceContainerLowest,
+                    shape: BoxShape.circle,
+                    boxShadow: [_cardShadow],
+                  ),
+                  child: IconButton(
+                    icon: const Icon(Icons.notifications_none, color: _onSurface),
+                    onPressed: () {},
+                    iconSize: 20,
+                  ),
                 ),
               ],
             ),
 
             SliverPadding(
-              padding: const EdgeInsets.all(16),
+              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 8),
               sliver: SliverList(
                 delegate: SliverChildListDelegate([
-                  // Stats Row
-                  _StatsRow(
-                    totalTasks: tasks.todoTasks.length,
-                    todayEvents: todayEvents.length,
-                    overdueTasks: tasks.overdueTasks.length,
-                  ),
-                  const SizedBox(height: 24),
-
-                  // Quick Actions
-                  _SectionHeader(
-                    title: 'Schnellzugriff',
-                    onSeeAll: null,
-                  ),
-                  const SizedBox(height: 12),
-                  _QuickActionsGrid(),
-                  const SizedBox(height: 24),
-
-                  // Today's Tasks
-                  _SectionHeader(
-                    title: "Heutige Aufgaben",
-                    onSeeAll: () => context.go('/tasks'),
-                  ),
-                  const SizedBox(height: 12),
-                  if (tasks.isLoading)
-                    const Center(child: CircularProgressIndicator())
-                  else if (tasks.todayTasks.isEmpty)
-                    _EmptyState(
-                      icon: Icons.task_alt,
-                      message: 'Keine Aufgaben für heute!',
-                    )
-                  else
-                    ...tasks.todayTasks
-                        .take(5)
-                        .map((t) => _TaskCard(task: t)),
-                  const SizedBox(height: 24),
-
-                  // Today's Events
-                  _SectionHeader(
-                    title: "Heutige Events",
-                    onSeeAll: () => context.go('/calendar'),
-                  ),
-                  const SizedBox(height: 12),
+                  
+                  // Today's Schedule Section
+                  _SectionTitle(title: "Today's Schedule"),
+                  const SizedBox(height: 16),
                   if (todayEvents.isEmpty)
-                    _EmptyState(
-                      icon: Icons.event_available,
-                      message: 'Keine Events heute',
-                    )
+                    const _EmptyState(message: 'Keine Termine heute.')
                   else
-                    ...todayEvents
-                        .take(3)
-                        .map((e) => _EventCard(event: e)),
-                  const SizedBox(height: 24),
+                    ...todayEvents.take(4).map((e) => _EventItem(event: e)),
 
-                  // Spaces Overview
-                  _SectionHeader(
-                    title: 'Meine Spaces',
-                    onSeeAll: () => context.go('/spaces'),
-                  ),
-                  const SizedBox(height: 12),
-                  _SpacesRow(),
-                  const SizedBox(height: 32),
+                  const SizedBox(height: 40),
+
+                  // Pending Tasks Section
+                  _SectionTitle(title: "Ausstehende Aufgaben",
+                      action: IconButton(
+                        icon: const Icon(Icons.arrow_forward_ios, size: 14, color: _onSurfaceVariant),
+                        onPressed: () => context.go('/tasks'),
+                      )),
+                  const SizedBox(height: 16),
+                  if (tasks.isLoading)
+                    const Center(child: CircularProgressIndicator(color: _primary))
+                  else if (tasks.todoTasks.isEmpty)
+                    const _EmptyState(message: 'Alles erledigt!')
+                  else
+                    ...tasks.todoTasks.take(4).map((t) => _TaskItem(task: t)),
+
+                  const SizedBox(height: 40),
+
+                  // Spaces Quick Access Section
+                  _SectionTitle(title: "Schnellzugriff auf Spaces"),
+                  const SizedBox(height: 16),
+                  const _SpacesGrid(),
+
+                  const SizedBox(height: 80), // Bottom padding
                 ]),
               ),
             ),
           ],
         ),
       ),
-      floatingActionButton: FloatingActionButton.extended(
+      floatingActionButton: FloatingActionButton(
         onPressed: () => context.go('/create'),
-        icon: const Icon(Icons.add),
-        label: const Text('Neu'),
+        backgroundColor: _primary,
+        foregroundColor: _surfaceContainerLowest,
+        elevation: 8,
+        child: const Icon(Icons.add),
       ),
     );
   }
 }
 
-// ─── Stat Row ─────────────────────────────────────────────────────────────────
+// ─── Section Title (Manrope, Editorial) ────────────────────────────────────────
 
-class _StatsRow extends StatelessWidget {
-  final int totalTasks;
-  final int todayEvents;
-  final int overdueTasks;
-
-  const _StatsRow({
-    required this.totalTasks,
-    required this.todayEvents,
-    required this.overdueTasks,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      children: [
-        Expanded(
-          child: _StatCard(
-            label: 'Offene Tasks',
-            value: '$totalTasks',
-            icon: Icons.checklist,
-            color: AppTheme.tasksColor,
-          ),
-        ),
-        const SizedBox(width: 12),
-        Expanded(
-          child: _StatCard(
-            label: 'Events heute',
-            value: '$todayEvents',
-            icon: Icons.event,
-            color: AppTheme.primaryColor,
-          ),
-        ),
-        const SizedBox(width: 12),
-        Expanded(
-          child: _StatCard(
-            label: 'Überfällig',
-            value: '$overdueTasks',
-            icon: Icons.warning_amber,
-            color: overdueTasks > 0 ? Colors.red : Colors.green,
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-class _StatCard extends StatelessWidget {
-  final String label;
-  final String value;
-  final IconData icon;
-  final Color color;
-
-  const _StatCard({
-    required this.label,
-    required this.value,
-    required this.icon,
-    required this.color,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: color.withOpacity(0.1),
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: color.withOpacity(0.2)),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Icon(icon, color: color, size: 24),
-          const SizedBox(height: 8),
-          Text(value,
-              style: theme.textTheme.headlineSmall?.copyWith(
-                  fontWeight: FontWeight.bold, color: color)),
-          Text(label,
-              style: theme.textTheme.bodySmall?.copyWith(
-                  color: theme.colorScheme.onSurface.withOpacity(0.6))),
-        ],
-      ),
-    );
-  }
-}
-
-// ─── Section Header ────────────────────────────────────────────────────────────
-
-class _SectionHeader extends StatelessWidget {
+class _SectionTitle extends StatelessWidget {
   final String title;
-  final VoidCallback? onSeeAll;
+  final Widget? action;
 
-  const _SectionHeader({required this.title, this.onSeeAll});
+  const _SectionTitle({required this.title, this.action});
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
-        Text(title,
-            style: theme.textTheme.titleMedium
-                ?.copyWith(fontWeight: FontWeight.bold)),
-        if (onSeeAll != null)
-          TextButton(onPressed: onSeeAll, child: const Text('Alle anzeigen')),
+        Text(
+          title,
+          style: GoogleFonts.manrope(
+            fontSize: 20,
+            fontWeight: FontWeight.bold,
+            color: _onSurface,
+            letterSpacing: -0.3,
+          ),
+        ),
+        if (action != null) action!,
       ],
     );
   }
 }
 
-// ─── Quick Actions ─────────────────────────────────────────────────────────────
+// ─── Event Item (Soft Minimalism) ──────────────────────────────────────────────
 
-class _QuickActionsGrid extends StatelessWidget {
-  final List<_QuickAction> actions = const [
-    _QuickAction(icon: Icons.schedule, label: 'Auto-Plan',
-        route: '/calendar', color: Color(0xFF6366F1)),
-    _QuickAction(icon: Icons.book, label: 'Studium',
-        route: '/study', color: Color(0xFF3B82F6)),
-    _QuickAction(icon: Icons.fitness_center, label: 'Sport',
-        route: '/sports', color: Color(0xFF8B5CF6)),
-    _QuickAction(icon: Icons.restaurant, label: 'Rezepte',
-        route: '/recipes', color: Color(0xFF10B981)),
-  ];
+class _EventItem extends StatelessWidget {
+  final CalendarEvent event;
 
-  const _QuickActionsGrid();
+  const _EventItem({required this.event});
 
   @override
   Widget build(BuildContext context) {
-    return Row(
-      children: actions.map((a) {
-        return Expanded(
-          child: Padding(
-            padding: const EdgeInsets.only(right: 8),
-            child: InkWell(
-              onTap: () => context.go(a.route),
-              borderRadius: BorderRadius.circular(16),
-              child: Container(
-                padding: const EdgeInsets.symmetric(vertical: 16),
-                decoration: BoxDecoration(
-                  color: a.color.withOpacity(0.1),
-                  borderRadius: BorderRadius.circular(16),
-                  border: Border.all(color: a.color.withOpacity(0.2)),
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: _surfaceContainerLowest,
+        borderRadius: BorderRadius.circular(16), // Round 4
+        boxShadow: [_cardShadow],
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Timeline indicator
+          Container(
+            width: 4,
+            height: 48,
+            decoration: BoxDecoration(
+              color: event.colorObject.withOpacity(0.8),
+              borderRadius: BorderRadius.circular(2),
+            ),
+          ),
+          const SizedBox(width: 16),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  event.title,
+                  style: GoogleFonts.manrope(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w700,
+                    color: _onSurface,
+                  ),
                 ),
-                child: Column(
-                  children: [
-                    Icon(a.icon, color: a.color, size: 28),
-                    const SizedBox(height: 8),
-                    Text(a.label,
-                        style: TextStyle(
-                            fontSize: 12,
-                            fontWeight: FontWeight.w600,
-                            color: a.color),
-                        textAlign: TextAlign.center),
-                  ],
+                const SizedBox(height: 4),
+                Text(
+                  '${DateFormat('HH:mm').format(event.startTime)} - ${DateFormat('HH:mm').format(event.endTime)}',
+                  style: GoogleFonts.inter(
+                    fontSize: 13,
+                    color: _onSurfaceVariant,
+                    fontWeight: FontWeight.w500,
+                  ),
                 ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ─── Task Item (Ghost Border on interaction / subtle layering) ─────────────────
+
+class _TaskItem extends StatelessWidget {
+  final Task task;
+
+  const _TaskItem({required this.task});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: _surfaceColor,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: _outlineVariant.withOpacity(0.2), width: 1),
+      ),
+      child: Row(
+        children: [
+          // Custom soft checkbox
+          GestureDetector(
+            onTap: () => context.read<TaskProvider>().completeTask(task.id!),
+            child: Container(
+              width: 24,
+              height: 24,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                border: Border.all(
+                  color: task.isCompleted ? _primary : _outlineVariant,
+                  width: 1.5,
+                ),
+                color: task.isCompleted ? _primary : Colors.transparent,
               ),
+              child: task.isCompleted
+                  ? const Icon(Icons.check, size: 14, color: _surfaceContainerLowest)
+                  : null,
+            ),
+          ),
+          const SizedBox(width: 16),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  task.title,
+                  style: GoogleFonts.inter(
+                    fontSize: 15,
+                    fontWeight: FontWeight.w600,
+                    color: task.isCompleted ? _onSurfaceVariant : _onSurface,
+                    decoration: task.isCompleted ? TextDecoration.lineThrough : null,
+                  ),
+                ),
+                if (task.deadline != null) ...[
+                  const SizedBox(height: 4),
+                  Text(
+                    'Bis ${DateFormat('HH:mm').format(task.deadline!)}',
+                    style: GoogleFonts.inter(
+                      fontSize: 12,
+                      color: task.isOverdue ? Colors.redAccent : _onSurfaceVariant,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                ]
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ─── Spaces Grid ──────────────────────────────────────────────────────────────
+
+class _SpacesGrid extends StatelessWidget {
+  const _SpacesGrid();
+
+  static const spaces = [
+    _SpaceData(icon: Icons.school_outlined, title: 'Study', color: Colors.blueAccent, route: '/study'),
+    _SpaceData(icon: Icons.account_balance_wallet_outlined, title: 'Finances', color: Colors.orangeAccent, route: '/finance'),
+    _SpaceData(icon: Icons.fitness_center_outlined, title: 'Gym', color: Colors.purpleAccent, route: '/sports'),
+    _SpaceData(icon: Icons.restaurant_menu_outlined, title: 'Recipes', color: Colors.greenAccent, route: '/recipes'),
+  ];
+
+  @override
+  Widget build(BuildContext context) {
+    return GridView.builder(
+      padding: EdgeInsets.zero,
+      shrinkWrap: true,
+      physics: const NeverScrollableScrollPhysics(),
+      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+        crossAxisCount: 2,
+        mainAxisSpacing: 16,
+        crossAxisSpacing: 16,
+        childAspectRatio: 1.1,
+      ),
+      itemCount: spaces.length,
+      itemBuilder: (context, index) {
+        final space = spaces[index];
+        return GestureDetector(
+          onTap: () => context.go(space.route),
+          child: Container(
+            decoration: BoxDecoration(
+              color: _surfaceContainerLowest,
+              borderRadius: BorderRadius.circular(20),
+              boxShadow: [_cardShadow],
+            ),
+            padding: const EdgeInsets.all(20),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(
+                    color: space.color.withOpacity(0.1),
+                    shape: BoxShape.circle,
+                  ),
+                  child: Icon(space.icon, color: space.color, size: 24),
+                ),
+                Text(
+                  space.title,
+                  style: GoogleFonts.manrope(
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold,
+                    color: _onSurface,
+                  ),
+                ),
+              ],
             ),
           ),
         );
-      }).toList(),
+      },
     );
   }
 }
 
-class _QuickAction {
+class _SpaceData {
   final IconData icon;
-  final String label;
-  final String route;
+  final String title;
   final Color color;
-  const _QuickAction(
-      {required this.icon,
-      required this.label,
-      required this.route,
-      required this.color});
-}
-
-// ─── Task Card ─────────────────────────────────────────────────────────────────
-
-class _TaskCard extends StatelessWidget {
-  final Task task;
-  const _TaskCard({required this.task});
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final priorityColor = AppTheme.getPriorityColor(task.priority);
-    return Container(
-      margin: const EdgeInsets.only(bottom: 8),
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: theme.colorScheme.surfaceVariant.withOpacity(0.5),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: theme.colorScheme.outline.withOpacity(0.1)),
-      ),
-      child: Row(
-        children: [
-          Container(
-            width: 4,
-            height: 40,
-            decoration: BoxDecoration(
-              color: priorityColor,
-              borderRadius: BorderRadius.circular(4),
-            ),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(task.title,
-                    style: theme.textTheme.bodyMedium
-                        ?.copyWith(fontWeight: FontWeight.w600),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis),
-                if (task.deadline != null)
-                  Text(
-                    DateFormat('HH:mm').format(task.deadline!),
-                    style: theme.textTheme.bodySmall
-                        ?.copyWith(color: task.isOverdue ? Colors.red : null),
-                  ),
-              ],
-            ),
-          ),
-          Checkbox(
-            value: task.isCompleted,
-            onChanged: (_) => context.read<TaskProvider>().completeTask(task.id!),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-// ─── Event Card ────────────────────────────────────────────────────────────────
-
-class _EventCard extends StatelessWidget {
-  final CalendarEvent event;
-  const _EventCard({required this.event});
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    return Container(
-      margin: const EdgeInsets.only(bottom: 8),
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: event.colorObject.withOpacity(0.1),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: event.colorObject.withOpacity(0.3)),
-      ),
-      child: Row(
-        children: [
-          Icon(Icons.circle, size: 10, color: event.colorObject),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(event.title,
-                    style: theme.textTheme.bodyMedium
-                        ?.copyWith(fontWeight: FontWeight.w600),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis),
-                Text(
-                  '${DateFormat('HH:mm').format(event.startTime)} - '
-                  '${DateFormat('HH:mm').format(event.endTime)}',
-                  style: theme.textTheme.bodySmall,
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-// ─── Spaces Row ───────────────────────────────────────────────────────────────
-
-class _SpacesRow extends StatelessWidget {
-  final List<_SpaceItem> spaces = const [
-    _SpaceItem(icon: Icons.school, label: 'Studium', route: '/study',
-        color: Color(0xFF3B82F6)),
-    _SpaceItem(icon: Icons.fitness_center, label: 'Sport', route: '/sports',
-        color: Color(0xFF8B5CF6)),
-    _SpaceItem(icon: Icons.task_alt, label: 'Tasks', route: '/tasks',
-        color: Color(0xFFF97316)),
-    _SpaceItem(icon: Icons.restaurant_menu, label: 'Rezepte', route: '/recipes',
-        color: Color(0xFF10B981)),
-    _SpaceItem(icon: Icons.account_balance_wallet, label: 'Finanzen',
-        route: '/finance', color: Color(0xFFEAB308)),
-  ];
-
-  const _SpacesRow();
-
-  @override
-  Widget build(BuildContext context) {
-    return SingleChildScrollView(
-      scrollDirection: Axis.horizontal,
-      child: Row(
-        children: spaces.map((s) {
-          return Padding(
-            padding: const EdgeInsets.only(right: 12),
-            child: InkWell(
-              onTap: () => context.go(s.route),
-              borderRadius: BorderRadius.circular(16),
-              child: Container(
-                width: 80,
-                padding: const EdgeInsets.symmetric(vertical: 16),
-                decoration: BoxDecoration(
-                  color: s.color.withOpacity(0.1),
-                  borderRadius: BorderRadius.circular(16),
-                  border: Border.all(color: s.color.withOpacity(0.2)),
-                ),
-                child: Column(
-                  children: [
-                    Icon(s.icon, color: s.color, size: 32),
-                    const SizedBox(height: 8),
-                    Text(s.label,
-                        style: TextStyle(
-                            fontSize: 11,
-                            fontWeight: FontWeight.w600,
-                            color: s.color),
-                        textAlign: TextAlign.center),
-                  ],
-                ),
-              ),
-            ),
-          );
-        }).toList(),
-      ),
-    );
-  }
-}
-
-class _SpaceItem {
-  final IconData icon;
-  final String label;
   final String route;
-  final Color color;
-  const _SpaceItem(
-      {required this.icon,
-      required this.label,
-      required this.route,
-      required this.color});
+  const _SpaceData({required this.icon, required this.title, required this.color, required this.route});
 }
 
-// ─── Empty State ───────────────────────────────────────────────────────────────
+// ─── Empty State ──────────────────────────────────────────────────────────────
 
 class _EmptyState extends StatelessWidget {
-  final IconData icon;
   final String message;
-  const _EmptyState({required this.icon, required this.message});
+  const _EmptyState({required this.message});
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
     return Container(
-      padding: const EdgeInsets.all(24),
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(vertical: 32, horizontal: 16),
       decoration: BoxDecoration(
-        color: theme.colorScheme.surfaceVariant.withOpacity(0.3),
-        borderRadius: BorderRadius.circular(12),
+        color: _surfaceColor,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: _outlineVariant.withOpacity(0.1)),
       ),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(icon, color: Colors.grey, size: 24),
-          const SizedBox(width: 12),
-          Text(message,
-              style: theme.textTheme.bodyMedium
-                  ?.copyWith(color: Colors.grey)),
-        ],
+      child: Center(
+        child: Text(
+          message,
+          style: GoogleFonts.inter(
+            color: _onSurfaceVariant,
+            fontStyle: FontStyle.italic,
+          ),
+        ),
       ),
     );
   }
