@@ -1,78 +1,108 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
-import '../../config/app_theme.dart';
+import 'package:google_fonts/google_fonts.dart';
+
+// Stitch Design System: "The Digital Curator"
+const _surfaceContainerLow = Color(0xFFF6F3F2);
+const _surfaceContainerLowest = Color(0xFFFFFFFF);
+const _onSurface = Color(0xFF323232);
+const _onSurfaceVariant = Color(0xFF5F5F5F);
+
+final _cardShadow = BoxShadow(
+  color: _onSurface.withOpacity(0.04),
+  blurRadius: 32,
+  offset: const Offset(0, 8),
+);
 
 class SpacesScreen extends StatelessWidget {
   const SpacesScreen({super.key});
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
+    // Keep consistent colors with the rest of the application spaces
     final spaces = [
-      _SpaceData(
-        icon: Icons.school,
-        title: 'Studium',
-        subtitle: 'Notizen, Stundenplan, Karteikarten, Noten',
-        route: '/study',
-        color: AppTheme.studyColor,
-        stats: '3 Kurse • 12 Notizen',
-      ),
-      _SpaceData(
-        icon: Icons.fitness_center,
-        title: 'Sport',
-        subtitle: 'Workouts, Training, Fortschritt',
-        route: '/sports',
-        color: AppTheme.sportsColor,
-        stats: '3 Trainings/Woche',
-      ),
       _SpaceData(
         icon: Icons.task_alt,
         title: 'Aufgaben',
-        subtitle: 'Tasks, Habits, Projekte',
+        status: '12 Active',
         route: '/tasks',
-        color: AppTheme.tasksColor,
-        stats: '5 offene Tasks',
+        color: const Color(0xFFF97316),
       ),
       _SpaceData(
-        icon: Icons.restaurant_menu,
+        icon: Icons.sync,
+        title: 'Habits',
+        status: '85% Completion',
+        route: '/tasks', // Routing to tasks or specific habits screen if exists
+        color: const Color(0xFF06B6D4),
+      ),
+      _SpaceData(
+        icon: Icons.note_alt_outlined,
+        title: 'Notizen',
+        status: 'Updated 2h ago',
+        route: '/study', // Or specific notes route
+        color: const Color(0xFF8B5CF6),
+      ),
+      _SpaceData(
+        icon: Icons.school_outlined,
+        title: 'Studium',
+        status: 'Exam Prep Active',
+        route: '/study',
+        color: const Color(0xFF3B82F6),
+      ),
+      _SpaceData(
+        icon: Icons.fitness_center_outlined,
+        title: 'Gym',
+        status: 'Leg Day Scheduled',
+        route: '/sports',
+        color: const Color(0xFFEC4899),
+      ),
+      _SpaceData(
+        icon: Icons.restaurant_menu_outlined,
         title: 'Rezepte',
-        subtitle: 'Kochrezepte, Wochenplan, Einkaufsliste',
+        status: '4 New Ideas',
         route: '/recipes',
-        color: AppTheme.recipesColor,
-        stats: '5 Rezepte gespeichert',
+        color: const Color(0xFF10B981),
       ),
       _SpaceData(
-        icon: Icons.account_balance_wallet,
+        icon: Icons.account_balance_wallet_outlined,
         title: 'Finanzen',
-        subtitle: 'Transaktionen, Budget, Statistiken',
+        status: 'On Track',
         route: '/finance',
-        color: AppTheme.financeColor,
-        stats: '€ 769,50 verfügbar',
+        color: const Color(0xFFEAB308),
       ),
     ];
 
     return Scaffold(
+      backgroundColor: _surfaceContainerLow,
       appBar: AppBar(
-        title: const Text('Meine Spaces'),
+        title: Text(
+          'Spaces',
+          style: GoogleFonts.manrope(
+            color: _onSurface,
+            fontWeight: FontWeight.w800,
+            fontSize: 24,
+            letterSpacing: -0.5,
+          ),
+        ),
+        backgroundColor: _surfaceContainerLow,
+        elevation: 0,
+        centerTitle: false,
+        titleSpacing: 24,
       ),
       body: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              'Wähle einen Space um loszulegen',
-              style: theme.textTheme.bodyMedium
-                  ?.copyWith(color: Colors.grey),
-            ),
-            const SizedBox(height: 16),
-            Expanded(
-              child: ListView.builder(
-                itemCount: spaces.length,
-                itemBuilder: (_, i) => _SpaceCard(space: spaces[i]),
-              ),
-            ),
-          ],
+        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 8),
+        child: GridView.builder(
+          physics: const AlwaysScrollableScrollPhysics(),
+          gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+            crossAxisCount: 2,
+            mainAxisSpacing: 16,
+            crossAxisSpacing: 16,
+            childAspectRatio: 0.95,
+          ),
+          itemCount: spaces.length,
+          itemBuilder: (context, index) {
+            return _SpaceGridCard(space: spaces[index]);
+          },
         ),
       ),
     );
@@ -82,79 +112,72 @@ class SpacesScreen extends StatelessWidget {
 class _SpaceData {
   final IconData icon;
   final String title;
-  final String subtitle;
+  final String status;
   final String route;
   final Color color;
-  final String stats;
 
   const _SpaceData({
     required this.icon,
     required this.title,
-    required this.subtitle,
+    required this.status,
     required this.route,
     required this.color,
-    required this.stats,
   });
 }
 
-class _SpaceCard extends StatelessWidget {
+class _SpaceGridCard extends StatelessWidget {
   final _SpaceData space;
-  const _SpaceCard({required this.space});
+  const _SpaceGridCard({required this.space});
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    return Card(
-      margin: const EdgeInsets.only(bottom: 12),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-      child: InkWell(
-        onTap: () => context.go(space.route),
-        borderRadius: BorderRadius.circular(16),
-        child: Padding(
-          padding: const EdgeInsets.all(20),
-          child: Row(
-            children: [
-              Container(
-                padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  color: space.color.withOpacity(0.15),
-                  borderRadius: BorderRadius.circular(16),
-                ),
-                child: Icon(space.icon, color: space.color, size: 32),
+    return GestureDetector(
+      onTap: () => context.go(space.route),
+      child: Container(
+        decoration: BoxDecoration(
+          color: _surfaceContainerLowest,
+          borderRadius: BorderRadius.circular(20),
+          boxShadow: [_cardShadow],
+        ),
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: space.color.withOpacity(0.1),
+                shape: BoxShape.circle,
               ),
-              const SizedBox(width: 16),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(space.title,
-                        style: theme.textTheme.titleMedium
-                            ?.copyWith(fontWeight: FontWeight.bold)),
-                    const SizedBox(height: 4),
-                    Text(space.subtitle,
-                        style: theme.textTheme.bodySmall
-                            ?.copyWith(color: Colors.grey)),
-                    const SizedBox(height: 8),
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 8, vertical: 4),
-                      decoration: BoxDecoration(
-                        color: space.color.withOpacity(0.1),
-                        borderRadius: BorderRadius.circular(6),
-                      ),
-                      child: Text(space.stats,
-                          style: TextStyle(
-                              color: space.color,
-                              fontSize: 11,
-                              fontWeight: FontWeight.w600)),
-                    ),
-                  ],
+              child: Icon(space.icon, color: space.color, size: 28),
+            ),
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  space.title,
+                  style: GoogleFonts.manrope(
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                    color: _onSurface,
+                    letterSpacing: -0.2,
+                  ),
                 ),
-              ),
-              Icon(Icons.arrow_forward_ios,
-                  size: 16, color: space.color),
-            ],
-          ),
+                const SizedBox(height: 4),
+                Text(
+                  space.status,
+                  style: GoogleFonts.inter(
+                    fontSize: 12,
+                    color: _onSurfaceVariant,
+                    fontWeight: FontWeight.w500,
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ],
+            ),
+          ],
         ),
       ),
     );
