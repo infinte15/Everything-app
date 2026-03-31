@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import '../config/api_config.dart';
@@ -137,11 +138,11 @@ class ApiService {
 
   /// Logging
   void _logRequest(String method, String url, int statusCode) {
-    print('[$method] $url - Status: $statusCode');
+    debugPrint('[$method] $url - Status: $statusCode');
   }
 
   void _logError(String method, String url, dynamic error) {
-    print('[$method] $url - Error: $error');
+    debugPrint('[$method] $url - Error: $error');
   }
 
   /// Close Client

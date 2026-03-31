@@ -12,7 +12,6 @@ class CreateScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
     final options = [
       _CreateOption(
         icon: Icons.task_alt,
@@ -93,7 +92,7 @@ class CreateScreen extends StatelessWidget {
                 Container(
                   padding: const EdgeInsets.all(8),
                   decoration: BoxDecoration(
-                    color: AppTheme.tasksColor.withOpacity(0.1),
+                    color: AppTheme.tasksColor.withValues(alpha: 0.1),
                     borderRadius: BorderRadius.circular(8),
                   ),
                   child: Icon(Icons.task_alt, color: AppTheme.tasksColor),
@@ -128,7 +127,7 @@ class CreateScreen extends StatelessWidget {
                           decoration: BoxDecoration(
                             color: priority == p
                                 ? color
-                                : color.withOpacity(0.1),
+                                : color.withValues(alpha: 0.1),
                             borderRadius: BorderRadius.circular(8),
                           ),
                           child: Text('P$p',
@@ -190,7 +189,7 @@ class CreateScreen extends StatelessWidget {
               Container(
                 padding: const EdgeInsets.all(8),
                 decoration: BoxDecoration(
-                  color: AppTheme.primaryColor.withOpacity(0.1),
+                  color: AppTheme.primaryColor.withValues(alpha: 0.1),
                   borderRadius: BorderRadius.circular(8),
                 ),
                 child: Icon(Icons.event, color: AppTheme.primaryColor),
@@ -268,7 +267,7 @@ class _CreateOptionCard extends StatelessWidget {
               Container(
                 padding: const EdgeInsets.all(12),
                 decoration: BoxDecoration(
-                  color: option.color.withOpacity(0.15),
+                  color: option.color.withValues(alpha: 0.15),
                   borderRadius: BorderRadius.circular(12),
                 ),
                 child: Icon(option.icon, color: option.color, size: 28),

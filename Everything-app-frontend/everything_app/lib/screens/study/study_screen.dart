@@ -146,7 +146,7 @@ class _StudySidebar extends StatelessWidget {
         color: isDark ? const Color(0xFF1A1A1A) : const Color(0xFFF7F7F5),
         border: Border(
           right: BorderSide(
-            color: theme.colorScheme.outline.withOpacity(0.12),
+            color: theme.colorScheme.outline.withValues(alpha: 0.12),
           ),
         ),
       ),
@@ -229,7 +229,7 @@ class _SidebarItem extends StatelessWidget {
         duration: const Duration(milliseconds: 180),
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
         decoration: BoxDecoration(
-          color: selected ? AppTheme.studyColor.withOpacity(0.12) : Colors.transparent,
+          color: selected ? AppTheme.studyColor.withValues(alpha: 0.12) : Colors.transparent,
           borderRadius: BorderRadius.circular(8),
         ),
         child: Row(
@@ -237,7 +237,7 @@ class _SidebarItem extends StatelessWidget {
             Icon(
               selected ? item.selectedIcon : item.icon,
               size: 20,
-              color: selected ? AppTheme.studyColor : theme.colorScheme.onSurface.withOpacity(0.7),
+              color: selected ? AppTheme.studyColor : theme.colorScheme.onSurface.withValues(alpha: 0.7),
             ),
             const SizedBox(width: 12),
             Expanded(
@@ -336,12 +336,12 @@ class _NotesListPage extends StatelessWidget {
                         child: Container(
                           padding: const EdgeInsets.all(16),
                           decoration: BoxDecoration(
-                            color: theme.colorScheme.surfaceVariant
-                                .withOpacity(0.3),
+                            color: theme.colorScheme.surfaceContainerHighest
+                                .withValues(alpha: 0.3),
                             borderRadius: BorderRadius.circular(12),
                             border: Border.all(
                                 color: theme.colorScheme.outline
-                                    .withOpacity(0.12)),
+                                    .withValues(alpha: 0.12)),
                           ),
                           child: Row(
                             children: [

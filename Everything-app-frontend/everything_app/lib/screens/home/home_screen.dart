@@ -20,7 +20,7 @@ const _primary = Color(0xFF4F4CCD);
 const _outlineVariant = Color(0xFFB3B2B1);
 
 final _cardShadow = BoxShadow(
-  color: _onSurface.withOpacity(0.04),
+  color: _onSurface.withValues(alpha: 0.04),
   blurRadius: 32,
   offset: const Offset(0, 8),
 );
@@ -198,7 +198,7 @@ class _SectionTitle extends StatelessWidget {
             letterSpacing: -0.3,
           ),
         ),
-        if (action != null) action!,
+        if (action != null) action,
       ],
     );
   }
@@ -229,7 +229,7 @@ class _EventItem extends StatelessWidget {
             width: 4,
             height: 48,
             decoration: BoxDecoration(
-              color: event.colorObject.withOpacity(0.8),
+              color: event.colorObject.withValues(alpha: 0.8),
               borderRadius: BorderRadius.circular(2),
             ),
           ),
@@ -279,7 +279,7 @@ class _TaskItem extends StatelessWidget {
       decoration: BoxDecoration(
         color: _surfaceColor,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: _outlineVariant.withOpacity(0.2), width: 1),
+        border: Border.all(color: _outlineVariant.withValues(alpha: 0.2), width: 1),
       ),
       child: Row(
         children: [
@@ -379,7 +379,7 @@ class _SpacesGrid extends StatelessWidget {
                 Container(
                   padding: const EdgeInsets.all(10),
                   decoration: BoxDecoration(
-                    color: space.color.withOpacity(0.1),
+                    color: space.color.withValues(alpha: 0.1),
                     shape: BoxShape.circle,
                   ),
                   child: Icon(space.icon, color: space.color, size: 24),
@@ -423,7 +423,7 @@ class _EmptyState extends StatelessWidget {
       decoration: BoxDecoration(
         color: _surfaceColor,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: _outlineVariant.withOpacity(0.1)),
+        border: Border.all(color: _outlineVariant.withValues(alpha: 0.1)),
       ),
       child: Center(
         child: Text(

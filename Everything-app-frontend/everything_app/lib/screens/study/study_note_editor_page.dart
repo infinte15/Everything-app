@@ -137,10 +137,10 @@ class _StudyNoteEditorPageState extends State<StudyNoteEditorPage> {
               margin: const EdgeInsets.only(bottom: 16),
               padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
-                color: const Color(0xFF3B82F6).withOpacity(0.08),
+                color: const Color(0xFF3B82F6).withValues(alpha: 0.08),
                 borderRadius: BorderRadius.circular(10),
                 border: Border.all(
-                    color: const Color(0xFF3B82F6).withOpacity(0.2)),
+                    color: const Color(0xFF3B82F6).withValues(alpha: 0.2)),
               ),
               child: Row(
                 children: [
@@ -152,7 +152,7 @@ class _StudyNoteEditorPageState extends State<StudyNoteEditorPage> {
                       'Tipp: Nutze # für Überschriften, - für Listen, [] für Todos, > für Callouts',
                       style: TextStyle(
                           fontSize: 12,
-                          color: const Color(0xFF3B82F6).withOpacity(0.8)),
+                          color: const Color(0xFF3B82F6).withValues(alpha: 0.8)),
                     ),
                   ),
                 ],
@@ -244,7 +244,7 @@ class _BlockRenderer extends StatelessWidget {
           borderSide: BorderSide(color: Colors.grey.shade300),
         ),
         filled: true,
-        fillColor: theme.colorScheme.surfaceVariant.withOpacity(0.3),
+        fillColor: theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.3),
         contentPadding: const EdgeInsets.all(16),
       ),
     ));
@@ -340,9 +340,9 @@ class _BlockCallout extends StatelessWidget {
       margin: const EdgeInsets.symmetric(vertical: 6),
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: Colors.amber.withOpacity(0.12),
+        color: Colors.amber.withValues(alpha: 0.12),
         borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: Colors.amber.withOpacity(0.4)),
+        border: Border.all(color: Colors.amber.withValues(alpha: 0.4)),
       ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,

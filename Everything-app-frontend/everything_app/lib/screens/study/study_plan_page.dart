@@ -237,7 +237,7 @@ class _WeekSummaryCard extends StatelessWidget {
         borderRadius: BorderRadius.circular(20),
         boxShadow: [
           BoxShadow(
-              color: const Color(0xFF6366F1).withOpacity(0.4),
+              color: const Color(0xFF6366F1).withValues(alpha: 0.4),
               blurRadius: 16,
               offset: const Offset(0, 6)),
         ],
@@ -307,9 +307,9 @@ class _StudyGoalCard extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: color.withOpacity(0.07),
+        color: color.withValues(alpha: 0.07),
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: color.withOpacity(0.2)),
+        border: Border.all(color: color.withValues(alpha: 0.2)),
       ),
       child: Row(
         children: [
@@ -342,7 +342,7 @@ class _StudyGoalCard extends StatelessWidget {
                   borderRadius: BorderRadius.circular(4),
                   child: LinearProgressIndicator(
                     value: goal.progress,
-                    backgroundColor: color.withOpacity(0.15),
+                    backgroundColor: color.withValues(alpha: 0.15),
                     valueColor: AlwaysStoppedAnimation(color),
                     minHeight: 6,
                   ),
@@ -422,7 +422,7 @@ class _RingPainter extends CustomPainter {
       center,
       radius,
       Paint()
-        ..color = color.withOpacity(0.15)
+        ..color = color.withValues(alpha: 0.15)
         ..style = PaintingStyle.stroke
         ..strokeWidth = stroke,
     );

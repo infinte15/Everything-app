@@ -112,7 +112,7 @@ class _RecipesScreenState extends State<RecipesScreen> {
           : NavigationBar(
               selectedIndex: _selectedIndex,
               onDestinationSelected: (i) => setState(() => _selectedIndex = i),
-              indicatorColor: AppTheme.recipesColor.withOpacity(0.2),
+              indicatorColor: AppTheme.recipesColor.withValues(alpha: 0.2),
               destinations: const [
                 NavigationDestination(
                   icon: Icon(Icons.explore_outlined),

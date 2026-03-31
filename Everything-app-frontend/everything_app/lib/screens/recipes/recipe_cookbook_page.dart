@@ -91,10 +91,10 @@ class RecipeCookbookPage extends StatelessWidget {
                           borderRadius: BorderRadius.circular(16),
                           border: Border.all(
                               color: theme.colorScheme.outline
-                                  .withOpacity(0.1)),
+                                  .withValues(alpha: 0.1)),
                           boxShadow: [
                             BoxShadow(
-                                color: Colors.black.withOpacity(0.05),
+                                color: Colors.black.withValues(alpha: 0.05),
                                 blurRadius: 8,
                                 offset: const Offset(0, 2))
                           ],
@@ -108,7 +108,7 @@ class RecipeCookbookPage extends StatelessWidget {
                                   borderRadius: const BorderRadius.vertical(
                                       top: Radius.circular(15)),
                                   color: recipe.imageUrl == null
-                                      ? AppTheme.recipesColor.withOpacity(0.2)
+                                      ? AppTheme.recipesColor.withValues(alpha: 0.2)
                                       : null,
                                   image: recipe.imageUrl != null
                                       ? DecorationImage(

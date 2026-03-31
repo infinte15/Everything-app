@@ -15,7 +15,7 @@ class TasksScreen extends StatefulWidget {
 class _TasksScreenState extends State<TasksScreen>
     with SingleTickerProviderStateMixin {
   late TabController _tabController;
-  String _searchQuery = '';
+  final String _searchQuery = '';
 
   @override
   void initState() {
@@ -270,7 +270,7 @@ class _TaskTile extends StatelessWidget {
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                 decoration: BoxDecoration(
-                  color: priorityColor.withOpacity(0.1),
+                  color: priorityColor.withValues(alpha: 0.1),
                   borderRadius: BorderRadius.circular(8),
                 ),
                 child: Text(
@@ -382,9 +382,9 @@ class _CreateTaskSheetState extends State<_CreateTaskSheet> {
                       decoration: BoxDecoration(
                         color: _priority == p
                             ? color
-                            : color.withOpacity(0.1),
+                            : color.withValues(alpha: 0.1),
                         borderRadius: BorderRadius.circular(8),
-                        border: Border.all(color: color.withOpacity(0.5)),
+                        border: Border.all(color: color.withValues(alpha: 0.5)),
                       ),
                       child: Text(
                         'P$p',

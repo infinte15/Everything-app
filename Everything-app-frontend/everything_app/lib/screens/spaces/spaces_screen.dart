@@ -9,7 +9,7 @@ const _onSurface = Color(0xFF323232);
 const _onSurfaceVariant = Color(0xFF5F5F5F);
 
 final _cardShadow = BoxShadow(
-  color: _onSurface.withOpacity(0.04),
+  color: _onSurface.withValues(alpha: 0.04),
   blurRadius: 32,
   offset: const Offset(0, 8),
 );
@@ -147,7 +147,7 @@ class _SpaceGridCard extends StatelessWidget {
             Container(
               padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
-                color: space.color.withOpacity(0.1),
+                color: space.color.withValues(alpha: 0.1),
                 shape: BoxShape.circle,
               ),
               child: Icon(space.icon, color: space.color, size: 28),

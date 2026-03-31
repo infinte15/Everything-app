@@ -91,7 +91,7 @@ class _WorkoutTab extends StatelessWidget {
           padding: const EdgeInsets.all(20),
           decoration: BoxDecoration(
             gradient: LinearGradient(
-              colors: [AppTheme.sportsColor, AppTheme.sportsColor.withOpacity(0.7)],
+              colors: [AppTheme.sportsColor, AppTheme.sportsColor.withValues(alpha: 0.7)],
             ),
             borderRadius: BorderRadius.circular(20),
           ),
@@ -173,7 +173,7 @@ class _WorkoutCard extends StatelessWidget {
                   padding:
                       const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                   decoration: BoxDecoration(
-                    color: AppTheme.sportsColor.withOpacity(0.1),
+                    color: AppTheme.sportsColor.withValues(alpha: 0.1),
                     borderRadius: BorderRadius.circular(8),
                   ),
                   child: Text(workout['day'],
@@ -199,7 +199,7 @@ class _WorkoutCard extends StatelessWidget {
                 return Chip(
                   label: Text(e, style: const TextStyle(fontSize: 12)),
                   backgroundColor:
-                      AppTheme.sportsColor.withOpacity(0.1),
+                      AppTheme.sportsColor.withValues(alpha: 0.1),
                   side: BorderSide.none,
                   materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
                 );
@@ -219,7 +219,6 @@ class _HistoryTab extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
     final history = [
       {'date': DateTime.now().subtract(const Duration(days: 1)),
        'name': 'Oberkörper', 'duration': 62, 'sets': 15},
@@ -239,7 +238,7 @@ class _HistoryTab extends StatelessWidget {
           margin: const EdgeInsets.only(bottom: 8),
           child: ListTile(
             leading: CircleAvatar(
-              backgroundColor: AppTheme.sportsColor.withOpacity(0.1),
+              backgroundColor: AppTheme.sportsColor.withValues(alpha: 0.1),
               child: Icon(Icons.fitness_center, color: AppTheme.sportsColor),
             ),
             title: Text(h['name'] as String,
@@ -334,13 +333,12 @@ class _SportStatCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: color.withOpacity(0.1),
+        color: color.withValues(alpha: 0.1),
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: color.withOpacity(0.2)),
+        border: Border.all(color: color.withValues(alpha: 0.2)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -368,7 +366,7 @@ class _SimpleBarChart extends StatelessWidget {
       height: 120,
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: Theme.of(context).colorScheme.surfaceVariant.withOpacity(0.5),
+      color: Theme.of(context).colorScheme.surfaceContainerHighest.withValues(alpha: 0.5),
         borderRadius: BorderRadius.circular(16),
       ),
       child: Row(

@@ -1,4 +1,3 @@
-import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 import '../providers/auth_provider.dart';
@@ -31,11 +30,11 @@ final router = GoRouter(
     // Auth Routes (kein Bottom Nav)
     GoRoute(
       path: '/login',
-      builder: (_, __) => const LoginScreen(),
+      builder: (_, _) => const LoginScreen(),
     ),
     GoRoute(
       path: '/register',
-      builder: (_, __) => const RegisterScreen(),
+      builder: (_, _) => const RegisterScreen(),
     ),
 
     // Main App Routes (mit Bottom Nav via ShellRoute)
@@ -44,19 +43,19 @@ final router = GoRouter(
       routes: [
         GoRoute(
           path: '/home',
-          builder: (_, __) => const HomeScreen(),
+          builder: (_, _) => const HomeScreen(),
         ),
         GoRoute(
           path: '/calendar',
-          builder: (_, __) => const CalendarScreen(),
+          builder: (_, _) => const CalendarScreen(),
         ),
         GoRoute(
           path: '/spaces',
-          builder: (_, __) => const SpacesScreen(),
+          builder: (_, _) => const SpacesScreen(),
         ),
         GoRoute(
           path: '/create',
-          builder: (_, __) => const CreateScreen(),
+          builder: (_, _) => const CreateScreen(),
         ),
       ],
     ),
@@ -64,23 +63,23 @@ final router = GoRouter(
     // Space Detail Routes (ohne Bottom Nav Shell, eigene Navigation)
     GoRoute(
       path: '/study',
-      builder: (_, __) => const StudyScreen(),
+      builder: (_, _) => const StudyScreen(),
     ),
     GoRoute(
       path: '/sports',
-      builder: (_, __) => const SportsScreen(),
+      builder: (_, _) => const SportsScreen(),
     ),
     GoRoute(
       path: '/tasks',
-      builder: (_, __) => const TasksScreen(),
+      builder: (_, _) => const TasksScreen(),
     ),
     GoRoute(
       path: '/recipes',
-      builder: (_, __) => const RecipesScreen(),
+      builder: (_, _) => const RecipesScreen(),
     ),
     GoRoute(
       path: '/finance',
-      builder: (_, __) => const FinanceScreen(),
+      builder: (_, _) => const FinanceScreen(),
     ),
   ],
 );

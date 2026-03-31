@@ -158,10 +158,10 @@ class _CategoryChip extends StatelessWidget {
       margin: const EdgeInsets.only(right: 8),
       padding: const EdgeInsets.symmetric(horizontal: 16),
       decoration: BoxDecoration(
-        color: Theme.of(context).colorScheme.surfaceVariant.withOpacity(0.5),
+        color: Theme.of(context).colorScheme.surfaceContainerHighest.withValues(alpha: 0.5),
         borderRadius: BorderRadius.circular(20),
         border: Border.all(
-            color: Theme.of(context).colorScheme.outline.withOpacity(0.1)),
+            color: Theme.of(context).colorScheme.outline.withValues(alpha: 0.1)),
       ),
       alignment: Alignment.center,
       child: Row(
@@ -191,7 +191,7 @@ class _HeroRecipeCard extends StatelessWidget {
         height: 240,
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(24),
-          color: theme.colorScheme.surfaceVariant,
+          color: theme.colorScheme.surfaceContainerHighest,
           image: recipe.imageUrl != null
               ? DecorationImage(
                   image: NetworkImage(recipe.imageUrl!),
@@ -200,7 +200,7 @@ class _HeroRecipeCard extends StatelessWidget {
               : null,
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withOpacity(0.1),
+              color: Colors.black.withValues(alpha: 0.1),
               blurRadius: 12,
               offset: const Offset(0, 4),
             ),
@@ -216,7 +216,7 @@ class _HeroRecipeCard extends StatelessWidget {
                   gradient: LinearGradient(
                     colors: [
                       AppTheme.recipesColor,
-                      AppTheme.recipesColor.withOpacity(0.4)
+                      AppTheme.recipesColor.withValues(alpha: 0.4)
                     ],
                     begin: Alignment.topLeft,
                     end: Alignment.bottomRight,
@@ -228,7 +228,7 @@ class _HeroRecipeCard extends StatelessWidget {
               decoration: BoxDecoration(
                 borderRadius: BorderRadius.circular(24),
                 gradient: LinearGradient(
-                  colors: [Colors.black.withOpacity(0.7), Colors.transparent],
+                  colors: [Colors.black.withValues(alpha: 0.7), Colors.transparent],
                   begin: Alignment.bottomCenter,
                   end: Alignment.center,
                 ),
@@ -241,7 +241,7 @@ class _HeroRecipeCard extends StatelessWidget {
               child: Container(
                 padding: const EdgeInsets.all(8),
                 decoration: BoxDecoration(
-                  color: Colors.white.withOpacity(0.9),
+                  color: Colors.white.withValues(alpha: 0.9),
                   shape: BoxShape.circle,
                 ),
                 child: Icon(
@@ -326,7 +326,7 @@ class _SmallRecipeCard extends StatelessWidget {
           color: theme.colorScheme.surface,
           borderRadius: BorderRadius.circular(16),
           border:
-              Border.all(color: theme.colorScheme.outline.withOpacity(0.1)),
+              Border.all(color: theme.colorScheme.outline.withValues(alpha: 0.1)),
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -338,7 +338,7 @@ class _SmallRecipeCard extends StatelessWidget {
                   borderRadius:
                       const BorderRadius.vertical(top: Radius.circular(15)),
                   color: recipe.imageUrl == null
-                      ? AppTheme.recipesColor.withOpacity(0.2)
+                      ? AppTheme.recipesColor.withValues(alpha: 0.2)
                       : null,
                   image: recipe.imageUrl != null
                       ? DecorationImage(

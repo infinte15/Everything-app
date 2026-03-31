@@ -50,7 +50,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
             end: Alignment.bottomRight,
             colors: [
               AppTheme.primaryColor,
-              AppTheme.primaryColor.withOpacity(0.7),
+              AppTheme.primaryColor.withValues(alpha: 0.7),
               theme.colorScheme.surface,
             ],
             stops: const [0.0, 0.4, 1.0],
@@ -75,7 +75,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                       borderRadius: BorderRadius.circular(24),
                       boxShadow: [
                         BoxShadow(
-                            color: Colors.black.withOpacity(0.15),
+                            color: Colors.black.withValues(alpha: 0.15),
                             blurRadius: 20,
                             offset: const Offset(0, 8))
                       ],
@@ -174,8 +174,9 @@ class _RegisterScreenState extends State<RegisterScreen> {
                             ),
                             validator: (v) {
                               if (v == null || v.isEmpty) return 'Pflichtfeld';
-                              if (v != _passwordController.text)
+                              if (v != _passwordController.text) {
                                 return 'Passwörter stimmen nicht überein';
+                              }
                               return null;
                             },
                           ),
@@ -183,7 +184,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
 
                           // Error
                           Consumer<AuthProvider>(
-                            builder: (_, auth, __) {
+                            builder: (_, auth, _) {
                               if (auth.error == null) return const SizedBox.shrink();
                               return Container(
                                 padding: const EdgeInsets.all(12),
@@ -203,7 +204,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
 
                           // Register Button
                           Consumer<AuthProvider>(
-                            builder: (_, auth, __) => FilledButton(
+                            builder: (_, auth, _) => FilledButton(
                               onPressed: auth.isLoading ? null : _register,
                               style: FilledButton.styleFrom(
                                 padding:

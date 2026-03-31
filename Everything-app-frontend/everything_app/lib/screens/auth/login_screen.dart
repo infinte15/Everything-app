@@ -65,7 +65,7 @@ class _LoginScreenState extends State<LoginScreen>
             end: Alignment.bottomRight,
             colors: [
               AppTheme.primaryColor,
-              AppTheme.primaryColor.withOpacity(0.7),
+              AppTheme.primaryColor.withValues(alpha: 0.7),
               theme.colorScheme.surface,
             ],
             stops: const [0.0, 0.4, 1.0],
@@ -85,7 +85,7 @@ class _LoginScreenState extends State<LoginScreen>
                       Container(
                         padding: const EdgeInsets.all(20),
                         decoration: BoxDecoration(
-                          color: Colors.white.withOpacity(0.15),
+                          color: Colors.white.withValues(alpha: 0.15),
                           borderRadius: BorderRadius.circular(24),
                         ),
                         child: const Icon(Icons.auto_awesome,
@@ -112,7 +112,7 @@ class _LoginScreenState extends State<LoginScreen>
                           borderRadius: BorderRadius.circular(24),
                           boxShadow: [
                             BoxShadow(
-                              color: Colors.black.withOpacity(0.15),
+                              color: Colors.black.withValues(alpha: 0.15),
                               blurRadius: 20,
                               offset: const Offset(0, 8),
                             )
@@ -168,7 +168,7 @@ class _LoginScreenState extends State<LoginScreen>
                               ),
                               const SizedBox(height: 12),
                               Consumer<AuthProvider>(
-                                builder: (_, auth, __) {
+                                builder: (_, auth, _) {
                                   if (auth.error == null) return const SizedBox.shrink();
                                   return Container(
                                     padding: const EdgeInsets.all(12),
@@ -194,7 +194,7 @@ class _LoginScreenState extends State<LoginScreen>
                               ),
                               const SizedBox(height: 12),
                               Consumer<AuthProvider>(
-                                builder: (_, auth, __) => FilledButton(
+                                builder: (_, auth, _) => FilledButton(
                                   onPressed: auth.isLoading ? null : _login,
                                   style: FilledButton.styleFrom(
                                     padding: const EdgeInsets.symmetric(

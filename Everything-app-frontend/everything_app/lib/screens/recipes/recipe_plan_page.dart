@@ -172,7 +172,7 @@ class _MealSection extends StatelessWidget {
                             image: NetworkImage(r.imageUrl!),
                             fit: BoxFit.cover)
                         : null,
-                    color: AppTheme.recipesColor.withOpacity(0.2),
+                    color: AppTheme.recipesColor.withValues(alpha: 0.2),
                   ),
                   child: r.imageUrl == null
                       ? const Icon(Icons.restaurant,

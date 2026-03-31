@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import '../config/api_config.dart';
 import '../models/calendar_event.dart';
 import 'api_service.dart';
@@ -23,7 +24,7 @@ class CalendarService {
         throw Exception(_apiService.getErrorMessage(response));
       }
     } catch (e) {
-      print('Error fetching calendar events: $e');
+      debugPrint('Error fetching calendar events: $e');
       return [];
     }
   }
@@ -49,7 +50,7 @@ class CalendarService {
         throw Exception(_apiService.getErrorMessage(response));
       }
     } catch (e) {
-      print('Error creating event: $e');
+      debugPrint('Error creating event: $e');
       return null;
     }
   }
@@ -72,7 +73,7 @@ class CalendarService {
         throw Exception(_apiService.getErrorMessage(response));
       }
     } catch (e) {
-      print('Error updating event: $e');
+      debugPrint('Error updating event: $e');
       return null;
     }
   }
@@ -84,7 +85,7 @@ class CalendarService {
       );
       return _apiService.isSuccess(response);
     } catch (e) {
-      print('Error deleting event: $e');
+      debugPrint('Error deleting event: $e');
       return false;
     }
   }
@@ -115,7 +116,7 @@ class CalendarService {
         };
       }
     } catch (e) {
-      print('Error generating schedule: $e');
+      debugPrint('Error generating schedule: $e');
       return {
         'success': false,
         'error': 'Verbindungsfehler: $e',

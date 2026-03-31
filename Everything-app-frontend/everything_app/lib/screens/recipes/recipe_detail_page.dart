@@ -76,7 +76,7 @@ class _RecipeDetailPageState extends State<RecipeDetailPage> {
               background: widget.recipe.imageUrl != null
                   ? Image.network(widget.recipe.imageUrl!, fit: BoxFit.cover)
                   : Container(
-                      color: AppTheme.recipesColor.withOpacity(0.2),
+                      color: AppTheme.recipesColor.withValues(alpha: 0.2),
                       child: const Center(
                           child: Icon(Icons.restaurant,
                               size: 80, color: AppTheme.recipesColor)),
@@ -141,7 +141,7 @@ class _RecipeDetailPageState extends State<RecipeDetailPage> {
                     decoration: BoxDecoration(
                       border: Border.symmetric(
                           horizontal: BorderSide(
-                              color: theme.colorScheme.outline.withOpacity(0.2))),
+                              color: theme.colorScheme.outline.withValues(alpha: 0.2))),
                     ),
                     child: Row(
                       mainAxisAlignment: MainAxisAlignment.spaceEvenly,
@@ -172,7 +172,7 @@ class _RecipeDetailPageState extends State<RecipeDetailPage> {
                               fontSize: 20, fontWeight: FontWeight.bold)),
                       Container(
                         decoration: BoxDecoration(
-                          color: theme.colorScheme.surfaceVariant.withOpacity(0.5),
+                          color: theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.5),
                           borderRadius: BorderRadius.circular(20),
                         ),
                         child: Row(
@@ -298,9 +298,9 @@ class _Badge extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
       decoration: BoxDecoration(
-        color: color.withOpacity(0.1),
+        color: color.withValues(alpha: 0.1),
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: color.withOpacity(0.3)),
+        border: Border.all(color: color.withValues(alpha: 0.3)),
       ),
       child: Text(
         text,

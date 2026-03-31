@@ -64,10 +64,10 @@ class LessonPlanPage extends StatelessWidget {
                               border: Border(
                                 bottom: BorderSide(
                                     color: theme.colorScheme.outline
-                                        .withOpacity(0.2)),
+                                        .withValues(alpha: 0.2)),
                                 right: BorderSide(
                                     color: theme.colorScheme.outline
-                                        .withOpacity(0.15)),
+                                        .withValues(alpha: 0.15)),
                               ),
                             ),
                             child: Text(_days[d],
@@ -395,7 +395,7 @@ class _DayColumn extends StatelessWidget {
         decoration: BoxDecoration(
           border: Border(
             right: BorderSide(
-                color: theme.colorScheme.outline.withOpacity(0.15)),
+                color: theme.colorScheme.outline.withValues(alpha: 0.15)),
           ),
         ),
         child: Stack(
@@ -408,7 +408,7 @@ class _DayColumn extends StatelessWidget {
                 right: 0,
                 child: Divider(
                     height: 1,
-                    color: theme.colorScheme.outline.withOpacity(0.1)),
+                    color: theme.colorScheme.outline.withValues(alpha: 0.1)),
               ),
             // Lesson blocks
             for (final entry in entries)
@@ -454,7 +454,7 @@ class _LessonBlock extends StatelessWidget {
         child: Container(
           padding: const EdgeInsets.all(6),
           decoration: BoxDecoration(
-            color: color.withOpacity(0.15),
+            color: color.withValues(alpha: 0.15),
             borderRadius: BorderRadius.circular(8),
             border: Border(left: BorderSide(color: color, width: 3)),
           ),

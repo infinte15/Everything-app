@@ -1,4 +1,5 @@
 
+import 'package:flutter/foundation.dart';
 import '../config/api_config.dart';
 import '../models/task.dart';
 import 'api_service.dart';
@@ -21,7 +22,7 @@ class TaskService {
         throw Exception(_apiService.getErrorMessage(response));
       }
     } catch (e) {
-      print('Error fetching tasks: $e');
+      debugPrint('Error fetching tasks: $e');
       return [];
     }
   }
@@ -38,7 +39,7 @@ class TaskService {
         throw Exception(_apiService.getErrorMessage(response));
       }
     } catch (e) {
-      print('Error fetching task: $e');
+      debugPrint('Error fetching task: $e');
       return null;
     }
   }
@@ -55,7 +56,7 @@ class TaskService {
         throw Exception(_apiService.getErrorMessage(response));
       }
     } catch (e) {
-      print('Error fetching tasks by status: $e');
+      debugPrint('Error fetching tasks by status: $e');
       return [];
     }
   }
@@ -72,7 +73,7 @@ class TaskService {
         throw Exception(_apiService.getErrorMessage(response));
       }
     } catch (e) {
-      print('Error fetching unscheduled tasks: $e');
+      debugPrint('Error fetching unscheduled tasks: $e');
       return [];
     }
   }
@@ -92,7 +93,7 @@ class TaskService {
         throw Exception(_apiService.getErrorMessage(response));
       }
     } catch (e) {
-      print('Error creating task: $e');
+      debugPrint('Error creating task: $e');
       return null;
     }
   }
@@ -116,7 +117,7 @@ class TaskService {
         throw Exception(_apiService.getErrorMessage(response));
       }
     } catch (e) {
-      print('Error updating task: $e');
+      debugPrint('Error updating task: $e');
       return null;
     }
   }
@@ -131,7 +132,7 @@ class TaskService {
 
       return _apiService.isSuccess(response);
     } catch (e) {
-      print('Error completing task: $e');
+      debugPrint('Error completing task: $e');
       return false;
     }
   }
@@ -142,7 +143,7 @@ class TaskService {
       final response = await _apiService.delete(ApiConfig.taskById(id));
       return _apiService.isSuccess(response);
     } catch (e) {
-      print('Error deleting task: $e');
+      debugPrint('Error deleting task: $e');
       return false;
     }
   }

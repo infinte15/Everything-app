@@ -118,9 +118,9 @@ class _KanbanColumn extends StatelessWidget {
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
             decoration: BoxDecoration(
-              color: col.color.withOpacity(0.1),
+              color: col.color.withValues(alpha: 0.1),
               borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: col.color.withOpacity(0.25)),
+              border: Border.all(color: col.color.withValues(alpha: 0.25)),
             ),
             child: Row(
               children: [
@@ -135,7 +135,7 @@ class _KanbanColumn extends StatelessWidget {
                   padding:
                       const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
                   decoration: BoxDecoration(
-                    color: col.color.withOpacity(0.2),
+                    color: col.color.withValues(alpha: 0.2),
                     borderRadius: BorderRadius.circular(20),
                   ),
                   child: Text('${notes.length}',
@@ -164,10 +164,10 @@ class _KanbanColumn extends StatelessWidget {
               height: 80,
               alignment: Alignment.center,
               decoration: BoxDecoration(
-                color: theme.colorScheme.surfaceVariant.withOpacity(0.3),
+                color: theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.3),
                 borderRadius: BorderRadius.circular(12),
                 border: Border.all(
-                    color: theme.colorScheme.outline.withOpacity(0.15),
+                    color: theme.colorScheme.outline.withValues(alpha: 0.15),
                     style: BorderStyle.solid),
               ),
               child: Text('Keine Einträge',
@@ -213,10 +213,10 @@ class _NoteCard extends StatelessWidget {
           color: theme.colorScheme.surface,
           borderRadius: BorderRadius.circular(12),
           border: Border.all(
-              color: theme.colorScheme.outline.withOpacity(0.15)),
+              color: theme.colorScheme.outline.withValues(alpha: 0.15)),
           boxShadow: [
             BoxShadow(
-                color: Colors.black.withOpacity(0.05),
+                color: Colors.black.withValues(alpha: 0.05),
                 blurRadius: 8,
                 offset: const Offset(0, 2)),
           ],
@@ -272,7 +272,7 @@ class _NoteCard extends StatelessWidget {
                     padding: const EdgeInsets.symmetric(
                         horizontal: 8, vertical: 3),
                     decoration: BoxDecoration(
-                      color: accentColor.withOpacity(0.1),
+                      color: accentColor.withValues(alpha: 0.1),
                       borderRadius: BorderRadius.circular(20),
                     ),
                     child: Text(t,
