@@ -1,566 +1,484 @@
 package com.Finn.everything_app.service;
 
+import com.Finn.everything_app.event.ScheduleChangedEvent;
 import com.Finn.everything_app.model.*;
 import com.Finn.everything_app.repository.*;
+import com.google.ortools.Loader;
+import com.google.ortools.sat.*;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.context.event.EventListener;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.context.event.EventListener;
-import com.Finn.everything_app.event.ScheduleChangedEvent;
 
-import java.sql.Time;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.time.temporal.ChronoUnit;
-import java.util.ArrayList;
-import java.util.Comparator;
-import java.util.List;
-import java.util.Set;
+import java.util.*;
 import java.util.stream.Collectors;
 
+/**
+ * Smart Scheduler using Google OR-Tools CP-SAT solver.
+ *
+ * Mental model (Motion / Reclaim style):
+ *  - Time axis  : integer line of minutes from startDate (minute 0) to endDate (minute horizon).
+ *  - Fixed blocks: sleep windows + calendar events → unmovable IntervalVars.
+ *  - Tasks       : IntervalVars with fixed duration but variable start.
+ *  - Engine      : addNoOverlap() ensures nothing collides.
+ *  - Objective   : minimize Σ weight_i × start_i so urgent / high-priority tasks
+ *                  are pushed to the earliest available slot automatically.
+ */
 @Service
 @RequiredArgsConstructor
 @Slf4j
 public class SmartSchedulerService {
 
-    private final TaskRepository taskRepository;
-    private final CalendarEventRepository calendarEventRepository;
-    private final HabitRepository habitRepository;
-    private final WorkoutSessionRepository workoutSessionRepository;
-    private final CourseScheduleRepository courseScheduleRepository;
-    private final UserService userService;
-    private final CalendarEventService calendarEventService;
-    private final TaskService taskService;
+    private final TaskRepository             taskRepository;
+    private final CalendarEventRepository    calendarEventRepository;
+    private final HabitRepository            habitRepository;
+    private final WorkoutSessionRepository   workoutSessionRepository;
+    private final CourseScheduleRepository   courseScheduleRepository;
+    private final UserService                userService;
+    private final CalendarEventService       calendarEventService;
+    private final TaskService                taskService;
+
+    private static final double SOLVER_TIME_LIMIT_SECONDS = 10.0;
+    private static final int    MIN_SLOT_MINUTES          = 10;
+
+    // Load OR-Tools JNI libraries once on class initialisation
+    static {
+        Loader.loadNativeLibraries();
+    }
+
+    // =========================================================================
+    // PUBLIC API
+    // =========================================================================
 
     @EventListener
     public void onScheduleChanged(ScheduleChangedEvent event) {
-        log.info("ScheduleChangedEvent empfangen für User {}", event.getUserId());
-        LocalDate start = LocalDate.now();
-        LocalDate end = start.plusDays(14); // Next 14 days
-        generateOptimalSchedule(event.getUserId(), start, end);
+        log.info("ScheduleChangedEvent für User {}", event.getUserId());
+        generateOptimalSchedule(event.getUserId(), LocalDate.now(), LocalDate.now().plusDays(14));
     }
 
     @Transactional
-    public ScheduleResult generateOptimalSchedule(Long userId, LocalDate startDate, LocalDate endDate){
-        log.info("Generiere Schedule für User {} von {} bis {}", userId, startDate, endDate);
+    public ScheduleResult generateOptimalSchedule(Long userId, LocalDate startDate, LocalDate endDate) {
+        log.info("Generiere CP-SAT Schedule für User {} | {} – {}", userId, startDate, endDate);
 
-        UserPreferences prefs = userService.getUserPreferences(userId);                                                                                                         //User Präferenzen laden
-        calendarEventService.clearScheduledEvents(userId);                                                                                                                      //Kalender clearen
-        ScheduleInput input = collectScheduleInput(userId, startDate, endDate);                                                                                                 //Daten holen
-        List<TimeSlot> availableSlots = generateAvailableTimeSlots(userId, startDate, endDate, prefs, input.getFixedEvents());                                                  //Zeitslots generieren
-        log.info("{} verfügbare Zeitslots gefunden", availableSlots.size());
-        List<Task> prioritzedTasks = prioritizeTasks(input.getTasks(), prefs);                                                                                                  //Tasks priosieren
-        List<ScheduledItem> scheduledTasks = scheduleTasksToSlots(prioritzedTasks, availableSlots, prefs);                                                                      //Tasks einplanen
-        List<ScheduledItem> scheduledHabits = scheduleRecurringActivities(input.getHabits(), input.getWorkouts(), availableSlots, prefs);                                       //Habits einplanen
-        saveScheduleToDatabase(userId, scheduledTasks, scheduledHabits);                                                                                                        //In DB speichern
+        UserPreferences prefs = userService.getUserPreferences(userId);
+        calendarEventService.clearScheduledEvents(userId);
+        ScheduleInput input = collectScheduleInput(userId, startDate, endDate);
 
-        ScheduleResult result = new ScheduleResult();                                                                                                                           //Ergebnis erstellen
+        // ---- Core: CP-SAT task scheduling ----
+        List<ScheduledItem> scheduledTasks =
+                solveWithCpSat(input.getTasks(), input.getFixedEvents(), startDate, endDate, prefs);
+
+        // ---- Habits / workouts: greedy into remaining free slots ----
+        List<TimeSlot> freeSlots =
+                buildFreeSlots(scheduledTasks, input.getFixedEvents(), startDate, endDate, prefs);
+        List<ScheduledItem> scheduledHabits =
+                scheduleRecurringActivities(input.getHabits(), input.getWorkouts(), freeSlots, prefs);
+
+        saveScheduleToDatabase(userId, scheduledTasks, scheduledHabits);
+
+        ScheduleResult result = new ScheduleResult();
         result.setScheduledTasks(scheduledTasks);
         result.setScheduledHabits(scheduledHabits);
-        result.setUnscheduledTasks(findUnscheduledTasks(prioritzedTasks, scheduledTasks));
+        result.setUnscheduledTasks(findUnscheduledTasks(input.getTasks(), scheduledTasks));
         result.setTotalTasksScheduled(scheduledTasks.size());
         result.setTotalHoursScheduled(calculateTotalHours(scheduledTasks, scheduledHabits));
 
-        log.info("Schedule generiert: {} Tasks, {} Habits eingeplant, {} Tasks nicht eingeplant", scheduledTasks.size(), scheduledHabits.size(), result.getUnscheduledTasks().size());
-
+        log.info("Schedule fertig: {} Tasks, {} Habits, {} unscheduled",
+                scheduledTasks.size(), scheduledHabits.size(), result.getUnscheduledTasks().size());
         return result;
     }
 
+    // =========================================================================
+    // CP-SAT SOLVER
+    // =========================================================================
 
-    //Input Daten sammeln
-    private ScheduleInput collectScheduleInput(Long userId, LocalDate startDate, LocalDate endDate){
-        ScheduleInput input = new ScheduleInput();
+    private List<ScheduledItem> solveWithCpSat(
+            List<Task> tasks,
+            List<CalendarEvent> fixedEvents,
+            LocalDate startDate,
+            LocalDate endDate,
+            UserPreferences prefs) {
 
-        LocalDateTime start = startDate.atStartOfDay();
-        LocalDateTime end = endDate.atTime(23,59,59);
+        List<Task> valid = tasks.stream()
+                .filter(t -> t.getEstimatedDurationMinutes() != null && t.getEstimatedDurationMinutes() > 0)
+                .collect(Collectors.toList());
+        if (valid.isEmpty()) return Collections.emptyList();
 
-        input.setTasks(taskService.getUnscheduledTasks(userId));                                                                                                                //Uneingeplante Tasks
-        input.setFixedEvents(calendarEventService.getFixedEvents(userId, start, end));                                                                                          //Fixe Events
-        input.setHabits(habitRepository.findActiveHabits(userId,startDate));                                                                                                    //Habits
-        input.setWorkouts(workoutSessionRepository.findByUserIdAndStartTimeBetween(userId, start, end));                                                                //Workouts
-        input.setCourseSchedules(courseScheduleRepository.findByUserId(userId));                                                                                                //Kurse
+        CpModel model = new CpModel();
 
-        log.debug("Input gesammelt: {} Tasks, {} fixe Events, {} Habits, {} Workouts, {} Kurse",
-                input.getTasks().size(), input.getFixedEvents().size(),
-                input.getHabits().size(), input.getWorkouts().size(), input.getCourseSchedules().size());
+        // --- Time axis ---
+        LocalDateTime horizonStart = startDate.atStartOfDay();
+        int totalDays = (int) ChronoUnit.DAYS.between(startDate, endDate) + 1;
+        int horizon   = totalDays * 1440;
 
+        LocalTime workStart  = prefs.getWorkdayStart() != null ? prefs.getWorkdayStart() : LocalTime.of(8, 0);
+        LocalTime workEnd    = prefs.getWorkdayEnd()   != null ? prefs.getWorkdayEnd()   : LocalTime.of(22, 0);
+        int workStartMin     = workStart.getHour() * 60 + workStart.getMinute();
+        int workEndMin       = workEnd.getHour()   * 60 + workEnd.getMinute();
 
-        return input;
-    }
+        // Earliest start = right now (tasks cannot be placed in the past)
+        int nowOffset = (int) Math.max(0, ChronoUnit.MINUTES.between(horizonStart, LocalDateTime.now()));
 
-    //Timeslots generieren
-    private List<TimeSlot> generateAvailableTimeSlots(Long userId, LocalDate startDate, LocalDate endDate, UserPreferences prefs, List<CalendarEvent> fixedEvents) {
-        List<TimeSlot> slots = new ArrayList<>();
-        for(LocalDate date = startDate; !date.isAfter(endDate); date = date.plusDays(1)){
-            List<TimeSlot> daySlots = generateDaySlots(date, prefs, fixedEvents);
-            slots.addAll(daySlots);
+        List<IntervalVar> allIntervals = new ArrayList<>();
+
+        // --- 1. Block non-working hours (sleep) for every day ---
+        for (int day = 0; day < totalDays; day++) {
+            int off = day * 1440;
+            if (workStartMin > 0)
+                allIntervals.add(fixedBlock(model, off, workStartMin, "sleep_am_d" + day));
+            if (workEndMin < 1440)
+                allIntervals.add(fixedBlock(model, off + workEndMin, 1440 - workEndMin, "sleep_pm_d" + day));
         }
 
-        return slots;
+        // --- 2. Block fixed calendar events (meetings, pinned tasks) ---
+        for (CalendarEvent ev : fixedEvents) {
+            long evS = ChronoUnit.MINUTES.between(horizonStart, ev.getStartTime());
+            long evE = ChronoUnit.MINUTES.between(horizonStart, ev.getEndTime());
+            if (evE > evS && evS >= 0 && evE <= horizon)
+                allIntervals.add(fixedBlock(model, (int) evS, (int)(evE - evS), "ev_" + ev.getId()));
+        }
+
+        // --- 3. Task interval variables ---
+        IntVar[]      startVars = new IntVar[valid.size()];
+        IntervalVar[] taskIvs   = new IntervalVar[valid.size()];
+        long[]        weights   = new long[valid.size()];
+
+        for (int i = 0; i < valid.size(); i++) {
+            Task task     = valid.get(i);
+            int  duration = task.getEstimatedDurationMinutes();
+
+            // Upper bound: horizon or deadline, whichever comes first
+            int latestStart = horizon - duration;
+            if (task.getDeadline() != null) {
+                long deadlineMin = ChronoUnit.MINUTES.between(horizonStart, task.getDeadline());
+                latestStart = (int) Math.min(latestStart, deadlineMin - duration);
+            }
+            // Guard: if deadline already passed, schedule best-effort at end of horizon
+            if (latestStart < nowOffset) {
+                log.warn("Task '{}' hat überschrittene Deadline – Best-Effort-Placement.", task.getTitle());
+                latestStart = horizon - duration;
+            }
+
+            int lb = Math.max(0, nowOffset);
+            int ub = Math.max(lb, latestStart);
+
+            startVars[i] = model.newIntVar(lb, ub, "s_" + task.getId());
+            taskIvs[i]   = model.newFixedSizeIntervalVar(startVars[i], duration, "iv_" + task.getId());
+            weights[i]   = calculateTaskWeight(task);
+            allIntervals.add(taskIvs[i]);
+        }
+
+        // --- 4. Core constraint: nothing overlaps ---
+        model.addNoOverlap(allIntervals.toArray(new IntervalVar[0]));
+
+        // --- 5. Objective: minimize Σ weight_i × start_i ---
+        // High weight tasks (urgent / high priority) are pushed to early slots.
+        model.minimize(LinearExpr.weightedSum(startVars, weights));
+
+        // --- 6. Solve ---
+        CpSolver solver = new CpSolver();
+        solver.getParameters().setMaxTimeInSeconds(SOLVER_TIME_LIMIT_SECONDS);
+        solver.getParameters().setNumSearchWorkers(4);
+        solver.getParameters().setLogSearchProgress(false);
+
+        CpSolverStatus status = solver.solve(model);
+        log.info("CP-SAT Status: {} | Objective: {}", status, solver.objectiveValue());
+
+        if (status != CpSolverStatus.OPTIMAL && status != CpSolverStatus.FEASIBLE) {
+            log.warn("CP-SAT: kein gültiger Schedule gefunden ({}). Schedule bleibt leer.", status);
+            return Collections.emptyList();
+        }
+
+        // --- 7. Extract solution ---
+        List<ScheduledItem> result = new ArrayList<>();
+        for (int i = 0; i < valid.size(); i++) {
+            long startMin          = solver.value(startVars[i]);
+            LocalDateTime taskStart = horizonStart.plusMinutes(startMin);
+            LocalDateTime taskEnd   = taskStart.plusMinutes(valid.get(i).getEstimatedDurationMinutes());
+
+            ScheduledItem item = new ScheduledItem();
+            item.setTask(valid.get(i));
+            item.setStartTime(taskStart);
+            item.setEndTime(taskEnd);
+            item.setType(ScheduledItemType.TASK);
+            result.add(item);
+
+            taskService.scheduleTask(valid.get(i).getId(), taskStart, taskEnd);
+        }
+        return result;
     }
-    //Timeslots für einzelne Tage
-    private List<TimeSlot> generateDaySlots(
-            LocalDate date,
-            UserPreferences prefs,
-            List<CalendarEvent> fixedEvents) {
+
+    /** Creates an unmovable blocking interval (e.g. sleep window or meeting). */
+    private IntervalVar fixedBlock(CpModel model, int startMin, int duration, String name) {
+        IntVar s = model.newIntVar(startMin, startMin, name + "_s");
+        return model.newFixedSizeIntervalVar(s, duration, name);
+    }
+
+    /**
+     * Urgency weight for the CP-SAT objective.
+     * Higher value → solver places the task at a lower (earlier) start minute.
+     */
+    private long calculateTaskWeight(Task task) {
+        long w = 0;
+        int priority = task.getPriority() != null ? task.getPriority() : 3;
+        w += (long) priority * 100;
+
+        if (task.getDeadline() != null) {
+            long days = ChronoUnit.DAYS.between(LocalDate.now(), task.getDeadline().toLocalDate());
+            if      (days <= 0) w += 1000;
+            else if (days == 1) w += 500;
+            else if (days <= 3) w += 300;
+            else if (days <= 7) w += 150;
+            else                w += 50;
+        }
+        return w;
+    }
+
+    // =========================================================================
+    // FREE-SLOT GENERATION  (used by habit / workout greedy scheduler)
+    // =========================================================================
+
+    /**
+     * Generates free TimeSlots within working hours, subtracting both fixed
+     * calendar events and the tasks already placed by the CP-SAT solver.
+     */
+    private List<TimeSlot> buildFreeSlots(
+            List<ScheduledItem> scheduled,
+            List<CalendarEvent> fixedEvents,
+            LocalDate startDate, LocalDate endDate,
+            UserPreferences prefs) {
+
+        // Combine all occupied windows
+        List<CalendarEvent> occupied = new ArrayList<>(fixedEvents);
+        for (ScheduledItem item : scheduled) {
+            CalendarEvent pseudo = new CalendarEvent();
+            pseudo.setStartTime(item.getStartTime());
+            pseudo.setEndTime(item.getEndTime());
+            occupied.add(pseudo);
+        }
 
         List<TimeSlot> slots = new ArrayList<>();
+        for (LocalDate d = startDate; !d.isAfter(endDate); d = d.plusDays(1))
+            slots.addAll(generateDaySlots(d, prefs, occupied));
+        return slots;
+    }
 
-        LocalTime workStart = prefs.getWorkdayStart() != null
-                ? prefs.getWorkdayStart()
-                : LocalTime.of(8, 0);
-        LocalTime workEnd = prefs.getWorkdayEnd() != null
-                ? prefs.getWorkdayEnd()
-                : LocalTime.of(22, 0);
+    private List<TimeSlot> generateDaySlots(LocalDate date, UserPreferences prefs,
+                                             List<CalendarEvent> occupied) {
+        LocalTime workStart = prefs.getWorkdayStart() != null ? prefs.getWorkdayStart() : LocalTime.of(8, 0);
+        LocalTime workEnd   = prefs.getWorkdayEnd()   != null ? prefs.getWorkdayEnd()   : LocalTime.of(22, 0);
 
-        LocalDateTime currentTime = date.atTime(workStart);
+        LocalDateTime cur      = date.atTime(workStart);
         LocalDateTime endOfDay = date.atTime(workEnd);
 
-        List<CalendarEvent> dayEvents = fixedEvents.stream()
-                .filter(e -> e.getStartTime().toLocalDate().equals(date))
+        List<CalendarEvent> dayOcc = occupied.stream()
+                .filter(e -> e.getStartTime() != null && e.getStartTime().toLocalDate().equals(date))
                 .sorted(Comparator.comparing(CalendarEvent::getStartTime))
                 .toList();
 
-        for (CalendarEvent event : dayEvents) {
-            // Slot vor dem Event
-            if (currentTime.isBefore(event.getStartTime())) {
-                long durationMinutes = ChronoUnit.MINUTES.between(currentTime, event.getStartTime());
-
-                if (durationMinutes >= 10) {
-                    TimeSlot slot = new TimeSlot();
-                    slot.setStart(currentTime);
-                    slot.setEnd(event.getStartTime());
-                    slot.setDuration((int) durationMinutes);
-                    slot.setDate(date);
-                    slots.add(slot);
-                }
+        List<TimeSlot> slots = new ArrayList<>();
+        for (CalendarEvent ev : dayOcc) {
+            if (cur.isBefore(ev.getStartTime())) {
+                long dur = ChronoUnit.MINUTES.between(cur, ev.getStartTime());
+                if (dur >= MIN_SLOT_MINUTES) slots.add(makeSlot(cur, ev.getStartTime(), date, (int) dur));
             }
-
-            currentTime = event.getEndTime();
+            if (ev.getEndTime() != null && ev.getEndTime().isAfter(cur)) cur = ev.getEndTime();
         }
-
-        if (currentTime.isBefore(endOfDay)) {
-            long durationMinutes = ChronoUnit.MINUTES.between(currentTime, endOfDay);
-
-            if (durationMinutes >= 10) {
-                TimeSlot slot = new TimeSlot();
-                slot.setStart(currentTime);
-                slot.setEnd(endOfDay);
-                slot.setDuration((int) durationMinutes);
-                slot.setDate(date);
-                slots.add(slot);
-            }
+        if (cur.isBefore(endOfDay)) {
+            long dur = ChronoUnit.MINUTES.between(cur, endOfDay);
+            if (dur >= MIN_SLOT_MINUTES) slots.add(makeSlot(cur, endOfDay, date, (int) dur));
         }
-
         return slots;
     }
 
-    //Tasks priorisieren
-    private List<Task> prioritizeTasks(List<Task> tasks, UserPreferences prefs) {
-        return tasks.stream()
-                .sorted((t1, t2) -> {
-                    //Überfällige Tasks
-                    boolean t1Overdue = t1.getDeadline() != null &&
-                            t1.getDeadline().isBefore(LocalDateTime.now());
-                    boolean t2Overdue = t2.getDeadline() != null &&
-                            t2.getDeadline().isBefore(LocalDateTime.now());
-
-                    if (t1Overdue != t2Overdue) {
-                        return t1Overdue ? -1 : 1;
-                    }
-
-                    //Priorität
-                    int priority1 = t1.getPriority() != null ? t1.getPriority() : 3;
-                    int priority2 = t2.getPriority() != null ? t2.getPriority() : 3;
-                    int priorityCompare = Integer.compare(priority2, priority1);
-
-                    if (priorityCompare != 0) {
-                        return priorityCompare;
-                    }
-
-                    //Deadline
-                    if (t1.getDeadline() != null && t2.getDeadline() != null) {
-                        return t1.getDeadline().compareTo(t2.getDeadline());
-                    }
-                    if (t1.getDeadline() != null) return -1;
-                    if (t2.getDeadline() != null) return 1;
-
-                    //Erstelldatum
-                    return t1.getCreatedAt().compareTo(t2.getCreatedAt());
-                })
-                .collect(Collectors.toList());
+    private TimeSlot makeSlot(LocalDateTime start, LocalDateTime end, LocalDate date, int dur) {
+        TimeSlot s = new TimeSlot();
+        s.setStart(start); s.setEnd(end); s.setDate(date); s.setDuration(dur);
+        return s;
     }
 
-    //Tasks einplanen
-    private List<ScheduledItem> scheduleTasksToSlots(
-            List<Task> prioritizedTasks,
-            List<TimeSlot> availableSlots,
-            UserPreferences prefs) {
+    // =========================================================================
+    // HABITS & WORKOUTS  (greedy – unchanged logic)
+    // =========================================================================
 
-        List<ScheduledItem> scheduled = new ArrayList<>();
-        List<TimeSlot> remainingSlots = new ArrayList<>(availableSlots);
-
-        int tasksPerDay = 0;
-        LocalDate currentDate = null;
-        int maxTasksPerDay = prefs.getMaxTasksPerDay() != null ? prefs.getMaxTasksPerDay() : 10;
-
-        for (Task task : prioritizedTasks) {
-
-            if (currentDate != null && tasksPerDay >= maxTasksPerDay) {
-                LocalDate finalCurrentDate = currentDate;
-                remainingSlots = remainingSlots.stream()
-                        .filter(s -> s.getDate().isAfter(finalCurrentDate))
-                        .collect(Collectors.toList());
-                tasksPerDay = 0;
-                currentDate = null;
-            }
-
-            //besten Slot
-            TimeSlot bestSlot = findBestSlotForTask(task, remainingSlots, prefs);
-
-            if (bestSlot != null) {
-                //einplanen
-                int duration = task.getEstimatedDurationMinutes() != null
-                        ? task.getEstimatedDurationMinutes()
-                        : 60;
-
-                ScheduledItem item = new ScheduledItem();
-                item.setTask(task);
-                item.setStartTime(bestSlot.getStart());
-                item.setEndTime(bestSlot.getStart().plusMinutes(duration));
-                item.setType(ScheduledItemType.TASK);
-
-                scheduled.add(item);
-
-                // Update Task
-                taskService.scheduleTask(
-                        task.getId(),
-                        item.getStartTime(),
-                        item.getEndTime()
-                );
-
-                // Aktualisiere Slots
-                updateSlotAfterScheduling(bestSlot, duration, remainingSlots);
-
-                // Zähle Tasks
-                if (currentDate == null || !currentDate.equals(bestSlot.getDate())) {
-                    currentDate = bestSlot.getDate();
-                    tasksPerDay = 1;
-                } else {
-                    tasksPerDay++;
-                }
-
-                log.debug("Task '{}' geplant für {} (Score: {})",
-                        task.getTitle(), item.getStartTime(),
-                        calculateSlotScore(bestSlot, task, prefs));
-            } else {
-                log.warn("Kein passender Slot für Task '{}' gefunden", task.getTitle());
-            }
-        }
-
-        return scheduled;
-    }
-
-    //Bester Slot
-    private TimeSlot findBestSlotForTask(Task task, List<TimeSlot> slots, UserPreferences prefs) {
-        if (slots.isEmpty()) {
-            return null;
-        }
-
-        int taskDuration = task.getEstimatedDurationMinutes() != null
-                ? task.getEstimatedDurationMinutes()
-                : 60;
-
-        return slots.stream()
-                .filter(slot -> slot.getDuration() >= taskDuration)
-                .max(Comparator.comparing(slot -> calculateSlotScore(slot, task, prefs)))
-                .orElse(null);
-    }
-
-    //Test?
-    private double calculateSlotScore(TimeSlot slot, Task task, UserPreferences prefs) {
-        double score = 0.0;
-
-        //Deadline
-        if (task.getDeadline() != null) {
-            long daysUntilDeadline = ChronoUnit.DAYS.between(
-                    slot.getDate(),
-                    task.getDeadline().toLocalDate()
-            );
-
-            if (daysUntilDeadline < 0) {
-                score += 100.0;
-            } else if (daysUntilDeadline == 0) {
-                score += 80.0;
-            } else if (daysUntilDeadline <= 3) {
-                score += 60.0 / (daysUntilDeadline + 1);
-            } else {
-                score += 40.0 / (daysUntilDeadline + 1);
-            }
-        } else {
-            score += 10.0;
-        }
-
-        //Prioritäten
-        int priority = task.getPriority() != null ? task.getPriority() : 3;
-        score += (priority * 6.0);
-
-        //Tageszeit
-        if (isInPreferredTimeRange(slot, prefs)) {
-            score += 20.0;
-        }
-
-        // Slot-Passung
-        int slotDuration = slot.getDuration();
-        int taskDuration = task.getEstimatedDurationMinutes() != null
-                ? task.getEstimatedDurationMinutes()
-                : 60;
-
-        if (slotDuration == taskDuration) {
-            score += 10.0;
-        } else if (slotDuration < taskDuration + 30) {
-            score += 8.0;
-        } else {
-            score += 5.0;
-        }
-
-        return score;
-    }
-
-    //Prüft ob Slot in bevorzugter Tageszeit liegt
-    private boolean isInPreferredTimeRange(TimeSlot slot, UserPreferences prefs) {
-        LocalTime slotTime = slot.getStart().toLocalTime();
-        ProductivityPeakTime peakTime = prefs.getPeakProductivityTime();
-
-        if (peakTime == null) {
-            return true;
-        }
-
-        return switch (peakTime) {
-            case MORNING -> slotTime.isAfter(LocalTime.of(6, 0)) &&
-                    slotTime.isBefore(LocalTime.of(12, 0));
-            case AFTERNOON -> slotTime.isAfter(LocalTime.of(12, 0)) &&
-                    slotTime.isBefore(LocalTime.of(18, 0));
-            case EVENING -> slotTime.isAfter(LocalTime.of(18, 0)) &&
-                    slotTime.isBefore(LocalTime.of(24, 0));
-            default -> true;
-        };
-    }
-
-    //Aktualisiert Slot
-    private void updateSlotAfterScheduling(TimeSlot slot, int usedMinutes, List<TimeSlot> remainingSlots) {
-        int remaining = slot.getDuration() - usedMinutes;
-
-        if (remaining < 10) {
-            remainingSlots.remove(slot);
-        } else {
-            slot.setStart(slot.getStart().plusMinutes(usedMinutes));
-            slot.setDuration(remaining);
-        }
-    }
-
-    //wiederkehrende Aktivitäten
     private List<ScheduledItem> scheduleRecurringActivities(
-            List<Habit> habits,
-            List<WorkoutSession> workouts,
-            List<TimeSlot> availableSlots,
-            UserPreferences prefs) {
+            List<Habit> habits, List<WorkoutSession> workouts,
+            List<TimeSlot> slots, UserPreferences prefs) {
 
         List<ScheduledItem> scheduled = new ArrayList<>();
 
-        //Habits
         for (Habit habit : habits) {
-            ScheduledItem item = scheduleHabit(habit, availableSlots, prefs);
+            ScheduledItem item = scheduleHabit(habit, slots, prefs);
             if (item != null) {
                 scheduled.add(item);
-
-                // Update Slots
-                int duration = habit.getDurationMinutes() != null ? habit.getDurationMinutes() : 30;
-                TimeSlot usedSlot = findSlotForTime(item.getStartTime(), availableSlots);
-                if (usedSlot != null) {
-                    updateSlotAfterScheduling(usedSlot, duration, availableSlots);
-                }
+                int dur = habit.getDurationMinutes() != null ? habit.getDurationMinutes() : 30;
+                TimeSlot used = findSlotForTime(item.getStartTime(), slots);
+                if (used != null) updateSlotAfterScheduling(used, dur, slots);
             }
         }
 
-        //Workouts
-        for (WorkoutSession workout : workouts) {
-            if (workout.getStartTime() != null) {
+        for (WorkoutSession wo : workouts) {
+            if (wo.getStartTime() != null) {
                 ScheduledItem item = new ScheduledItem();
-                item.setWorkoutSession(workout);
-                item.setStartTime(workout.getStartTime());
-                item.setEndTime(workout.getEndTime() != null
-                        ? workout.getEndTime()
-                        : workout.getStartTime().plusMinutes(
-                        workout.getDurationMinutes() != null ? workout.getDurationMinutes() : 60
-                ));
+                item.setWorkoutSession(wo);
+                item.setStartTime(wo.getStartTime());
+                item.setEndTime(wo.getEndTime() != null
+                        ? wo.getEndTime()
+                        : wo.getStartTime().plusMinutes(wo.getDurationMinutes() != null ? wo.getDurationMinutes() : 60));
                 item.setType(ScheduledItemType.WORKOUT);
                 scheduled.add(item);
             }
         }
-
         return scheduled;
     }
 
-    // einzelnes Habit
-
     private ScheduledItem scheduleHabit(Habit habit, List<TimeSlot> slots, UserPreferences prefs) {
-        LocalTime preferredTime = habit.getPreferredTime() != null
-                ? habit.getPreferredTime()
-                : LocalTime.of(9, 0);
-
+        LocalTime preferred = habit.getPreferredTime() != null ? habit.getPreferredTime() : LocalTime.of(9, 0);
         int duration = habit.getDurationMinutes() != null ? habit.getDurationMinutes() : 30;
 
-        TimeSlot bestSlot = slots.stream()
+        return slots.stream()
                 .filter(s -> s.getDuration() >= duration)
-                .min(Comparator.comparing(s -> {
-                    LocalTime slotTime = s.getStart().toLocalTime();
-                    return Math.abs(ChronoUnit.MINUTES.between(slotTime, preferredTime));
-                }))
-                .orElse(null);
-
-        if (bestSlot != null) {
-            ScheduledItem item = new ScheduledItem();
-            item.setHabit(habit);
-            item.setStartTime(bestSlot.getStart());
-            item.setEndTime(bestSlot.getStart().plusMinutes(duration));
-            item.setType(ScheduledItemType.HABIT);
-            return item;
-        }
-
-        return null;
+                .min(Comparator.comparingLong(s ->
+                        Math.abs(ChronoUnit.MINUTES.between(s.getStart().toLocalTime(), preferred))))
+                .map(best -> {
+                    ScheduledItem item = new ScheduledItem();
+                    item.setHabit(habit);
+                    item.setStartTime(best.getStart());
+                    item.setEndTime(best.getStart().plusMinutes(duration));
+                    item.setType(ScheduledItemType.HABIT);
+                    return item;
+                }).orElse(null);
     }
 
-    //Speichert geplante Items in Datenbank als CalendarEvents
-    @Transactional
-    private void saveScheduleToDatabase(
-            Long userId,
-            List<ScheduledItem> scheduledTasks,
-            List<ScheduledItem> scheduledHabits) {
+    private void updateSlotAfterScheduling(TimeSlot slot, int usedMin, List<TimeSlot> remaining) {
+        int leftover = slot.getDuration() - usedMin;
+        if (leftover < MIN_SLOT_MINUTES) remaining.remove(slot);
+        else { slot.setStart(slot.getStart().plusMinutes(usedMin)); slot.setDuration(leftover); }
+    }
 
+    private TimeSlot findSlotForTime(LocalDateTime time, List<TimeSlot> slots) {
+        return slots.stream()
+                .filter(s -> !s.getStart().isAfter(time) && !s.getEnd().isBefore(time))
+                .findFirst().orElse(null);
+    }
+
+    // =========================================================================
+    // INPUT COLLECTION
+    // =========================================================================
+
+    private ScheduleInput collectScheduleInput(Long userId, LocalDate startDate, LocalDate endDate) {
+        ScheduleInput input = new ScheduleInput();
+        LocalDateTime start = startDate.atStartOfDay();
+        LocalDateTime end   = endDate.atTime(23, 59, 59);
+
+        input.setTasks(taskService.getUnscheduledTasks(userId));
+        input.setFixedEvents(calendarEventService.getFixedEvents(userId, start, end));
+        input.setHabits(habitRepository.findActiveHabits(userId, startDate));
+        input.setWorkouts(workoutSessionRepository.findByUserIdAndStartTimeBetween(userId, start, end));
+        input.setCourseSchedules(courseScheduleRepository.findByUserId(userId));
+
+        log.debug("Input: {} Tasks, {} fixe Events, {} Habits, {} Workouts",
+                input.getTasks().size(), input.getFixedEvents().size(),
+                input.getHabits().size(), input.getWorkouts().size());
+        return input;
+    }
+
+    // =========================================================================
+    // PERSISTENCE
+    // =========================================================================
+
+    @Transactional
+    private void saveScheduleToDatabase(Long userId,
+                                         List<ScheduledItem> scheduledTasks,
+                                         List<ScheduledItem> scheduledHabits) {
         User user = userService.findById(userId);
 
-        // Speichere Task-Events
         for (ScheduledItem item : scheduledTasks) {
-            CalendarEvent event = new CalendarEvent();
-            event.setUser(user);
-            event.setTitle(item.getTask().getTitle());
-            event.setDescription(item.getTask().getDescription());
-            event.setStartTime(item.getStartTime());
-            event.setEndTime(item.getEndTime());
-            event.setEventType(EventType.TASK);
-
-            event.setRelatedTask(item.getTask());
-
-            event.setIsFixed(false);
-            event.setColor(getColorForTask(item.getTask()));
-
-            calendarEventRepository.save(event);
+            CalendarEvent ev = new CalendarEvent();
+            ev.setUser(user);
+            ev.setTitle(item.getTask().getTitle());
+            ev.setDescription(item.getTask().getDescription());
+            ev.setStartTime(item.getStartTime());
+            ev.setEndTime(item.getEndTime());
+            ev.setEventType(EventType.TASK);
+            ev.setRelatedTask(item.getTask());
+            ev.setIsFixed(false);
+            ev.setColor(getColorForTask(item.getTask()));
+            calendarEventRepository.save(ev);
         }
 
-        // Speichere Habit & Workout-Events
         for (ScheduledItem item : scheduledHabits) {
-            CalendarEvent event = new CalendarEvent();
-            event.setUser(user);
-            event.setStartTime(item.getStartTime());
-            event.setEndTime(item.getEndTime());
-            event.setIsFixed(false);
-
+            CalendarEvent ev = new CalendarEvent();
+            ev.setUser(user);
+            ev.setStartTime(item.getStartTime());
+            ev.setEndTime(item.getEndTime());
+            ev.setIsFixed(false);
             if (item.getType() == ScheduledItemType.HABIT && item.getHabit() != null) {
-                event.setTitle(item.getHabit().getName());
-                event.setDescription(item.getHabit().getDescription());
-                event.setEventType(EventType.HABIT);
-
-                event.setRelatedHabit(item.getHabit());
-
-                event.setColor("#4CAF50");
-
+                ev.setTitle(item.getHabit().getName());
+                ev.setDescription(item.getHabit().getDescription());
+                ev.setEventType(EventType.HABIT);
+                ev.setRelatedHabit(item.getHabit());
+                ev.setColor("#4CAF50");
             } else if (item.getType() == ScheduledItemType.WORKOUT && item.getWorkoutSession() != null) {
-                event.setTitle(item.getWorkoutSession().getName());
-                event.setDescription(item.getWorkoutSession().getDescription());
-                event.setEventType(EventType.WORKOUT);
-                event.setRelatedWorkout(item.getWorkoutSession());
-                event.setColor("#FF5722");
+                ev.setTitle(item.getWorkoutSession().getName());
+                ev.setDescription(item.getWorkoutSession().getDescription());
+                ev.setEventType(EventType.WORKOUT);
+                ev.setRelatedWorkout(item.getWorkoutSession());
+                ev.setColor("#FF5722");
             }
-
-            calendarEventRepository.save(event);
+            calendarEventRepository.save(ev);
         }
 
         log.info("Gespeichert: {} Task-Events, {} Habit/Workout-Events",
                 scheduledTasks.size(), scheduledHabits.size());
     }
 
-    //Farben
+    // =========================================================================
+    // HELPERS
+    // =========================================================================
+
+    private List<Task> findUnscheduledTasks(List<Task> all, List<ScheduledItem> scheduled) {
+        Set<Long> ids = scheduled.stream()
+                .filter(i -> i.getTask() != null)
+                .map(i -> i.getTask().getId())
+                .collect(Collectors.toSet());
+        return all.stream().filter(t -> !ids.contains(t.getId())).collect(Collectors.toList());
+    }
+
+    @SafeVarargs
+    private final double calculateTotalHours(List<ScheduledItem>... lists) {
+        int total = 0;
+        for (List<ScheduledItem> list : lists)
+            for (ScheduledItem item : list)
+                total += ChronoUnit.MINUTES.between(item.getStartTime(), item.getEndTime());
+        return total / 60.0;
+    }
+
     private String getColorForTask(Task task) {
-        //Priorität
-        if (task.getPriority() != null && task.getPriority() >= 4) {
+        if (task.getPriority() != null && task.getPriority() >= 4)
             return switch (task.getPriority()) {
-                case 5 -> "#F44336";
-                case 4 -> "#FF9800";
+                case 5  -> "#F44336";
+                case 4  -> "#FF9800";
                 default -> "#2196F3";
             };
-        }
-
-        //SpaceType
-        if (task.getSpaceType() != null) {
-            return getColorForSpaceType(task.getSpaceType());
-        }
-
-        // 3. Default
+        if (task.getSpaceType() != null) return getColorForSpaceType(task.getSpaceType());
         return "#2196F3";
     }
 
-    //Farben Spaces
     private String getColorForSpaceType(SpaceType spaceType) {
-        if (spaceType == null) {
-            return "#2196F3";  // Blau default
-        }
-
+        if (spaceType == null) return "#2196F3";
         return switch (spaceType) {
-            case SPORTS -> "#9C27B0";      // Lila
-            case STUDY -> "#2196F3";    // Blau
-            case PROJECTS -> "#00BCD4";   // Cyan
-            case TASKS -> "#FF5722";       // Orange-Rot
-            case RECIPES -> "#4CAF50";   // Grün
-            default -> "#2196F3";
+            case SPORTS   -> "#9C27B0";
+            case STUDY    -> "#2196F3";
+            case PROJECTS -> "#00BCD4";
+            case TASKS    -> "#FF5722";
+            case RECIPES  -> "#4CAF50";
+            default       -> "#2196F3";
         };
     }
-
-    //nicht eingeplante Tasks
-    private List<Task> findUnscheduledTasks(List<Task> all, List<ScheduledItem> scheduled) {
-        Set<Long> scheduledIds = scheduled.stream()
-                .filter(item -> item.getTask() != null)
-                .map(item -> item.getTask().getId())
-                .collect(Collectors.toSet());
-
-        return all.stream()
-                .filter(task -> !scheduledIds.contains(task.getId()))
-                .collect(Collectors.toList());
-    }
-
-    //Gesamtstunden
-    @SafeVarargs
-    private final double calculateTotalHours(List<ScheduledItem>... itemLists) {
-        int totalMinutes = 0;
-
-        for (List<ScheduledItem> items : itemLists) {
-            for (ScheduledItem item : items) {
-                long minutes = ChronoUnit.MINUTES.between(item.getStartTime(), item.getEndTime());
-                totalMinutes += minutes;
-            }
-        }
-
-        return totalMinutes / 60.0;
-    }
-
-
-    private TimeSlot findSlotForTime(LocalDateTime time, List<TimeSlot> slots) {
-        return slots.stream()
-                .filter(s -> !s.getStart().isAfter(time) && !s.getEnd().isBefore(time))
-                .findFirst()
-                .orElse(null);
-    }
-
 }
