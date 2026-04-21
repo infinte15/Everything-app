@@ -198,7 +198,7 @@ class _SectionTitle extends StatelessWidget {
             letterSpacing: -0.3,
           ),
         ),
-        if (action != null) action,
+        if (action != null) action!,
       ],
     );
   }

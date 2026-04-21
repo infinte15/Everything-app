@@ -10,17 +10,13 @@ import com.Finn.everything_app.event.ScheduleChangedEvent;
 import java.time.LocalDateTime;
 import java.util.List;
 
-
-
 @Service
 @RequiredArgsConstructor
 public class CalendarEventService {
 
     private final CalendarEventRepository calendarEventRepository;
     private final UserRepository userRepository;
-    private final TaskRepository taskRepository;
-    private final HabitRepository habitRepository;
-    private final WorkoutSessionRepository workoutSessionRepository;
+
     private final ApplicationEventPublisher eventPublisher;
 
     public List<CalendarEvent> getEventsInRange(Long userId, LocalDateTime start, LocalDateTime end) {
@@ -126,7 +122,6 @@ public class CalendarEventService {
         return calendarEventRepository.save(event);
     }
 
-
     @Transactional
     public CalendarEvent createEventFromHabit(Habit habit, LocalDateTime startTime, LocalDateTime endTime) {
         CalendarEvent event = new CalendarEvent();
@@ -141,7 +136,6 @@ public class CalendarEventService {
 
         return calendarEventRepository.save(event);
     }
-
 
     @Transactional
     public CalendarEvent createEventFromWorkout(WorkoutSession workout) {
@@ -159,7 +153,6 @@ public class CalendarEventService {
         return calendarEventRepository.save(event);
     }
 
-
     @Transactional
     public void deleteNonFixedEventsInRange(Long userId, LocalDateTime start, LocalDateTime end) {
         List<CalendarEvent> events = getEventsInRange(userId, start, end);
@@ -176,8 +169,7 @@ public class CalendarEventService {
         List<CalendarEvent> events = calendarEventRepository.findByUserIdAndEventTypeAndIsFixed(
                 userId,
                 EventType.TASK,
-                false
-        );
+                false);
         calendarEventRepository.deleteAll(events);
     }
 }
