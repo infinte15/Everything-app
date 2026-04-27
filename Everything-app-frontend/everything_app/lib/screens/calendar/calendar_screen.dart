@@ -18,15 +18,18 @@ const int kDayEnd = 24;
 Color _typeColor(String type) {
   switch (type.toUpperCase()) {
     case 'TASK':
-      return const Color(0xFF6366F1);
+    case 'STRATEGY':
+      return AppTheme.primaryColor;
     case 'HABIT':
-      return const Color(0xFF10B981);
+    case 'FINANCE':
+      return AppTheme.financeColor;
     case 'WORKOUT':
-      return const Color(0xFFF59E0B);
+    case 'GYM':
+      return AppTheme.sportsColor;
     case 'STUDY':
-      return const Color(0xFF3B82F6);
+      return AppTheme.studyColor;
     default:
-      return const Color(0xFF8B5CF6);
+      return AppTheme.primaryColor;
   }
 }
 
@@ -57,7 +60,7 @@ class CalendarScreen extends StatefulWidget {
 }
 
 class _CalendarScreenState extends State<CalendarScreen> {
-  _CalView _view = _CalView.day;
+  _CalView _view = _CalView.week;
   late ScrollController _timelineScrollController;
 
   @override
@@ -99,13 +102,11 @@ class _CalendarScreenState extends State<CalendarScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final isDark = theme.brightness == Brightness.dark;
     final cal = context.watch<CalendarProvider>();
     final selected = cal.selectedDay ?? DateTime.now();
 
     return Scaffold(
-      backgroundColor: isDark ? const Color(0xFF0F0F13) : const Color(0xFFF7F8FC),
+      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       body: SafeArea(
         child: Column(
           children: [
@@ -123,7 +124,7 @@ class _CalendarScreenState extends State<CalendarScreen> {
               onSchedule: () => _showScheduleDialog(context),
               onAdd: () => _showCreateSheet(context),
             ),
-            if (_view != _CalView.month)
+            if (_view == _CalView.week)
               _WeekStrip(
                 selected: selected,
                 onDayTap: (d) {
@@ -153,13 +154,13 @@ class _CalendarScreenState extends State<CalendarScreen> {
           ],
         ),
       ),
-      floatingActionButton: FloatingActionButton.extended(
+      floatingActionButton: FloatingActionButton(
         onPressed: () => _showCreateSheet(context),
         backgroundColor: AppTheme.primaryColor,
-        foregroundColor: Colors.white,
-        icon: const Icon(Icons.add_rounded),
-        label: const Text('New Event', style: TextStyle(fontWeight: FontWeight.w600)),
-        elevation: 4,
+        foregroundColor: const Color(0xFF2D27AD),
+        shape: const RoundedRectangleBorder(borderRadius: BorderRadius.zero),
+        elevation: 10,
+        child: const Icon(Icons.add, size: 32),
       ),
     );
   }
@@ -236,73 +237,116 @@ class _CalendarHeader extends StatelessWidget {
     required this.onAdd,
   });
 
-  String get _title {
-    switch (view) {
-      case _CalView.day:
-        return DateFormat('MMMM yyyy').format(selectedDay);
-      case _CalView.week:
-        return 'Week of ${DateFormat('MMM d').format(selectedDay)}';
-      case _CalView.month:
-        return DateFormat('MMMM yyyy').format(selectedDay);
-    }
+  int _getWeekNumber(DateTime date) {
+    int dayOfYear = int.parse(DateFormat('D').format(date));
+    return ((dayOfYear - date.weekday + 10) / 7).floor();
   }
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
-    final surfaceColor = isDark ? const Color(0xFF1A1A24) : Colors.white;
+    final surfaceColor = isDark ? const Color(0xFF0E0E0E) : Colors.white;
+    final borderColor = const Color(0xFF484848).withValues(alpha: 0.15);
 
-    return Container(
-      padding: const EdgeInsets.fromLTRB(16, 8, 12, 8),
-      decoration: BoxDecoration(
-        color: surfaceColor,
-        border: Border(
-          bottom: BorderSide(
-            color: isDark ? const Color(0xFF2A2A38) : const Color(0xFFE8EAF0),
+    String dateTitle;
+    String dateSubtitle;
+    if (view == _CalView.day) {
+      dateTitle = DateFormat('MMMM d').format(selectedDay);
+      dateSubtitle = DateFormat('EEEE').format(selectedDay).toUpperCase();
+    } else if (view == _CalView.week) {
+      dateTitle = DateFormat('MMMM yyyy').format(selectedDay);
+      dateSubtitle = 'Week ${_getWeekNumber(selectedDay)} • Kinetic Pulse View';
+    } else {
+      dateTitle = DateFormat('MMMM yyyy').format(selectedDay);
+      dateSubtitle = 'Month View';
+    }
+
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        // Top Bar
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+          decoration: BoxDecoration(
+            color: surfaceColor,
+            border: Border(bottom: BorderSide(color: borderColor)),
           ),
-        ),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Expanded(
-                child: Text(
-                  _title,
-                  style: theme.textTheme.titleMedium?.copyWith(
-                    fontWeight: FontWeight.w700,
-                    letterSpacing: -0.4,
+              Row(
+                children: [
+                  Icon(Icons.calendar_today_outlined, color: theme.colorScheme.primary, size: 24),
+                  const SizedBox(width: 12),
+                  const Text('Calendar', style: TextStyle(fontSize: 20, fontWeight: FontWeight.w800, letterSpacing: -0.5, color: Colors.white, fontFamily: 'Manrope')),
+                ],
+              ),
+              Row(
+                children: [
+                  GestureDetector(
+                    onTap: onToday,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                      color: Colors.transparent,
+                      child: Text('TODAY', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w800, letterSpacing: 1.5, color: theme.colorScheme.primary, fontFamily: 'Manrope')),
+                    ),
                   ),
-                ),
+                  const SizedBox(width: 16),
+                  _ViewToggle(current: view, onChanged: onViewChanged),
+                ],
               ),
-              IconButton(
-                icon: const Icon(Icons.auto_awesome_rounded, size: 20),
-                tooltip: 'Smart Schedule',
-                color: const Color(0xFFF59E0B),
-                onPressed: onSchedule,
-                style: IconButton.styleFrom(
-                  backgroundColor: const Color(0xFFF59E0B).withValues(alpha: 0.1),
-                ),
-              ),
-              const SizedBox(width: 4),
-              TextButton(
-                onPressed: onToday,
-                style: TextButton.styleFrom(
-                  foregroundColor: AppTheme.primaryColor,
-                  padding: const EdgeInsets.symmetric(horizontal: 12),
-                ),
-                child: const Text('Today', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
-              ),
-              IconButton(icon: const Icon(Icons.chevron_left_rounded), onPressed: () => onNavigate(-1), iconSize: 22),
-              IconButton(icon: const Icon(Icons.chevron_right_rounded), onPressed: () => onNavigate(1), iconSize: 22),
             ],
           ),
-          const SizedBox(height: 8),
-          _ViewToggle(current: view, onChanged: onViewChanged),
-        ],
-      ),
+        ),
+        // Sub-header
+        Container(
+          padding: const EdgeInsets.fromLTRB(24, 24, 24, 24),
+          color: surfaceColor,
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  if (view == _CalView.day)
+                    Text(dateSubtitle, style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500, letterSpacing: 2.0, color: theme.colorScheme.onSurfaceVariant, fontFamily: 'Manrope'))
+                  else
+                    Text(dateTitle, style: const TextStyle(fontSize: 30, fontWeight: FontWeight.w800, letterSpacing: -1.0, color: Colors.white, fontFamily: 'Manrope')),
+                  const SizedBox(height: 4),
+                  if (view == _CalView.day)
+                    Text(dateTitle, style: const TextStyle(fontSize: 48, fontWeight: FontWeight.w800, letterSpacing: -2.0, color: Colors.white, fontFamily: 'Manrope', height: 1.0))
+                  else
+                    Text(dateSubtitle, style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500, color: theme.colorScheme.onSurfaceVariant, fontFamily: 'Manrope')),
+                ],
+              ),
+              Row(
+                children: [
+                  GestureDetector(
+                    onTap: () => onNavigate(-1),
+                    child: Container(
+                      width: 40, height: 40,
+                      color: theme.colorScheme.surfaceContainerHighest,
+                      child: const Icon(Icons.chevron_left, color: Colors.white),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  GestureDetector(
+                    onTap: () => onNavigate(1),
+                    child: Container(
+                      width: 40, height: 40,
+                      color: theme.colorScheme.surfaceContainerHighest,
+                      child: const Icon(Icons.chevron_right, color: Colors.white),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ],
     );
   }
 }
@@ -314,12 +358,11 @@ class _ViewToggle extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final theme = Theme.of(context);
     return Container(
-      padding: const EdgeInsets.all(3),
       decoration: BoxDecoration(
-        color: isDark ? const Color(0xFF252532) : const Color(0xFFF0F1F6),
-        borderRadius: BorderRadius.circular(12),
+        color: theme.colorScheme.surfaceContainerHighest,
+        borderRadius: BorderRadius.zero,
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
@@ -342,26 +385,22 @@ class _ToggleItem extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final isSelected = v == current;
+    final theme = Theme.of(context);
     return GestureDetector(
       onTap: () => onChanged(v),
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 200),
-        curve: Curves.easeInOut,
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
         decoration: BoxDecoration(
-          color: isSelected ? AppTheme.primaryColor : Colors.transparent,
-          borderRadius: BorderRadius.circular(9),
-          boxShadow: isSelected
-              ? [BoxShadow(color: AppTheme.primaryColor.withValues(alpha: 0.3), blurRadius: 8, offset: const Offset(0, 2))]
-              : null,
+          color: isSelected ? theme.colorScheme.primary : Colors.transparent,
         ),
         child: Text(
           _label,
           style: TextStyle(
-            fontSize: 13,
-            fontWeight: FontWeight.w600,
-            color: isSelected ? Colors.white : Colors.grey,
-          ),
+            fontSize: 11,
+            fontWeight: FontWeight.w800,
+            letterSpacing: 1.5,
+            color: isSelected ? const Color(0xFF2D27AD) : theme.colorScheme.onSurfaceVariant,
+          ).apply(fontFamily: 'Manrope'),
         ),
       ),
     );
@@ -370,18 +409,10 @@ class _ToggleItem extends StatelessWidget {
 
 // ─── Week Strip ───────────────────────────────────────────────────────────────
 
-class _WeekStrip extends StatefulWidget {
+class _WeekStrip extends StatelessWidget {
   final DateTime selected;
   final ValueChanged<DateTime> onDayTap;
   const _WeekStrip({required this.selected, required this.onDayTap});
-
-  @override
-  State<_WeekStrip> createState() => _WeekStripState();
-}
-
-class _WeekStripState extends State<_WeekStrip> {
-  late PageController _pageController;
-  late int _basePage;
 
   DateTime _weekStart(DateTime d) {
     final wd = d.weekday;
@@ -389,82 +420,74 @@ class _WeekStripState extends State<_WeekStrip> {
   }
 
   @override
-  void initState() {
-    super.initState();
-    _basePage = 1000;
-    _pageController = PageController(initialPage: _basePage);
-  }
-
-  @override
-  void didUpdateWidget(covariant _WeekStrip oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    // keep page in sync when header arrows are pressed
-  }
-
-  @override
-  void dispose() {
-    _pageController.dispose();
-    super.dispose();
-  }
-
-  @override
   Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    final surfaceColor = isDark ? const Color(0xFF1A1A24) : Colors.white;
-    final selectedWeekStart = _weekStart(widget.selected);
+    final theme = Theme.of(context);
+    final surfaceColor = theme.scaffoldBackgroundColor;
+    final selectedWeekStart = _weekStart(selected);
 
     return Container(
-      height: 70,
-      color: surfaceColor,
+      color: theme.colorScheme.outlineVariant.withValues(alpha: 0.1), // background for gap-px
       child: Row(
-        children: List.generate(7, (i) {
-          final day = selectedWeekStart.add(Duration(days: i));
-          final isSelected = isSameDay(day, widget.selected);
-          final isToday = isSameDay(day, DateTime.now());
-          return Expanded(
-            child: GestureDetector(
-              onTap: () => widget.onDayTap(day),
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Text(
-                    DateFormat('E').format(day).substring(0, 2).toUpperCase(),
-                    style: TextStyle(
-                      fontSize: 10,
-                      fontWeight: FontWeight.w700,
-                      color: isToday ? AppTheme.primaryColor : Colors.grey,
-                      letterSpacing: 0.5,
-                    ),
-                  ),
-                  const SizedBox(height: 4),
-                  AnimatedContainer(
-                    duration: const Duration(milliseconds: 180),
-                    width: 34,
-                    height: 34,
-                    decoration: BoxDecoration(
-                      color: isSelected ? AppTheme.primaryColor : Colors.transparent,
-                      shape: BoxShape.circle,
-                    ),
-                    child: Center(
-                      child: Text(
-                        '${day.day}',
-                        style: TextStyle(
-                          fontSize: 15,
-                          fontWeight: FontWeight.w700,
-                          color: isSelected
-                              ? Colors.white
-                              : isToday
-                                  ? AppTheme.primaryColor
-                                  : null,
-                        ),
+        children: [
+          Container(
+            width: kTimeGutterWidth,
+            height: 60,
+            color: surfaceColor,
+          ),
+          Expanded(
+            child: Row(
+              children: List.generate(7, (i) {
+                final day = selectedWeekStart.add(Duration(days: i));
+                
+                final isToday = isSameDay(day, DateTime.now());
+                return Expanded(
+                  child: GestureDetector(
+                    onTap: () => onDayTap(day),
+                    child: Container(
+                      margin: const EdgeInsets.only(left: 1), // gap-px
+                      height: 60,
+                      color: surfaceColor,
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Text(
+                            DateFormat('E').format(day).substring(0, 3).toUpperCase(),
+                            style: TextStyle(
+                              fontSize: 8,
+                              fontWeight: FontWeight.w800,
+                              color: theme.colorScheme.onSurfaceVariant,
+                              letterSpacing: 1.0,
+                              fontFamily: 'Manrope',
+                            ),
+                          ),
+                          const SizedBox(height: 2),
+                          Text(
+                            '${day.day}',
+                            style: TextStyle(
+                              fontSize: 14,
+                              fontWeight: FontWeight.w800,
+                              fontFamily: 'Manrope',
+                              color: isToday
+                                  ? theme.colorScheme.primary
+                                  : (day.weekday >= 6 ? theme.colorScheme.error : Colors.white),
+                            ),
+                          ),
+                          if (isToday)
+                            Container(
+                              margin: const EdgeInsets.only(top: 2),
+                              width: 4,
+                              height: 4,
+                              color: theme.colorScheme.primary,
+                            ),
+                        ],
                       ),
                     ),
                   ),
-                ],
-              ),
+                );
+              }),
             ),
-          );
-        }),
+          ),
+        ],
       ),
     );
   }
@@ -573,7 +596,7 @@ class _TimelineGridState extends State<_TimelineGrid> {
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final gridLineColor = isDark ? const Color(0xFF252532) : const Color(0xFFEEEFF5);
+    final gridLineColor = Theme.of(context).colorScheme.outlineVariant.withValues(alpha: 0.3);
     final timeTextColor = isDark ? Colors.grey.shade600 : Colors.grey.shade400;
     final totalHeight = kHourHeight * (kDayEnd - kDayStart);
 
@@ -595,10 +618,13 @@ class _TimelineGridState extends State<_TimelineGrid> {
                       top: (h - kDayStart) * kHourHeight - 7,
                       left: 0,
                       right: 0,
-                      child: Text(
-                        h == 0 ? '' : DateFormat('h a').format(DateTime(2000, 1, 1, h)),
-                        textAlign: TextAlign.right,
-                        style: TextStyle(fontSize: 10, color: timeTextColor, fontWeight: FontWeight.w500),
+                      child: Padding(
+                        padding: const EdgeInsets.only(right: 8),
+                        child: Text(
+                          h == 0 ? '' : DateFormat('h a').format(DateTime(2000, 1, 1, h)),
+                          textAlign: TextAlign.right,
+                          style: TextStyle(fontSize: 10, color: timeTextColor, fontWeight: FontWeight.w500),
+                        ),
                       ),
                     ),
                 ],
@@ -640,7 +666,7 @@ class _TimelineGridState extends State<_TimelineGrid> {
                           child: Divider(
                             height: 1,
                             thickness: 1,
-                            color: h % 6 == 0 ? gridLineColor : gridLineColor.withValues(alpha: 0.5),
+                            color: h % 2 == 0 ? Theme.of(context).colorScheme.outlineVariant.withValues(alpha: 0.3) : Theme.of(context).colorScheme.outlineVariant.withValues(alpha: 0.1),
                           ),
                         ),
                       // Column separators (week view)
@@ -769,17 +795,23 @@ class _CurrentTimeLineState extends State<_CurrentTimeLine> {
     final minutes = _now.hour * 60 + _now.minute;
     final top = (minutes / 60) * kHourHeight;
     return Positioned(
-      top: top,
+      top: top - 6,
       left: 0,
       right: 0,
       child: Row(
         children: [
           Container(
-            width: 10,
-            height: 10,
-            decoration: const BoxDecoration(color: Color(0xFFEF4444), shape: BoxShape.circle),
+            width: 8,
+            height: 8,
+            margin: const EdgeInsets.only(left: 2, right: 4),
+            decoration: const BoxDecoration(color: Colors.white, shape: BoxShape.circle, boxShadow: [BoxShadow(color: Colors.white, blurRadius: 4)]),
           ),
-          Expanded(child: Container(height: 1.5, color: const Color(0xFFEF4444))),
+          Expanded(child: Container(height: 1, color: Colors.white.withValues(alpha: 0.5))),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
+            color: Colors.white,
+            child: const Text('NOW', style: TextStyle(color: Colors.black, fontSize: 8, fontWeight: FontWeight.w900, letterSpacing: -0.5)),
+          ),
         ],
       ),
     );
@@ -826,7 +858,7 @@ class _DragIndicator extends StatelessWidget {
           child: Container(
             decoration: BoxDecoration(
               color: color.withValues(alpha: 0.25),
-              borderRadius: BorderRadius.circular(6),
+              borderRadius: BorderRadius.zero,
               border: Border.all(color: color, width: 1.5),
             ),
           ),
@@ -839,7 +871,7 @@ class _DragIndicator extends StatelessWidget {
             padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
             decoration: BoxDecoration(
               color: color,
-              borderRadius: BorderRadius.circular(20),
+              borderRadius: BorderRadius.zero,
               boxShadow: [BoxShadow(color: color.withValues(alpha: 0.4), blurRadius: 8)],
             ),
             child: Text(
@@ -869,15 +901,15 @@ class _EventBlock extends StatelessWidget {
   Widget _buildCard(BuildContext context, {double opacity = 1.0}) {
     final color = event.color != null ? event.colorObject : _typeColor(event.eventType);
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final bg = isDark ? color.withValues(alpha: 0.18) : color.withValues(alpha: 0.12);
+    final bg = isDark ? color.withValues(alpha: 0.20) : color.withValues(alpha: 0.15);
     final dmin = event.durationInMinutes;
     return Opacity(
       opacity: opacity,
       child: Container(
         decoration: BoxDecoration(
           color: bg,
-          borderRadius: BorderRadius.circular(6),
-          border: Border(left: BorderSide(color: color, width: 3)),
+          borderRadius: BorderRadius.zero,
+          border: Border(left: BorderSide(color: color, width: 4)),
         ),
         padding: const EdgeInsets.fromLTRB(6, 4, 4, 4),
         child: dmin < 30
@@ -887,7 +919,7 @@ class _EventBlock extends StatelessWidget {
                     event.title,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                    style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: color),
+                    style: TextStyle(fontSize: 11, fontWeight: FontWeight.w800, color: color),
                   ),
                 ),
               ])
@@ -895,16 +927,16 @@ class _EventBlock extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
+                    event.eventType.toUpperCase(),
+                    style: TextStyle(fontSize: 8, fontWeight: FontWeight.w800, letterSpacing: 1.2, color: color.withValues(alpha: 0.8)),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
                     event.title,
                     maxLines: 2,
                     overflow: TextOverflow.ellipsis,
-                    style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: color),
+                    style: TextStyle(fontSize: 12, fontWeight: FontWeight.w800, color: color, height: 1.1),
                   ),
-                  if (dmin >= 45)
-                    Text(
-                      DateFormat('h:mm a').format(event.startTime),
-                      style: TextStyle(fontSize: 10, color: color.withValues(alpha: 0.75)),
-                    ),
                 ],
               ),
       ),
@@ -929,7 +961,7 @@ class _EventBlock extends StatelessWidget {
           child: Container(
             decoration: BoxDecoration(
               color: color.withValues(alpha: 0.9),
-              borderRadius: BorderRadius.circular(8),
+              borderRadius: BorderRadius.zero,
               boxShadow: [BoxShadow(color: color.withValues(alpha: 0.45), blurRadius: 16, offset: const Offset(0, 6))],
             ),
             padding: const EdgeInsets.fromLTRB(10, 8, 8, 8),
@@ -1025,7 +1057,7 @@ class _MonthView extends StatelessWidget {
                         : isToday
                             ? AppTheme.primaryColor.withValues(alpha: 0.1)
                             : Colors.transparent,
-                    borderRadius: BorderRadius.circular(8),
+                    borderRadius: BorderRadius.zero,
                   ),
                   padding: const EdgeInsets.all(4),
                   child: Column(
@@ -1051,7 +1083,7 @@ class _MonthView extends StatelessWidget {
                                     color: isSel
                                         ? Colors.white.withValues(alpha: 0.8)
                                         : (e.color != null ? e.colorObject : _typeColor(e.eventType)),
-                                    shape: BoxShape.circle,
+                                    shape: BoxShape.rectangle,
                                   ),
                                 ))
                             .toList(),
@@ -1101,7 +1133,7 @@ class _EventListTile extends StatelessWidget {
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
         decoration: BoxDecoration(
           color: color.withValues(alpha: 0.1),
-          borderRadius: BorderRadius.circular(10),
+          borderRadius: BorderRadius.zero,
           border: Border(left: BorderSide(color: color, width: 3)),
         ),
         child: Row(
@@ -1137,7 +1169,7 @@ class _EventDetailSheet extends StatelessWidget {
 
     return Container(
       margin: const EdgeInsets.all(12),
-      decoration: BoxDecoration(color: bg, borderRadius: BorderRadius.circular(24)),
+      decoration: BoxDecoration(color: bg, borderRadius: BorderRadius.zero),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
@@ -1156,7 +1188,7 @@ class _EventDetailSheet extends StatelessWidget {
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
             decoration: BoxDecoration(
               color: color.withValues(alpha: 0.1),
-              borderRadius: BorderRadius.circular(14),
+              borderRadius: BorderRadius.zero,
               border: Border(left: BorderSide(color: color, width: 4)),
             ),
             child: Row(
@@ -1171,7 +1203,7 @@ class _EventDetailSheet extends StatelessWidget {
                   padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                   decoration: BoxDecoration(
                     color: color.withValues(alpha: 0.15),
-                    borderRadius: BorderRadius.circular(20),
+                    borderRadius: BorderRadius.zero,
                   ),
                   child: Text(event.eventType,
                       style: TextStyle(fontSize: 10, fontWeight: FontWeight.w700, color: color, letterSpacing: 0.5)),
@@ -1200,7 +1232,7 @@ class _EventDetailSheet extends StatelessWidget {
                         label: const Text('Edit'),
                         onPressed: () => Navigator.pop(context),
                         style: OutlinedButton.styleFrom(
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.zero),
                         ),
                       ),
                     ),
@@ -1211,7 +1243,7 @@ class _EventDetailSheet extends StatelessWidget {
                         label: const Text('Delete'),
                         style: FilledButton.styleFrom(
                           backgroundColor: const Color(0xFFEF4444),
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.zero),
                         ),
                         onPressed: () async {
                           if (event.id != null) {
@@ -1323,7 +1355,7 @@ class _CreateEventSheetState extends State<_CreateEventSheet> {
       padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
       child: Container(
         margin: const EdgeInsets.all(12),
-        decoration: BoxDecoration(color: bg, borderRadius: BorderRadius.circular(24)),
+        decoration: BoxDecoration(color: bg, borderRadius: BorderRadius.zero),
         child: SingleChildScrollView(
           padding: const EdgeInsets.fromLTRB(20, 16, 20, 24),
           child: Column(
@@ -1349,7 +1381,7 @@ class _CreateEventSheetState extends State<_CreateEventSheet> {
                 decoration: InputDecoration(
                   hintText: 'Event title',
                   prefixIcon: const Icon(Icons.title_rounded, size: 18),
-                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                  border: OutlineInputBorder(borderRadius: BorderRadius.zero),
                 ),
               ),
               const SizedBox(height: 12),
@@ -1368,7 +1400,7 @@ class _CreateEventSheetState extends State<_CreateEventSheet> {
                       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
                       decoration: BoxDecoration(
                         color: selected ? color : color.withValues(alpha: 0.1),
-                        borderRadius: BorderRadius.circular(20),
+                        borderRadius: BorderRadius.zero,
                         border: Border.all(color: selected ? color : Colors.transparent),
                       ),
                       child: Row(
@@ -1415,7 +1447,7 @@ class _CreateEventSheetState extends State<_CreateEventSheet> {
                 padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
                 decoration: BoxDecoration(
                   border: Border.all(color: isDark ? const Color(0xFF2A2A38) : const Color(0xFFE8EAF0)),
-                  borderRadius: BorderRadius.circular(12),
+                  borderRadius: BorderRadius.zero,
                 ),
                 child: Row(
                   children: [
@@ -1446,7 +1478,7 @@ class _CreateEventSheetState extends State<_CreateEventSheet> {
                 decoration: InputDecoration(
                   hintText: 'Notes (optional)',
                   prefixIcon: const Icon(Icons.notes_rounded, size: 18),
-                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                  border: OutlineInputBorder(borderRadius: BorderRadius.zero),
                 ),
               ),
               const SizedBox(height: 20),
@@ -1456,7 +1488,7 @@ class _CreateEventSheetState extends State<_CreateEventSheet> {
                   style: FilledButton.styleFrom(
                     backgroundColor: AppTheme.primaryColor,
                     padding: const EdgeInsets.symmetric(vertical: 16),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.zero),
                   ),
                   onPressed: () async {
                     if (_titleController.text.trim().isEmpty) return;
@@ -1498,7 +1530,7 @@ class _TimePicker extends StatelessWidget {
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
         decoration: BoxDecoration(
           border: Border.all(color: isDark ? const Color(0xFF2A2A38) : const Color(0xFFE8EAF0)),
-          borderRadius: BorderRadius.circular(12),
+          borderRadius: BorderRadius.zero,
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,

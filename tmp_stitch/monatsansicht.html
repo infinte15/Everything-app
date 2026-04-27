@@ -1,0 +1,348 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Kinetic Mono - Month View</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@200;300;400;500;600;700;800&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            colors: {
+              "on-tertiary": "#4c546e",
+              "on-primary-fixed": "#2d27ad",
+              "primary-fixed": "#e2dfff",
+              "surface": "#0e0e0e",
+              "surface-bright": "#2b2c2c",
+              "on-secondary-fixed-variant": "#5c5b5f",
+              "on-tertiary-container": "#444c65",
+              "tertiary-fixed": "#d1d9f8",
+              "surface-container-lowest": "#000000",
+              "inverse-primary": "#4f4dcd",
+              "on-background": "#e7e5e5",
+              "on-surface-variant": "#acabaa",
+              "on-primary-container": "#cdccff",
+              "on-primary-fixed-variant": "#4c49c9",
+              "primary-dim": "#b2b1ff",
+              "tertiary-container": "#d1d9f8",
+              "surface-container": "#191a1a",
+              "outline-variant": "#484848",
+              "surface-container-high": "#1f2020",
+              "inverse-on-surface": "#565555",
+              "on-secondary-fixed": "#403f43",
+              "primary-fixed-dim": "#d2d0ff",
+              "on-surface": "#e7e5e5",
+              "on-primary": "#2e28ad",
+              "on-error-container": "#ff97a3",
+              "on-error": "#490013",
+              "surface-container-low": "#131313",
+              "tertiary-dim": "#c3cbe9",
+              "on-tertiary-fixed-variant": "#4d556f",
+              "primary-container": "#3631b4",
+              "secondary-container": "#3c3b3f",
+              "surface-container-highest": "#252626",
+              "surface-tint": "#c2c1ff",
+              "error-dim": "#b95463",
+              "error": "#ec7c8a",
+              "on-secondary": "#202023",
+              "secondary-fixed": "#e5e1e6",
+              "surface-dim": "#0e0e0e",
+              "surface-variant": "#252626",
+              "tertiary-fixed-dim": "#c3cbe9",
+              "error-container": "#7f2737",
+              "inverse-surface": "#fcf9f8",
+              "tertiary": "#e2e7ff",
+              "secondary": "#9f9da1",
+              "background": "#0e0e0e",
+              "secondary-dim": "#9f9da1",
+              "on-tertiary-fixed": "#313951",
+              "secondary-fixed-dim": "#d7d3d8",
+              "outline": "#767575",
+              "on-secondary-container": "#c1bec3",
+              "primary": "#5856D6"
+            },
+            fontFamily: {
+              "headline": ["Manrope"],
+              "body": ["Manrope"],
+              "label": ["Manrope"]
+            },
+            borderRadius: {"DEFAULT": "2px", "lg": "4px", "xl": "6px", "full": "9999px"},
+          },
+        },
+      }
+    </script>
+<style>
+        body { font-family: 'Manrope', sans-serif; background-color: #0e0e0e; }
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 300, 'GRAD' 0, 'opsz' 24;
+        }
+        ::-webkit-scrollbar { width: 4px; height: 4px; }
+        ::-webkit-scrollbar-track { background: #0e0e0e; }
+        ::-webkit-scrollbar-thumb { background: #252626; }
+    </style>
+</head>
+<body class="text-on-surface antialiased select-none bg-[#0e0e0e]">
+<!-- TopAppBar -->
+<header class="bg-[#0e0e0e] flex justify-between items-center w-full px-6 py-4 fixed top-0 z-50">
+<div class="flex items-center gap-3">
+<div class="w-8 h-8 overflow-hidden rounded-full border border-[#484848]/30">
+<img alt="user profile picture" class="w-full h-full object-cover grayscale" src="https://lh3.googleusercontent.com/aida-public/AB6AXuAl8su7Xgjyimg5skO3N510r3vs_Bw-ORtQlZhMuNo_wUHfyshiY3fP4qb_5T8LkreibrToU3jUJtz7bqpt6gCt4p6U8ZANzh1M2eyJuv9WW4k-aZVnx3T9aAaBWEEesiceVpCcOS3nIXQnfk1LhWKCcWJrXwslFnUbE1bvtkRywEw2uGGZN40RdRn1lF5hs71bj8czJ0MdYeN-5XzMML4rd7Cv6Wm8P75elZ6VXyUaCucM9Dhg8Bd9JoMn6jgyXZJD6tLmT2aiGiM"/>
+</div>
+<h1 class="font-['Manrope'] font-bold text-lg tracking-tight text-[#c2c1ff]">Kinetic Mono</h1>
+</div>
+<div class="flex items-center gap-4"><button class="flex items-center justify-center hover:bg-[#252626] p-1.5 transition-colors duration-200 rounded-full"><span class="material-symbols-outlined text-[#acabaa] text-xl">grid_view</span></button>
+<button class="flex items-center justify-center hover:bg-[#252626] p-1.5 transition-colors duration-200 rounded-full">
+<span class="material-symbols-outlined text-[#acabaa] text-xl">search</span>
+</button>
+</div>
+</header>
+<main class="pt-[68px] pb-24">
+<!-- View Toggle and Header Section -->
+<section class="px-6 py-4 bg-[#0e0e0e] sticky top-[68px] z-40">
+<div class="flex flex-col">
+<!-- Month Selection Header -->
+<div class="flex justify-between items-center">
+<h2 class="text-sm font-semibold tracking-wide text-[#acabaa]">OCTOBER 2024</h2>
+<div class="flex items-center gap-6">
+<div class="flex gap-6 mr-2 border-r border-[#484848]/30 pr-6">
+<span class="material-symbols-outlined text-[#acabaa] text-lg cursor-pointer hover:text-white transition-colors">chevron_left</span>
+<span class="material-symbols-outlined text-[#acabaa] text-lg cursor-pointer hover:text-white transition-colors">chevron_right</span>
+</div>
+<button class="flex items-center justify-center hover:bg-[#252626] p-1 transition-colors duration-200 rounded-sm">
+<img alt="View Selection" class="w-5 h-5 opacity-70 hover:opacity-100 invert" src="https://lh3.googleusercontent.com/aida/ADBb0uhAgIa4uW89ORhN8zzS06dKBANqQ7u26CIKgSnd7nsjMHvFois3nKKFGRw-YuCX1YunR5mtMBWJjJiYFvBGQLnUsgea4XsZLNck9tDB5Nti7uHj1a9zb1cAscMlECTDM0D5rw8iK07xu1JGJo9zZtB4MNlTd_Eo1WqJQS0l2VnA699QqUL8e1E7-rR9zSzzJDhYVXoV6iK2hdi_ca2L4Ku3z-BeoFuc_TFy2vcJkTQKQrZmFjB8lLlzM4NmWZxFcMRH65-puY31"/>
+</button>
+</div>
+</div>
+<!-- Tag/Woche/Monat Toggle (Segmented Control) -->
+</div>
+</section>
+<!-- Monthly Grid Layout -->
+<section class="px-4">
+<!-- Day Labels -->
+<div class="grid grid-cols-7 gap-1 mb-2">
+<div class="text-center py-2"><span class="text-[10px] uppercase font-bold text-[#acabaa]">M</span></div>
+<div class="text-center py-2"><span class="text-[10px] uppercase font-bold text-[#acabaa]">T</span></div>
+<div class="text-center py-2"><span class="text-[10px] uppercase font-bold text-[#acabaa]">W</span></div>
+<div class="text-center py-2"><span class="text-[10px] uppercase font-bold text-[#acabaa]">T</span></div>
+<div class="text-center py-2"><span class="text-[10px] uppercase font-bold text-[#acabaa]">F</span></div>
+<div class="text-center py-2"><span class="text-[10px] uppercase font-bold text-[#acabaa]">S</span></div>
+<div class="text-center py-2"><span class="text-[10px] uppercase font-bold text-[#acabaa]">S</span></div>
+</div>
+<!-- Calendar Grid -->
+<div class="grid grid-cols-7 gap-1 border-t border-l border-[#484848]/20">
+<!-- Previous month padding -->
+<div class="aspect-square border-r border-b border-[#484848]/10 p-1 flex flex-col justify-between opacity-20">
+<span class="text-[10px] font-medium">30</span>
+</div>
+<!-- Days 1-31 -->
+<div class="aspect-square border-r border-b border-[#484848]/20 p-1 flex flex-col justify-between hover:bg-[#191a1a] transition-colors">
+<span class="text-[10px] font-medium text-[#acabaa]">1</span>
+<div class="flex gap-0.5 mt-auto pb-1 px-0.5">
+<div class="h-1 flex-1 bg-[#5856D6] rounded-full"></div>
+</div>
+</div>
+<div class="aspect-square border-r border-b border-[#484848]/20 p-1 flex flex-col justify-between">
+<span class="text-[10px] font-medium text-[#acabaa]">2</span>
+</div>
+<div class="aspect-square border-r border-b border-[#484848]/20 p-1 flex flex-col justify-between">
+<span class="text-[10px] font-medium text-[#acabaa]">3</span>
+<div class="flex gap-0.5 mt-auto pb-1 px-0.5">
+<div class="h-1 flex-1 bg-[#4ade80] rounded-full"></div>
+</div>
+</div>
+<div class="aspect-square border-r border-b border-[#484848]/20 p-1 flex flex-col justify-between">
+<span class="text-[10px] font-medium text-[#acabaa]">4</span>
+</div>
+<div class="aspect-square border-r border-b border-[#484848]/20 p-1 flex flex-col justify-between">
+<span class="text-[10px] font-medium text-[#acabaa]">5</span>
+<div class="flex gap-0.5 mt-auto pb-1 px-0.5">
+<div class="h-1 flex-1 bg-[#fb923c] rounded-full"></div>
+</div>
+</div>
+<div class="aspect-square border-r border-b border-[#484848]/20 p-1 flex flex-col justify-between">
+<span class="text-[10px] font-medium text-[#acabaa]">6</span>
+</div>
+<div class="aspect-square border-r border-b border-[#484848]/20 p-1 flex flex-col justify-between">
+<span class="text-[10px] font-medium text-[#acabaa]">7</span>
+</div>
+<!-- Week 2 -->
+<div class="aspect-square border-r border-b border-[#484848]/20 p-1 flex flex-col justify-between">
+<span class="text-[10px] font-medium text-[#acabaa]">8</span>
+<div class="flex flex-col gap-0.5 mt-auto pb-1 px-0.5">
+<div class="h-1 w-full bg-[#5856D6] rounded-full"></div>
+<div class="h-1 w-full bg-[#fb923c] rounded-full"></div>
+</div>
+</div>
+<div class="aspect-square border-r border-b border-[#484848]/20 p-1 flex flex-col justify-between">
+<span class="text-[10px] font-medium text-[#acabaa]">9</span>
+</div>
+<div class="aspect-square border-r border-b border-[#484848]/20 p-1 flex flex-col justify-between">
+<span class="text-[10px] font-medium text-[#acabaa]">10</span>
+</div>
+<div class="aspect-square border-r border-b border-[#484848]/20 p-1 flex flex-col justify-between">
+<span class="text-[10px] font-medium text-[#acabaa]">11</span>
+<div class="flex gap-0.5 mt-auto pb-1 px-0.5">
+<div class="h-1 flex-1 bg-[#4ade80] rounded-full"></div>
+</div>
+</div>
+<div class="aspect-square border-r border-b border-[#484848]/20 p-1 flex flex-col justify-between">
+<span class="text-[10px] font-medium text-[#acabaa]">12</span>
+</div>
+<div class="aspect-square border-r border-b border-[#484848]/20 p-1 flex flex-col justify-between">
+<span class="text-[10px] font-medium text-[#acabaa]">13</span>
+</div>
+<div class="aspect-square border-r border-b border-[#484848]/20 p-1 flex flex-col justify-between">
+<span class="text-[10px] font-medium text-[#acabaa]">14</span>
+</div>
+<!-- Week 3 -->
+<div class="aspect-square border-r border-b border-[#484848]/20 p-1 flex flex-col justify-between">
+<span class="text-[10px] font-medium text-[#acabaa]">15</span>
+<div class="flex gap-0.5 mt-auto pb-1 px-0.5">
+<div class="h-1 flex-1 bg-[#5856D6] rounded-full"></div>
+</div>
+</div>
+<div class="aspect-square border-r border-b border-[#484848]/20 p-1 flex flex-col justify-between">
+<span class="text-[10px] font-medium text-[#acabaa]">16</span>
+</div>
+<div class="aspect-square border-r border-b border-[#484848]/20 p-1 flex flex-col justify-between">
+<span class="text-[10px] font-medium text-[#acabaa]">17</span>
+</div>
+<div class="aspect-square border-r border-b border-[#484848]/20 p-1 flex flex-col justify-between">
+<span class="text-[10px] font-medium text-[#acabaa]">18</span>
+</div>
+<div class="aspect-square border-r border-b border-[#484848]/20 p-1 flex flex-col justify-between">
+<span class="text-[10px] font-medium text-[#acabaa]">19</span>
+<div class="flex gap-0.5 mt-auto pb-1 px-0.5">
+<div class="h-1 flex-1 bg-[#fb923c] rounded-full"></div>
+</div>
+</div>
+<div class="aspect-square border-r border-b border-[#484848]/20 p-1 flex flex-col justify-between">
+<span class="text-[10px] font-medium text-[#acabaa]">20</span>
+</div>
+<div class="aspect-square border-r border-b border-[#484848]/20 p-1 flex flex-col justify-between">
+<span class="text-[10px] font-medium text-[#acabaa]">21</span>
+</div>
+<!-- Week 4 - Current Day Included -->
+<div class="aspect-square border-r border-b border-[#484848]/20 p-1 flex flex-col justify-between">
+<span class="text-[10px] font-medium text-[#acabaa]">22</span>
+</div>
+<div class="aspect-square border-r border-b border-[#484848]/20 p-1 flex flex-col justify-between">
+<span class="text-[10px] font-medium text-[#acabaa]">23</span>
+<div class="flex gap-0.5 mt-auto pb-1 px-0.5">
+<div class="h-1 flex-1 bg-[#5856D6] rounded-full"></div>
+</div>
+</div>
+<!-- Active Day 24 -->
+<div class="aspect-square border-r border-b border-[#484848]/20 p-1 flex flex-col justify-between bg-[#5856D6]/10">
+<span class="text-[10px] font-bold text-white bg-[#5856D6] w-5 h-5 flex items-center justify-center rounded-[2px] -mt-1 -ml-1">24</span>
+<div class="flex flex-col gap-0.5 mt-auto pb-1 px-0.5">
+<div class="h-1 w-full bg-[#5856D6] rounded-full"></div>
+<div class="h-1 w-full bg-[#4ade80] rounded-full"></div>
+<div class="h-1 w-full bg-[#fb923c] rounded-full"></div>
+</div>
+</div>
+<div class="aspect-square border-r border-b border-[#484848]/20 p-1 flex flex-col justify-between">
+<span class="text-[10px] font-medium text-[#acabaa]">25</span>
+</div>
+<div class="aspect-square border-r border-b border-[#484848]/20 p-1 flex flex-col justify-between">
+<span class="text-[10px] font-medium text-[#acabaa]">26</span>
+</div>
+<div class="aspect-square border-r border-b border-[#484848]/20 p-1 flex flex-col justify-between">
+<span class="text-[10px] font-medium text-[#acabaa]">27</span>
+</div>
+<div class="aspect-square border-r border-b border-[#484848]/20 p-1 flex flex-col justify-between">
+<span class="text-[10px] font-medium text-[#acabaa]">28</span>
+</div>
+<!-- Last Week -->
+<div class="aspect-square border-r border-b border-[#484848]/20 p-1 flex flex-col justify-between">
+<span class="text-[10px] font-medium text-[#acabaa]">29</span>
+</div>
+<div class="aspect-square border-r border-b border-[#484848]/20 p-1 flex flex-col justify-between">
+<span class="text-[10px] font-medium text-[#acabaa]">30</span>
+<div class="flex gap-0.5 mt-auto pb-1 px-0.5">
+<div class="h-1 flex-1 bg-[#5856D6] rounded-full"></div>
+</div>
+</div>
+<div class="aspect-square border-r border-b border-[#484848]/20 p-1 flex flex-col justify-between">
+<span class="text-[10px] font-medium text-[#acabaa]">31</span>
+</div>
+<!-- Next month padding -->
+<div class="aspect-square border-r border-b border-[#484848]/10 p-1 flex flex-col justify-between opacity-20">
+<span class="text-[10px] font-medium">1</span>
+</div>
+<div class="aspect-square border-r border-b border-[#484848]/10 p-1 flex flex-col justify-between opacity-20">
+<span class="text-[10px] font-medium">2</span>
+</div>
+<div class="aspect-square border-r border-b border-[#484848]/10 p-1 flex flex-col justify-between opacity-20">
+<span class="text-[10px] font-medium">3</span>
+</div>
+<div class="aspect-square border-r border-b border-[#484848]/10 p-1 flex flex-col justify-between opacity-20">
+<span class="text-[10px] font-medium">4</span>
+</div>
+</div>
+</section>
+<!-- Events Summary List for Selected Day -->
+<section class="mt-8 px-6">
+<h3 class="text-[10px] font-extrabold text-[#acabaa] tracking-widest uppercase mb-4">Events for Oct 24</h3>
+<div class="space-y-3">
+<div class="flex items-center gap-4 bg-[#191a1a] p-3 border-l-4 border-[#5856D6] rounded-sm">
+<div class="flex flex-col">
+<span class="text-[10px] font-bold text-[#acabaa]">09:00</span>
+<span class="text-[10px] font-bold text-[#5856D6]">10:30</span>
+</div>
+<div>
+<h4 class="text-xs font-bold text-[#c2c1ff]">Linear Algebra</h4>
+<p class="text-[10px] text-[#acabaa]">Studium • Hall B</p>
+</div>
+</div>
+<div class="flex items-center gap-4 bg-[#191a1a] p-3 border-l-4 border-[#4ade80] rounded-sm">
+<div class="flex flex-col">
+<span class="text-[10px] font-bold text-[#acabaa]">11:30</span>
+<span class="text-[10px] font-bold text-[#4ade80]">12:30</span>
+</div>
+<div>
+<h4 class="text-xs font-bold text-[#4ade80]">Monthly Rent Due</h4>
+<p class="text-[10px] text-[#acabaa]">Finance • Automatic</p>
+</div>
+</div>
+<div class="flex items-center gap-4 bg-[#191a1a] p-3 border-l-4 border-[#fb923c] rounded-sm">
+<div class="flex flex-col min-w-[32px]">
+<span class="text-[10px] font-bold text-[#acabaa]">14:00</span>
+<span class="text-[10px] font-bold text-[#fb923c]">15:00</span>
+</div>
+<div class="flex-1">
+<h4 class="text-xs font-bold text-[#fb923c]">Chest Day</h4>
+<p class="text-[10px] text-[#acabaa]">Workout • Main Gym</p>
+</div>
+<!-- FAB Context Action (as seen in screenshot bottom right of event list) -->
+<button class="bg-[#5856D6] text-white w-10 h-10 flex items-center justify-center rounded-[4px] shadow-lg">
+<span class="material-symbols-outlined text-xl" style="font-variation-settings: 'wght' 600;">add</span>
+</button>
+</div>
+</div>
+</section>
+</main>
+<!-- BottomNavBar -->
+<nav class="fixed bottom-0 left-0 w-full z-50 flex justify-around items-center px-4 py-3 bg-[#0e0e0e]/60 backdrop-blur-3xl border-t border-[#484848]/15">
+<a class="flex flex-col items-center justify-center text-[#acabaa] opacity-50 hover:opacity-100 transition-opacity" href="#">
+<span class="material-symbols-outlined">home</span>
+</a>
+<a class="flex flex-col items-center justify-center text-[#c2c1ff] relative transition-all" href="#">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">calendar_today</span>
+<div class="absolute -bottom-1 w-6 h-0.5 bg-[#c2c1ff] rounded-full"></div>
+</a>
+<a class="flex flex-col items-center justify-center text-[#acabaa] opacity-50 hover:opacity-100 transition-opacity" href="#">
+<span class="material-symbols-outlined">add</span>
+</a>
+<a class="flex flex-col items-center justify-center text-[#acabaa] opacity-50 hover:opacity-100 transition-opacity" href="#">
+<span class="material-symbols-outlined">grid_view</span>
+</a>
+<a class="flex flex-col items-center justify-center text-[#acabaa] opacity-50 hover:opacity-100 transition-opacity" href="#">
+<span class="material-symbols-outlined">settings</span>
+</a>
+</nav>
+</body></html>

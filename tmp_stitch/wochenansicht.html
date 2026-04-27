@@ -1,0 +1,273 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Kinetic Mono - Weekly Calendar</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;700;800&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            colors: {
+              "tertiary-dim": "#c3cbe9",
+              "on-primary": "#2e28ad",
+              "on-background": "#e7e5e5",
+              "on-error-container": "#ff97a3",
+              "on-error": "#490013",
+              "secondary-fixed": "#e5e1e6",
+              "on-primary-fixed": "#2d27ad",
+              "surface-container-high": "#1f2020",
+              "primary": "#c2c1ff",
+              "on-tertiary-fixed-variant": "#4d556f",
+              "secondary-container": "#3c3b3f",
+              "on-surface-variant": "#acabaa",
+              "error-dim": "#b95463",
+              "on-primary-fixed-variant": "#4c49c9",
+              "inverse-on-surface": "#565555",
+              "on-tertiary": "#4c546e",
+              "surface-variant": "#252626",
+              "tertiary-container": "#d1d9f8",
+              "inverse-surface": "#fcf9f8",
+              "primary-fixed": "#e2dfff",
+              "surface-container": "#191a1a",
+              "error": "#ec7c8a",
+              "tertiary-fixed-dim": "#c3cbe9",
+              "outline": "#767575",
+              "outline-variant": "#484848",
+              "surface-container-low": "#131313",
+              "on-primary-container": "#cdccff",
+              "surface-container-lowest": "#000000",
+              "tertiary-fixed": "#d1d9f8",
+              "surface-container-highest": "#252626",
+              "on-secondary-container": "#c1bec3",
+              "surface-tint": "#c2c1ff",
+              "primary-dim": "#b2b1ff",
+              "background": "#0e0e0e",
+              "on-secondary-fixed-variant": "#5c5b5f",
+              "on-tertiary-container": "#444c65",
+              "tertiary": "#e2e7ff",
+              "surface": "#0e0e0e",
+              "secondary": "#9f9da1",
+              "primary-container": "#3631b4",
+              "error-container": "#7f2737",
+              "surface-bright": "#2b2c2c",
+              "on-tertiary-fixed": "#313951",
+              "on-surface": "#e7e5e5",
+              "primary-fixed-dim": "#d2d0ff",
+              "surface-dim": "#0e0e0e",
+              "on-secondary-fixed": "#403f43",
+              "secondary-fixed-dim": "#d7d3d8",
+              "secondary-dim": "#9f9da1",
+              "on-secondary": "#202023",
+              "inverse-primary": "#4f4dcd"
+            },
+            fontFamily: {
+              "headline": ["Manrope"],
+              "body": ["Manrope"],
+              "label": ["Manrope"]
+            },
+            borderRadius: {"DEFAULT": "0px", "lg": "0px", "xl": "0px", "full": "9999px"},
+          },
+        },
+      }
+    </script>
+<style>
+        body { font-family: 'Manrope', sans-serif; }
+        .material-symbols-outlined { font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24; }
+        .no-scrollbar::-webkit-scrollbar { display: none; }
+        .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+    </style>
+<style>
+        body {
+            min-height: max(884px, 100dvh);
+        }
+    </style>
+</head>
+<body class="bg-surface text-on-surface select-none overflow-x-hidden">
+<!-- TopAppBar -->
+<header class="bg-[#0e0e0e] dark:bg-[#0e0e0e] docked full-width top-0 z-50 border-b border-[#484848]/15 flex justify-between items-center w-full px-6 py-4">
+<div class="flex items-center gap-3">
+<span class="material-symbols-outlined text-[#5856D6] dark:text-[#c2c1ff]">calendar_today</span>
+<h1 class="font-['Manrope'] font-bold tracking-tight text-white text-xl">Calendar</h1>
+</div>
+<!-- Segmented Control for View (TAG, WOCHE, MONAT) -->
+<div class="flex flex-col items-end">
+<button class="text-[#5856D6] dark:text-[#c2c1ff] font-bold uppercase tracking-widest text-[11px] hover:bg-[#252626] transition-colors duration-200 px-3 py-1 active:scale-95">Today</button>
+</div>
+</header><div class="w-full flex justify-end px-6 pt-2">
+<button class="opacity-80 hover:opacity-100 transition-opacity">
+<img alt="View Toggle" class="h-8 w-auto object-contain" src="https://lh3.googleusercontent.com/aida/ADBb0uhAgIa4uW89ORhN8zzS06dKBANqQ7u26CIKgSnd7nsjMHvFois3nKKFGRw-YuCX1YunR5mtMBWJjJiYFvBGQLnUsgea4XsZLNck9tDB5Nti7uHj1a9zb1cAscMlECTDM0D5rw8iK07xu1JGJo9zZtB4MNlTd_Eo1WqJQS0l2VnA699QqUL8e1E7-rR9zSzzJDhYVXoV6iK2hdi_ca2L4Ku3z-BeoFuc_TFy2vcJkTQKQrZmFjB8lLlzM4NmWZxFcMRH65-puY31"/>
+</button>
+</div>
+<main class="min-h-screen pt-4 pb-24">
+<!-- Date Subheader -->
+<div class="flex items-center justify-between px-6 mb-8">
+<div>
+<h2 class="text-3xl font-extrabold tracking-tighter">October 2024</h2>
+<p class="text-on-surface-variant text-sm font-medium">Week 42 • Kinetic Pulse View</p>
+</div>
+<div class="flex gap-2">
+<button class="w-10 h-10 flex items-center justify-center bg-surface-container-highest hover:bg-surface-bright transition-colors">
+<span class="material-symbols-outlined">chevron_left</span>
+</button>
+<button class="w-10 h-10 flex items-center justify-center bg-surface-container-highest hover:bg-surface-bright transition-colors">
+<span class="material-symbols-outlined">chevron_right</span>
+</button>
+</div>
+</div>
+<!-- Weekly Grid Container -->
+<div class="w-full">
+<div class="grid grid-cols-[36px_repeat(7,minmax(0,1fr))] gap-px bg-outline-variant/10">
+<!-- Grid Headers -->
+<div class="bg-surface"></div>
+<div class="bg-surface py-3 px-1 flex flex-col items-center">
+<span class="text-[8px] font-bold uppercase tracking-wider text-on-surface-variant mb-1">Mon</span>
+<span class="text-sm font-extrabold">14</span>
+</div>
+<div class="bg-surface py-3 px-1 flex flex-col items-center">
+<span class="text-[8px] font-bold uppercase tracking-wider text-on-surface-variant mb-1">Tue</span>
+<span class="text-sm font-extrabold">15</span>
+</div>
+<div class="bg-surface py-3 px-1 flex flex-col items-center relative">
+<span class="text-[8px] font-bold uppercase tracking-wider text-on-surface-variant mb-1">Wed</span>
+<span class="text-sm font-extrabold text-primary">16</span>
+<div class="w-1 h-1 bg-primary mt-1"></div>
+</div>
+<div class="bg-surface py-3 px-1 flex flex-col items-center">
+<span class="text-[8px] font-bold uppercase tracking-wider text-on-surface-variant mb-1">Thu</span>
+<span class="text-sm font-extrabold">17</span>
+</div>
+<div class="bg-surface py-3 px-1 flex flex-col items-center">
+<span class="text-[8px] font-bold uppercase tracking-wider text-on-surface-variant mb-1">Fri</span>
+<span class="text-sm font-extrabold text-error">18</span>
+</div>
+<div class="bg-surface py-3 px-1 flex flex-col items-center">
+<span class="text-[8px] font-bold uppercase tracking-wider text-on-surface-variant mb-1">Sat</span>
+<span class="text-sm font-extrabold">19</span>
+</div>
+<div class="bg-surface py-3 px-1 flex flex-col items-center">
+<span class="text-[8px] font-bold uppercase tracking-wider text-on-surface-variant mb-1">Sun</span>
+<span class="text-sm font-extrabold">20</span>
+</div>
+<!-- Time Slots & Content (Rows represent visual vertical timelines) -->
+<!-- 08:00 Slot -->
+<div class="bg-surface-dim min-h-[120px] flex justify-center pt-2 relative">
+<span class="text-[8px] font-bold text-on-surface-variant/60">08:00</span>
+</div>
+<div class="bg-surface-dim min-h-[120px] p-0.5 relative">
+<div class="mt-6 p-1 bg-primary-container/20 border-l-2 border-primary text-primary-dim overflow-hidden">
+<p class="text-[6px] font-bold uppercase tracking-wider truncate">Studium</p>
+<p class="text-[8px] font-semibold leading-tight mt-0.5 line-clamp-3 break-words">Advanced Algorithms</p>
+</div>
+</div>
+<div class="bg-surface-dim min-h-[120px] p-0.5 relative">
+</div>
+<div class="bg-surface-dim min-h-[120px] p-0.5 relative">
+<div class="mt-6 p-1 bg-primary-container/20 border-l-2 border-primary text-primary-dim overflow-hidden">
+<p class="text-[6px] font-bold uppercase tracking-wider truncate">Studium</p>
+<p class="text-[8px] font-semibold leading-tight mt-0.5 line-clamp-3 break-words">Thesis Research</p>
+</div>
+</div>
+<div class="bg-surface-dim min-h-[120px] p-0.5 relative">
+<div class="mt-6 p-1 bg-primary-container/20 border-l-2 border-primary text-primary-dim overflow-hidden">
+<p class="text-[6px] font-bold uppercase tracking-wider truncate">Studium</p>
+<p class="text-[8px] font-semibold leading-tight mt-0.5 line-clamp-3 break-words">Review Seminar</p>
+</div>
+</div>
+<div class="bg-surface-dim min-h-[120px] p-0.5 relative">
+</div>
+<div class="bg-surface-dim min-h-[120px] p-0.5 relative">
+</div>
+<div class="bg-surface-dim min-h-[120px] p-0.5 relative">
+</div>
+<!-- 12:00 Slot -->
+<div class="bg-surface-dim min-h-[120px] flex justify-center pt-2 relative">
+<span class="text-[8px] font-bold text-on-surface-variant/60">12:00</span>
+</div>
+<div class="bg-surface-dim min-h-[120px] p-0.5 relative">
+</div>
+<div class="bg-surface-dim min-h-[120px] p-0.5 relative">
+<div class="mt-4 p-1 bg-green-900/20 border-l-2 border-green-500 text-green-300 overflow-hidden">
+<p class="text-[6px] font-bold uppercase tracking-wider truncate">Finance</p>
+<p class="text-[8px] font-semibold leading-tight mt-0.5 line-clamp-3 break-words">Portfolio Audit</p>
+</div>
+</div>
+<div class="bg-surface-dim min-h-[120px] p-0.5 relative">
+<span class="text-[7px] text-primary/80 absolute top-1 left-0.5 uppercase font-bold z-10 bg-surface-dim px-0.5">Now</span>
+<div class="absolute top-2.5 left-0 w-full h-px bg-primary/40"></div>
+</div>
+<div class="bg-surface-dim min-h-[120px] p-0.5 relative">
+<div class="mt-8 p-1 bg-green-900/20 border-l-2 border-green-500 text-green-300 overflow-hidden">
+<p class="text-[6px] font-bold uppercase tracking-wider truncate">Finance</p>
+<p class="text-[8px] font-semibold leading-tight mt-0.5 line-clamp-3 break-words">Tax Filing</p>
+</div>
+</div>
+<div class="bg-surface-dim min-h-[120px] p-0.5 relative">
+</div>
+<div class="bg-surface-dim min-h-[120px] p-0.5 relative">
+</div>
+<div class="bg-surface-dim min-h-[120px] p-0.5 relative">
+</div>
+<!-- 18:00 Slot -->
+<div class="bg-surface-dim min-h-[120px] flex justify-center pt-2 relative">
+<span class="text-[8px] font-bold text-on-surface-variant/60">18:00</span>
+</div>
+<div class="bg-surface-dim min-h-[120px] p-0.5 relative">
+<div class="mt-10 p-1 bg-orange-900/20 border-l-2 border-orange-500 text-orange-300 overflow-hidden">
+<p class="text-[6px] font-bold uppercase tracking-wider truncate">Gym</p>
+<p class="text-[8px] font-semibold leading-tight mt-0.5 line-clamp-3 break-words">Lower Body Power</p>
+</div>
+</div>
+<div class="bg-surface-dim min-h-[120px] p-0.5 relative">
+</div>
+<div class="bg-surface-dim min-h-[120px] p-0.5 relative">
+<div class="mt-10 p-1 bg-orange-900/20 border-l-2 border-orange-500 text-orange-300 overflow-hidden">
+<p class="text-[6px] font-bold uppercase tracking-wider truncate">Gym</p>
+<p class="text-[8px] font-semibold leading-tight mt-0.5 line-clamp-3 break-words">Upper Body Focus</p>
+</div>
+</div>
+<div class="bg-surface-dim min-h-[120px] p-0.5 relative">
+</div>
+<div class="bg-surface-dim min-h-[120px] p-0.5 relative">
+<div class="mt-10 p-1 bg-orange-900/20 border-l-2 border-orange-500 text-orange-300 overflow-hidden">
+<p class="text-[6px] font-bold uppercase tracking-wider truncate">Gym</p>
+<p class="text-[8px] font-semibold leading-tight mt-0.5 line-clamp-3 break-words">Cardio Flow</p>
+</div>
+</div>
+<div class="bg-surface-dim min-h-[120px] p-0.5 relative">
+</div>
+<div class="bg-surface-dim min-h-[120px] p-0.5 relative">
+</div>
+</div>
+</div>
+<!-- Floating Scrubber -->
+</main>
+<!-- BottomNavBar -->
+<nav class="fixed bottom-0 left-0 w-full flex justify-around items-end px-4 pb-6 pt-2 bg-[#000]/80 backdrop-blur-xl border-t border-[#484848]/15 z-50">
+<a class="flex flex-col items-center justify-center text-[#acabaa] p-2 hover:text-white transition-all duration-300 active:translate-y-0.5" href="#">
+<span class="material-symbols-outlined mb-1">home</span>
+<span class="font-['Manrope'] text-[10px] font-medium uppercase tracking-widest">Home</span>
+</a>
+<a class="flex flex-col items-center justify-center text-white bg-[#5856D6] px-4 py-2 rounded-none transition-all duration-300 active:translate-y-0.5" href="#">
+<span class="material-symbols-outlined mb-1">calendar_month</span>
+<span class="font-['Manrope'] text-[10px] font-medium uppercase tracking-widest">Calendar</span>
+</a>
+<div class="relative px-4">
+<button class="w-14 h-14 bg-white text-black flex items-center justify-center shadow-2xl hover:bg-primary transition-colors active:scale-90">
+<span class="material-symbols-outlined text-3xl font-bold">add</span>
+</button>
+</div>
+<a class="flex flex-col items-center justify-center text-[#acabaa] p-2 hover:text-white transition-all duration-300 active:translate-y-0.5" href="#">
+<span class="material-symbols-outlined mb-1">grid_view</span>
+<span class="font-['Manrope'] text-[10px] font-medium uppercase tracking-widest">Spaces</span>
+</a>
+<a class="flex flex-col items-center justify-center text-[#acabaa] p-2 hover:text-white transition-all duration-300 active:translate-y-0.5" href="#">
+<span class="material-symbols-outlined mb-1">settings</span>
+<span class="font-['Manrope'] text-[10px] font-medium uppercase tracking-widest">Settings</span>
+</a>
+</nav>
+</body></html>
