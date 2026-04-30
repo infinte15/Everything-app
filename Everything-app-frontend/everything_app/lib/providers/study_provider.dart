@@ -3,6 +3,9 @@ import '../models/study_note.dart';
 import '../models/study_folder.dart';
 import '../models/study_plan.dart';
 import '../models/lesson_plan_entry.dart';
+import '../models/study_subject.dart';
+import '../models/study_grade.dart';
+import '../models/flashcard_deck.dart';
 
 class StudyProvider with ChangeNotifier {
   // ── Core data ───────────────────────────────────────────────────────────────
@@ -10,9 +13,10 @@ class StudyProvider with ChangeNotifier {
   List<StudyFolder> _folders = [];
   List<StudyPlanGoal> _studyPlan = [];
   List<LessonPlanEntry> _lessonPlan = [];
-  List<Map<String, dynamic>> _courses = [];
-  List<Map<String, dynamic>> _flashcards = [];
-  List<Map<String, dynamic>> _grades = [];
+  List<StudySubject> _subjects = [];
+  List<FlashcardDeck> _flashcardDecks = [];
+  List<Flashcard> _flashcards = [];
+  List<StudyGrade> _grades = [];
 
   // ── UI state ─────────────────────────────────────────────────────────────────
   String? _selectedFolderId;
@@ -27,9 +31,10 @@ class StudyProvider with ChangeNotifier {
   List<StudyFolder> get folders => _folders;
   List<StudyPlanGoal> get studyPlan => _studyPlan;
   List<LessonPlanEntry> get lessonPlan => _lessonPlan;
-  List<Map<String, dynamic>> get courses => _courses;
-  List<Map<String, dynamic>> get flashcards => _flashcards;
-  List<Map<String, dynamic>> get grades => _grades;
+  List<StudySubject> get subjects => _subjects;
+  List<FlashcardDeck> get flashcardDecks => _flashcardDecks;
+  List<Flashcard> get flashcards => _flashcards;
+  List<StudyGrade> get grades => _grades;
 
   String? get selectedFolderId => _selectedFolderId;
   String? get selectedNoteId => _selectedNoteId;
@@ -70,7 +75,7 @@ class StudyProvider with ChangeNotifier {
         _loadNotes(),
         _loadStudyPlan(),
         _loadLessonPlan(),
-        _loadCourses(),
+        _loadSubjects(),
         _loadFlashcards(),
         _loadGrades(),
       ]);
@@ -194,41 +199,33 @@ class StudyProvider with ChangeNotifier {
     ];
   }
 
-  Future<void> _loadCourses() async {
+  Future<void> _loadSubjects() async {
     await Future.delayed(const Duration(milliseconds: 100));
-    _courses = [
-      {'id': 1, 'name': 'Mathematik II', 'code': 'MATH201',
-       'professor': 'Prof. Dr. Schmidt', 'credits': 6, 'semester': 'WiSe 2024/25'},
-      {'id': 2, 'name': 'Programmierung', 'code': 'CS101',
-       'professor': 'Prof. Dr. Müller', 'credits': 8, 'semester': 'WiSe 2024/25'},
-      {'id': 3, 'name': 'Physik', 'code': 'PHYS101',
-       'professor': 'Prof. Dr. Weber', 'credits': 4, 'semester': 'WiSe 2024/25'},
+    _subjects = [
+      StudySubject(id: '1', name: 'Mathematik II', professor: 'Prof. Dr. Schmidt', creditPoints: 6, semester: 'WiSe 2024/25', colorHex: '#3B82F6'),
+      StudySubject(id: '2', name: 'Programmierung', professor: 'Prof. Dr. Müller', creditPoints: 8, semester: 'WiSe 2024/25', colorHex: '#10B981'),
+      StudySubject(id: '3', name: 'Physik', professor: 'Prof. Dr. Weber', creditPoints: 4, semester: 'WiSe 2024/25', colorHex: '#F59E0B'),
     ];
   }
 
   Future<void> _loadFlashcards() async {
     await Future.delayed(const Duration(milliseconds: 100));
+    _flashcardDecks = [
+      FlashcardDeck(id: 'd1', title: 'Programmierung Grundlagen', subjectId: '2', totalCards: 25, toReviewCount: 12, masteryPercentage: 40),
+      FlashcardDeck(id: 'd2', title: 'Analysis', subjectId: '1', totalCards: 40, toReviewCount: 5, masteryPercentage: 80),
+    ];
     _flashcards = [
-      {'id': 1, 'question': 'Was ist eine abstrakte Klasse?',
-       'answer': 'Eine Klasse, die nicht instanziiert werden kann.',
-       'courseId': 2, 'difficulty': 'medium', 'reviewCount': 3,
-       'nextReview': DateTime.now().add(const Duration(days: 5))},
-      {'id': 2, 'question': 'Was ist Polymorphismus?',
-       'answer': 'Die Fähigkeit eines Objekts, sich als ein Objekt eines anderen Typs zu verhalten.',
-       'courseId': 2, 'difficulty': 'hard', 'reviewCount': 5,
-       'nextReview': DateTime.now().add(const Duration(days: 3))},
+      Flashcard(id: 'fc1', deckId: 'd1', question: 'Was ist eine abstrakte Klasse?', answer: 'Eine Klasse, die nicht instanziiert werden kann.', srsLevel: 2, nextReview: DateTime.now().add(const Duration(days: 5))),
+      Flashcard(id: 'fc2', deckId: 'd1', question: 'Was ist Polymorphismus?', answer: 'Die Fähigkeit eines Objekts, sich als ein Objekt eines anderen Typs zu verhalten.', srsLevel: 3, nextReview: DateTime.now().add(const Duration(days: 3))),
     ];
   }
 
   Future<void> _loadGrades() async {
     await Future.delayed(const Duration(milliseconds: 100));
     _grades = [
-      {'id': 1, 'courseId': 1, 'courseName': 'Mathematik', 'grade': 2.0,
-       'credits': 6, 'type': 'Klausur', 'weight': 1.0},
-      {'id': 2, 'courseId': 2, 'courseName': 'Programmierung', 'grade': 1.3,
-       'credits': 8, 'type': 'Projekt', 'weight': 1.0},
-      {'id': 3, 'courseId': 3, 'courseName': 'Physik', 'grade': 2.7,
-       'credits': 4, 'type': 'Klausur', 'weight': 1.0},
+      StudyGrade(id: 'g1', subjectId: '1', examName: 'Klausur', grade: 2.0, weight: 1.0, date: DateTime.now().subtract(const Duration(days: 30))),
+      StudyGrade(id: 'g2', subjectId: '2', examName: 'Projekt', grade: 1.3, weight: 1.0, date: DateTime.now().subtract(const Duration(days: 20))),
+      StudyGrade(id: 'g3', subjectId: '3', examName: 'Klausur', grade: 2.7, weight: 1.0, date: DateTime.now().subtract(const Duration(days: 10))),
     ];
   }
 
@@ -401,38 +398,34 @@ class StudyProvider with ChangeNotifier {
             .compareTo(b.startHour * 60 + b.startMinute));
 
   // ── Flashcards ───────────────────────────────────────────────────────────────
-  List<Map<String, dynamic>> get dueFlashcards {
+  List<Flashcard> get dueFlashcards {
     final now = DateTime.now();
     return _flashcards.where((f) {
-      final next = f['nextReview'] as DateTime?;
-      return next == null || next.isBefore(now);
+      return f.nextReview.isBefore(now);
     }).toList();
   }
 
-  Future<void> reviewFlashcard(int id, bool correct) async {
-    final idx = _flashcards.indexWhere((f) => f['id'] == id);
+  Future<void> reviewFlashcard(String id, bool correct) async {
+    final idx = _flashcards.indexWhere((f) => f.id == id);
     if (idx != -1) {
       final card = _flashcards[idx];
-      final count = (card['reviewCount'] as int) + 1;
-      final days = correct ? count * 2 : 1;
-      _flashcards[idx] = {
-        ...card,
-        'reviewCount': correct ? count : 0,
-        'lastReviewed': DateTime.now(),
-        'nextReview': DateTime.now().add(Duration(days: days)),
-      };
+      final newSrsLevel = correct ? card.srsLevel + 1 : 0;
+      final days = correct ? (newSrsLevel * 2).clamp(1, 30) : 1;
+      _flashcards[idx] = Flashcard(
+        id: card.id,
+        deckId: card.deckId,
+        question: card.question,
+        answer: card.answer,
+        srsLevel: newSrsLevel,
+        nextReview: DateTime.now().add(Duration(days: days)),
+      );
       notifyListeners();
     }
   }
 
-  Future<bool> addFlashcard(Map<String, dynamic> flashcard) async {
+  Future<bool> addFlashcard(Flashcard flashcard) async {
     try {
-      _flashcards.add({
-        ...flashcard,
-        'id': _flashcards.length + 1,
-        'reviewCount': 0,
-        'nextReview': DateTime.now().add(const Duration(days: 1)),
-      });
+      _flashcards.add(flashcard);
       notifyListeners();
       return true;
     } catch (_) {
@@ -446,14 +439,18 @@ class StudyProvider with ChangeNotifier {
     double weighted = 0;
     int credits = 0;
     for (final g in _grades) {
-      weighted += (g['grade'] as double) * (g['credits'] as int);
-      credits += g['credits'] as int;
+      final subject = _subjects.firstWhere((s) => s.id == g.subjectId, orElse: () => StudySubject(id: '', name: ''));
+      weighted += g.grade * subject.creditPoints * g.weight;
+      credits += (subject.creditPoints * g.weight).round();
     }
     return credits > 0 ? weighted / credits : 0.0;
   }
 
   int get totalCredits =>
-      _grades.fold<int>(0, (s, g) => s + (g['credits'] as int));
+      _grades.fold<int>(0, (s, g) {
+        final subject = _subjects.firstWhere((sub) => sub.id == g.subjectId, orElse: () => StudySubject(id: '', name: ''));
+        return s + subject.creditPoints;
+      });
 
   // ── Helpers ──────────────────────────────────────────────────────────────────
   DateTime _currentWeekStart() {

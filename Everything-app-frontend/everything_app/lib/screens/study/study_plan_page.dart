@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import 'dart:math';
 import '../../providers/study_provider.dart';
 import '../../models/study_plan.dart';
+import 'widgets/study_kinetic_card.dart';
 
 class StudyPlanPage extends StatelessWidget {
   const StudyPlanPage({super.key});
@@ -87,7 +88,7 @@ class StudyPlanPage extends StatelessWidget {
                     delegate: SliverChildBuilderDelegate(
                       (ctx, i) => Padding(
                         padding: const EdgeInsets.only(bottom: 12),
-                        child: _StudyGoalCard(goal: goals[i]),
+                        child: _StudyGoalKineticCard(goal: goals[i]),
                       ),
                       childCount: goals.length,
                     ),
@@ -226,22 +227,9 @@ class _WeekSummaryCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        gradient: const LinearGradient(
-          colors: [Color(0xFF6366F1), Color(0xFF8B5CF6)],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
-        borderRadius: BorderRadius.circular(20),
-        boxShadow: [
-          BoxShadow(
-              color: const Color(0xFF6366F1).withValues(alpha: 0.4),
-              blurRadius: 16,
-              offset: const Offset(0, 6)),
-        ],
-      ),
+    final theme = Theme.of(context);
+    return StudyKineticCard(
+      backgroundColor: theme.colorScheme.primaryContainer,
       child: Row(
         children: [
           // Ring
@@ -295,22 +283,16 @@ class _WeekSummaryCard extends StatelessWidget {
 
 // ── Goal card ─────────────────────────────────────────────────────────────────
 
-class _StudyGoalCard extends StatelessWidget {
+class _StudyGoalKineticCard extends StatelessWidget {
   final StudyPlanGoal goal;
-  const _StudyGoalCard({required this.goal});
+  const _StudyGoalKineticCard({required this.goal});
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final color = goal.color;
 
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.07),
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: color.withValues(alpha: 0.2)),
-      ),
+    return StudyKineticCard(
       child: Row(
         children: [
           // Ring
@@ -339,7 +321,7 @@ class _StudyGoalCard extends StatelessWidget {
                 ),
                 const SizedBox(height: 6),
                 ClipRRect(
-                  borderRadius: BorderRadius.circular(4),
+                  borderRadius: BorderRadius.zero,
                   child: LinearProgressIndicator(
                     value: goal.progress,
                     backgroundColor: color.withValues(alpha: 0.15),
@@ -353,13 +335,13 @@ class _StudyGoalCard extends StatelessWidget {
           const SizedBox(width: 12),
           Column(
             children: [
-              IconButton.filledTonal(
-                icon: const Icon(Icons.add, size: 18),
+              IconButton(
+                icon: const Icon(Icons.add, size: 20),
                 tooltip: 'Stunden erfassen',
                 onPressed: () => _logHours(context, goal),
               ),
               IconButton(
-                icon: const Icon(Icons.delete_outline, size: 18, color: Colors.grey),
+                icon: const Icon(Icons.delete_outline, size: 20, color: Colors.grey),
                 tooltip: 'Löschen',
                 onPressed: () => context.read<StudyProvider>().deleteStudyGoal(goal.id),
               ),

@@ -3,11 +3,12 @@ import 'package:provider/provider.dart';
 import 'package:go_router/go_router.dart';
 import '../../providers/study_provider.dart';
 import '../../config/app_theme.dart';
-import 'study_file_system_page.dart';
-import 'study_note_editor_page.dart';
+import 'study_dashboard_page.dart';
+import 'study_subjects_page.dart';
+import 'study_timetable_page.dart';
 import 'study_plan_page.dart';
-import 'lesson_plan_page.dart';
-import 'note_tracker_page.dart';
+import 'study_grades_page.dart';
+import 'lern_zone/study_decks_page.dart';
 
 class StudyScreen extends StatefulWidget {
   const StudyScreen({super.key});
@@ -20,11 +21,12 @@ class _StudyScreenState extends State<StudyScreen> {
   int _selectedIndex = 0;
 
   static const _navItems = [
-    _NavItem(Icons.folder_outlined, Icons.folder, 'Dateisystem'),
-    _NavItem(Icons.edit_note_outlined, Icons.edit_note, 'Notizen'),
-    _NavItem(Icons.track_changes_outlined, Icons.track_changes, 'Lernplan'),
+    _NavItem(Icons.dashboard_outlined, Icons.dashboard, 'Dashboard'),
+    _NavItem(Icons.book_outlined, Icons.book, 'Fächer'),
     _NavItem(Icons.calendar_view_week_outlined, Icons.calendar_view_week, 'Stundenplan'),
-    _NavItem(Icons.view_kanban_outlined, Icons.view_kanban, 'Tracker'),
+    _NavItem(Icons.track_changes_outlined, Icons.track_changes, 'Lernplan'),
+    _NavItem(Icons.calculate_outlined, Icons.calculate, 'Notenrechner'),
+    _NavItem(Icons.flash_on_outlined, Icons.flash_on, 'Lern-Zone'),
   ];
 
   @override
@@ -40,15 +42,13 @@ class _StudyScreenState extends State<StudyScreen> {
     final theme = Theme.of(context);
     final isWide = MediaQuery.of(context).size.width > 600;
 
-    // Pages array (Notes shows all notes list if no note selected, else editor)
     final pages = [
-      const StudyFileSystemPage(),
-      _NotesListPage(onOpen: (id) {
-        // handled internally
-      }),
+      const StudyDashboardPage(),
+      const StudySubjectsPage(),
+      const StudyTimetablePage(),
       const StudyPlanPage(),
-      const LessonPlanPage(),
-      const NoteTrackerPage(),
+      const StudyGradesPage(),
+      const StudyDecksPage(),
     ];
 
     if (isWide) {
@@ -263,185 +263,4 @@ class _NavItem {
   const _NavItem(this.icon, this.selectedIcon, this.label);
 }
 
-// ── Notes list page ───────────────────────────────────────────────────────────
-
-class _NotesListPage extends StatelessWidget {
-  final void Function(int) onOpen;
-  const _NotesListPage({required this.onOpen});
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final provider = context.watch<StudyProvider>();
-    final notes = provider.notes;
-
-    return Scaffold(
-      backgroundColor: theme.colorScheme.surface,
-      body: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Padding(
-            padding: const EdgeInsets.fromLTRB(20, 24, 20, 12),
-            child: Row(
-              children: [
-                const Text('📝', style: TextStyle(fontSize: 28)),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Text('Notizen',
-                      style: theme.textTheme.headlineSmall
-                          ?.copyWith(fontWeight: FontWeight.bold)),
-                ),
-                FilledButton.icon(
-                  onPressed: () => _addNote(context),
-                  icon: const Icon(Icons.add, size: 18),
-                  label: const Text('Neu'),
-                ),
-              ],
-            ),
-          ),
-          const Divider(height: 1),
-          Expanded(
-            child: notes.isEmpty
-                ? Center(
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        const Text('📝', style: TextStyle(fontSize: 56)),
-                        const SizedBox(height: 16),
-                        Text('Noch keine Notizen',
-                            style: theme.textTheme.titleMedium
-                                ?.copyWith(color: Colors.grey)),
-                        const SizedBox(height: 24),
-                        FilledButton.icon(
-                          onPressed: () => _addNote(context),
-                          icon: const Icon(Icons.add),
-                          label: const Text('Erste Notiz erstellen'),
-                        ),
-                      ],
-                    ),
-                  )
-                : ListView.separated(
-                    padding: const EdgeInsets.all(16),
-                    itemCount: notes.length,
-                    separatorBuilder: (_, __) => const SizedBox(height: 8),
-                    itemBuilder: (ctx, i) {
-                      final note = notes[i];
-                      return InkWell(
-                        onTap: () => Navigator.of(context).push(
-                          MaterialPageRoute(
-                              builder: (_) =>
-                                  StudyNoteEditorPage(noteId: note.id!)),
-                        ),
-                        borderRadius: BorderRadius.circular(12),
-                        child: Container(
-                          padding: const EdgeInsets.all(16),
-                          decoration: BoxDecoration(
-                            color: theme.colorScheme.surfaceContainerHighest
-                                .withValues(alpha: 0.3),
-                            borderRadius: BorderRadius.circular(12),
-                            border: Border.all(
-                                color: theme.colorScheme.outline
-                                    .withValues(alpha: 0.12)),
-                          ),
-                          child: Row(
-                            children: [
-                              const Text('📄',
-                                  style: TextStyle(fontSize: 22)),
-                              const SizedBox(width: 12),
-                              Expanded(
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Text(note.title,
-                                        style: theme.textTheme.bodyMedium
-                                            ?.copyWith(
-                                                fontWeight: FontWeight.w600),
-                                        maxLines: 1,
-                                        overflow: TextOverflow.ellipsis),
-                                    const SizedBox(height: 4),
-                                    Row(
-                                      children: [
-                                        if (note.courseName != null) ...[
-                                          Text(note.courseName!,
-                                              style: const TextStyle(
-                                                  fontSize: 11,
-                                                  color: Colors.grey)),
-                                          const Text(' · ',
-                                              style: TextStyle(
-                                                  color: Colors.grey)),
-                                        ],
-                                        if (note.createdAt != null)
-                                          Text(
-                                            _relDate(note.createdAt!),
-                                            style: const TextStyle(
-                                                fontSize: 11,
-                                                color: Colors.grey),
-                                          ),
-                                      ],
-                                    ),
-                                  ],
-                                ),
-                              ),
-                              const SizedBox(width: 8),
-                              if (note.isFavorite)
-                                const Icon(Icons.star,
-                                    size: 16, color: Colors.amber),
-                              const Icon(Icons.chevron_right,
-                                  color: Colors.grey),
-                            ],
-                          ),
-                        ),
-                      );
-                    },
-                  ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  String _relDate(DateTime d) {
-    final diff = DateTime.now().difference(d);
-    if (diff.inDays == 0) return 'Heute';
-    if (diff.inDays == 1) return 'Gestern';
-    return 'vor ${diff.inDays} Tagen';
-  }
-
-  Future<void> _addNote(BuildContext context) async {
-    final ctrl = TextEditingController();
-    await showDialog(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Neue Notiz'),
-        content: TextField(
-          controller: ctrl,
-          autofocus: true,
-          decoration: const InputDecoration(
-              labelText: 'Titel', hintText: 'z.B. Vorlesungsnotizen'),
-        ),
-        actions: [
-          TextButton(
-              onPressed: () => Navigator.pop(ctx),
-              child: const Text('Abbrechen')),
-          FilledButton(
-            onPressed: () async {
-              if (ctrl.text.trim().isNotEmpty) {
-                final note = await context
-                    .read<StudyProvider>()
-                    .addNote(title: ctrl.text.trim());
-                Navigator.pop(ctx);
-                if (context.mounted) {
-                  Navigator.of(context).push(MaterialPageRoute(
-                    builder: (_) =>
-                        StudyNoteEditorPage(noteId: note.id!),
-                  ));
-                }
-              }
-            },
-            child: const Text('Erstellen'),
-          ),
-        ],
-      ),
-    );
-  }
-}
+// removed _NotesListPage

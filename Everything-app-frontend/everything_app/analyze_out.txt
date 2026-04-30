@@ -1,0 +1,20 @@
+Analyzing everything_app...
+
+  error - lib/screens/study/study_screen.dart:333:35 - The method 'StudyNoteEditorPage' isn't defined for the type '_NotesListPage'. Try correcting the name to the name of an existing method, or defining a method named 'StudyNoteEditorPage'. - undefined_method
+  error - lib/screens/study/study_screen.dart:436:25 - The method 'StudyNoteEditorPage' isn't defined for the type '_NotesListPage'. Try correcting the name to the name of an existing method, or defining a method named 'StudyNoteEditorPage'. - undefined_method
+  error - lib/screens/study/study_timetable_page.dart:95:37 - The argument type 'String?' can't be assigned to the parameter type 'String'.  - argument_type_not_assignable
+warning - lib/screens/study/lern_zone/study_question_page.dart:2:8 - Unused import: 'package:provider/provider.dart'. Try removing the import directive. - unused_import
+warning - lib/screens/study/lern_zone/study_question_page.dart:3:8 - Unused import: '../../../providers/study_provider.dart'. Try removing the import directive. - unused_import
+warning - lib/screens/study/study_screen.dart:268:7 - The declaration '_NotesListPage' isn't referenced. Try removing the declaration of '_NotesListPage'. - unused_element
+warning - lib/screens/study/study_timetable_page.dart:101:51 - The operand can't be 'null', so the condition is always 'true'. Remove the condition. - unnecessary_null_comparison
+warning - lib/screens/study/study_timetable_page.dart:105:50 - The '!' will have no effect because the receiver can't be null. Try removing the '!' operator. - unnecessary_non_null_assertion
+   info - lib/config/routes.dart:42:20 - Unnecessary use of multiple underscores. Try using '_'. - unnecessary_underscores
+   info - lib/screens/finance/finance_screen.dart:1180:9 - Use the null-aware marker '?' rather than a null check via an 'if'. Try using '?'. - use_null_aware_elements
+   info - lib/screens/home/home_screen.dart:189:9 - Use the null-aware marker '?' rather than a null check via an 'if'. Try using '?'. - use_null_aware_elements
+   info - lib/screens/recipes/recipe_shopping_page.dart:144:17 - 'value' is deprecated and shouldn't be used. Use initialValue instead. This will set the initial value for the form field. This feature was deprecated after v3.33.0-1.0.pre. Try replacing the use of the deprecated member with the replacement. - deprecated_member_use
+   info - lib/screens/study/study_file_system_page.dart:213:31 - Don't use 'BuildContext's across async gaps. Try rewriting the code to not use the 'BuildContext', or guard the use with a 'mounted' check. - use_build_context_synchronously
+   info - lib/screens/study/study_note_editor_page.dart:70:40 - Don't use 'BuildContext's across async gaps, guarded by an unrelated 'mounted' check. Guard a 'State.context' use with a 'mounted' check on the State, and other BuildContext use with a 'mounted' check on the BuildContext. - use_build_context_synchronously
+   info - lib/screens/study/study_screen.dart:326:43 - Unnecessary use of multiple underscores. Try using '_'. - unnecessary_underscores
+   info - lib/screens/study/study_screen.dart:432:31 - Don't use 'BuildContext's across async gaps. Try rewriting the code to not use the 'BuildContext', or guard the use with a 'mounted' check. - use_build_context_synchronously
+
+16 issues found.
