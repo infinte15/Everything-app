@@ -26,6 +26,7 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<HomeScreen> {
+  DateTime _selectedDate = DateTime.now();
   @override
   void initState() {
     super.initState();
@@ -45,7 +46,7 @@ class _HomeScreenState extends State<HomeScreen> {
     final tasks = context.watch<TaskProvider>();
     final calendar = context.watch<CalendarProvider>();
     final now = DateTime.now();
-    final todayEvents = calendar.getEventsForDay(now);
+    final todayEvents = calendar.getEventsForDay(_selectedDate);
 
     return Scaffold(
       backgroundColor: _backgroundColor,
@@ -103,7 +104,7 @@ class _HomeScreenState extends State<HomeScreen> {
                     rightLabel: DateFormat('E d').format(now).toUpperCase(),
                   ),
                   const SizedBox(height: 24),
-                  const _HorizontalDateSelector(),
+                  _HorizontalDateSelector(  selectedDate: _selectedDate, onDateSelected: (date) => setState(() => _selectedDate = date),),
                   const SizedBox(height: 24),
                   if (todayEvents.isEmpty)
                     const _EmptyState(message: 'Keine Termine heute.')
@@ -192,61 +193,85 @@ class _SectionTitle extends StatelessWidget {
   }
 }
 
-// ─── Horizontal Date Selector ──────────────────────────────────────────────────
-class _HorizontalDateSelector extends StatelessWidget {
-  const _HorizontalDateSelector();
+class _HorizontalDateSelector extends StatefulWidget {
+  final DateTime selectedDate;
+  final ValueChanged<DateTime> onDateSelected;
+
+  const _HorizontalDateSelector({
+    required this.selectedDate,
+    required this.onDateSelected,
+  });
+
+  @override
+  State<_HorizontalDateSelector> createState() => _HorizontalDateSelectorState();
+}
+
+class _HorizontalDateSelectorState extends State<_HorizontalDateSelector> {
+  int? _hoveredIndex;
 
   @override
   Widget build(BuildContext context) {
     final now = DateTime.now();
-    // Generate dates from Mon to Sun of the current week (or just a 7 day window)
-    final dates = List.generate(7, (index) => now.subtract(Duration(days: now.weekday - 1 - index)));
+    final dates = List.generate(
+      7, (i) => now.subtract(Duration(days: now.weekday - 1 - i)),
+    );
 
-    return SizedBox(
-      height: 70,
-      child: ListView.builder(
-        scrollDirection: Axis.horizontal,
-        itemCount: 7,
-        itemBuilder: (context, index) {
-          final date = dates[index];
-          final isToday = date.day == now.day && date.month == now.month && date.year == now.year;
+    return Row(
+      children: List.generate(7, (index) {
+        final date = dates[index];
+        final isSelected = date.day == widget.selectedDate.day &&
+            date.month == widget.selectedDate.month &&
+            date.year == widget.selectedDate.year;
+        final isHovered = _hoveredIndex == index && !isSelected;
 
-          return Container(
-            width: 50,
-            margin: const EdgeInsets.only(right: 8),
-            decoration: BoxDecoration(
-              color: isToday ? _primary : Colors.transparent,
-              borderRadius: BorderRadius.zero,
-            ),
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Text(
-                  DateFormat('E').format(date).toUpperCase(),
-                  style: GoogleFonts.inter(
-                    fontSize: 10,
-                    fontWeight: FontWeight.w600,
-                    color: isToday ? _backgroundColor : _onSurfaceVariant,
+        return Expanded(
+          child: MouseRegion(
+            cursor: SystemMouseCursors.click,
+            onEnter: (_) => setState(() => _hoveredIndex = index),
+            onExit: (_) => setState(() => _hoveredIndex = null),
+            child: GestureDetector(
+              onTap: () => widget.onDateSelected(date),
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 150),
+                padding: EdgeInsets.symmetric(vertical: isSelected ? 12 : 8),
+                color: isSelected
+                    ? _primary
+                    : isHovered
+                        ? _primary.withOpacity(0.15)
+                        : Colors.transparent,
+                child: Opacity(
+                  opacity: isSelected ? 1.0 : isHovered ? 0.7 : 0.4,
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        DateFormat('E').format(date).substring(0, 3).toUpperCase(),
+                        style: GoogleFonts.manrope(
+                          fontSize: 10,
+                          fontWeight: isSelected ? FontWeight.w900 : FontWeight.w700,
+                          color: isSelected ? Colors.white : _onSurface,
+                        ),
+                      ),
+                      const SizedBox(height: 6),
+                      Text(
+                        '${date.day}',
+                        style: GoogleFonts.manrope(
+                          fontSize: isSelected ? 18 : 14,
+                          fontWeight: isSelected ? FontWeight.w900 : FontWeight.w700,
+                          color: isSelected ? Colors.white : _onSurface,
+                        ),
+                      ),
+                    ],
                   ),
                 ),
-                const SizedBox(height: 8),
-                Text(
-                  '${date.day}',
-                  style: GoogleFonts.inter(
-                    fontSize: 16,
-                    fontWeight: FontWeight.bold,
-                    color: isToday ? _backgroundColor : _onSurface,
-                  ),
-                ),
-              ],
+              ),
             ),
-          );
-        },
-      ),
+          ),
+        );
+      }),
     );
   }
 }
-
 // ─── Event Item (Brutalist blocks) ──────────────────────────────────────────────
 class _EventItem extends StatelessWidget {
   final CalendarEvent event;
@@ -381,60 +406,81 @@ class _SpacesHorizontalList extends StatelessWidget {
   ];
 
   @override
-  Widget build(BuildContext context) {
-    return SizedBox(
-      height: 180,
-      child: ListView.builder(
-        scrollDirection: Axis.horizontal,
-        itemCount: spaces.length,
-        itemBuilder: (context, index) {
-          final space = spaces[index];
-          return GestureDetector(
-            onTap: () => context.go(space.route),
-            child: Container(
-              width: 140,
-              margin: const EdgeInsets.only(right: 16),
-              decoration: const BoxDecoration(
-                color: _surfaceColor,
-                borderRadius: BorderRadius.zero,
-              ),
-              padding: const EdgeInsets.all(20),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Icon(space.icon, color: _primaryLight, size: 28),
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        space.title,
-                        style: GoogleFonts.manrope(
-                          fontSize: 10,
-                          fontWeight: FontWeight.w800,
-                          color: _onSurface,
-                          letterSpacing: 1.0,
-                        ),
+Widget build(BuildContext context) {
+  return LayoutBuilder(
+    builder: (context, constraints) {
+      // Build a single card widget to avoid duplication
+      Widget buildCard(int index) {
+        final space = spaces[index];
+        final isLast = index == spaces.length - 1;
+        return GestureDetector(
+          onTap: () => context.go(space.route),
+          child: Container(
+            margin: EdgeInsets.only(right: isLast ? 0 : 16),
+            decoration: const BoxDecoration(color: _surfaceColor),
+            padding: const EdgeInsets.all(20),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Icon(space.icon, color: _primaryLight, size: 28),
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      space.title,
+                      style: GoogleFonts.manrope(
+                        fontSize: 10,
+                        fontWeight: FontWeight.w800,
+                        color: _onSurface,
+                        letterSpacing: 1.0,
                       ),
-                      const SizedBox(height: 4),
-                      Text(
-                        space.subtitle,
-                        style: GoogleFonts.inter(
-                          fontSize: 8,
-                          fontWeight: FontWeight.w600,
-                          color: _onSurfaceVariant,
-                        ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      space.subtitle,
+                      style: GoogleFonts.manrope(
+                        fontSize: 8,
+                        fontWeight: FontWeight.w600,
+                        color: _onSurfaceVariant,
                       ),
-                    ],
-                  ),
-                ],
-              ),
+                    ),
+                  ],
+                ),
+              ],
             ),
-          );
-        },
-      ),
-    );
-  }
+          ),
+        );
+      }
+
+      // Wide screen: all cards fill available width equally
+      if (constraints.maxWidth > 500) {
+        return SizedBox(
+          height: 180,
+          child: Row(
+            children: List.generate(
+              spaces.length,
+              (i) => Expanded(child: buildCard(i)),
+            ),
+          ),
+        );
+      }
+
+      // Narrow screen: horizontal scroll with fixed card width
+      return SizedBox(
+        height: 180,
+        child: ListView.builder(
+          scrollDirection: Axis.horizontal,
+          itemCount: spaces.length,
+          itemBuilder: (context, index) => SizedBox(
+            width: 140,
+            child: buildCard(index),
+          ),
+        ),
+      );
+    },
+  );
+}
 }
 
 class _SpaceData {
