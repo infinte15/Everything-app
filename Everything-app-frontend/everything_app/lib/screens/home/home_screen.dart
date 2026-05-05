@@ -409,50 +409,6 @@ class _SpacesHorizontalList extends StatelessWidget {
 Widget build(BuildContext context) {
   return LayoutBuilder(
     builder: (context, constraints) {
-      // Build a single card widget to avoid duplication
-      Widget buildCard(int index) {
-        final space = spaces[index];
-        final isLast = index == spaces.length - 1;
-        return GestureDetector(
-          onTap: () => context.go(space.route),
-          child: Container(
-            margin: EdgeInsets.only(right: isLast ? 0 : 16),
-            decoration: const BoxDecoration(color: _surfaceColor),
-            padding: const EdgeInsets.all(20),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Icon(space.icon, color: _primaryLight, size: 28),
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      space.title,
-                      style: GoogleFonts.manrope(
-                        fontSize: 10,
-                        fontWeight: FontWeight.w800,
-                        color: _onSurface,
-                        letterSpacing: 1.0,
-                      ),
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      space.subtitle,
-                      style: GoogleFonts.manrope(
-                        fontSize: 8,
-                        fontWeight: FontWeight.w600,
-                        color: _onSurfaceVariant,
-                      ),
-                    ),
-                  ],
-                ),
-              ],
-            ),
-          ),
-        );
-      }
-
       // Wide screen: all cards fill available width equally
       if (constraints.maxWidth > 500) {
         return SizedBox(
@@ -460,7 +416,7 @@ Widget build(BuildContext context) {
           child: Row(
             children: List.generate(
               spaces.length,
-              (i) => Expanded(child: buildCard(i)),
+              (i) => Expanded(child: _SpaceCard(space: spaces[i], isLast: i == spaces.length - 1)),
             ),
           ),
         );
@@ -474,13 +430,79 @@ Widget build(BuildContext context) {
           itemCount: spaces.length,
           itemBuilder: (context, index) => SizedBox(
             width: 140,
-            child: buildCard(index),
+            child: _SpaceCard(space: spaces[index], isLast: index == spaces.length - 1),
           ),
         ),
       );
     },
   );
 }
+}
+
+
+class _SpaceCard extends StatefulWidget {
+  final _SpaceData space;
+  final bool isLast;
+  const _SpaceCard({required this.space, required this.isLast});
+
+  @override
+  State<_SpaceCard> createState() => _SpaceCardState();
+}
+
+class _SpaceCardState extends State<_SpaceCard> {
+  bool _hovered = false;
+
+  @override
+  Widget build(BuildContext context) {
+    return MouseRegion(
+      cursor: SystemMouseCursors.click,
+      onEnter: (_) => setState(() => _hovered = true),
+      onExit: (_) => setState(() => _hovered = false),
+      child: GestureDetector(
+        onTap: () => context.go(widget.space.route),
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 150),
+          margin: EdgeInsets.only(right: widget.isLast ? 0 : 16),
+          color: _hovered ? _primary.withOpacity(0.15) : _surfaceColor,
+          padding: const EdgeInsets.all(20),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Icon(
+                widget.space.icon,
+                color: _hovered ? _primary : _primaryLight,
+                size: 28,
+              ),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    widget.space.title,
+                    style: GoogleFonts.manrope(
+                      fontSize: 10,
+                      fontWeight: FontWeight.w800,
+                      color: _hovered ? _primary : _onSurface,
+                      letterSpacing: 1.0,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    widget.space.subtitle,
+                    style: GoogleFonts.manrope(
+                      fontSize: 8,
+                      fontWeight: FontWeight.w600,
+                      color: _onSurfaceVariant,
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
 }
 
 class _SpaceData {
