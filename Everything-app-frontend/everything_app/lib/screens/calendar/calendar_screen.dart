@@ -453,7 +453,7 @@ class _WeekStrip extends StatelessWidget {
                           Text(
                             DateFormat('E').format(day).substring(0, 3).toUpperCase(),
                             style: TextStyle(
-                              fontSize: 8,
+                              fontSize: 15,
                               fontWeight: FontWeight.w800,
                               color: theme.colorScheme.onSurfaceVariant,
                               letterSpacing: 1.0,
@@ -464,7 +464,7 @@ class _WeekStrip extends StatelessWidget {
                           Text(
                             '${day.day}',
                             style: TextStyle(
-                              fontSize: 14,
+                              fontSize: 15,
                               fontWeight: FontWeight.w800,
                               fontFamily: 'Manrope',
                               color: isToday
@@ -475,8 +475,8 @@ class _WeekStrip extends StatelessWidget {
                           if (isToday)
                             Container(
                               margin: const EdgeInsets.only(top: 2),
-                              width: 4,
-                              height: 4,
+                              width: 5,
+                              height: 5,
                               color: theme.colorScheme.primary,
                             ),
                         ],
@@ -1308,18 +1308,22 @@ class _CreateEventSheet extends StatefulWidget {
 class _CreateEventSheetState extends State<_CreateEventSheet> {
   final _titleController = TextEditingController();
   final _descController = TextEditingController();
+  late DateTime _date;
   late DateTime _start;
   late DateTime _end;
-  String _type = 'OTHER';
+  int _durationMinutes = 60;
+  String _type = 'TASK';
   bool _isFixed = false;
 
-  static const _types = ['TASK', 'HABIT', 'WORKOUT', 'STUDY', 'OTHER'];
+  static const _types = ['TASK', 'STUDY', 'OTHER'];
+  static const _durations = [15, 30, 45, 60, 90, 120];
 
   @override
   void initState() {
     super.initState();
+    _date = widget.selectedDay;
     final now = DateTime.now();
-    _start = DateTime(widget.selectedDay.year, widget.selectedDay.month, widget.selectedDay.day, now.hour, 0);
+    _start = DateTime(_date.year, _date.month, _date.day, now.hour, 0);
     _end = _start.add(const Duration(hours: 1));
   }
 
@@ -1330,26 +1334,51 @@ class _CreateEventSheetState extends State<_CreateEventSheet> {
     super.dispose();
   }
 
-  Future<void> _pickTime(bool isStart) async {
-    final picked = await showTimePicker(
+  Future<void> _pickDate() async {
+    final picked = await showDatePicker(
       context: context,
-      initialTime: TimeOfDay.fromDateTime(isStart ? _start : _end),
+      initialDate: _date,
+      firstDate: DateTime.now().subtract(const Duration(days: 365)),
+      lastDate: DateTime.now().add(const Duration(days: 365 * 2)),
     );
     if (picked == null) return;
     setState(() {
-      if (isStart) {
-        _start = DateTime(_start.year, _start.month, _start.day, picked.hour, picked.minute);
-        if (_end.isBefore(_start)) _end = _start.add(const Duration(hours: 1));
-      } else {
-        _end = DateTime(_end.year, _end.month, _end.day, picked.hour, picked.minute);
-      }
+      _date = picked;
+      _start = DateTime(_date.year, _date.month, _date.day, _start.hour, _start.minute);
+      _end = _start.add(Duration(minutes: _durationMinutes));
     });
+  }
+
+  Future<void> _pickTime() async {
+    final picked = await showTimePicker(
+      context: context,
+      initialTime: TimeOfDay.fromDateTime(_start),
+    );
+    if (picked == null) return;
+    setState(() {
+      _start = DateTime(_date.year, _date.month, _date.day, picked.hour, picked.minute);
+      _end = _start.add(Duration(minutes: _durationMinutes));
+    });
+  }
+
+  void _setDuration(int minutes) {
+    setState(() {
+      _durationMinutes = minutes;
+      _end = _start.add(Duration(minutes: minutes));
+    });
+  }
+
+  String _formatDuration(int min) {
+    if (min < 60) return '${min}m';
+    if (min % 60 == 0) return '${min ~/ 60}h';
+    return '${min ~/ 60}h ${min % 60}m';
   }
 
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final bg = isDark ? const Color(0xFF1A1A24) : Colors.white;
+    final borderCol = isDark ? const Color(0xFF2A2A38) : const Color(0xFFE8EAF0);
 
     return Padding(
       padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
@@ -1362,6 +1391,7 @@ class _CreateEventSheetState extends State<_CreateEventSheet> {
             crossAxisAlignment: CrossAxisAlignment.start,
             mainAxisSize: MainAxisSize.min,
             children: [
+              // Drag handle
               Center(
                 child: Container(
                   width: 40, height: 4,
@@ -1374,24 +1404,26 @@ class _CreateEventSheetState extends State<_CreateEventSheet> {
               const SizedBox(height: 16),
               const Text('New Event', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800, letterSpacing: -0.4)),
               const SizedBox(height: 16),
+
               // Title
               TextField(
                 controller: _titleController,
                 autofocus: true,
-                decoration: InputDecoration(
+                decoration: const InputDecoration(
                   hintText: 'Event title',
-                  prefixIcon: const Icon(Icons.title_rounded, size: 18),
+                  prefixIcon: Icon(Icons.title_rounded, size: 18),
                   border: OutlineInputBorder(borderRadius: BorderRadius.zero),
                 ),
               ),
               const SizedBox(height: 12),
+
               // Type chips
-              const Text('Type', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Colors.grey)),
+              const Text('TYPE', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: Colors.grey, letterSpacing: 1.5)),
               const SizedBox(height: 8),
               Wrap(
                 spacing: 8,
                 children: _types.map((t) {
-                  final selected = _type == t;
+                  final sel = _type == t;
                   final color = _typeColor(t);
                   return GestureDetector(
                     onTap: () => setState(() => _type = t),
@@ -1399,21 +1431,16 @@ class _CreateEventSheetState extends State<_CreateEventSheet> {
                       duration: const Duration(milliseconds: 150),
                       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
                       decoration: BoxDecoration(
-                        color: selected ? color : color.withValues(alpha: 0.1),
+                        color: sel ? color : color.withValues(alpha: 0.1),
                         borderRadius: BorderRadius.zero,
-                        border: Border.all(color: selected ? color : Colors.transparent),
+                        border: Border.all(color: sel ? color : Colors.transparent),
                       ),
                       child: Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          Icon(_typeIcon(t), size: 13, color: selected ? Colors.white : color),
+                          Icon(_typeIcon(t), size: 13, color: sel ? Colors.white : color),
                           const SizedBox(width: 5),
-                          Text(t,
-                              style: TextStyle(
-                                fontSize: 12,
-                                fontWeight: FontWeight.w700,
-                                color: selected ? Colors.white : color,
-                              )),
+                          Text(t, style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: sel ? Colors.white : color)),
                         ],
                       ),
                     ),
@@ -1421,34 +1448,96 @@ class _CreateEventSheetState extends State<_CreateEventSheet> {
                 }).toList(),
               ),
               const SizedBox(height: 14),
-              // Time row
+
+              // Date + Start time row
+              const Text('DATE & TIME', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: Colors.grey, letterSpacing: 1.5)),
+              const SizedBox(height: 8),
               Row(
                 children: [
+                  // Date picker
                   Expanded(
-                    child: _TimePicker(
-                      label: 'Start',
-                      time: _start,
-                      onTap: () => _pickTime(true),
+                    flex: 3,
+                    child: GestureDetector(
+                      onTap: _pickDate,
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                        decoration: BoxDecoration(border: Border.all(color: borderCol)),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Text('Date', style: TextStyle(fontSize: 11, color: Colors.grey, fontWeight: FontWeight.w600)),
+                            const SizedBox(height: 2),
+                            Text(
+                              DateFormat('EEE, MMM d').format(_date),
+                              style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700),
+                            ),
+                          ],
+                        ),
+                      ),
                     ),
                   ),
                   const SizedBox(width: 10),
+                  // Start time picker
                   Expanded(
-                    child: _TimePicker(
-                      label: 'End',
-                      time: _end,
-                      onTap: () => _pickTime(false),
+                    flex: 2,
+                    child: GestureDetector(
+                      onTap: _pickTime,
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                        decoration: BoxDecoration(border: Border.all(color: borderCol)),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Text('Start', style: TextStyle(fontSize: 11, color: Colors.grey, fontWeight: FontWeight.w600)),
+                            const SizedBox(height: 2),
+                            Text(
+                              DateFormat('h:mm a').format(_start),
+                              style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700),
+                            ),
+                          ],
+                        ),
+                      ),
                     ),
                   ),
                 ],
               ),
               const SizedBox(height: 12),
+
+              // Duration chips
+              const Text('DURATION', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: Colors.grey, letterSpacing: 1.5)),
+              const SizedBox(height: 8),
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: _durations.map((min) {
+                  final sel = _durationMinutes == min;
+                  return GestureDetector(
+                    onTap: () => _setDuration(min),
+                    child: AnimatedContainer(
+                      duration: const Duration(milliseconds: 120),
+                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                      decoration: BoxDecoration(
+                        color: sel ? AppTheme.primaryColor : Colors.transparent,
+                        border: Border.all(color: sel ? AppTheme.primaryColor : borderCol),
+                      ),
+                      child: Text(
+                        _formatDuration(min),
+                        style: TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w700,
+                          color: sel ? Colors.white : Colors.grey,
+                        ),
+                      ),
+                    ),
+                  );
+                }).toList(),
+              ),
+              const SizedBox(height: 12),
+
               // Fixed toggle
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-                decoration: BoxDecoration(
-                  border: Border.all(color: isDark ? const Color(0xFF2A2A38) : const Color(0xFFE8EAF0)),
-                  borderRadius: BorderRadius.zero,
-                ),
+                decoration: BoxDecoration(border: Border.all(color: borderCol)),
                 child: Row(
                   children: [
                     const Icon(Icons.lock_outline_rounded, size: 16, color: Colors.grey),
@@ -1458,37 +1547,40 @@ class _CreateEventSheetState extends State<_CreateEventSheet> {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text('Fixed time', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
-                          Text('AI won\'t reschedule this event', style: TextStyle(fontSize: 11, color: Colors.grey)),
+                          Text("AI won't reschedule this", style: TextStyle(fontSize: 11, color: Colors.grey)),
                         ],
                       ),
                     ),
                     Switch(
                       value: _isFixed,
                       onChanged: (v) => setState(() => _isFixed = v),
-                      activeThumbColor: AppTheme.primaryColor,
+                      activeColor: AppTheme.primaryColor,
                     ),
                   ],
                 ),
               ),
               const SizedBox(height: 12),
-              // Description
+
+              // Notes
               TextField(
                 controller: _descController,
                 maxLines: 2,
-                decoration: InputDecoration(
+                decoration: const InputDecoration(
                   hintText: 'Notes (optional)',
-                  prefixIcon: const Icon(Icons.notes_rounded, size: 18),
+                  prefixIcon: Icon(Icons.notes_rounded, size: 18),
                   border: OutlineInputBorder(borderRadius: BorderRadius.zero),
                 ),
               ),
               const SizedBox(height: 20),
+
+              // Submit
               SizedBox(
                 width: double.infinity,
                 child: FilledButton(
                   style: FilledButton.styleFrom(
                     backgroundColor: AppTheme.primaryColor,
                     padding: const EdgeInsets.symmetric(vertical: 16),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.zero),
+                    shape: const RoundedRectangleBorder(borderRadius: BorderRadius.zero),
                   ),
                   onPressed: () async {
                     if (_titleController.text.trim().isEmpty) return;
@@ -1503,8 +1595,7 @@ class _CreateEventSheetState extends State<_CreateEventSheet> {
                     await context.read<CalendarProvider>().addEvent(event);
                     if (context.mounted) Navigator.pop(context);
                   },
-                  child: const Text('Create Event',
-                      style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: Colors.white)),
+                  child: const Text('Create Event', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: Colors.white)),
                 ),
               ),
             ],
@@ -1514,7 +1605,6 @@ class _CreateEventSheetState extends State<_CreateEventSheet> {
     );
   }
 }
-
 class _TimePicker extends StatelessWidget {
   final String label;
   final DateTime time;
