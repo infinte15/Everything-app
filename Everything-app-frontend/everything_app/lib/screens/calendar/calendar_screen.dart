@@ -256,7 +256,7 @@ class _CalendarHeader extends StatelessWidget {
       dateSubtitle = DateFormat('EEEE').format(selectedDay).toUpperCase();
     } else if (view == _CalView.week) {
       dateTitle = DateFormat('MMMM yyyy').format(selectedDay);
-      dateSubtitle = 'Week ${_getWeekNumber(selectedDay)} • Kinetic Pulse View';
+      dateSubtitle = 'Week ${_getWeekNumber(selectedDay)}';
     } else {
       dateTitle = DateFormat('MMMM yyyy').format(selectedDay);
       dateSubtitle = 'Month View';
@@ -283,20 +283,7 @@ class _CalendarHeader extends StatelessWidget {
                   const Text('Calendar', style: TextStyle(fontSize: 20, fontWeight: FontWeight.w800, letterSpacing: -0.5, color: Colors.white, fontFamily: 'Manrope')),
                 ],
               ),
-              Row(
-                children: [
-                  GestureDetector(
-                    onTap: onToday,
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-                      color: Colors.transparent,
-                      child: Text('TODAY', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w800, letterSpacing: 1.5, color: theme.colorScheme.primary, fontFamily: 'Manrope')),
-                    ),
-                  ),
-                  const SizedBox(width: 16),
-                  _ViewToggle(current: view, onChanged: onViewChanged),
-                ],
-              ),
+              
             ],
           ),
         ),
@@ -322,27 +309,21 @@ class _CalendarHeader extends StatelessWidget {
                     Text(dateSubtitle, style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500, color: theme.colorScheme.onSurfaceVariant, fontFamily: 'Manrope')),
                 ],
               ),
-              Row(
-                children: [
-                  GestureDetector(
-                    onTap: () => onNavigate(-1),
-                    child: Container(
-                      width: 40, height: 40,
-                      color: theme.colorScheme.surfaceContainerHighest,
-                      child: const Icon(Icons.chevron_left, color: Colors.white),
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  GestureDetector(
-                    onTap: () => onNavigate(1),
-                    child: Container(
-                      width: 40, height: 40,
-                      color: theme.colorScheme.surfaceContainerHighest,
-                      child: const Icon(Icons.chevron_right, color: Colors.white),
-                    ),
-                  ),
-                ],
+              // Im _CalendarHeader bei den children der Row:
+          Row(
+            children: [
+              GestureDetector(
+                onTap: onToday,
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                  color: Colors.transparent,
+                  child: Text('TODAY', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w800, letterSpacing: 1.5, color: theme.colorScheme.primary, fontFamily: 'Manrope')),
+                ),
               ),
+              const SizedBox(width: 8), // Etwas weniger Platz zum Icon
+              _ViewDropDown(current: view, onChanged: onViewChanged), // Die neue Komponente
+            ],
+          ),
             ],
           ),
         ),
@@ -351,58 +332,45 @@ class _CalendarHeader extends StatelessWidget {
   }
 }
 
-class _ViewToggle extends StatelessWidget {
+class _ViewDropDown extends StatelessWidget {
   final _CalView current;
   final ValueChanged<_CalView> onChanged;
-  const _ViewToggle({required this.current, required this.onChanged});
+
+  const _ViewDropDown({required this.current, required this.onChanged});
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    return Container(
-      decoration: BoxDecoration(
-        color: theme.colorScheme.surfaceContainerHighest,
-        borderRadius: BorderRadius.zero,
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          for (final v in _CalView.values) _ToggleItem(v: v, current: current, onChanged: onChanged),
-        ],
-      ),
-    );
-  }
-}
-
-class _ToggleItem extends StatelessWidget {
-  final _CalView v;
-  final _CalView current;
-  final ValueChanged<_CalView> onChanged;
-  const _ToggleItem({required this.v, required this.current, required this.onChanged});
-
-  String get _label => v.name[0].toUpperCase() + v.name.substring(1);
-
-  @override
-  Widget build(BuildContext context) {
-    final isSelected = v == current;
-    final theme = Theme.of(context);
-    return GestureDetector(
-      onTap: () => onChanged(v),
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-        decoration: BoxDecoration(
-          color: isSelected ? theme.colorScheme.primary : Colors.transparent,
-        ),
-        child: Text(
-          _label,
-          style: TextStyle(
-            fontSize: 11,
-            fontWeight: FontWeight.w800,
-            letterSpacing: 1.5,
-            color: isSelected ? const Color(0xFF2D27AD) : theme.colorScheme.onSurfaceVariant,
-          ).apply(fontFamily: 'Manrope'),
-        ),
-      ),
+    
+    return PopupMenuButton<_CalView>(
+      initialValue: current,
+      onSelected: onChanged,
+      // Das kleine Kalender-Icon oben rechts
+      icon: Icon(Icons.calendar_view_day_rounded, color: theme.colorScheme.primary, size: 22),
+      padding: EdgeInsets.zero,
+      constraints: const BoxConstraints(minWidth: 120), // Sorgt für ein schlichtes, schmales Menü
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.zero), // Passend zu deinem restlichen Design
+      itemBuilder: (context) => _CalView.values.map((view) {
+        final isSelected = view == current;
+        return PopupMenuItem<_CalView>(
+          value: view,
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(
+                view.name[0].toUpperCase() + view.name.substring(1),
+                style: const TextStyle(
+                  fontFamily: 'Manrope',
+                  fontSize: 14,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+              if (isSelected)
+                Icon(Icons.check, color: theme.colorScheme.primary, size: 18),
+            ],
+          ),
+        );
+      }).toList(),
     );
   }
 }
@@ -455,7 +423,11 @@ class _WeekStrip extends StatelessWidget {
                             style: TextStyle(
                               fontSize: 15,
                               fontWeight: FontWeight.w800,
-                              color: theme.colorScheme.onSurfaceVariant,
+                              color: 
+                              isToday
+                                  ? theme.colorScheme.primary
+                                  :theme.colorScheme.onSurfaceVariant,
+                            
                               letterSpacing: 1.0,
                               fontFamily: 'Manrope',
                             ),
@@ -472,13 +444,7 @@ class _WeekStrip extends StatelessWidget {
                                   : (day.weekday >= 6 ? theme.colorScheme.error : Colors.white),
                             ),
                           ),
-                          if (isToday)
-                            Container(
-                              margin: const EdgeInsets.only(top: 2),
-                              width: 5,
-                              height: 5,
-                              color: theme.colorScheme.primary,
-                            ),
+                          
                         ],
                       ),
                     ),
