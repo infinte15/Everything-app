@@ -62,10 +62,12 @@ class CalendarScreen extends StatefulWidget {
 class _CalendarScreenState extends State<CalendarScreen> {
   _CalView _view = _CalView.week;
   late ScrollController _timelineScrollController;
+  late PageController _pageController;
 
   @override
   void initState() {
     super.initState();
+    _pageController = PageController(initialPage: 10000);
     final now = DateTime.now();
     // scroll to make current hour visible (~2 hours before now)
     final offset = ((now.hour - 2).clamp(0, 22)) * kHourHeight;
@@ -81,24 +83,16 @@ class _CalendarScreenState extends State<CalendarScreen> {
   @override
   void dispose() {
     _timelineScrollController.dispose();
+    _pageController.dispose();
     super.dispose();
   }
-
-  void _navigate(int delta) {
-    final cal = context.read<CalendarProvider>();
-    final cur = cal.selectedDay ?? DateTime.now();
-    final Duration d = _view == _CalView.day
-        ? Duration(days: delta)
-        : _view == _CalView.week
-            ? Duration(days: delta * 7)
-            : Duration(days: delta * 30);
-    final next = cur.add(d);
-    cal.setSelectedDay(next);
-    cal.setFocusedDay(next);
-    if (_view == _CalView.month || _view == _CalView.week) {
-      cal.loadEventsForMonth(next);
-    }
-  }
+void _navigate(int delta) {
+  _pageController.animateToPage(
+    _pageController.page!.toInt() + delta,
+    duration: const Duration(milliseconds: 300),
+    curve: Curves.easeInOut,
+  );
+}
 
   @override
   Widget build(BuildContext context) {
@@ -120,6 +114,8 @@ class _CalendarScreenState extends State<CalendarScreen> {
                 cal.setSelectedDay(now);
                 cal.setFocusedDay(now);
                 cal.loadEventsForMonth(now);
+
+                _pageController.jumpToPage(10000);
               },
               onSchedule: () => _showScheduleDialog(context),
               onAdd: () => _showCreateSheet(context),
@@ -133,24 +129,69 @@ class _CalendarScreenState extends State<CalendarScreen> {
                 },
               ),
             Expanded(
-              child: _view == _CalView.day
-                  ? _DayTimeline(
-                      cal: cal,
-                      selected: selected,
-                      scrollController: _timelineScrollController,
-                    )
-                  : _view == _CalView.week
-                      ? _WeekTimeline(cal: cal, selected: selected)
-                      : _MonthView(
-                          cal: cal,
-                          selected: selected,
-                          onDayTap: (d) {
-                            cal.setSelectedDay(d);
-                            cal.setFocusedDay(d);
-                            setState(() => _view = _CalView.day);
-                          },
-                        ),
-            ),
+  child: PageView.builder(
+    controller: _pageController,
+    onPageChanged: (index) {
+      // Nur den Provider informieren, damit der Header (Monat/Jahr) sich aktualisiert
+      final cal = context.read<CalendarProvider>();
+      final delta = index - 10000;
+      final now = DateTime.now(); // Basis ist heute
+      
+      DateTime targetDate;
+      if (_view == _CalView.day) {
+        targetDate = now.add(Duration(days: delta));
+      } else if (_view == _CalView.week) {
+        targetDate = now.add(Duration(days: delta * 7));
+      } else {
+        targetDate = DateTime(now.year, now.month + delta, now.day);
+      }
+      
+      cal.setSelectedDay(targetDate);
+      cal.setFocusedDay(targetDate);
+      if (_view != _CalView.day) cal.loadEventsForMonth(targetDate);
+    },
+    itemBuilder: (context, index) {
+      final cal = context.watch<CalendarProvider>();
+      final delta = index - 10000;
+      final now = DateTime.now();
+
+      DateTime pageDate;
+      if (_view == _CalView.day) {
+        pageDate = now.add(Duration(days: delta));
+      } else if (_view == _CalView.week) {
+        pageDate = now.add(Duration(days: delta * 7));
+      } else {
+        pageDate = DateTime(now.year, now.month + delta, 1);
+      }
+
+
+      return _view == _CalView.day
+          ? _DayTimeline(cal: cal, selected: pageDate, scrollController: _timelineScrollController)
+          : _view == _CalView.week
+              ? _WeekTimeline(cal: cal, selected: pageDate)
+              : _MonthView(
+                  cal: cal,
+                  selected: pageDate,
+                  onDayTap: (d) {
+                    final cal = context.read<CalendarProvider>();
+                    cal.setSelectedDay(d);
+                    cal.setFocusedDay(d);
+  
+                  final now = DateTime.now();
+                  final differenceInDays = DateTime(d.year, d.month, d.day)
+                    .difference(DateTime(now.year, now.month, now.day))
+                    .inDays;
+  
+
+                  setState(() => _view = _CalView.day);
+  
+
+                  _pageController.jumpToPage(10000 + differenceInDays);
+                },
+      );
+    },
+  ),
+),
           ],
         ),
       ),
@@ -266,7 +307,7 @@ class _CalendarHeader extends StatelessWidget {
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        // Top Bar
+        // Top Bar (unverändert)
         Container(
           padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
           decoration: BoxDecoration(
@@ -274,56 +315,96 @@ class _CalendarHeader extends StatelessWidget {
             border: Border(bottom: BorderSide(color: borderColor)),
           ),
           child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Row(
-                children: [
-                  Icon(Icons.calendar_today_outlined, color: theme.colorScheme.primary, size: 24),
-                  const SizedBox(width: 12),
-                  const Text('Calendar', style: TextStyle(fontSize: 20, fontWeight: FontWeight.w800, letterSpacing: -0.5, color: Colors.white, fontFamily: 'Manrope')),
-                ],
-              ),
-              
+              Icon(Icons.calendar_today_outlined, color: theme.colorScheme.primary, size: 24),
+              const SizedBox(width: 12),
+              const Text('Calendar', style: TextStyle(fontSize: 20, fontWeight: FontWeight.w800, color: Colors.white, fontFamily: 'Manrope')),
             ],
           ),
         ),
-        // Sub-header
+        
+        // Der neue Sub-header Bereich
         Container(
           padding: const EdgeInsets.fromLTRB(24, 24, 24, 24),
           color: surfaceColor,
           child: Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            crossAxisAlignment: CrossAxisAlignment.end,
+            crossAxisAlignment: CrossAxisAlignment.center,
             children: [
+ 
+
+Expanded(
+  child: Column(
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: [
+      if (view == _CalView.day)
+        Text(dateSubtitle, 
+          style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500, letterSpacing: 2.0, color: theme.colorScheme.onSurfaceVariant, fontFamily: 'Manrope'))
+      else ...[
+        // Jahreszahl über dem Monat (nur in Woche/Monat Ansicht)
+        Text(DateFormat('yyyy').format(selectedDay), 
+          style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, letterSpacing: 1.0, color: theme.colorScheme.primary.withValues(alpha: 0.8), fontFamily: 'Manrope')),
+        const SizedBox(height: 2),
+        Text(DateFormat('MMMM').format(selectedDay), // Nur der Monat, groß
+          overflow: TextOverflow.ellipsis, 
+          style: const TextStyle(fontSize: 32, fontWeight: FontWeight.w800, letterSpacing: -1.0, color: Colors.white, fontFamily: 'Manrope')),
+      ],
+      const SizedBox(height: 4),
+      if (view == _CalView.day)
+        Text(dateTitle, 
+          style: const TextStyle(fontSize: 28, fontWeight: FontWeight.w800, letterSpacing: -2.0, color: Colors.white, fontFamily: 'Manrope', height: 1.0))
+      else
+        Text(dateSubtitle, 
+          style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500, color: theme.colorScheme.onSurfaceVariant, fontFamily: 'Manrope')),
+    ],
+  ),
+),
+
+              
+              // Rechte Seite: Kompakter Steuerungsblock
+              const SizedBox(width: 12),
               Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
+                crossAxisAlignment: CrossAxisAlignment.end,
                 children: [
-                  if (view == _CalView.day)
-                    Text(dateSubtitle, style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500, letterSpacing: 2.0, color: theme.colorScheme.onSurfaceVariant, fontFamily: 'Manrope'))
-                  else
-                    Text(dateTitle, style: const TextStyle(fontSize: 30, fontWeight: FontWeight.w800, letterSpacing: -1.0, color: Colors.white, fontFamily: 'Manrope')),
-                  const SizedBox(height: 4),
-                  if (view == _CalView.day)
-                    Text(dateTitle, style: const TextStyle(fontSize: 48, fontWeight: FontWeight.w800, letterSpacing: -2.0, color: Colors.white, fontFamily: 'Manrope', height: 1.0))
-                  else
-                    Text(dateSubtitle, style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500, color: theme.colorScheme.onSurfaceVariant, fontFamily: 'Manrope')),
+                  Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      GestureDetector(
+                        onTap: onToday,
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                          child: Text('TODAY', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w900, color: theme.colorScheme.primary, fontFamily: 'Manrope')),
+                        ),
+                      ),
+                      const SizedBox(width: 4),
+                      _ViewDropDown(current: view, onChanged: onViewChanged),
+                    ],
+                  ),
+                  // Pfeile direkt unter TODAY & Kalender-Icon
+                  Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      IconButton(
+                        onPressed: () => onNavigate(-1),
+                        icon: const Icon(Icons.chevron_left_rounded, size: 22),
+                        padding: EdgeInsets.zero,
+                        constraints: const BoxConstraints(),
+                        visualDensity: VisualDensity.compact,
+                        color: theme.colorScheme.primary,
+                      ),
+                      const SizedBox(width: 12),
+                      IconButton(
+                        onPressed: () => onNavigate(1),
+                        icon: const Icon(Icons.chevron_right_rounded, size: 22),
+                        padding: EdgeInsets.zero,
+                        constraints: const BoxConstraints(),
+                        visualDensity: VisualDensity.compact,
+                        color: theme.colorScheme.primary,
+                      ),
+                    ],
+                  ),
                 ],
               ),
-              // Im _CalendarHeader bei den children der Row:
-          Row(
-            children: [
-              GestureDetector(
-                onTap: onToday,
-                child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-                  color: Colors.transparent,
-                  child: Text('TODAY', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w800, letterSpacing: 1.5, color: theme.colorScheme.primary, fontFamily: 'Manrope')),
-                ),
-              ),
-              const SizedBox(width: 8), // Etwas weniger Platz zum Icon
-              _ViewDropDown(current: view, onChanged: onViewChanged), // Die neue Komponente
-            ],
-          ),
             ],
           ),
         ),
