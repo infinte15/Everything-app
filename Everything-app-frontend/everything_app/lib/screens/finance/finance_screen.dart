@@ -69,6 +69,7 @@ class _FinanceScreenState extends State<FinanceScreen>
       appBar: AppBar(
         backgroundColor: const Color(0xFF0F0F1A),
         foregroundColor: Colors.white,
+        leading: const BackButton(color: Colors.white),
         title: const Text('Finanzen',
             style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
         bottom: TabBar(

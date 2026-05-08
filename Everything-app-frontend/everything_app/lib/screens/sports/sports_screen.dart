@@ -28,6 +28,7 @@ class _SportsScreenState extends State<SportsScreen>
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
+        leading: const BackButton(),
         title: const Text('Sport'),
         backgroundColor: AppTheme.sportsColor,
         foregroundColor: Colors.white,

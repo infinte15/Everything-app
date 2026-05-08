@@ -12,6 +12,7 @@ import '../screens/sports/sports_screen.dart';
 import '../screens/tasks/tasks_screen.dart';
 import '../screens/recipes/recipes_screen.dart';
 import '../screens/finance/finance_screen.dart';
+import '../screens/notes/notes_screen.dart';
 import '../widgets/bottom_nav.dart';
 
 final router = GoRouter(
@@ -67,11 +68,23 @@ final router = GoRouter(
     ),
     GoRoute(
       path: '/sports',
-      builder: (_, _) => const SportsScreen(),
+      builder: (_, _) => const SportsScreen(), // 2. Sports (Gym) already has a back button? I'll check.
     ),
     GoRoute(
       path: '/tasks',
-      builder: (_, _) => const TasksScreen(),
+      builder: (context, state) {
+        final title = state.uri.queryParameters['title'] ?? 'Aufgaben';
+        final type = state.uri.queryParameters['type'];
+        return TasksScreen(title: title, spaceType: type);
+      },
+    ),
+    GoRoute(
+      path: '/habits',
+      builder: (_, _) => const TasksScreen(title: 'Habits', spaceType: 'HABITS'),
+    ),
+    GoRoute(
+      path: '/notes',
+      builder: (_, _) => const NotesScreen(), // [NEW] I'll create this next
     ),
     GoRoute(
       path: '/recipes',

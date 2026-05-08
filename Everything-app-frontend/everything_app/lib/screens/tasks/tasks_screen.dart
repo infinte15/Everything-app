@@ -6,7 +6,14 @@ import '../../config/app_theme.dart';
 import '../../models/task.dart';
 
 class TasksScreen extends StatefulWidget {
-  const TasksScreen({super.key});
+  final String title;
+  final String? spaceType;
+
+  const TasksScreen({
+    super.key,
+    this.title = 'Aufgaben',
+    this.spaceType,
+  });
 
   @override
   State<TasksScreen> createState() => _TasksScreenState();
@@ -34,34 +41,40 @@ class _TasksScreenState extends State<TasksScreen>
 
   @override
   Widget build(BuildContext context) {
-    final tasks = context.watch<TaskProvider>();
+    final tasksProvider = context.watch<TaskProvider>();
+    
+    // Filter tasks based on spaceType if provided
+    final todo = _applySpaceFilter(tasksProvider.todoTasks);
+    final inProgress = _applySpaceFilter(tasksProvider.inProgressTasks);
+    final completed = _applySpaceFilter(tasksProvider.completedTasks);
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Aufgaben'),
+        leading: const BackButton(),
+        title: Text(widget.title),
         bottom: TabBar(
           controller: _tabController,
           tabs: [
-            Tab(text: 'Offen (${tasks.todoTasks.length})'),
-            Tab(text: 'Aktiv (${tasks.inProgressTasks.length})'),
-            Tab(text: 'Fertig (${tasks.completedTasks.length})'),
+            Tab(text: 'Offen (${todo.length})'),
+            Tab(text: 'Aktiv (${inProgress.length})'),
+            Tab(text: 'Fertig (${completed.length})'),
           ],
         ),
         actions: [
           IconButton(
             icon: const Icon(Icons.search),
-            onPressed: () => _showSearch(context),
+            onPressed: () => _showSearch(context, todo + inProgress + completed),
           ),
         ],
       ),
-      body: tasks.isLoading
+      body: tasksProvider.isLoading
           ? const Center(child: CircularProgressIndicator())
           : TabBarView(
               controller: _tabController,
               children: [
-                _TaskList(tasks: _filterTasks(tasks.todoTasks)),
-                _TaskList(tasks: _filterTasks(tasks.inProgressTasks)),
-                _TaskList(tasks: _filterTasks(tasks.completedTasks)),
+                _TaskList(tasks: _filterTasks(todo)),
+                _TaskList(tasks: _filterTasks(inProgress)),
+                _TaskList(tasks: _filterTasks(completed)),
               ],
             ),
       floatingActionButton: FloatingActionButton.extended(
@@ -73,6 +86,11 @@ class _TasksScreenState extends State<TasksScreen>
     );
   }
 
+  List<Task> _applySpaceFilter(List<Task> tasks) {
+    if (widget.spaceType == null) return tasks;
+    return tasks.where((t) => t.spaceType == widget.spaceType).toList();
+  }
+
   List<Task> _filterTasks(List<Task> tasks) {
     if (_searchQuery.isEmpty) return tasks;
     return tasks
@@ -81,11 +99,11 @@ class _TasksScreenState extends State<TasksScreen>
         .toList();
   }
 
-  void _showSearch(BuildContext context) {
+  void _showSearch(BuildContext context, List<Task> filteredTasks) {
     showSearch(
       context: context,
       delegate: _TaskSearchDelegate(
-          tasks: context.read<TaskProvider>().tasks),
+          tasks: filteredTasks),
     );
   }
 
@@ -95,7 +113,7 @@ class _TasksScreenState extends State<TasksScreen>
       isScrollControlled: true,
       shape: const RoundedRectangleBorder(
           borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
-      builder: (_) => const _CreateTaskSheet(),
+      builder: (_) => _CreateTaskSheet(spaceType: widget.spaceType),
     );
   }
 }
@@ -292,7 +310,8 @@ class _TaskTile extends StatelessWidget {
 // ─── Create Task Sheet ─────────────────────────────────────────────────────────
 
 class _CreateTaskSheet extends StatefulWidget {
-  const _CreateTaskSheet();
+  final String? spaceType;
+  const _CreateTaskSheet({this.spaceType});
 
   @override
   State<_CreateTaskSheet> createState() => _CreateTaskSheetState();
@@ -323,6 +342,7 @@ class _CreateTaskSheetState extends State<_CreateTaskSheet> {
       deadline: _deadline,
       estimatedDurationMinutes: _duration,
       status: 'TODO',
+      spaceType: widget.spaceType ?? 'TASKS', // Default to current space
     );
     await context.read<TaskProvider>().addTask(task);
     if (mounted) Navigator.pop(context);

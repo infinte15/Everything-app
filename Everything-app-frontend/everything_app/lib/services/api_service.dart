@@ -27,6 +27,28 @@ class ApiService {
     await _storage.delete(key: 'auth_token');
   }
 
+  /// Helper to build full URI
+  Uri _buildUri(String url) {
+    if (url.startsWith('http')) {
+      return Uri.parse(url);
+    }
+    
+    // Prepend base URL if it's just a path
+    // Remove the '/api' from start of path if the base URL already ends with '/api'
+    String path = url;
+    const base = ApiConfig.baseUrl; // e.g. http://localhost:8080/api
+    
+    if (path.startsWith('/api')) {
+      path = path.replaceFirst('/api', '');
+    }
+    
+    if (!path.startsWith('/')) {
+      path = '/$path';
+    }
+    
+    return Uri.parse('$base$path');
+  }
+
   /// Get Headers
   Future<Map<String, String>> getHeaders() async {
     final token = await getToken();
@@ -45,72 +67,76 @@ class ApiService {
 
   /// GET Request
   Future<http.Response> get(String url) async {
+    final uri = _buildUri(url);
     try {
       final headers = await getHeaders();
       final response = await _client
-          .get(Uri.parse(url), headers: headers)
+          .get(uri, headers: headers)
           .timeout(ApiConfig.timeout);
       
-      _logRequest('GET', url, response.statusCode);
+      _logRequest('GET', uri.toString(), response.statusCode);
       return response;
     } catch (e) {
-      _logError('GET', url, e);
+      _logError('GET', uri.toString(), e);
       rethrow;
     }
   }
 
   /// POST Request
   Future<http.Response> post(String url, Map<String, dynamic> body) async {
+    final uri = _buildUri(url);
     try {
       final headers = await getHeaders();
       final response = await _client
           .post(
-            Uri.parse(url),
+            uri,
             headers: headers,
             body: json.encode(body),
           )
           .timeout(ApiConfig.timeout);
       
-      _logRequest('POST', url, response.statusCode);
+      _logRequest('POST', uri.toString(), response.statusCode);
       return response;
     } catch (e) {
-      _logError('POST', url, e);
+      _logError('POST', uri.toString(), e);
       rethrow;
     }
   }
 
   /// PUT Request
   Future<http.Response> put(String url, Map<String, dynamic> body) async {
+    final uri = _buildUri(url);
     try {
       final headers = await getHeaders();
       final response = await _client
           .put(
-            Uri.parse(url),
+            uri,
             headers: headers,
             body: json.encode(body),
           )
           .timeout(ApiConfig.timeout);
       
-      _logRequest('PUT', url, response.statusCode);
+      _logRequest('PUT', uri.toString(), response.statusCode);
       return response;
     } catch (e) {
-      _logError('PUT', url, e);
+      _logError('PUT', uri.toString(), e);
       rethrow;
     }
   }
 
   /// DELETE Request
   Future<http.Response> delete(String url) async {
+    final uri = _buildUri(url);
     try {
       final headers = await getHeaders();
       final response = await _client
-          .delete(Uri.parse(url), headers: headers)
+          .delete(uri, headers: headers)
           .timeout(ApiConfig.timeout);
       
-      _logRequest('DELETE', url, response.statusCode);
+      _logRequest('DELETE', uri.toString(), response.statusCode);
       return response;
     } catch (e) {
-      _logError('DELETE', url, e);
+      _logError('DELETE', uri.toString(), e);
       rethrow;
     }
   }

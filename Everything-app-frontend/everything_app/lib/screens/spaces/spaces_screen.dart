@@ -19,7 +19,7 @@ class SpacesScreen extends StatelessWidget {
       title: 'Aufgaben',
       statusLabel: 'ACTIVE',
       statusSub: '12 Active',
-      route: '/tasks',
+      route: '/tasks?type=TASKS&title=Aufgaben',
       accentColor: Color(0xFF5856D6),
     ),
     _SpaceData(
@@ -27,7 +27,7 @@ class SpacesScreen extends StatelessWidget {
       title: 'Habits',
       statusLabel: 'TODAY',
       statusSub: '85% Completion',
-      route: '/tasks',
+      route: '/habits',
       accentColor: Color(0xFF2DD4BF),
     ),
     _SpaceData(
@@ -35,7 +35,7 @@ class SpacesScreen extends StatelessWidget {
       title: 'Notizen',
       statusLabel: 'RECENT',
       statusSub: 'Updated 2h ago',
-      route: '/study',
+      route: '/notes',
       accentColor: Color(0xFFF59E0B),
     ),
     _SpaceData(
@@ -164,7 +164,7 @@ class _SpaceGridCardState extends State<_SpaceGridCard> {
       onEnter: (_) => setState(() => _hovered = true),
       onExit: (_) => setState(() => _hovered = false),
       child: GestureDetector(
-        onTap: () => context.go(widget.space.route),
+        onTap: () => context.push(widget.space.route),
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 200),
           curve: Curves.easeOut,

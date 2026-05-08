@@ -81,10 +81,6 @@ class _StudyScreenState extends State<StudyScreen> {
     return Scaffold(
       backgroundColor: theme.colorScheme.surface,
       appBar: AppBar(
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back),
-          onPressed: () => context.go('/spaces'),
-        ),
         title: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
