@@ -37,20 +37,22 @@ class CalendarService {
   }
 
   Future<CalendarEvent?> createEvent(CalendarEvent event) async {
+    debugPrint('📤 [CalendarService] createEvent POST ${ApiConfig.calendarEvents}');
     try {
       final response = await _apiService.post(
         ApiConfig.calendarEvents,
         event.toJson(),
       );
-
+      
+      debugPrint('📥 [CalendarService] createEvent Status: ${response.statusCode}');
       if (_apiService.isSuccess(response)) {
         final data = _apiService.parseResponse(response);
         return CalendarEvent.fromJson(data);
-      } else {
-        throw Exception(_apiService.getErrorMessage(response));
       }
+      debugPrint('❌ [CalendarService] createEvent Failed: ${response.body}');
+      return null;
     } catch (e) {
-      debugPrint('Error creating event: $e');
+      debugPrint('💥 [CalendarService] createEvent Exception: $e');
       return null;
     }
   }

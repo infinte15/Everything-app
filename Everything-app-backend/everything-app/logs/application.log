@@ -1,96 +1,2435 @@
-2026-03-23 15:04:18 [restartedMain] INFO  c.F.e.EverythingAppApplication - Starting EverythingAppApplication using Java 17.0.18 with PID 6673 (/home/finn/Dokumente/Projekte/Everything-app/Everything-app-backend/everything-app/target/classes started by finn in /home/finn/Dokumente/Projekte/Everything-app/Everything-app-backend/everything-app)
-2026-03-23 15:04:18 [restartedMain] DEBUG c.F.e.EverythingAppApplication - Running with Spring Boot v3.2.0, Spring v6.1.1
-2026-03-23 15:04:18 [restartedMain] INFO  c.F.e.EverythingAppApplication - The following 1 profile is active: "development"
-2026-03-23 15:04:18 [restartedMain] INFO  o.s.b.d.e.DevToolsPropertyDefaultsPostProcessor - Devtools property defaults active! Set 'spring.devtools.add-properties' to 'false' to disable
-2026-03-23 15:04:18 [restartedMain] INFO  o.s.b.d.e.DevToolsPropertyDefaultsPostProcessor - For additional web related logging consider setting the 'logging.level.web' property to 'DEBUG'
-2026-03-23 15:04:19 [restartedMain] INFO  o.s.d.r.c.RepositoryConfigurationDelegate - Bootstrapping Spring Data JPA repositories in DEFAULT mode.
-2026-03-23 15:04:19 [restartedMain] INFO  o.s.d.r.c.RepositoryConfigurationDelegate - Finished Spring Data repository scanning in 46 ms. Found 21 JPA repository interfaces.
-2026-03-23 15:04:19 [restartedMain] INFO  o.s.b.w.e.tomcat.TomcatWebServer - Tomcat initialized with port 8080 (http)
-2026-03-23 15:04:19 [restartedMain] INFO  o.a.catalina.core.StandardService - Starting service [Tomcat]
-2026-03-23 15:04:19 [restartedMain] INFO  o.a.catalina.core.StandardEngine - Starting Servlet engine: [Apache Tomcat/10.1.16]
-2026-03-23 15:04:19 [restartedMain] INFO  o.a.c.c.C.[Tomcat].[localhost].[/] - Initializing Spring embedded WebApplicationContext
-2026-03-23 15:04:19 [restartedMain] INFO  o.s.b.w.s.c.ServletWebServerApplicationContext - Root WebApplicationContext: initialization completed in 792 ms
-2026-03-23 15:04:19 [restartedMain] INFO  o.h.jpa.internal.util.LogHelper - HHH000204: Processing PersistenceUnitInfo [name: default]
-2026-03-23 15:04:19 [restartedMain] INFO  org.hibernate.Version - HHH000412: Hibernate ORM core version 6.3.1.Final
-2026-03-23 15:04:19 [restartedMain] INFO  o.h.c.i.RegionFactoryInitiator - HHH000026: Second-level cache disabled
-2026-03-23 15:04:19 [restartedMain] INFO  o.s.o.j.p.SpringPersistenceUnitInfo - No LoadTimeWeaver setup: ignoring JPA class transformer
-2026-03-23 15:04:19 [restartedMain] INFO  com.zaxxer.hikari.HikariDataSource - HikariPool-1 - Starting...
-2026-03-23 15:04:19 [restartedMain] INFO  com.zaxxer.hikari.pool.HikariPool - HikariPool-1 - Added connection org.postgresql.jdbc.PgConnection@3843ae7a
-2026-03-23 15:04:19 [restartedMain] INFO  com.zaxxer.hikari.HikariDataSource - HikariPool-1 - Start completed.
-2026-03-23 15:04:20 [restartedMain] WARN  org.hibernate.orm.deprecation - HHH90000025: PostgreSQLDialect does not need to be specified explicitly using 'hibernate.dialect' (remove the property setting and it will be selected by default)
-2026-03-23 15:04:20 [restartedMain] INFO  o.h.e.t.j.p.i.JtaPlatformInitiator - HHH000489: No JTA platform available (set 'hibernate.transaction.jta.platform' to enable JTA platform integration)
-2026-03-23 15:04:20 [restartedMain] INFO  o.s.o.j.LocalContainerEntityManagerFactoryBean - Initialized JPA EntityManagerFactory for persistence unit 'default'
-2026-03-23 15:04:21 [restartedMain] DEBUG c.F.e.s.JwtAuthenticationFilter - Filter 'jwtAuthenticationFilter' configured for use
-2026-03-23 15:04:21 [restartedMain] INFO  o.s.d.j.r.query.QueryEnhancerFactory - Hibernate is in classpath; If applicable, HQL parser will be used.
-2026-03-23 15:04:22 [restartedMain] WARN  o.s.b.a.o.j.JpaBaseConfiguration$JpaWebConfiguration - spring.jpa.open-in-view is enabled by default. Therefore, database queries may be performed during view rendering. Explicitly configure spring.jpa.open-in-view to disable this warning
-2026-03-23 15:04:22 [restartedMain] INFO  o.s.s.web.DefaultSecurityFilterChain - Will secure any request with [org.springframework.security.web.session.DisableEncodeUrlFilter@3002c22c, org.springframework.security.web.context.request.async.WebAsyncManagerIntegrationFilter@33ce0d3a, org.springframework.security.web.context.SecurityContextHolderFilter@528920, org.springframework.security.web.header.HeaderWriterFilter@16e9427, org.springframework.web.filter.CorsFilter@5fcad45b, org.springframework.security.web.authentication.logout.LogoutFilter@5b4b6fb, com.Finn.everything_app.security.JwtAuthenticationFilter@46a7e8fe, org.springframework.security.web.savedrequest.RequestCacheAwareFilter@f041137, org.springframework.security.web.servletapi.SecurityContextHolderAwareRequestFilter@f045915, org.springframework.security.web.authentication.AnonymousAuthenticationFilter@4740a789, org.springframework.security.web.session.SessionManagementFilter@26e324a0, org.springframework.security.web.access.ExceptionTranslationFilter@2b3fb5dd, org.springframework.security.web.access.intercept.AuthorizationFilter@5b7b0690]
-2026-03-23 15:04:22 [restartedMain] INFO  o.s.b.d.a.OptionalLiveReloadServer - LiveReload server is running on port 35729
-2026-03-23 15:04:22 [restartedMain] INFO  o.s.b.w.e.tomcat.TomcatWebServer - Tomcat started on port 8080 (http) with context path ''
-2026-03-23 15:04:22 [restartedMain] INFO  c.F.e.EverythingAppApplication - Started EverythingAppApplication in 3.881 seconds (process running for 4.096)
-2026-03-23 15:14:44 [SpringApplicationShutdownHook] INFO  o.s.o.j.LocalContainerEntityManagerFactoryBean - Closing JPA EntityManagerFactory for persistence unit 'default'
-2026-03-23 15:14:44 [SpringApplicationShutdownHook] INFO  com.zaxxer.hikari.HikariDataSource - HikariPool-1 - Shutdown initiated...
-2026-03-23 15:14:44 [SpringApplicationShutdownHook] INFO  com.zaxxer.hikari.HikariDataSource - HikariPool-1 - Shutdown completed.
-2026-03-23 15:25:22 [restartedMain] INFO  c.F.e.EverythingAppApplication - Starting EverythingAppApplication using Java 17.0.18 with PID 10234 (/home/finn/Dokumente/Projekte/Everything-app/Everything-app-backend/everything-app/target/classes started by finn in /home/finn/Dokumente/Projekte/Everything-app/Everything-app-backend/everything-app)
-2026-03-23 15:25:22 [restartedMain] DEBUG c.F.e.EverythingAppApplication - Running with Spring Boot v3.2.0, Spring v6.1.1
-2026-03-23 15:25:22 [restartedMain] INFO  c.F.e.EverythingAppApplication - The following 1 profile is active: "development"
-2026-03-23 15:25:22 [restartedMain] INFO  o.s.b.d.e.DevToolsPropertyDefaultsPostProcessor - Devtools property defaults active! Set 'spring.devtools.add-properties' to 'false' to disable
-2026-03-23 15:25:22 [restartedMain] INFO  o.s.b.d.e.DevToolsPropertyDefaultsPostProcessor - For additional web related logging consider setting the 'logging.level.web' property to 'DEBUG'
-2026-03-23 15:25:22 [restartedMain] INFO  o.s.d.r.c.RepositoryConfigurationDelegate - Bootstrapping Spring Data JPA repositories in DEFAULT mode.
-2026-03-23 15:25:22 [restartedMain] INFO  o.s.d.r.c.RepositoryConfigurationDelegate - Finished Spring Data repository scanning in 48 ms. Found 21 JPA repository interfaces.
-2026-03-23 15:25:23 [restartedMain] INFO  o.s.b.w.e.tomcat.TomcatWebServer - Tomcat initialized with port 8080 (http)
-2026-03-23 15:25:23 [restartedMain] INFO  o.a.catalina.core.StandardService - Starting service [Tomcat]
-2026-03-23 15:25:23 [restartedMain] INFO  o.a.catalina.core.StandardEngine - Starting Servlet engine: [Apache Tomcat/10.1.16]
-2026-03-23 15:25:23 [restartedMain] INFO  o.a.c.c.C.[Tomcat].[localhost].[/] - Initializing Spring embedded WebApplicationContext
-2026-03-23 15:25:23 [restartedMain] INFO  o.s.b.w.s.c.ServletWebServerApplicationContext - Root WebApplicationContext: initialization completed in 754 ms
-2026-03-23 15:25:23 [restartedMain] INFO  o.h.jpa.internal.util.LogHelper - HHH000204: Processing PersistenceUnitInfo [name: default]
-2026-03-23 15:25:23 [restartedMain] INFO  org.hibernate.Version - HHH000412: Hibernate ORM core version 6.3.1.Final
-2026-03-23 15:25:23 [restartedMain] INFO  o.h.c.i.RegionFactoryInitiator - HHH000026: Second-level cache disabled
-2026-03-23 15:25:23 [restartedMain] INFO  o.s.o.j.p.SpringPersistenceUnitInfo - No LoadTimeWeaver setup: ignoring JPA class transformer
-2026-03-23 15:25:23 [restartedMain] INFO  com.zaxxer.hikari.HikariDataSource - HikariPool-1 - Starting...
-2026-03-23 15:25:23 [restartedMain] INFO  com.zaxxer.hikari.pool.HikariPool - HikariPool-1 - Added connection org.postgresql.jdbc.PgConnection@7d83f886
-2026-03-23 15:25:23 [restartedMain] INFO  com.zaxxer.hikari.HikariDataSource - HikariPool-1 - Start completed.
-2026-03-23 15:25:23 [restartedMain] WARN  org.hibernate.orm.deprecation - HHH90000025: PostgreSQLDialect does not need to be specified explicitly using 'hibernate.dialect' (remove the property setting and it will be selected by default)
-2026-03-23 15:25:24 [restartedMain] INFO  o.h.e.t.j.p.i.JtaPlatformInitiator - HHH000489: No JTA platform available (set 'hibernate.transaction.jta.platform' to enable JTA platform integration)
-2026-03-23 15:25:24 [restartedMain] INFO  o.s.o.j.LocalContainerEntityManagerFactoryBean - Initialized JPA EntityManagerFactory for persistence unit 'default'
-2026-03-23 15:25:24 [restartedMain] DEBUG c.F.e.s.JwtAuthenticationFilter - Filter 'jwtAuthenticationFilter' configured for use
-2026-03-23 15:25:24 [restartedMain] INFO  o.s.d.j.r.query.QueryEnhancerFactory - Hibernate is in classpath; If applicable, HQL parser will be used.
-2026-03-23 15:25:25 [restartedMain] WARN  o.s.b.a.o.j.JpaBaseConfiguration$JpaWebConfiguration - spring.jpa.open-in-view is enabled by default. Therefore, database queries may be performed during view rendering. Explicitly configure spring.jpa.open-in-view to disable this warning
-2026-03-23 15:25:25 [restartedMain] INFO  o.s.s.web.DefaultSecurityFilterChain - Will secure any request with [org.springframework.security.web.session.DisableEncodeUrlFilter@3028146b, org.springframework.security.web.context.request.async.WebAsyncManagerIntegrationFilter@40877a8a, org.springframework.security.web.context.SecurityContextHolderFilter@1a761d8c, org.springframework.security.web.header.HeaderWriterFilter@4e46b95f, org.springframework.web.filter.CorsFilter@146ccf3b, org.springframework.security.web.authentication.logout.LogoutFilter@4a32f57c, com.Finn.everything_app.security.JwtAuthenticationFilter@268646a0, org.springframework.security.web.savedrequest.RequestCacheAwareFilter@5ddd5dcd, org.springframework.security.web.servletapi.SecurityContextHolderAwareRequestFilter@577ba9bc, org.springframework.security.web.authentication.AnonymousAuthenticationFilter@2ca9ca49, org.springframework.security.web.session.SessionManagementFilter@7b03c814, org.springframework.security.web.access.ExceptionTranslationFilter@4f790930, org.springframework.security.web.access.intercept.AuthorizationFilter@5d25bf43]
-2026-03-23 15:25:25 [restartedMain] INFO  o.s.b.d.a.OptionalLiveReloadServer - LiveReload server is running on port 35729
-2026-03-23 15:25:25 [restartedMain] INFO  o.s.b.w.e.tomcat.TomcatWebServer - Tomcat started on port 8080 (http) with context path ''
-2026-03-23 15:25:25 [restartedMain] INFO  c.F.e.EverythingAppApplication - Started EverythingAppApplication in 3.659 seconds (process running for 3.849)
-2026-03-23 15:25:52 [SpringApplicationShutdownHook] INFO  o.s.o.j.LocalContainerEntityManagerFactoryBean - Closing JPA EntityManagerFactory for persistence unit 'default'
-2026-03-23 15:25:52 [SpringApplicationShutdownHook] INFO  com.zaxxer.hikari.HikariDataSource - HikariPool-1 - Shutdown initiated...
-2026-03-23 15:25:52 [SpringApplicationShutdownHook] INFO  com.zaxxer.hikari.HikariDataSource - HikariPool-1 - Shutdown completed.
-2026-03-23 15:52:30 [restartedMain] INFO  c.F.e.EverythingAppApplication - Starting EverythingAppApplication using Java 17.0.18 with PID 14464 (/home/finn/Dokumente/Projekte/Everything-app/Everything-app-backend/everything-app/target/classes started by finn in /home/finn/Dokumente/Projekte/Everything-app/Everything-app-backend/everything-app)
-2026-03-23 15:52:30 [restartedMain] DEBUG c.F.e.EverythingAppApplication - Running with Spring Boot v3.2.0, Spring v6.1.1
-2026-03-23 15:52:30 [restartedMain] INFO  c.F.e.EverythingAppApplication - The following 1 profile is active: "development"
-2026-03-23 15:52:30 [restartedMain] INFO  o.s.b.d.e.DevToolsPropertyDefaultsPostProcessor - Devtools property defaults active! Set 'spring.devtools.add-properties' to 'false' to disable
-2026-03-23 15:52:30 [restartedMain] INFO  o.s.b.d.e.DevToolsPropertyDefaultsPostProcessor - For additional web related logging consider setting the 'logging.level.web' property to 'DEBUG'
-2026-03-23 15:52:30 [restartedMain] INFO  o.s.d.r.c.RepositoryConfigurationDelegate - Bootstrapping Spring Data JPA repositories in DEFAULT mode.
-2026-03-23 15:52:30 [restartedMain] INFO  o.s.d.r.c.RepositoryConfigurationDelegate - Finished Spring Data repository scanning in 44 ms. Found 21 JPA repository interfaces.
-2026-03-23 15:52:30 [restartedMain] INFO  o.s.b.w.e.tomcat.TomcatWebServer - Tomcat initialized with port 8080 (http)
-2026-03-23 15:52:30 [restartedMain] INFO  o.a.catalina.core.StandardService - Starting service [Tomcat]
-2026-03-23 15:52:30 [restartedMain] INFO  o.a.catalina.core.StandardEngine - Starting Servlet engine: [Apache Tomcat/10.1.16]
-2026-03-23 15:52:31 [restartedMain] INFO  o.a.c.c.C.[Tomcat].[localhost].[/] - Initializing Spring embedded WebApplicationContext
-2026-03-23 15:52:31 [restartedMain] INFO  o.s.b.w.s.c.ServletWebServerApplicationContext - Root WebApplicationContext: initialization completed in 690 ms
-2026-03-23 15:52:31 [restartedMain] INFO  o.h.jpa.internal.util.LogHelper - HHH000204: Processing PersistenceUnitInfo [name: default]
-2026-03-23 15:52:31 [restartedMain] INFO  org.hibernate.Version - HHH000412: Hibernate ORM core version 6.3.1.Final
-2026-03-23 15:52:31 [restartedMain] INFO  o.h.c.i.RegionFactoryInitiator - HHH000026: Second-level cache disabled
-2026-03-23 15:52:31 [restartedMain] INFO  o.s.o.j.p.SpringPersistenceUnitInfo - No LoadTimeWeaver setup: ignoring JPA class transformer
-2026-03-23 15:52:31 [restartedMain] INFO  com.zaxxer.hikari.HikariDataSource - HikariPool-1 - Starting...
-2026-03-23 15:52:31 [restartedMain] INFO  com.zaxxer.hikari.pool.HikariPool - HikariPool-1 - Added connection org.postgresql.jdbc.PgConnection@7d83f886
-2026-03-23 15:52:31 [restartedMain] INFO  com.zaxxer.hikari.HikariDataSource - HikariPool-1 - Start completed.
-2026-03-23 15:52:31 [restartedMain] WARN  org.hibernate.orm.deprecation - HHH90000025: PostgreSQLDialect does not need to be specified explicitly using 'hibernate.dialect' (remove the property setting and it will be selected by default)
-2026-03-23 15:52:31 [restartedMain] INFO  o.h.e.t.j.p.i.JtaPlatformInitiator - HHH000489: No JTA platform available (set 'hibernate.transaction.jta.platform' to enable JTA platform integration)
-2026-03-23 15:52:32 [restartedMain] INFO  o.s.o.j.LocalContainerEntityManagerFactoryBean - Initialized JPA EntityManagerFactory for persistence unit 'default'
-2026-03-23 15:52:32 [restartedMain] DEBUG c.F.e.s.JwtAuthenticationFilter - Filter 'jwtAuthenticationFilter' configured for use
-2026-03-23 15:52:32 [restartedMain] INFO  o.s.d.j.r.query.QueryEnhancerFactory - Hibernate is in classpath; If applicable, HQL parser will be used.
-2026-03-23 15:52:33 [restartedMain] WARN  o.s.b.a.o.j.JpaBaseConfiguration$JpaWebConfiguration - spring.jpa.open-in-view is enabled by default. Therefore, database queries may be performed during view rendering. Explicitly configure spring.jpa.open-in-view to disable this warning
-2026-03-23 15:52:33 [restartedMain] INFO  o.s.s.web.DefaultSecurityFilterChain - Will secure any request with [org.springframework.security.web.session.DisableEncodeUrlFilter@3028146b, org.springframework.security.web.context.request.async.WebAsyncManagerIntegrationFilter@40877a8a, org.springframework.security.web.context.SecurityContextHolderFilter@1a761d8c, org.springframework.security.web.header.HeaderWriterFilter@4e46b95f, org.springframework.web.filter.CorsFilter@146ccf3b, org.springframework.security.web.authentication.logout.LogoutFilter@4a32f57c, com.Finn.everything_app.security.JwtAuthenticationFilter@268646a0, org.springframework.security.web.savedrequest.RequestCacheAwareFilter@5ddd5dcd, org.springframework.security.web.servletapi.SecurityContextHolderAwareRequestFilter@577ba9bc, org.springframework.security.web.authentication.AnonymousAuthenticationFilter@2ca9ca49, org.springframework.security.web.session.SessionManagementFilter@7b03c814, org.springframework.security.web.access.ExceptionTranslationFilter@4f790930, org.springframework.security.web.access.intercept.AuthorizationFilter@5d25bf43]
-2026-03-23 15:52:33 [restartedMain] INFO  o.s.b.d.a.OptionalLiveReloadServer - LiveReload server is running on port 35729
-2026-03-23 15:52:33 [restartedMain] INFO  o.s.b.w.e.tomcat.TomcatWebServer - Tomcat started on port 8080 (http) with context path ''
-2026-03-23 15:52:33 [restartedMain] INFO  c.F.e.EverythingAppApplication - Started EverythingAppApplication in 3.436 seconds (process running for 3.613)
-2026-03-23 15:54:52 [SpringApplicationShutdownHook] INFO  o.s.o.j.LocalContainerEntityManagerFactoryBean - Closing JPA EntityManagerFactory for persistence unit 'default'
-2026-03-23 15:54:52 [SpringApplicationShutdownHook] INFO  com.zaxxer.hikari.HikariDataSource - HikariPool-1 - Shutdown initiated...
-2026-03-23 15:54:52 [SpringApplicationShutdownHook] INFO  com.zaxxer.hikari.HikariDataSource - HikariPool-1 - Shutdown completed.
+2026-05-08 15:35:33 [restartedMain] INFO  c.F.e.EverythingAppApplication - Starting EverythingAppApplication using Java 17.0.18 with PID 17479 (/home/finn/Dokumente/Projekte/Everything-app/Everything-app-backend/everything-app/target/classes started by finn in /home/finn/Dokumente/Projekte/Everything-app/Everything-app-backend/everything-app)
+2026-05-08 15:35:33 [restartedMain] DEBUG c.F.e.EverythingAppApplication - Running with Spring Boot v3.2.0, Spring v6.1.1
+2026-05-08 15:35:33 [restartedMain] INFO  c.F.e.EverythingAppApplication - The following 1 profile is active: "development"
+2026-05-08 15:35:33 [restartedMain] INFO  o.s.b.d.e.DevToolsPropertyDefaultsPostProcessor - Devtools property defaults active! Set 'spring.devtools.add-properties' to 'false' to disable
+2026-05-08 15:35:33 [restartedMain] INFO  o.s.b.d.e.DevToolsPropertyDefaultsPostProcessor - For additional web related logging consider setting the 'logging.level.web' property to 'DEBUG'
+2026-05-08 15:35:34 [restartedMain] INFO  o.s.d.r.c.RepositoryConfigurationDelegate - Bootstrapping Spring Data JPA repositories in DEFAULT mode.
+2026-05-08 15:35:34 [restartedMain] INFO  o.s.d.r.c.RepositoryConfigurationDelegate - Finished Spring Data repository scanning in 46 ms. Found 21 JPA repository interfaces.
+2026-05-08 15:35:34 [restartedMain] INFO  o.s.b.w.e.tomcat.TomcatWebServer - Tomcat initialized with port 8080 (http)
+2026-05-08 15:35:34 [restartedMain] INFO  o.a.catalina.core.StandardService - Starting service [Tomcat]
+2026-05-08 15:35:34 [restartedMain] INFO  o.a.catalina.core.StandardEngine - Starting Servlet engine: [Apache Tomcat/10.1.16]
+2026-05-08 15:35:34 [restartedMain] INFO  o.a.c.c.C.[Tomcat].[localhost].[/] - Initializing Spring embedded WebApplicationContext
+2026-05-08 15:35:34 [restartedMain] INFO  o.s.b.w.s.c.ServletWebServerApplicationContext - Root WebApplicationContext: initialization completed in 829 ms
+2026-05-08 15:35:34 [restartedMain] INFO  o.h.jpa.internal.util.LogHelper - HHH000204: Processing PersistenceUnitInfo [name: default]
+2026-05-08 15:35:34 [restartedMain] INFO  org.hibernate.Version - HHH000412: Hibernate ORM core version 6.3.1.Final
+2026-05-08 15:35:34 [restartedMain] INFO  o.h.c.i.RegionFactoryInitiator - HHH000026: Second-level cache disabled
+2026-05-08 15:35:34 [restartedMain] INFO  o.s.o.j.p.SpringPersistenceUnitInfo - No LoadTimeWeaver setup: ignoring JPA class transformer
+2026-05-08 15:35:34 [restartedMain] INFO  com.zaxxer.hikari.HikariDataSource - HikariPool-1 - Starting...
+2026-05-08 15:35:35 [restartedMain] INFO  com.zaxxer.hikari.pool.HikariPool - HikariPool-1 - Added connection org.postgresql.jdbc.PgConnection@b6c84ae
+2026-05-08 15:35:35 [restartedMain] INFO  com.zaxxer.hikari.HikariDataSource - HikariPool-1 - Start completed.
+2026-05-08 15:35:35 [restartedMain] WARN  org.hibernate.orm.deprecation - HHH90000025: PostgreSQLDialect does not need to be specified explicitly using 'hibernate.dialect' (remove the property setting and it will be selected by default)
+2026-05-08 15:35:35 [restartedMain] INFO  o.h.e.t.j.p.i.JtaPlatformInitiator - HHH000489: No JTA platform available (set 'hibernate.transaction.jta.platform' to enable JTA platform integration)
+2026-05-08 15:35:35 [restartedMain] INFO  o.s.o.j.LocalContainerEntityManagerFactoryBean - Initialized JPA EntityManagerFactory for persistence unit 'default'
+2026-05-08 15:35:36 [restartedMain] DEBUG c.F.e.s.JwtAuthenticationFilter - Filter 'jwtAuthenticationFilter' configured for use
+2026-05-08 15:35:36 [restartedMain] INFO  o.s.d.j.r.query.QueryEnhancerFactory - Hibernate is in classpath; If applicable, HQL parser will be used.
+2026-05-08 15:35:37 [restartedMain] WARN  o.s.b.a.o.j.JpaBaseConfiguration$JpaWebConfiguration - spring.jpa.open-in-view is enabled by default. Therefore, database queries may be performed during view rendering. Explicitly configure spring.jpa.open-in-view to disable this warning
+2026-05-08 15:35:37 [restartedMain] INFO  o.s.s.web.DefaultSecurityFilterChain - Will secure any request with [org.springframework.security.web.session.DisableEncodeUrlFilter@54932e0c, org.springframework.security.web.context.request.async.WebAsyncManagerIntegrationFilter@956838, org.springframework.security.web.context.SecurityContextHolderFilter@df241f6, org.springframework.security.web.header.HeaderWriterFilter@45ae4f67, org.springframework.web.filter.CorsFilter@2025078f, org.springframework.security.web.authentication.logout.LogoutFilter@7eed3174, com.Finn.everything_app.security.JwtAuthenticationFilter@69175f96, org.springframework.security.web.savedrequest.RequestCacheAwareFilter@43cdd5c3, org.springframework.security.web.servletapi.SecurityContextHolderAwareRequestFilter@4ac6b21c, org.springframework.security.web.authentication.AnonymousAuthenticationFilter@3370a729, org.springframework.security.web.session.SessionManagementFilter@14ea8784, org.springframework.security.web.access.ExceptionTranslationFilter@5e68f49c, org.springframework.security.web.access.intercept.AuthorizationFilter@6aa7deb8]
+2026-05-08 15:35:37 [restartedMain] INFO  o.s.b.d.a.OptionalLiveReloadServer - LiveReload server is running on port 35729
+2026-05-08 15:35:37 [restartedMain] INFO  o.s.b.w.e.tomcat.TomcatWebServer - Tomcat started on port 8080 (http) with context path ''
+2026-05-08 15:35:37 [restartedMain] INFO  c.F.e.EverythingAppApplication - Started EverythingAppApplication in 4.122 seconds (process running for 4.332)
+2026-05-08 15:44:24 [File Watcher] INFO  o.s.b.d.a.LocalDevToolsAutoConfiguration$RestartingClassPathChangeChangedEventListener - Restarting due to 148 class path changes (0 additions, 148 deletions, 0 modifications)
+2026-05-08 15:44:24 [Thread-5] INFO  o.s.o.j.LocalContainerEntityManagerFactoryBean - Closing JPA EntityManagerFactory for persistence unit 'default'
+2026-05-08 15:44:24 [Thread-5] INFO  com.zaxxer.hikari.HikariDataSource - HikariPool-1 - Shutdown initiated...
+2026-05-08 15:44:24 [Thread-5] INFO  com.zaxxer.hikari.HikariDataSource - HikariPool-1 - Shutdown completed.
+2026-05-08 15:44:26 [restartedMain] INFO  c.F.e.EverythingAppApplication - Starting EverythingAppApplication using Java 17.0.18 with PID 17479 (/home/finn/Dokumente/Projekte/Everything-app/Everything-app-backend/everything-app/target/classes started by finn in /home/finn/Dokumente/Projekte/Everything-app/Everything-app-backend/everything-app)
+2026-05-08 15:44:26 [restartedMain] DEBUG c.F.e.EverythingAppApplication - Running with Spring Boot v3.2.0, Spring v6.1.1
+2026-05-08 15:44:26 [restartedMain] INFO  c.F.e.EverythingAppApplication - The following 1 profile is active: "development"
+2026-05-08 15:44:26 [restartedMain] INFO  o.s.d.r.c.RepositoryConfigurationDelegate - Bootstrapping Spring Data JPA repositories in DEFAULT mode.
+2026-05-08 15:44:26 [restartedMain] INFO  o.s.d.r.c.RepositoryConfigurationDelegate - Finished Spring Data repository scanning in 21 ms. Found 21 JPA repository interfaces.
+2026-05-08 15:44:26 [restartedMain] INFO  o.s.b.w.e.tomcat.TomcatWebServer - Tomcat initialized with port 8080 (http)
+2026-05-08 15:44:26 [restartedMain] INFO  o.a.catalina.core.StandardService - Starting service [Tomcat]
+2026-05-08 15:44:26 [restartedMain] INFO  o.a.catalina.core.StandardEngine - Starting Servlet engine: [Apache Tomcat/10.1.16]
+2026-05-08 15:44:26 [restartedMain] INFO  o.a.c.c.C.[Tomcat-1].[localhost].[/] - Initializing Spring embedded WebApplicationContext
+2026-05-08 15:44:26 [restartedMain] INFO  o.s.b.w.s.c.ServletWebServerApplicationContext - Root WebApplicationContext: initialization completed in 191 ms
+2026-05-08 15:44:26 [restartedMain] INFO  o.h.jpa.internal.util.LogHelper - HHH000204: Processing PersistenceUnitInfo [name: default]
+2026-05-08 15:44:26 [restartedMain] INFO  o.h.c.i.RegionFactoryInitiator - HHH000026: Second-level cache disabled
+2026-05-08 15:44:26 [restartedMain] INFO  o.s.o.j.p.SpringPersistenceUnitInfo - No LoadTimeWeaver setup: ignoring JPA class transformer
+2026-05-08 15:44:26 [restartedMain] INFO  com.zaxxer.hikari.HikariDataSource - HikariPool-2 - Starting...
+2026-05-08 15:44:26 [restartedMain] INFO  com.zaxxer.hikari.pool.HikariPool - HikariPool-2 - Added connection org.postgresql.jdbc.PgConnection@616c25a0
+2026-05-08 15:44:26 [restartedMain] INFO  com.zaxxer.hikari.HikariDataSource - HikariPool-2 - Start completed.
+2026-05-08 15:44:26 [restartedMain] WARN  org.hibernate.orm.deprecation - HHH90000025: PostgreSQLDialect does not need to be specified explicitly using 'hibernate.dialect' (remove the property setting and it will be selected by default)
+2026-05-08 15:44:26 [restartedMain] INFO  o.h.e.t.j.p.i.JtaPlatformInitiator - HHH000489: No JTA platform available (set 'hibernate.transaction.jta.platform' to enable JTA platform integration)
+2026-05-08 15:44:26 [restartedMain] INFO  o.s.o.j.LocalContainerEntityManagerFactoryBean - Initialized JPA EntityManagerFactory for persistence unit 'default'
+2026-05-08 15:44:26 [restartedMain] DEBUG c.F.e.s.JwtAuthenticationFilter - Filter 'jwtAuthenticationFilter' configured for use
+2026-05-08 15:44:27 [restartedMain] WARN  o.s.b.a.o.j.JpaBaseConfiguration$JpaWebConfiguration - spring.jpa.open-in-view is enabled by default. Therefore, database queries may be performed during view rendering. Explicitly configure spring.jpa.open-in-view to disable this warning
+2026-05-08 15:44:27 [restartedMain] INFO  o.s.s.web.DefaultSecurityFilterChain - Will secure any request with [org.springframework.security.web.session.DisableEncodeUrlFilter@308fcdad, org.springframework.security.web.context.request.async.WebAsyncManagerIntegrationFilter@23c28910, org.springframework.security.web.context.SecurityContextHolderFilter@271d5641, org.springframework.security.web.header.HeaderWriterFilter@4cf82a77, org.springframework.web.filter.CorsFilter@68ebebda, org.springframework.security.web.authentication.logout.LogoutFilter@9b58540, com.Finn.everything_app.security.JwtAuthenticationFilter@4b9d7a1c, org.springframework.security.web.savedrequest.RequestCacheAwareFilter@8ee58ee, org.springframework.security.web.servletapi.SecurityContextHolderAwareRequestFilter@5c86016, org.springframework.security.web.authentication.AnonymousAuthenticationFilter@534b582c, org.springframework.security.web.session.SessionManagementFilter@7ce8f3f1, org.springframework.security.web.access.ExceptionTranslationFilter@4fec160a, org.springframework.security.web.access.intercept.AuthorizationFilter@15b5c5de]
+2026-05-08 15:44:27 [restartedMain] INFO  o.s.b.d.a.OptionalLiveReloadServer - LiveReload server is running on port 35729
+2026-05-08 15:44:27 [restartedMain] INFO  o.s.b.w.e.tomcat.TomcatWebServer - Tomcat started on port 8080 (http) with context path ''
+2026-05-08 15:44:27 [restartedMain] INFO  c.F.e.EverythingAppApplication - Started EverythingAppApplication in 1.369 seconds (process running for 534.257)
+2026-05-08 15:44:27 [restartedMain] INFO  o.s.b.d.a.ConditionEvaluationDeltaLoggingListener - Condition evaluation unchanged
+2026-05-08 15:44:40 [SpringApplicationShutdownHook] INFO  o.s.o.j.LocalContainerEntityManagerFactoryBean - Closing JPA EntityManagerFactory for persistence unit 'default'
+2026-05-08 15:44:40 [SpringApplicationShutdownHook] INFO  com.zaxxer.hikari.HikariDataSource - HikariPool-2 - Shutdown initiated...
+2026-05-08 15:44:40 [SpringApplicationShutdownHook] INFO  com.zaxxer.hikari.HikariDataSource - HikariPool-2 - Shutdown completed.
+2026-05-08 15:45:26 [restartedMain] INFO  c.F.e.EverythingAppApplication - Starting EverythingAppApplication using Java 17.0.18 with PID 20667 (/home/finn/Dokumente/Projekte/Everything-app/Everything-app-backend/everything-app/target/classes started by finn in /home/finn/Dokumente/Projekte/Everything-app/Everything-app-backend/everything-app)
+2026-05-08 15:45:26 [restartedMain] DEBUG c.F.e.EverythingAppApplication - Running with Spring Boot v3.2.0, Spring v6.1.1
+2026-05-08 15:45:26 [restartedMain] INFO  c.F.e.EverythingAppApplication - The following 1 profile is active: "development"
+2026-05-08 15:45:26 [restartedMain] INFO  o.s.b.d.e.DevToolsPropertyDefaultsPostProcessor - Devtools property defaults active! Set 'spring.devtools.add-properties' to 'false' to disable
+2026-05-08 15:45:26 [restartedMain] INFO  o.s.b.d.e.DevToolsPropertyDefaultsPostProcessor - For additional web related logging consider setting the 'logging.level.web' property to 'DEBUG'
+2026-05-08 15:45:26 [restartedMain] INFO  o.s.d.r.c.RepositoryConfigurationDelegate - Bootstrapping Spring Data JPA repositories in DEFAULT mode.
+2026-05-08 15:45:26 [restartedMain] INFO  o.s.d.r.c.RepositoryConfigurationDelegate - Finished Spring Data repository scanning in 51 ms. Found 21 JPA repository interfaces.
+2026-05-08 15:45:27 [restartedMain] INFO  o.s.b.w.e.tomcat.TomcatWebServer - Tomcat initialized with port 8080 (http)
+2026-05-08 15:45:27 [restartedMain] INFO  o.a.catalina.core.StandardService - Starting service [Tomcat]
+2026-05-08 15:45:27 [restartedMain] INFO  o.a.catalina.core.StandardEngine - Starting Servlet engine: [Apache Tomcat/10.1.16]
+2026-05-08 15:45:27 [restartedMain] INFO  o.a.c.c.C.[Tomcat].[localhost].[/] - Initializing Spring embedded WebApplicationContext
+2026-05-08 15:45:27 [restartedMain] INFO  o.s.b.w.s.c.ServletWebServerApplicationContext - Root WebApplicationContext: initialization completed in 747 ms
+2026-05-08 15:45:27 [restartedMain] INFO  o.h.jpa.internal.util.LogHelper - HHH000204: Processing PersistenceUnitInfo [name: default]
+2026-05-08 15:45:27 [restartedMain] INFO  org.hibernate.Version - HHH000412: Hibernate ORM core version 6.3.1.Final
+2026-05-08 15:45:27 [restartedMain] INFO  o.h.c.i.RegionFactoryInitiator - HHH000026: Second-level cache disabled
+2026-05-08 15:45:27 [restartedMain] INFO  o.s.o.j.p.SpringPersistenceUnitInfo - No LoadTimeWeaver setup: ignoring JPA class transformer
+2026-05-08 15:45:27 [restartedMain] INFO  com.zaxxer.hikari.HikariDataSource - HikariPool-1 - Starting...
+2026-05-08 15:45:27 [restartedMain] INFO  com.zaxxer.hikari.pool.HikariPool - HikariPool-1 - Added connection org.postgresql.jdbc.PgConnection@3f978553
+2026-05-08 15:45:27 [restartedMain] INFO  com.zaxxer.hikari.HikariDataSource - HikariPool-1 - Start completed.
+2026-05-08 15:45:27 [restartedMain] WARN  org.hibernate.orm.deprecation - HHH90000025: PostgreSQLDialect does not need to be specified explicitly using 'hibernate.dialect' (remove the property setting and it will be selected by default)
+2026-05-08 15:45:28 [restartedMain] INFO  o.h.e.t.j.p.i.JtaPlatformInitiator - HHH000489: No JTA platform available (set 'hibernate.transaction.jta.platform' to enable JTA platform integration)
+2026-05-08 15:45:28 [restartedMain] INFO  o.s.o.j.LocalContainerEntityManagerFactoryBean - Initialized JPA EntityManagerFactory for persistence unit 'default'
+2026-05-08 15:45:28 [restartedMain] DEBUG c.F.e.s.JwtAuthenticationFilter - Filter 'jwtAuthenticationFilter' configured for use
+2026-05-08 15:45:28 [restartedMain] INFO  o.s.d.j.r.query.QueryEnhancerFactory - Hibernate is in classpath; If applicable, HQL parser will be used.
+2026-05-08 15:45:29 [restartedMain] WARN  o.s.b.a.o.j.JpaBaseConfiguration$JpaWebConfiguration - spring.jpa.open-in-view is enabled by default. Therefore, database queries may be performed during view rendering. Explicitly configure spring.jpa.open-in-view to disable this warning
+2026-05-08 15:45:30 [restartedMain] INFO  o.s.s.web.DefaultSecurityFilterChain - Will secure any request with [org.springframework.security.web.session.DisableEncodeUrlFilter@4f507c80, org.springframework.security.web.context.request.async.WebAsyncManagerIntegrationFilter@5e67fad9, org.springframework.security.web.context.SecurityContextHolderFilter@5e68f49c, org.springframework.security.web.header.HeaderWriterFilter@216680a1, org.springframework.web.filter.CorsFilter@40f060b3, org.springframework.security.web.authentication.logout.LogoutFilter@4371c6d4, com.Finn.everything_app.security.JwtAuthenticationFilter@6b369995, org.springframework.security.web.savedrequest.RequestCacheAwareFilter@45ae4f67, org.springframework.security.web.servletapi.SecurityContextHolderAwareRequestFilter@779afb7a, org.springframework.security.web.authentication.AnonymousAuthenticationFilter@6944e592, org.springframework.security.web.session.SessionManagementFilter@203cdccf, org.springframework.security.web.access.ExceptionTranslationFilter@67aef246, org.springframework.security.web.access.intercept.AuthorizationFilter@466af99a]
+2026-05-08 15:45:30 [restartedMain] INFO  o.s.b.d.a.OptionalLiveReloadServer - LiveReload server is running on port 35729
+2026-05-08 15:45:30 [restartedMain] INFO  o.s.b.w.e.tomcat.TomcatWebServer - Tomcat started on port 8080 (http) with context path ''
+2026-05-08 15:45:30 [restartedMain] INFO  c.F.e.EverythingAppApplication - Started EverythingAppApplication in 3.85 seconds (process running for 4.049)
+2026-05-08 15:47:00 [restartedMain] INFO  c.F.e.EverythingAppApplication - Starting EverythingAppApplication using Java 17.0.18 with PID 21343 (/home/finn/Dokumente/Projekte/Everything-app/Everything-app-backend/everything-app/target/classes started by finn in /home/finn/Dokumente/Projekte/Everything-app/Everything-app-backend/everything-app)
+2026-05-08 15:47:00 [restartedMain] DEBUG c.F.e.EverythingAppApplication - Running with Spring Boot v3.2.0, Spring v6.1.1
+2026-05-08 15:47:00 [restartedMain] INFO  c.F.e.EverythingAppApplication - The following 1 profile is active: "development"
+2026-05-08 15:47:00 [restartedMain] INFO  o.s.b.d.e.DevToolsPropertyDefaultsPostProcessor - Devtools property defaults active! Set 'spring.devtools.add-properties' to 'false' to disable
+2026-05-08 15:47:00 [restartedMain] INFO  o.s.b.d.e.DevToolsPropertyDefaultsPostProcessor - For additional web related logging consider setting the 'logging.level.web' property to 'DEBUG'
+2026-05-08 15:47:00 [restartedMain] INFO  o.s.d.r.c.RepositoryConfigurationDelegate - Bootstrapping Spring Data JPA repositories in DEFAULT mode.
+2026-05-08 15:47:00 [restartedMain] INFO  o.s.d.r.c.RepositoryConfigurationDelegate - Finished Spring Data repository scanning in 48 ms. Found 21 JPA repository interfaces.
+2026-05-08 15:47:00 [restartedMain] INFO  o.s.b.w.e.tomcat.TomcatWebServer - Tomcat initialized with port 8080 (http)
+2026-05-08 15:47:00 [restartedMain] INFO  o.a.catalina.core.StandardService - Starting service [Tomcat]
+2026-05-08 15:47:00 [restartedMain] INFO  o.a.catalina.core.StandardEngine - Starting Servlet engine: [Apache Tomcat/10.1.16]
+2026-05-08 15:47:01 [restartedMain] INFO  o.a.c.c.C.[Tomcat].[localhost].[/] - Initializing Spring embedded WebApplicationContext
+2026-05-08 15:47:01 [restartedMain] INFO  o.s.b.w.s.c.ServletWebServerApplicationContext - Root WebApplicationContext: initialization completed in 727 ms
+2026-05-08 15:47:01 [restartedMain] INFO  o.h.jpa.internal.util.LogHelper - HHH000204: Processing PersistenceUnitInfo [name: default]
+2026-05-08 15:47:01 [restartedMain] INFO  org.hibernate.Version - HHH000412: Hibernate ORM core version 6.3.1.Final
+2026-05-08 15:47:01 [restartedMain] INFO  o.h.c.i.RegionFactoryInitiator - HHH000026: Second-level cache disabled
+2026-05-08 15:47:01 [restartedMain] INFO  o.s.o.j.p.SpringPersistenceUnitInfo - No LoadTimeWeaver setup: ignoring JPA class transformer
+2026-05-08 15:47:01 [restartedMain] INFO  com.zaxxer.hikari.HikariDataSource - HikariPool-1 - Starting...
+2026-05-08 15:47:01 [restartedMain] INFO  com.zaxxer.hikari.pool.HikariPool - HikariPool-1 - Added connection org.postgresql.jdbc.PgConnection@7ac1d381
+2026-05-08 15:47:01 [restartedMain] INFO  com.zaxxer.hikari.HikariDataSource - HikariPool-1 - Start completed.
+2026-05-08 15:47:01 [restartedMain] WARN  org.hibernate.orm.deprecation - HHH90000025: PostgreSQLDialect does not need to be specified explicitly using 'hibernate.dialect' (remove the property setting and it will be selected by default)
+2026-05-08 15:47:02 [restartedMain] INFO  o.h.e.t.j.p.i.JtaPlatformInitiator - HHH000489: No JTA platform available (set 'hibernate.transaction.jta.platform' to enable JTA platform integration)
+2026-05-08 15:47:02 [restartedMain] INFO  o.s.o.j.LocalContainerEntityManagerFactoryBean - Initialized JPA EntityManagerFactory for persistence unit 'default'
+2026-05-08 15:47:02 [restartedMain] DEBUG c.F.e.s.JwtAuthenticationFilter - Filter 'jwtAuthenticationFilter' configured for use
+2026-05-08 15:47:02 [restartedMain] INFO  o.s.d.j.r.query.QueryEnhancerFactory - Hibernate is in classpath; If applicable, HQL parser will be used.
+2026-05-08 15:47:03 [restartedMain] WARN  o.s.b.a.o.j.JpaBaseConfiguration$JpaWebConfiguration - spring.jpa.open-in-view is enabled by default. Therefore, database queries may be performed during view rendering. Explicitly configure spring.jpa.open-in-view to disable this warning
+2026-05-08 15:47:03 [restartedMain] INFO  o.s.s.web.DefaultSecurityFilterChain - Will secure any request with [org.springframework.security.web.session.DisableEncodeUrlFilter@6f3d1a77, org.springframework.security.web.context.request.async.WebAsyncManagerIntegrationFilter@5a2c29fe, org.springframework.security.web.context.SecurityContextHolderFilter@67cc0f62, org.springframework.security.web.header.HeaderWriterFilter@bd0250d, org.springframework.web.filter.CorsFilter@4d5dc55e, org.springframework.security.web.authentication.logout.LogoutFilter@4f507c80, com.Finn.everything_app.security.JwtAuthenticationFilter@26767229, org.springframework.security.web.savedrequest.RequestCacheAwareFilter@1c76f136, org.springframework.security.web.servletapi.SecurityContextHolderAwareRequestFilter@2c273e9d, org.springframework.security.web.authentication.AnonymousAuthenticationFilter@74ea600, org.springframework.security.web.session.SessionManagementFilter@74f0bdeb, org.springframework.security.web.access.ExceptionTranslationFilter@64ddb365, org.springframework.security.web.access.intercept.AuthorizationFilter@2c733af4]
+2026-05-08 15:47:04 [restartedMain] WARN  o.s.b.d.a.OptionalLiveReloadServer - Unable to start LiveReload server
+2026-05-08 15:47:04 [restartedMain] WARN  o.s.b.w.s.c.AnnotationConfigServletWebServerApplicationContext - Exception encountered during context initialization - cancelling refresh attempt: org.springframework.context.ApplicationContextException: Failed to start bean 'webServerStartStop'
+2026-05-08 15:47:04 [restartedMain] INFO  o.s.o.j.LocalContainerEntityManagerFactoryBean - Closing JPA EntityManagerFactory for persistence unit 'default'
+2026-05-08 15:47:04 [restartedMain] INFO  com.zaxxer.hikari.HikariDataSource - HikariPool-1 - Shutdown initiated...
+2026-05-08 15:47:04 [restartedMain] INFO  com.zaxxer.hikari.HikariDataSource - HikariPool-1 - Shutdown completed.
+2026-05-08 15:47:04 [restartedMain] INFO  o.s.b.a.l.ConditionEvaluationReportLogger - 
+
+Error starting ApplicationContext. To display the condition evaluation report re-run your application with 'debug' enabled.
+2026-05-08 15:47:04 [restartedMain] ERROR o.s.boot.SpringApplication - Application run failed
+org.springframework.context.ApplicationContextException: Failed to start bean 'webServerStartStop'
+	at org.springframework.context.support.DefaultLifecycleProcessor.doStart(DefaultLifecycleProcessor.java:287)
+	at org.springframework.context.support.DefaultLifecycleProcessor$LifecycleGroup.start(DefaultLifecycleProcessor.java:467)
+	at java.base/java.lang.Iterable.forEach(Iterable.java:75)
+	at org.springframework.context.support.DefaultLifecycleProcessor.startBeans(DefaultLifecycleProcessor.java:256)
+	at org.springframework.context.support.DefaultLifecycleProcessor.onRefresh(DefaultLifecycleProcessor.java:201)
+	at org.springframework.context.support.AbstractApplicationContext.finishRefresh(AbstractApplicationContext.java:965)
+	at org.springframework.context.support.AbstractApplicationContext.refresh(AbstractApplicationContext.java:619)
+	at org.springframework.boot.web.servlet.context.ServletWebServerApplicationContext.refresh(ServletWebServerApplicationContext.java:146)
+	at org.springframework.boot.SpringApplication.refresh(SpringApplication.java:753)
+	at org.springframework.boot.SpringApplication.refreshContext(SpringApplication.java:455)
+	at org.springframework.boot.SpringApplication.run(SpringApplication.java:323)
+	at org.springframework.boot.SpringApplication.run(SpringApplication.java:1342)
+	at org.springframework.boot.SpringApplication.run(SpringApplication.java:1331)
+	at com.Finn.everything_app.EverythingAppApplication.main(EverythingAppApplication.java:12)
+	at java.base/jdk.internal.reflect.NativeMethodAccessorImpl.invoke0(Native Method)
+	at java.base/jdk.internal.reflect.NativeMethodAccessorImpl.invoke(NativeMethodAccessorImpl.java:77)
+	at java.base/jdk.internal.reflect.DelegatingMethodAccessorImpl.invoke(DelegatingMethodAccessorImpl.java:43)
+	at java.base/java.lang.reflect.Method.invoke(Method.java:569)
+	at org.springframework.boot.devtools.restart.RestartLauncher.run(RestartLauncher.java:50)
+Caused by: org.springframework.boot.web.server.WebServerException: Unable to start embedded Tomcat server
+	at org.springframework.boot.web.embedded.tomcat.TomcatWebServer.start(TomcatWebServer.java:229)
+	at org.springframework.boot.web.servlet.context.WebServerStartStopLifecycle.start(WebServerStartStopLifecycle.java:44)
+	at org.springframework.context.support.DefaultLifecycleProcessor.doStart(DefaultLifecycleProcessor.java:284)
+	... 18 common frames omitted
+Caused by: java.lang.IllegalArgumentException: standardService.connector.startFailed
+	at org.apache.catalina.core.StandardService.addConnector(StandardService.java:235)
+	at org.springframework.boot.web.embedded.tomcat.TomcatWebServer.addPreviouslyRemovedConnectors(TomcatWebServer.java:286)
+	at org.springframework.boot.web.embedded.tomcat.TomcatWebServer.start(TomcatWebServer.java:214)
+	... 20 common frames omitted
+Caused by: org.apache.catalina.LifecycleException: Protocol handler start failed
+	at org.apache.catalina.connector.Connector.startInternal(Connector.java:1046)
+	at org.apache.catalina.util.LifecycleBase.start(LifecycleBase.java:171)
+	at org.apache.catalina.core.StandardService.addConnector(StandardService.java:232)
+	... 22 common frames omitted
+Caused by: java.net.BindException: Die Adresse wird bereits verwendet
+	at java.base/sun.nio.ch.Net.bind0(Native Method)
+	at java.base/sun.nio.ch.Net.bind(Net.java:567)
+	at java.base/sun.nio.ch.ServerSocketChannelImpl.netBind(ServerSocketChannelImpl.java:337)
+	at java.base/sun.nio.ch.ServerSocketChannelImpl.bind(ServerSocketChannelImpl.java:294)
+	at org.apache.tomcat.util.net.NioEndpoint.initServerSocket(NioEndpoint.java:247)
+	at org.apache.tomcat.util.net.NioEndpoint.bind(NioEndpoint.java:202)
+	at org.apache.tomcat.util.net.AbstractEndpoint.bindWithCleanup(AbstractEndpoint.java:1280)
+	at org.apache.tomcat.util.net.AbstractEndpoint.start(AbstractEndpoint.java:1366)
+	at org.apache.coyote.AbstractProtocol.start(AbstractProtocol.java:635)
+	at org.apache.catalina.connector.Connector.startInternal(Connector.java:1043)
+	... 24 common frames omitted
+2026-05-08 15:47:23 [restartedMain] INFO  c.F.e.EverythingAppApplication - Starting EverythingAppApplication using Java 17.0.18 with PID 21768 (/home/finn/Dokumente/Projekte/Everything-app/Everything-app-backend/everything-app/target/classes started by finn in /home/finn/Dokumente/Projekte/Everything-app/Everything-app-backend/everything-app)
+2026-05-08 15:47:23 [restartedMain] DEBUG c.F.e.EverythingAppApplication - Running with Spring Boot v3.2.0, Spring v6.1.1
+2026-05-08 15:47:23 [restartedMain] INFO  c.F.e.EverythingAppApplication - The following 1 profile is active: "development"
+2026-05-08 15:47:23 [restartedMain] INFO  o.s.b.d.e.DevToolsPropertyDefaultsPostProcessor - Devtools property defaults active! Set 'spring.devtools.add-properties' to 'false' to disable
+2026-05-08 15:47:23 [restartedMain] INFO  o.s.b.d.e.DevToolsPropertyDefaultsPostProcessor - For additional web related logging consider setting the 'logging.level.web' property to 'DEBUG'
+2026-05-08 15:47:23 [restartedMain] INFO  o.s.d.r.c.RepositoryConfigurationDelegate - Bootstrapping Spring Data JPA repositories in DEFAULT mode.
+2026-05-08 15:47:23 [restartedMain] INFO  o.s.d.r.c.RepositoryConfigurationDelegate - Finished Spring Data repository scanning in 50 ms. Found 21 JPA repository interfaces.
+2026-05-08 15:47:24 [restartedMain] INFO  o.s.b.w.e.tomcat.TomcatWebServer - Tomcat initialized with port 8080 (http)
+2026-05-08 15:47:24 [restartedMain] INFO  o.a.catalina.core.StandardService - Starting service [Tomcat]
+2026-05-08 15:47:24 [restartedMain] INFO  o.a.catalina.core.StandardEngine - Starting Servlet engine: [Apache Tomcat/10.1.16]
+2026-05-08 15:47:24 [restartedMain] INFO  o.a.c.c.C.[Tomcat].[localhost].[/] - Initializing Spring embedded WebApplicationContext
+2026-05-08 15:47:24 [restartedMain] INFO  o.s.b.w.s.c.ServletWebServerApplicationContext - Root WebApplicationContext: initialization completed in 741 ms
+2026-05-08 15:47:24 [restartedMain] INFO  o.h.jpa.internal.util.LogHelper - HHH000204: Processing PersistenceUnitInfo [name: default]
+2026-05-08 15:47:24 [restartedMain] INFO  org.hibernate.Version - HHH000412: Hibernate ORM core version 6.3.1.Final
+2026-05-08 15:47:24 [restartedMain] INFO  o.h.c.i.RegionFactoryInitiator - HHH000026: Second-level cache disabled
+2026-05-08 15:47:24 [restartedMain] INFO  o.s.o.j.p.SpringPersistenceUnitInfo - No LoadTimeWeaver setup: ignoring JPA class transformer
+2026-05-08 15:47:24 [restartedMain] INFO  com.zaxxer.hikari.HikariDataSource - HikariPool-1 - Starting...
+2026-05-08 15:47:24 [restartedMain] INFO  com.zaxxer.hikari.pool.HikariPool - HikariPool-1 - Added connection org.postgresql.jdbc.PgConnection@299e0b19
+2026-05-08 15:47:24 [restartedMain] INFO  com.zaxxer.hikari.HikariDataSource - HikariPool-1 - Start completed.
+2026-05-08 15:47:24 [restartedMain] WARN  org.hibernate.orm.deprecation - HHH90000025: PostgreSQLDialect does not need to be specified explicitly using 'hibernate.dialect' (remove the property setting and it will be selected by default)
+2026-05-08 15:47:25 [restartedMain] INFO  o.h.e.t.j.p.i.JtaPlatformInitiator - HHH000489: No JTA platform available (set 'hibernate.transaction.jta.platform' to enable JTA platform integration)
+2026-05-08 15:47:25 [restartedMain] INFO  o.s.o.j.LocalContainerEntityManagerFactoryBean - Initialized JPA EntityManagerFactory for persistence unit 'default'
+2026-05-08 15:47:25 [restartedMain] DEBUG c.F.e.s.JwtAuthenticationFilter - Filter 'jwtAuthenticationFilter' configured for use
+2026-05-08 15:47:25 [restartedMain] INFO  o.s.d.j.r.query.QueryEnhancerFactory - Hibernate is in classpath; If applicable, HQL parser will be used.
+2026-05-08 15:47:26 [restartedMain] WARN  o.s.b.a.o.j.JpaBaseConfiguration$JpaWebConfiguration - spring.jpa.open-in-view is enabled by default. Therefore, database queries may be performed during view rendering. Explicitly configure spring.jpa.open-in-view to disable this warning
+2026-05-08 15:47:26 [restartedMain] INFO  o.s.s.web.DefaultSecurityFilterChain - Will secure any request with [org.springframework.security.web.session.DisableEncodeUrlFilter@5e67fad9, org.springframework.security.web.context.request.async.WebAsyncManagerIntegrationFilter@40f060b3, org.springframework.security.web.context.SecurityContextHolderFilter@18f4813a, org.springframework.security.web.header.HeaderWriterFilter@6f8b051f, org.springframework.web.filter.CorsFilter@6944e592, org.springframework.security.web.authentication.logout.LogoutFilter@2cfe4ac2, com.Finn.everything_app.security.JwtAuthenticationFilter@5d94949a, org.springframework.security.web.savedrequest.RequestCacheAwareFilter@779afb7a, org.springframework.security.web.servletapi.SecurityContextHolderAwareRequestFilter@6e4f2d01, org.springframework.security.web.authentication.AnonymousAuthenticationFilter@253c3046, org.springframework.security.web.session.SessionManagementFilter@41138289, org.springframework.security.web.access.ExceptionTranslationFilter@cd6d596, org.springframework.security.web.access.intercept.AuthorizationFilter@7d4c78ae]
+2026-05-08 15:47:26 [restartedMain] WARN  o.s.b.d.a.OptionalLiveReloadServer - Unable to start LiveReload server
+2026-05-08 15:47:26 [restartedMain] WARN  o.s.b.w.s.c.AnnotationConfigServletWebServerApplicationContext - Exception encountered during context initialization - cancelling refresh attempt: org.springframework.context.ApplicationContextException: Failed to start bean 'webServerStartStop'
+2026-05-08 15:47:26 [restartedMain] INFO  o.s.o.j.LocalContainerEntityManagerFactoryBean - Closing JPA EntityManagerFactory for persistence unit 'default'
+2026-05-08 15:47:26 [restartedMain] INFO  com.zaxxer.hikari.HikariDataSource - HikariPool-1 - Shutdown initiated...
+2026-05-08 15:47:26 [restartedMain] INFO  com.zaxxer.hikari.HikariDataSource - HikariPool-1 - Shutdown completed.
+2026-05-08 15:47:26 [restartedMain] INFO  o.s.b.a.l.ConditionEvaluationReportLogger - 
+
+Error starting ApplicationContext. To display the condition evaluation report re-run your application with 'debug' enabled.
+2026-05-08 15:47:26 [restartedMain] ERROR o.s.boot.SpringApplication - Application run failed
+org.springframework.context.ApplicationContextException: Failed to start bean 'webServerStartStop'
+	at org.springframework.context.support.DefaultLifecycleProcessor.doStart(DefaultLifecycleProcessor.java:287)
+	at org.springframework.context.support.DefaultLifecycleProcessor$LifecycleGroup.start(DefaultLifecycleProcessor.java:467)
+	at java.base/java.lang.Iterable.forEach(Iterable.java:75)
+	at org.springframework.context.support.DefaultLifecycleProcessor.startBeans(DefaultLifecycleProcessor.java:256)
+	at org.springframework.context.support.DefaultLifecycleProcessor.onRefresh(DefaultLifecycleProcessor.java:201)
+	at org.springframework.context.support.AbstractApplicationContext.finishRefresh(AbstractApplicationContext.java:965)
+	at org.springframework.context.support.AbstractApplicationContext.refresh(AbstractApplicationContext.java:619)
+	at org.springframework.boot.web.servlet.context.ServletWebServerApplicationContext.refresh(ServletWebServerApplicationContext.java:146)
+	at org.springframework.boot.SpringApplication.refresh(SpringApplication.java:753)
+	at org.springframework.boot.SpringApplication.refreshContext(SpringApplication.java:455)
+	at org.springframework.boot.SpringApplication.run(SpringApplication.java:323)
+	at org.springframework.boot.SpringApplication.run(SpringApplication.java:1342)
+	at org.springframework.boot.SpringApplication.run(SpringApplication.java:1331)
+	at com.Finn.everything_app.EverythingAppApplication.main(EverythingAppApplication.java:12)
+	at java.base/jdk.internal.reflect.NativeMethodAccessorImpl.invoke0(Native Method)
+	at java.base/jdk.internal.reflect.NativeMethodAccessorImpl.invoke(NativeMethodAccessorImpl.java:77)
+	at java.base/jdk.internal.reflect.DelegatingMethodAccessorImpl.invoke(DelegatingMethodAccessorImpl.java:43)
+	at java.base/java.lang.reflect.Method.invoke(Method.java:569)
+	at org.springframework.boot.devtools.restart.RestartLauncher.run(RestartLauncher.java:50)
+Caused by: org.springframework.boot.web.server.WebServerException: Unable to start embedded Tomcat server
+	at org.springframework.boot.web.embedded.tomcat.TomcatWebServer.start(TomcatWebServer.java:229)
+	at org.springframework.boot.web.servlet.context.WebServerStartStopLifecycle.start(WebServerStartStopLifecycle.java:44)
+	at org.springframework.context.support.DefaultLifecycleProcessor.doStart(DefaultLifecycleProcessor.java:284)
+	... 18 common frames omitted
+Caused by: java.lang.IllegalArgumentException: standardService.connector.startFailed
+	at org.apache.catalina.core.StandardService.addConnector(StandardService.java:235)
+	at org.springframework.boot.web.embedded.tomcat.TomcatWebServer.addPreviouslyRemovedConnectors(TomcatWebServer.java:286)
+	at org.springframework.boot.web.embedded.tomcat.TomcatWebServer.start(TomcatWebServer.java:214)
+	... 20 common frames omitted
+Caused by: org.apache.catalina.LifecycleException: Protocol handler start failed
+	at org.apache.catalina.connector.Connector.startInternal(Connector.java:1046)
+	at org.apache.catalina.util.LifecycleBase.start(LifecycleBase.java:171)
+	at org.apache.catalina.core.StandardService.addConnector(StandardService.java:232)
+	... 22 common frames omitted
+Caused by: java.net.BindException: Die Adresse wird bereits verwendet
+	at java.base/sun.nio.ch.Net.bind0(Native Method)
+	at java.base/sun.nio.ch.Net.bind(Net.java:567)
+	at java.base/sun.nio.ch.ServerSocketChannelImpl.netBind(ServerSocketChannelImpl.java:337)
+	at java.base/sun.nio.ch.ServerSocketChannelImpl.bind(ServerSocketChannelImpl.java:294)
+	at org.apache.tomcat.util.net.NioEndpoint.initServerSocket(NioEndpoint.java:247)
+	at org.apache.tomcat.util.net.NioEndpoint.bind(NioEndpoint.java:202)
+	at org.apache.tomcat.util.net.AbstractEndpoint.bindWithCleanup(AbstractEndpoint.java:1280)
+	at org.apache.tomcat.util.net.AbstractEndpoint.start(AbstractEndpoint.java:1366)
+	at org.apache.coyote.AbstractProtocol.start(AbstractProtocol.java:635)
+	at org.apache.catalina.connector.Connector.startInternal(Connector.java:1043)
+	... 24 common frames omitted
+2026-05-08 15:49:01 [restartedMain] INFO  c.F.e.EverythingAppApplication - Starting EverythingAppApplication using Java 17.0.18 with PID 22328 (/home/finn/Dokumente/Projekte/Everything-app/Everything-app-backend/everything-app/target/classes started by finn in /home/finn/Dokumente/Projekte/Everything-app/Everything-app-backend/everything-app)
+2026-05-08 15:49:01 [restartedMain] DEBUG c.F.e.EverythingAppApplication - Running with Spring Boot v3.2.0, Spring v6.1.1
+2026-05-08 15:49:01 [restartedMain] INFO  c.F.e.EverythingAppApplication - The following 1 profile is active: "development"
+2026-05-08 15:49:01 [restartedMain] INFO  o.s.b.d.e.DevToolsPropertyDefaultsPostProcessor - Devtools property defaults active! Set 'spring.devtools.add-properties' to 'false' to disable
+2026-05-08 15:49:01 [restartedMain] INFO  o.s.b.d.e.DevToolsPropertyDefaultsPostProcessor - For additional web related logging consider setting the 'logging.level.web' property to 'DEBUG'
+2026-05-08 15:49:01 [restartedMain] INFO  o.s.d.r.c.RepositoryConfigurationDelegate - Bootstrapping Spring Data JPA repositories in DEFAULT mode.
+2026-05-08 15:49:01 [restartedMain] INFO  o.s.d.r.c.RepositoryConfigurationDelegate - Finished Spring Data repository scanning in 47 ms. Found 21 JPA repository interfaces.
+2026-05-08 15:49:01 [restartedMain] INFO  o.s.b.w.e.tomcat.TomcatWebServer - Tomcat initialized with port 8080 (http)
+2026-05-08 15:49:01 [restartedMain] INFO  o.a.catalina.core.StandardService - Starting service [Tomcat]
+2026-05-08 15:49:01 [restartedMain] INFO  o.a.catalina.core.StandardEngine - Starting Servlet engine: [Apache Tomcat/10.1.16]
+2026-05-08 15:49:01 [restartedMain] INFO  o.a.c.c.C.[Tomcat].[localhost].[/] - Initializing Spring embedded WebApplicationContext
+2026-05-08 15:49:01 [restartedMain] INFO  o.s.b.w.s.c.ServletWebServerApplicationContext - Root WebApplicationContext: initialization completed in 724 ms
+2026-05-08 15:49:02 [restartedMain] INFO  o.h.jpa.internal.util.LogHelper - HHH000204: Processing PersistenceUnitInfo [name: default]
+2026-05-08 15:49:02 [restartedMain] INFO  org.hibernate.Version - HHH000412: Hibernate ORM core version 6.3.1.Final
+2026-05-08 15:49:02 [restartedMain] INFO  o.h.c.i.RegionFactoryInitiator - HHH000026: Second-level cache disabled
+2026-05-08 15:49:02 [restartedMain] INFO  o.s.o.j.p.SpringPersistenceUnitInfo - No LoadTimeWeaver setup: ignoring JPA class transformer
+2026-05-08 15:49:02 [restartedMain] INFO  com.zaxxer.hikari.HikariDataSource - HikariPool-1 - Starting...
+2026-05-08 15:49:02 [restartedMain] INFO  com.zaxxer.hikari.pool.HikariPool - HikariPool-1 - Added connection org.postgresql.jdbc.PgConnection@321f0d6c
+2026-05-08 15:49:02 [restartedMain] INFO  com.zaxxer.hikari.HikariDataSource - HikariPool-1 - Start completed.
+2026-05-08 15:49:02 [restartedMain] WARN  org.hibernate.orm.deprecation - HHH90000025: PostgreSQLDialect does not need to be specified explicitly using 'hibernate.dialect' (remove the property setting and it will be selected by default)
+2026-05-08 15:49:02 [restartedMain] INFO  o.h.e.t.j.p.i.JtaPlatformInitiator - HHH000489: No JTA platform available (set 'hibernate.transaction.jta.platform' to enable JTA platform integration)
+2026-05-08 15:49:03 [restartedMain] INFO  o.s.o.j.LocalContainerEntityManagerFactoryBean - Initialized JPA EntityManagerFactory for persistence unit 'default'
+2026-05-08 15:49:03 [restartedMain] DEBUG c.F.e.s.JwtAuthenticationFilter - Filter 'jwtAuthenticationFilter' configured for use
+2026-05-08 15:49:03 [restartedMain] INFO  o.s.d.j.r.query.QueryEnhancerFactory - Hibernate is in classpath; If applicable, HQL parser will be used.
+2026-05-08 15:49:04 [restartedMain] WARN  o.s.b.a.o.j.JpaBaseConfiguration$JpaWebConfiguration - spring.jpa.open-in-view is enabled by default. Therefore, database queries may be performed during view rendering. Explicitly configure spring.jpa.open-in-view to disable this warning
+2026-05-08 15:49:04 [restartedMain] INFO  o.s.s.web.DefaultSecurityFilterChain - Will secure any request with [org.springframework.security.web.session.DisableEncodeUrlFilter@3bff401f, org.springframework.security.web.context.request.async.WebAsyncManagerIntegrationFilter@18ab050b, org.springframework.security.web.context.SecurityContextHolderFilter@2a7829d2, org.springframework.security.web.header.HeaderWriterFilter@203cdccf, org.springframework.web.filter.CorsFilter@6aa7deb8, org.springframework.security.web.authentication.logout.LogoutFilter@446cb70a, com.Finn.everything_app.security.JwtAuthenticationFilter@5460e080, org.springframework.security.web.savedrequest.RequestCacheAwareFilter@14ea8784, org.springframework.security.web.servletapi.SecurityContextHolderAwareRequestFilter@371aace, org.springframework.security.web.authentication.AnonymousAuthenticationFilter@556eafda, org.springframework.security.web.session.SessionManagementFilter@1c76f136, org.springframework.security.web.access.ExceptionTranslationFilter@3c3fc70e, org.springframework.security.web.access.intercept.AuthorizationFilter@4d5dc55e]
+2026-05-08 15:49:04 [restartedMain] WARN  o.s.b.d.a.OptionalLiveReloadServer - Unable to start LiveReload server
+2026-05-08 15:49:04 [restartedMain] WARN  o.s.b.w.s.c.AnnotationConfigServletWebServerApplicationContext - Exception encountered during context initialization - cancelling refresh attempt: org.springframework.context.ApplicationContextException: Failed to start bean 'webServerStartStop'
+2026-05-08 15:49:04 [restartedMain] INFO  o.s.o.j.LocalContainerEntityManagerFactoryBean - Closing JPA EntityManagerFactory for persistence unit 'default'
+2026-05-08 15:49:04 [restartedMain] INFO  com.zaxxer.hikari.HikariDataSource - HikariPool-1 - Shutdown initiated...
+2026-05-08 15:49:04 [restartedMain] INFO  com.zaxxer.hikari.HikariDataSource - HikariPool-1 - Shutdown completed.
+2026-05-08 15:49:04 [restartedMain] INFO  o.s.b.a.l.ConditionEvaluationReportLogger - 
+
+Error starting ApplicationContext. To display the condition evaluation report re-run your application with 'debug' enabled.
+2026-05-08 15:49:04 [restartedMain] ERROR o.s.boot.SpringApplication - Application run failed
+org.springframework.context.ApplicationContextException: Failed to start bean 'webServerStartStop'
+	at org.springframework.context.support.DefaultLifecycleProcessor.doStart(DefaultLifecycleProcessor.java:287)
+	at org.springframework.context.support.DefaultLifecycleProcessor$LifecycleGroup.start(DefaultLifecycleProcessor.java:467)
+	at java.base/java.lang.Iterable.forEach(Iterable.java:75)
+	at org.springframework.context.support.DefaultLifecycleProcessor.startBeans(DefaultLifecycleProcessor.java:256)
+	at org.springframework.context.support.DefaultLifecycleProcessor.onRefresh(DefaultLifecycleProcessor.java:201)
+	at org.springframework.context.support.AbstractApplicationContext.finishRefresh(AbstractApplicationContext.java:965)
+	at org.springframework.context.support.AbstractApplicationContext.refresh(AbstractApplicationContext.java:619)
+	at org.springframework.boot.web.servlet.context.ServletWebServerApplicationContext.refresh(ServletWebServerApplicationContext.java:146)
+	at org.springframework.boot.SpringApplication.refresh(SpringApplication.java:753)
+	at org.springframework.boot.SpringApplication.refreshContext(SpringApplication.java:455)
+	at org.springframework.boot.SpringApplication.run(SpringApplication.java:323)
+	at org.springframework.boot.SpringApplication.run(SpringApplication.java:1342)
+	at org.springframework.boot.SpringApplication.run(SpringApplication.java:1331)
+	at com.Finn.everything_app.EverythingAppApplication.main(EverythingAppApplication.java:12)
+	at java.base/jdk.internal.reflect.NativeMethodAccessorImpl.invoke0(Native Method)
+	at java.base/jdk.internal.reflect.NativeMethodAccessorImpl.invoke(NativeMethodAccessorImpl.java:77)
+	at java.base/jdk.internal.reflect.DelegatingMethodAccessorImpl.invoke(DelegatingMethodAccessorImpl.java:43)
+	at java.base/java.lang.reflect.Method.invoke(Method.java:569)
+	at org.springframework.boot.devtools.restart.RestartLauncher.run(RestartLauncher.java:50)
+Caused by: org.springframework.boot.web.server.WebServerException: Unable to start embedded Tomcat server
+	at org.springframework.boot.web.embedded.tomcat.TomcatWebServer.start(TomcatWebServer.java:229)
+	at org.springframework.boot.web.servlet.context.WebServerStartStopLifecycle.start(WebServerStartStopLifecycle.java:44)
+	at org.springframework.context.support.DefaultLifecycleProcessor.doStart(DefaultLifecycleProcessor.java:284)
+	... 18 common frames omitted
+Caused by: java.lang.IllegalArgumentException: standardService.connector.startFailed
+	at org.apache.catalina.core.StandardService.addConnector(StandardService.java:235)
+	at org.springframework.boot.web.embedded.tomcat.TomcatWebServer.addPreviouslyRemovedConnectors(TomcatWebServer.java:286)
+	at org.springframework.boot.web.embedded.tomcat.TomcatWebServer.start(TomcatWebServer.java:214)
+	... 20 common frames omitted
+Caused by: org.apache.catalina.LifecycleException: Protocol handler start failed
+	at org.apache.catalina.connector.Connector.startInternal(Connector.java:1046)
+	at org.apache.catalina.util.LifecycleBase.start(LifecycleBase.java:171)
+	at org.apache.catalina.core.StandardService.addConnector(StandardService.java:232)
+	... 22 common frames omitted
+Caused by: java.net.BindException: Die Adresse wird bereits verwendet
+	at java.base/sun.nio.ch.Net.bind0(Native Method)
+	at java.base/sun.nio.ch.Net.bind(Net.java:567)
+	at java.base/sun.nio.ch.ServerSocketChannelImpl.netBind(ServerSocketChannelImpl.java:337)
+	at java.base/sun.nio.ch.ServerSocketChannelImpl.bind(ServerSocketChannelImpl.java:294)
+	at org.apache.tomcat.util.net.NioEndpoint.initServerSocket(NioEndpoint.java:247)
+	at org.apache.tomcat.util.net.NioEndpoint.bind(NioEndpoint.java:202)
+	at org.apache.tomcat.util.net.AbstractEndpoint.bindWithCleanup(AbstractEndpoint.java:1280)
+	at org.apache.tomcat.util.net.AbstractEndpoint.start(AbstractEndpoint.java:1366)
+	at org.apache.coyote.AbstractProtocol.start(AbstractProtocol.java:635)
+	at org.apache.catalina.connector.Connector.startInternal(Connector.java:1043)
+	... 24 common frames omitted
+2026-05-08 15:52:12 [restartedMain] INFO  c.F.e.EverythingAppApplication - Starting EverythingAppApplication using Java 17.0.18 with PID 22609 (/home/finn/Dokumente/Projekte/Everything-app/Everything-app-backend/everything-app/target/classes started by finn in /home/finn/Dokumente/Projekte/Everything-app/Everything-app-backend/everything-app)
+2026-05-08 15:52:12 [restartedMain] DEBUG c.F.e.EverythingAppApplication - Running with Spring Boot v3.2.0, Spring v6.1.1
+2026-05-08 15:52:12 [restartedMain] INFO  c.F.e.EverythingAppApplication - The following 1 profile is active: "development"
+2026-05-08 15:52:12 [restartedMain] INFO  o.s.b.d.e.DevToolsPropertyDefaultsPostProcessor - Devtools property defaults active! Set 'spring.devtools.add-properties' to 'false' to disable
+2026-05-08 15:52:12 [restartedMain] INFO  o.s.b.d.e.DevToolsPropertyDefaultsPostProcessor - For additional web related logging consider setting the 'logging.level.web' property to 'DEBUG'
+2026-05-08 15:52:12 [restartedMain] INFO  o.s.d.r.c.RepositoryConfigurationDelegate - Bootstrapping Spring Data JPA repositories in DEFAULT mode.
+2026-05-08 15:52:12 [restartedMain] INFO  o.s.d.r.c.RepositoryConfigurationDelegate - Finished Spring Data repository scanning in 45 ms. Found 21 JPA repository interfaces.
+2026-05-08 15:52:12 [restartedMain] INFO  o.s.b.w.e.tomcat.TomcatWebServer - Tomcat initialized with port 8080 (http)
+2026-05-08 15:52:12 [restartedMain] INFO  o.a.catalina.core.StandardService - Starting service [Tomcat]
+2026-05-08 15:52:12 [restartedMain] INFO  o.a.catalina.core.StandardEngine - Starting Servlet engine: [Apache Tomcat/10.1.16]
+2026-05-08 15:52:12 [restartedMain] INFO  o.a.c.c.C.[Tomcat].[localhost].[/] - Initializing Spring embedded WebApplicationContext
+2026-05-08 15:52:12 [restartedMain] INFO  o.s.b.w.s.c.ServletWebServerApplicationContext - Root WebApplicationContext: initialization completed in 738 ms
+2026-05-08 15:52:13 [restartedMain] INFO  o.h.jpa.internal.util.LogHelper - HHH000204: Processing PersistenceUnitInfo [name: default]
+2026-05-08 15:52:13 [restartedMain] INFO  org.hibernate.Version - HHH000412: Hibernate ORM core version 6.3.1.Final
+2026-05-08 15:52:13 [restartedMain] INFO  o.h.c.i.RegionFactoryInitiator - HHH000026: Second-level cache disabled
+2026-05-08 15:52:13 [restartedMain] INFO  o.s.o.j.p.SpringPersistenceUnitInfo - No LoadTimeWeaver setup: ignoring JPA class transformer
+2026-05-08 15:52:13 [restartedMain] INFO  com.zaxxer.hikari.HikariDataSource - HikariPool-1 - Starting...
+2026-05-08 15:52:13 [restartedMain] INFO  com.zaxxer.hikari.pool.HikariPool - HikariPool-1 - Added connection org.postgresql.jdbc.PgConnection@653330d6
+2026-05-08 15:52:13 [restartedMain] INFO  com.zaxxer.hikari.HikariDataSource - HikariPool-1 - Start completed.
+2026-05-08 15:52:13 [restartedMain] WARN  org.hibernate.orm.deprecation - HHH90000025: PostgreSQLDialect does not need to be specified explicitly using 'hibernate.dialect' (remove the property setting and it will be selected by default)
+2026-05-08 15:52:13 [restartedMain] INFO  o.h.e.t.j.p.i.JtaPlatformInitiator - HHH000489: No JTA platform available (set 'hibernate.transaction.jta.platform' to enable JTA platform integration)
+2026-05-08 15:52:14 [restartedMain] INFO  o.s.o.j.LocalContainerEntityManagerFactoryBean - Initialized JPA EntityManagerFactory for persistence unit 'default'
+2026-05-08 15:52:14 [restartedMain] DEBUG c.F.e.s.JwtAuthenticationFilter - Filter 'jwtAuthenticationFilter' configured for use
+2026-05-08 15:52:14 [restartedMain] INFO  o.s.d.j.r.query.QueryEnhancerFactory - Hibernate is in classpath; If applicable, HQL parser will be used.
+2026-05-08 15:52:15 [restartedMain] WARN  o.s.b.a.o.j.JpaBaseConfiguration$JpaWebConfiguration - spring.jpa.open-in-view is enabled by default. Therefore, database queries may be performed during view rendering. Explicitly configure spring.jpa.open-in-view to disable this warning
+2026-05-08 15:52:15 [restartedMain] INFO  o.s.s.web.DefaultSecurityFilterChain - Will secure any request with [org.springframework.security.web.session.DisableEncodeUrlFilter@1450f2d0, org.springframework.security.web.context.request.async.WebAsyncManagerIntegrationFilter@54932e0c, org.springframework.security.web.context.SecurityContextHolderFilter@68ac35cb, org.springframework.security.web.header.HeaderWriterFilter@18f4813a, org.springframework.web.filter.CorsFilter@956838, org.springframework.security.web.authentication.logout.LogoutFilter@2c733af4, com.Finn.everything_app.security.JwtAuthenticationFilter@35908b38, org.springframework.security.web.savedrequest.RequestCacheAwareFilter@4de4216b, org.springframework.security.web.servletapi.SecurityContextHolderAwareRequestFilter@43cdd5c3, org.springframework.security.web.authentication.AnonymousAuthenticationFilter@2025078f, org.springframework.security.web.session.SessionManagementFilter@12c92ea, org.springframework.security.web.access.ExceptionTranslationFilter@3562a12, org.springframework.security.web.access.intercept.AuthorizationFilter@18ab050b]
+2026-05-08 15:52:15 [restartedMain] INFO  o.s.b.d.a.OptionalLiveReloadServer - LiveReload server is running on port 35729
+2026-05-08 15:52:15 [restartedMain] INFO  o.s.b.w.e.tomcat.TomcatWebServer - Tomcat started on port 8080 (http) with context path ''
+2026-05-08 15:52:15 [restartedMain] INFO  c.F.e.EverythingAppApplication - Started EverythingAppApplication in 3.822 seconds (process running for 4.017)
+2026-05-08 16:10:35 [File Watcher] INFO  o.s.b.d.a.LocalDevToolsAutoConfiguration$RestartingClassPathChangeChangedEventListener - Restarting due to 1 class path change (0 additions, 0 deletions, 1 modification)
+2026-05-08 16:10:35 [Thread-5] INFO  o.s.o.j.LocalContainerEntityManagerFactoryBean - Closing JPA EntityManagerFactory for persistence unit 'default'
+2026-05-08 16:10:35 [Thread-5] INFO  com.zaxxer.hikari.HikariDataSource - HikariPool-1 - Shutdown initiated...
+2026-05-08 16:10:35 [Thread-5] INFO  com.zaxxer.hikari.HikariDataSource - HikariPool-1 - Shutdown completed.
+2026-05-08 16:10:35 [restartedMain] INFO  c.F.e.EverythingAppApplication - Starting EverythingAppApplication using Java 17.0.18 with PID 22609 (/home/finn/Dokumente/Projekte/Everything-app/Everything-app-backend/everything-app/target/classes started by finn in /home/finn/Dokumente/Projekte/Everything-app/Everything-app-backend/everything-app)
+2026-05-08 16:10:35 [restartedMain] DEBUG c.F.e.EverythingAppApplication - Running with Spring Boot v3.2.0, Spring v6.1.1
+2026-05-08 16:10:35 [restartedMain] INFO  c.F.e.EverythingAppApplication - The following 1 profile is active: "development"
+2026-05-08 16:10:35 [restartedMain] INFO  o.s.d.r.c.RepositoryConfigurationDelegate - Bootstrapping Spring Data JPA repositories in DEFAULT mode.
+2026-05-08 16:10:35 [restartedMain] INFO  o.s.d.r.c.RepositoryConfigurationDelegate - Finished Spring Data repository scanning in 18 ms. Found 21 JPA repository interfaces.
+2026-05-08 16:10:35 [restartedMain] INFO  o.s.b.w.e.tomcat.TomcatWebServer - Tomcat initialized with port 8080 (http)
+2026-05-08 16:10:35 [restartedMain] INFO  o.a.catalina.core.StandardService - Starting service [Tomcat]
+2026-05-08 16:10:35 [restartedMain] INFO  o.a.catalina.core.StandardEngine - Starting Servlet engine: [Apache Tomcat/10.1.16]
+2026-05-08 16:10:35 [restartedMain] INFO  o.a.c.c.C.[Tomcat].[localhost].[/] - Initializing Spring embedded WebApplicationContext
+2026-05-08 16:10:35 [restartedMain] INFO  o.s.b.w.s.c.ServletWebServerApplicationContext - Root WebApplicationContext: initialization completed in 202 ms
+2026-05-08 16:10:35 [restartedMain] INFO  o.h.jpa.internal.util.LogHelper - HHH000204: Processing PersistenceUnitInfo [name: default]
+2026-05-08 16:10:35 [restartedMain] INFO  o.h.c.i.RegionFactoryInitiator - HHH000026: Second-level cache disabled
+2026-05-08 16:10:35 [restartedMain] INFO  o.s.o.j.p.SpringPersistenceUnitInfo - No LoadTimeWeaver setup: ignoring JPA class transformer
+2026-05-08 16:10:35 [restartedMain] INFO  com.zaxxer.hikari.HikariDataSource - HikariPool-2 - Starting...
+2026-05-08 16:10:35 [restartedMain] INFO  com.zaxxer.hikari.pool.HikariPool - HikariPool-2 - Added connection org.postgresql.jdbc.PgConnection@7468cb61
+2026-05-08 16:10:35 [restartedMain] INFO  com.zaxxer.hikari.HikariDataSource - HikariPool-2 - Start completed.
+2026-05-08 16:10:35 [restartedMain] WARN  org.hibernate.orm.deprecation - HHH90000025: PostgreSQLDialect does not need to be specified explicitly using 'hibernate.dialect' (remove the property setting and it will be selected by default)
+2026-05-08 16:10:35 [restartedMain] INFO  o.h.e.t.j.p.i.JtaPlatformInitiator - HHH000489: No JTA platform available (set 'hibernate.transaction.jta.platform' to enable JTA platform integration)
+2026-05-08 16:10:35 [restartedMain] INFO  o.s.o.j.LocalContainerEntityManagerFactoryBean - Initialized JPA EntityManagerFactory for persistence unit 'default'
+2026-05-08 16:10:35 [restartedMain] DEBUG c.F.e.s.JwtAuthenticationFilter - Filter 'jwtAuthenticationFilter' configured for use
+2026-05-08 16:10:36 [restartedMain] WARN  o.s.b.a.o.j.JpaBaseConfiguration$JpaWebConfiguration - spring.jpa.open-in-view is enabled by default. Therefore, database queries may be performed during view rendering. Explicitly configure spring.jpa.open-in-view to disable this warning
+2026-05-08 16:10:36 [restartedMain] INFO  o.s.s.web.DefaultSecurityFilterChain - Will secure any request with [org.springframework.security.web.session.DisableEncodeUrlFilter@46cc30c7, org.springframework.security.web.context.request.async.WebAsyncManagerIntegrationFilter@5511795f, org.springframework.security.web.context.SecurityContextHolderFilter@1dab3ada, org.springframework.security.web.header.HeaderWriterFilter@1c75ab18, org.springframework.web.filter.CorsFilter@153c088a, org.springframework.security.web.authentication.logout.LogoutFilter@7bc4ad31, com.Finn.everything_app.security.JwtAuthenticationFilter@49bf225, org.springframework.security.web.savedrequest.RequestCacheAwareFilter@31512a0c, org.springframework.security.web.servletapi.SecurityContextHolderAwareRequestFilter@4d6a55, org.springframework.security.web.authentication.AnonymousAuthenticationFilter@70b8e072, org.springframework.security.web.session.SessionManagementFilter@17a21581, org.springframework.security.web.access.ExceptionTranslationFilter@737bf5a6, org.springframework.security.web.access.intercept.AuthorizationFilter@18bfbbc4]
+2026-05-08 16:10:36 [restartedMain] INFO  o.s.b.d.a.OptionalLiveReloadServer - LiveReload server is running on port 35729
+2026-05-08 16:10:36 [restartedMain] INFO  o.s.b.w.e.tomcat.TomcatWebServer - Tomcat started on port 8080 (http) with context path ''
+2026-05-08 16:10:36 [restartedMain] INFO  c.F.e.EverythingAppApplication - Started EverythingAppApplication in 1.325 seconds (process running for 1104.765)
+2026-05-08 16:10:36 [restartedMain] INFO  o.s.b.d.a.ConditionEvaluationDeltaLoggingListener - Condition evaluation unchanged
+2026-05-08 16:10:49 [File Watcher] INFO  o.s.b.d.a.LocalDevToolsAutoConfiguration$RestartingClassPathChangeChangedEventListener - Restarting due to 1 class path change (0 additions, 0 deletions, 1 modification)
+2026-05-08 16:10:49 [Thread-7] INFO  o.s.o.j.LocalContainerEntityManagerFactoryBean - Closing JPA EntityManagerFactory for persistence unit 'default'
+2026-05-08 16:10:49 [Thread-7] INFO  com.zaxxer.hikari.HikariDataSource - HikariPool-2 - Shutdown initiated...
+2026-05-08 16:10:49 [Thread-7] INFO  com.zaxxer.hikari.HikariDataSource - HikariPool-2 - Shutdown completed.
+2026-05-08 16:10:50 [restartedMain] INFO  c.F.e.EverythingAppApplication - Starting EverythingAppApplication using Java 17.0.18 with PID 22609 (/home/finn/Dokumente/Projekte/Everything-app/Everything-app-backend/everything-app/target/classes started by finn in /home/finn/Dokumente/Projekte/Everything-app/Everything-app-backend/everything-app)
+2026-05-08 16:10:50 [restartedMain] DEBUG c.F.e.EverythingAppApplication - Running with Spring Boot v3.2.0, Spring v6.1.1
+2026-05-08 16:10:50 [restartedMain] INFO  c.F.e.EverythingAppApplication - The following 1 profile is active: "development"
+2026-05-08 16:10:50 [restartedMain] INFO  o.s.d.r.c.RepositoryConfigurationDelegate - Bootstrapping Spring Data JPA repositories in DEFAULT mode.
+2026-05-08 16:10:50 [restartedMain] INFO  o.s.d.r.c.RepositoryConfigurationDelegate - Finished Spring Data repository scanning in 25 ms. Found 21 JPA repository interfaces.
+2026-05-08 16:10:50 [restartedMain] INFO  o.s.b.w.e.tomcat.TomcatWebServer - Tomcat initialized with port 8080 (http)
+2026-05-08 16:10:50 [restartedMain] INFO  o.a.catalina.core.StandardService - Starting service [Tomcat]
+2026-05-08 16:10:50 [restartedMain] INFO  o.a.catalina.core.StandardEngine - Starting Servlet engine: [Apache Tomcat/10.1.16]
+2026-05-08 16:10:50 [restartedMain] INFO  o.a.c.c.C.[Tomcat].[localhost].[/] - Initializing Spring embedded WebApplicationContext
+2026-05-08 16:10:50 [restartedMain] INFO  o.s.b.w.s.c.ServletWebServerApplicationContext - Root WebApplicationContext: initialization completed in 195 ms
+2026-05-08 16:10:50 [restartedMain] INFO  o.h.jpa.internal.util.LogHelper - HHH000204: Processing PersistenceUnitInfo [name: default]
+2026-05-08 16:10:50 [restartedMain] INFO  o.h.c.i.RegionFactoryInitiator - HHH000026: Second-level cache disabled
+2026-05-08 16:10:50 [restartedMain] INFO  o.s.o.j.p.SpringPersistenceUnitInfo - No LoadTimeWeaver setup: ignoring JPA class transformer
+2026-05-08 16:10:50 [restartedMain] INFO  com.zaxxer.hikari.HikariDataSource - HikariPool-3 - Starting...
+2026-05-08 16:10:50 [restartedMain] INFO  com.zaxxer.hikari.pool.HikariPool - HikariPool-3 - Added connection org.postgresql.jdbc.PgConnection@50fced01
+2026-05-08 16:10:50 [restartedMain] INFO  com.zaxxer.hikari.HikariDataSource - HikariPool-3 - Start completed.
+2026-05-08 16:10:50 [restartedMain] WARN  org.hibernate.orm.deprecation - HHH90000025: PostgreSQLDialect does not need to be specified explicitly using 'hibernate.dialect' (remove the property setting and it will be selected by default)
+2026-05-08 16:10:50 [restartedMain] INFO  o.h.e.t.j.p.i.JtaPlatformInitiator - HHH000489: No JTA platform available (set 'hibernate.transaction.jta.platform' to enable JTA platform integration)
+2026-05-08 16:10:50 [restartedMain] INFO  o.s.o.j.LocalContainerEntityManagerFactoryBean - Initialized JPA EntityManagerFactory for persistence unit 'default'
+2026-05-08 16:10:50 [restartedMain] DEBUG c.F.e.s.JwtAuthenticationFilter - Filter 'jwtAuthenticationFilter' configured for use
+2026-05-08 16:10:51 [restartedMain] WARN  o.s.b.a.o.j.JpaBaseConfiguration$JpaWebConfiguration - spring.jpa.open-in-view is enabled by default. Therefore, database queries may be performed during view rendering. Explicitly configure spring.jpa.open-in-view to disable this warning
+2026-05-08 16:10:51 [restartedMain] INFO  o.s.s.web.DefaultSecurityFilterChain - Will secure any request with [org.springframework.security.web.session.DisableEncodeUrlFilter@72a0ab7d, org.springframework.security.web.context.request.async.WebAsyncManagerIntegrationFilter@4fada359, org.springframework.security.web.context.SecurityContextHolderFilter@37e4bdd0, org.springframework.security.web.header.HeaderWriterFilter@1b6782c4, org.springframework.web.filter.CorsFilter@ac26c93, org.springframework.security.web.authentication.logout.LogoutFilter@d0616d6, com.Finn.everything_app.security.JwtAuthenticationFilter@2ae17e7d, org.springframework.security.web.savedrequest.RequestCacheAwareFilter@1c76eaf7, org.springframework.security.web.servletapi.SecurityContextHolderAwareRequestFilter@3ba03a1f, org.springframework.security.web.authentication.AnonymousAuthenticationFilter@2038072e, org.springframework.security.web.session.SessionManagementFilter@3d333536, org.springframework.security.web.access.ExceptionTranslationFilter@68387033, org.springframework.security.web.access.intercept.AuthorizationFilter@1c46c2df]
+2026-05-08 16:10:51 [restartedMain] INFO  o.s.b.d.a.OptionalLiveReloadServer - LiveReload server is running on port 35729
+2026-05-08 16:10:51 [restartedMain] INFO  o.s.b.w.e.tomcat.TomcatWebServer - Tomcat started on port 8080 (http) with context path ''
+2026-05-08 16:10:51 [restartedMain] INFO  c.F.e.EverythingAppApplication - Started EverythingAppApplication in 1.259 seconds (process running for 1119.492)
+2026-05-08 16:10:51 [restartedMain] INFO  o.s.b.d.a.ConditionEvaluationDeltaLoggingListener - Condition evaluation unchanged
+2026-05-08 16:10:58 [File Watcher] INFO  o.s.b.d.a.LocalDevToolsAutoConfiguration$RestartingClassPathChangeChangedEventListener - Restarting due to 1 class path change (0 additions, 0 deletions, 1 modification)
+2026-05-08 16:10:58 [Thread-11] INFO  o.s.o.j.LocalContainerEntityManagerFactoryBean - Closing JPA EntityManagerFactory for persistence unit 'default'
+2026-05-08 16:10:58 [Thread-11] INFO  com.zaxxer.hikari.HikariDataSource - HikariPool-3 - Shutdown initiated...
+2026-05-08 16:10:58 [Thread-11] INFO  com.zaxxer.hikari.HikariDataSource - HikariPool-3 - Shutdown completed.
+2026-05-08 16:10:58 [restartedMain] INFO  c.F.e.EverythingAppApplication - Starting EverythingAppApplication using Java 17.0.18 with PID 22609 (/home/finn/Dokumente/Projekte/Everything-app/Everything-app-backend/everything-app/target/classes started by finn in /home/finn/Dokumente/Projekte/Everything-app/Everything-app-backend/everything-app)
+2026-05-08 16:10:58 [restartedMain] DEBUG c.F.e.EverythingAppApplication - Running with Spring Boot v3.2.0, Spring v6.1.1
+2026-05-08 16:10:58 [restartedMain] INFO  c.F.e.EverythingAppApplication - The following 1 profile is active: "development"
+2026-05-08 16:10:58 [restartedMain] INFO  o.s.d.r.c.RepositoryConfigurationDelegate - Bootstrapping Spring Data JPA repositories in DEFAULT mode.
+2026-05-08 16:10:58 [restartedMain] INFO  o.s.d.r.c.RepositoryConfigurationDelegate - Finished Spring Data repository scanning in 18 ms. Found 21 JPA repository interfaces.
+2026-05-08 16:10:58 [restartedMain] INFO  o.s.b.w.e.tomcat.TomcatWebServer - Tomcat initialized with port 8080 (http)
+2026-05-08 16:10:58 [restartedMain] INFO  o.a.catalina.core.StandardService - Starting service [Tomcat]
+2026-05-08 16:10:58 [restartedMain] INFO  o.a.catalina.core.StandardEngine - Starting Servlet engine: [Apache Tomcat/10.1.16]
+2026-05-08 16:10:58 [restartedMain] INFO  o.a.c.c.C.[Tomcat].[localhost].[/] - Initializing Spring embedded WebApplicationContext
+2026-05-08 16:10:58 [restartedMain] INFO  o.s.b.w.s.c.ServletWebServerApplicationContext - Root WebApplicationContext: initialization completed in 169 ms
+2026-05-08 16:10:58 [restartedMain] INFO  o.h.jpa.internal.util.LogHelper - HHH000204: Processing PersistenceUnitInfo [name: default]
+2026-05-08 16:10:58 [restartedMain] INFO  o.h.c.i.RegionFactoryInitiator - HHH000026: Second-level cache disabled
+2026-05-08 16:10:58 [restartedMain] INFO  o.s.o.j.p.SpringPersistenceUnitInfo - No LoadTimeWeaver setup: ignoring JPA class transformer
+2026-05-08 16:10:58 [restartedMain] INFO  com.zaxxer.hikari.HikariDataSource - HikariPool-4 - Starting...
+2026-05-08 16:10:58 [restartedMain] INFO  com.zaxxer.hikari.pool.HikariPool - HikariPool-4 - Added connection org.postgresql.jdbc.PgConnection@3b77122e
+2026-05-08 16:10:58 [restartedMain] INFO  com.zaxxer.hikari.HikariDataSource - HikariPool-4 - Start completed.
+2026-05-08 16:10:58 [restartedMain] WARN  org.hibernate.orm.deprecation - HHH90000025: PostgreSQLDialect does not need to be specified explicitly using 'hibernate.dialect' (remove the property setting and it will be selected by default)
+2026-05-08 16:10:59 [restartedMain] INFO  o.h.e.t.j.p.i.JtaPlatformInitiator - HHH000489: No JTA platform available (set 'hibernate.transaction.jta.platform' to enable JTA platform integration)
+2026-05-08 16:10:59 [restartedMain] INFO  o.s.o.j.LocalContainerEntityManagerFactoryBean - Initialized JPA EntityManagerFactory for persistence unit 'default'
+2026-05-08 16:10:59 [restartedMain] DEBUG c.F.e.s.JwtAuthenticationFilter - Filter 'jwtAuthenticationFilter' configured for use
+2026-05-08 16:10:59 [restartedMain] WARN  o.s.b.a.o.j.JpaBaseConfiguration$JpaWebConfiguration - spring.jpa.open-in-view is enabled by default. Therefore, database queries may be performed during view rendering. Explicitly configure spring.jpa.open-in-view to disable this warning
+2026-05-08 16:10:59 [restartedMain] INFO  o.s.s.web.DefaultSecurityFilterChain - Will secure any request with [org.springframework.security.web.session.DisableEncodeUrlFilter@682e0a8b, org.springframework.security.web.context.request.async.WebAsyncManagerIntegrationFilter@ae93a36, org.springframework.security.web.context.SecurityContextHolderFilter@3c4a6cbe, org.springframework.security.web.header.HeaderWriterFilter@3f0d2a3d, org.springframework.web.filter.CorsFilter@63d7d9e3, org.springframework.security.web.authentication.logout.LogoutFilter@62e018a0, com.Finn.everything_app.security.JwtAuthenticationFilter@2e4894c7, org.springframework.security.web.savedrequest.RequestCacheAwareFilter@4836b2bb, org.springframework.security.web.servletapi.SecurityContextHolderAwareRequestFilter@1e3c3542, org.springframework.security.web.authentication.AnonymousAuthenticationFilter@38367a31, org.springframework.security.web.session.SessionManagementFilter@31213a0, org.springframework.security.web.access.ExceptionTranslationFilter@4146b9dd, org.springframework.security.web.access.intercept.AuthorizationFilter@60d76dad]
+2026-05-08 16:10:59 [restartedMain] INFO  o.s.b.d.a.OptionalLiveReloadServer - LiveReload server is running on port 35729
+2026-05-08 16:10:59 [restartedMain] INFO  o.s.b.w.e.tomcat.TomcatWebServer - Tomcat started on port 8080 (http) with context path ''
+2026-05-08 16:10:59 [restartedMain] INFO  c.F.e.EverythingAppApplication - Started EverythingAppApplication in 1.193 seconds (process running for 1128.134)
+2026-05-08 16:10:59 [restartedMain] INFO  o.s.b.d.a.ConditionEvaluationDeltaLoggingListener - Condition evaluation unchanged
+2026-05-08 16:11:19 [restartedMain] INFO  c.F.e.EverythingAppApplication - Starting EverythingAppApplication using Java 17.0.18 with PID 26207 (/home/finn/Dokumente/Projekte/Everything-app/Everything-app-backend/everything-app/target/classes started by finn in /home/finn/Dokumente/Projekte/Everything-app/Everything-app-backend/everything-app)
+2026-05-08 16:11:19 [restartedMain] DEBUG c.F.e.EverythingAppApplication - Running with Spring Boot v3.2.0, Spring v6.1.1
+2026-05-08 16:11:19 [restartedMain] INFO  c.F.e.EverythingAppApplication - The following 1 profile is active: "development"
+2026-05-08 16:11:19 [restartedMain] INFO  o.s.b.d.e.DevToolsPropertyDefaultsPostProcessor - Devtools property defaults active! Set 'spring.devtools.add-properties' to 'false' to disable
+2026-05-08 16:11:19 [restartedMain] INFO  o.s.b.d.e.DevToolsPropertyDefaultsPostProcessor - For additional web related logging consider setting the 'logging.level.web' property to 'DEBUG'
+2026-05-08 16:11:19 [restartedMain] INFO  o.s.d.r.c.RepositoryConfigurationDelegate - Bootstrapping Spring Data JPA repositories in DEFAULT mode.
+2026-05-08 16:11:19 [restartedMain] INFO  o.s.d.r.c.RepositoryConfigurationDelegate - Finished Spring Data repository scanning in 51 ms. Found 21 JPA repository interfaces.
+2026-05-08 16:11:20 [restartedMain] INFO  o.s.b.w.e.tomcat.TomcatWebServer - Tomcat initialized with port 8080 (http)
+2026-05-08 16:11:20 [restartedMain] INFO  o.a.catalina.core.StandardService - Starting service [Tomcat]
+2026-05-08 16:11:20 [restartedMain] INFO  o.a.catalina.core.StandardEngine - Starting Servlet engine: [Apache Tomcat/10.1.16]
+2026-05-08 16:11:20 [restartedMain] INFO  o.a.c.c.C.[Tomcat].[localhost].[/] - Initializing Spring embedded WebApplicationContext
+2026-05-08 16:11:20 [restartedMain] INFO  o.s.b.w.s.c.ServletWebServerApplicationContext - Root WebApplicationContext: initialization completed in 784 ms
+2026-05-08 16:11:20 [restartedMain] INFO  o.h.jpa.internal.util.LogHelper - HHH000204: Processing PersistenceUnitInfo [name: default]
+2026-05-08 16:11:20 [restartedMain] INFO  org.hibernate.Version - HHH000412: Hibernate ORM core version 6.3.1.Final
+2026-05-08 16:11:20 [restartedMain] INFO  o.h.c.i.RegionFactoryInitiator - HHH000026: Second-level cache disabled
+2026-05-08 16:11:20 [restartedMain] INFO  o.s.o.j.p.SpringPersistenceUnitInfo - No LoadTimeWeaver setup: ignoring JPA class transformer
+2026-05-08 16:11:20 [restartedMain] INFO  com.zaxxer.hikari.HikariDataSource - HikariPool-1 - Starting...
+2026-05-08 16:11:20 [restartedMain] INFO  com.zaxxer.hikari.pool.HikariPool - HikariPool-1 - Added connection org.postgresql.jdbc.PgConnection@58e0b769
+2026-05-08 16:11:20 [restartedMain] INFO  com.zaxxer.hikari.HikariDataSource - HikariPool-1 - Start completed.
+2026-05-08 16:11:20 [restartedMain] WARN  org.hibernate.orm.deprecation - HHH90000025: PostgreSQLDialect does not need to be specified explicitly using 'hibernate.dialect' (remove the property setting and it will be selected by default)
+2026-05-08 16:11:21 [restartedMain] INFO  o.h.e.t.j.p.i.JtaPlatformInitiator - HHH000489: No JTA platform available (set 'hibernate.transaction.jta.platform' to enable JTA platform integration)
+2026-05-08 16:11:21 [restartedMain] INFO  o.s.o.j.LocalContainerEntityManagerFactoryBean - Initialized JPA EntityManagerFactory for persistence unit 'default'
+2026-05-08 16:11:21 [restartedMain] DEBUG c.F.e.s.JwtAuthenticationFilter - Filter 'jwtAuthenticationFilter' configured for use
+2026-05-08 16:11:21 [restartedMain] INFO  o.s.d.j.r.query.QueryEnhancerFactory - Hibernate is in classpath; If applicable, HQL parser will be used.
+2026-05-08 16:11:22 [restartedMain] WARN  o.s.b.a.o.j.JpaBaseConfiguration$JpaWebConfiguration - spring.jpa.open-in-view is enabled by default. Therefore, database queries may be performed during view rendering. Explicitly configure spring.jpa.open-in-view to disable this warning
+2026-05-08 16:11:23 [restartedMain] INFO  o.s.s.web.DefaultSecurityFilterChain - Will secure any request with [org.springframework.security.web.session.DisableEncodeUrlFilter@227be9d7, org.springframework.security.web.context.request.async.WebAsyncManagerIntegrationFilter@559e3bf0, org.springframework.security.web.context.SecurityContextHolderFilter@1ae2987c, org.springframework.security.web.header.HeaderWriterFilter@1581ba82, org.springframework.web.filter.CorsFilter@14ed471f, org.springframework.security.web.authentication.logout.LogoutFilter@58e949d4, com.Finn.everything_app.security.JwtAuthenticationFilter@6c897e1c, org.springframework.security.web.savedrequest.RequestCacheAwareFilter@652a5000, org.springframework.security.web.servletapi.SecurityContextHolderAwareRequestFilter@1ad27529, org.springframework.security.web.authentication.AnonymousAuthenticationFilter@227bb1bd, org.springframework.security.web.session.SessionManagementFilter@3b87e618, org.springframework.security.web.access.ExceptionTranslationFilter@64ac060a, org.springframework.security.web.access.intercept.AuthorizationFilter@6a33b43c]
+2026-05-08 16:11:23 [restartedMain] INFO  o.s.b.d.a.OptionalLiveReloadServer - LiveReload server is running on port 35729
+2026-05-08 16:11:23 [restartedMain] INFO  o.s.b.w.e.tomcat.TomcatWebServer - Tomcat started on port 8080 (http) with context path ''
+2026-05-08 16:11:23 [restartedMain] INFO  c.F.e.EverythingAppApplication - Started EverythingAppApplication in 3.978 seconds (process running for 4.169)
+2026-05-08 16:13:53 [http-nio-8080-exec-1] INFO  o.a.c.c.C.[Tomcat].[localhost].[/] - Initializing Spring DispatcherServlet 'dispatcherServlet'
+2026-05-08 16:13:53 [http-nio-8080-exec-1] INFO  o.s.web.servlet.DispatcherServlet - Initializing Servlet 'dispatcherServlet'
+2026-05-08 16:13:53 [http-nio-8080-exec-1] INFO  o.s.web.servlet.DispatcherServlet - Completed initialization in 1 ms
+2026-05-08 16:13:53 [http-nio-8080-exec-1] DEBUG o.s.security.web.FilterChainProxy - Securing GET /api/tasks
+2026-05-08 16:13:53 [http-nio-8080-exec-1] DEBUG o.s.s.w.a.AnonymousAuthenticationFilter - Set SecurityContextHolder to anonymous SecurityContext
+2026-05-08 16:13:53 [http-nio-8080-exec-1] WARN  o.s.w.s.h.HandlerMappingIntrospector - Cache miss for REQUEST dispatch to '/api/tasks' (previous null). Performing MatchableHandlerMapping lookup. This is logged once only at WARN level, and every time at TRACE.
+2026-05-08 16:13:53 [http-nio-8080-exec-1] DEBUG o.s.s.w.a.Http403ForbiddenEntryPoint - Pre-authenticated entry point called. Rejecting access
+2026-05-08 16:13:53 [http-nio-8080-exec-1] DEBUG o.s.security.web.FilterChainProxy - Securing GET /error
+2026-05-08 16:13:53 [http-nio-8080-exec-1] DEBUG o.s.security.web.FilterChainProxy - Secured GET /error
+2026-05-08 16:13:54 [http-nio-8080-exec-1] DEBUG o.s.s.w.a.AnonymousAuthenticationFilter - Set SecurityContextHolder to anonymous SecurityContext
+2026-05-08 16:13:54 [http-nio-8080-exec-2] DEBUG o.s.security.web.FilterChainProxy - Securing GET /api/calendar/events?startDate=2026-05-01T00:00:00.000&endDate=2026-05-31T23:59:59.000
+2026-05-08 16:13:54 [http-nio-8080-exec-2] DEBUG o.s.s.w.a.AnonymousAuthenticationFilter - Set SecurityContextHolder to anonymous SecurityContext
+2026-05-08 16:13:54 [http-nio-8080-exec-2] DEBUG o.s.s.w.a.Http403ForbiddenEntryPoint - Pre-authenticated entry point called. Rejecting access
+2026-05-08 16:13:54 [http-nio-8080-exec-2] DEBUG o.s.security.web.FilterChainProxy - Securing GET /error?startDate=2026-05-01T00:00:00.000&endDate=2026-05-31T23:59:59.000
+2026-05-08 16:13:54 [http-nio-8080-exec-2] DEBUG o.s.security.web.FilterChainProxy - Secured GET /error?startDate=2026-05-01T00:00:00.000&endDate=2026-05-31T23:59:59.000
+2026-05-08 16:13:54 [http-nio-8080-exec-2] DEBUG o.s.s.w.a.AnonymousAuthenticationFilter - Set SecurityContextHolder to anonymous SecurityContext
+2026-05-08 16:14:00 [http-nio-8080-exec-3] DEBUG o.s.security.web.FilterChainProxy - Securing GET /api/calendar/events?startDate=2026-05-01T00:00:00.000&endDate=2026-05-31T23:59:59.000
+2026-05-08 16:14:00 [http-nio-8080-exec-3] DEBUG o.s.s.w.a.AnonymousAuthenticationFilter - Set SecurityContextHolder to anonymous SecurityContext
+2026-05-08 16:14:00 [http-nio-8080-exec-3] DEBUG o.s.s.w.a.Http403ForbiddenEntryPoint - Pre-authenticated entry point called. Rejecting access
+2026-05-08 16:14:00 [http-nio-8080-exec-3] DEBUG o.s.security.web.FilterChainProxy - Securing GET /error?startDate=2026-05-01T00:00:00.000&endDate=2026-05-31T23:59:59.000
+2026-05-08 16:14:00 [http-nio-8080-exec-3] DEBUG o.s.security.web.FilterChainProxy - Secured GET /error?startDate=2026-05-01T00:00:00.000&endDate=2026-05-31T23:59:59.000
+2026-05-08 16:14:00 [http-nio-8080-exec-3] DEBUG o.s.s.w.a.AnonymousAuthenticationFilter - Set SecurityContextHolder to anonymous SecurityContext
+2026-05-08 16:14:09 [http-nio-8080-exec-5] DEBUG o.s.security.web.FilterChainProxy - Securing POST /api/calendar/events
+2026-05-08 16:14:09 [http-nio-8080-exec-5] DEBUG o.s.s.w.a.AnonymousAuthenticationFilter - Set SecurityContextHolder to anonymous SecurityContext
+2026-05-08 16:14:09 [http-nio-8080-exec-5] DEBUG o.s.s.w.a.Http403ForbiddenEntryPoint - Pre-authenticated entry point called. Rejecting access
+2026-05-08 16:14:09 [http-nio-8080-exec-5] DEBUG o.s.security.web.FilterChainProxy - Securing POST /error
+2026-05-08 16:14:09 [http-nio-8080-exec-5] DEBUG o.s.security.web.FilterChainProxy - Secured POST /error
+2026-05-08 16:14:09 [http-nio-8080-exec-5] DEBUG o.s.s.w.a.AnonymousAuthenticationFilter - Set SecurityContextHolder to anonymous SecurityContext
+2026-05-08 16:17:52 [File Watcher] INFO  o.s.b.d.a.LocalDevToolsAutoConfiguration$RestartingClassPathChangeChangedEventListener - Restarting due to 1 class path change (0 additions, 0 deletions, 1 modification)
+2026-05-08 16:17:52 [Thread-5] INFO  o.s.o.j.LocalContainerEntityManagerFactoryBean - Closing JPA EntityManagerFactory for persistence unit 'default'
+2026-05-08 16:17:52 [Thread-5] INFO  com.zaxxer.hikari.HikariDataSource - HikariPool-1 - Shutdown initiated...
+2026-05-08 16:17:52 [Thread-5] INFO  com.zaxxer.hikari.HikariDataSource - HikariPool-1 - Shutdown completed.
+2026-05-08 16:17:52 [restartedMain] INFO  c.F.e.EverythingAppApplication - Starting EverythingAppApplication using Java 17.0.18 with PID 26207 (/home/finn/Dokumente/Projekte/Everything-app/Everything-app-backend/everything-app/target/classes started by finn in /home/finn/Dokumente/Projekte/Everything-app/Everything-app-backend/everything-app)
+2026-05-08 16:17:52 [restartedMain] DEBUG c.F.e.EverythingAppApplication - Running with Spring Boot v3.2.0, Spring v6.1.1
+2026-05-08 16:17:52 [restartedMain] INFO  c.F.e.EverythingAppApplication - The following 1 profile is active: "development"
+2026-05-08 16:17:52 [restartedMain] INFO  o.s.d.r.c.RepositoryConfigurationDelegate - Bootstrapping Spring Data JPA repositories in DEFAULT mode.
+2026-05-08 16:17:52 [restartedMain] INFO  o.s.d.r.c.RepositoryConfigurationDelegate - Finished Spring Data repository scanning in 18 ms. Found 21 JPA repository interfaces.
+2026-05-08 16:17:52 [restartedMain] INFO  o.s.b.w.e.tomcat.TomcatWebServer - Tomcat initialized with port 8080 (http)
+2026-05-08 16:17:52 [restartedMain] INFO  o.a.catalina.core.StandardService - Starting service [Tomcat]
+2026-05-08 16:17:52 [restartedMain] INFO  o.a.catalina.core.StandardEngine - Starting Servlet engine: [Apache Tomcat/10.1.16]
+2026-05-08 16:17:52 [restartedMain] INFO  o.a.c.c.C.[Tomcat].[localhost].[/] - Initializing Spring embedded WebApplicationContext
+2026-05-08 16:17:52 [restartedMain] INFO  o.s.b.w.s.c.ServletWebServerApplicationContext - Root WebApplicationContext: initialization completed in 209 ms
+2026-05-08 16:17:53 [restartedMain] INFO  o.h.jpa.internal.util.LogHelper - HHH000204: Processing PersistenceUnitInfo [name: default]
+2026-05-08 16:17:53 [restartedMain] INFO  o.h.c.i.RegionFactoryInitiator - HHH000026: Second-level cache disabled
+2026-05-08 16:17:53 [restartedMain] INFO  o.s.o.j.p.SpringPersistenceUnitInfo - No LoadTimeWeaver setup: ignoring JPA class transformer
+2026-05-08 16:17:53 [restartedMain] INFO  com.zaxxer.hikari.HikariDataSource - HikariPool-2 - Starting...
+2026-05-08 16:17:53 [restartedMain] INFO  com.zaxxer.hikari.pool.HikariPool - HikariPool-2 - Added connection org.postgresql.jdbc.PgConnection@7625fc16
+2026-05-08 16:17:53 [restartedMain] INFO  com.zaxxer.hikari.HikariDataSource - HikariPool-2 - Start completed.
+2026-05-08 16:17:53 [restartedMain] WARN  org.hibernate.orm.deprecation - HHH90000025: PostgreSQLDialect does not need to be specified explicitly using 'hibernate.dialect' (remove the property setting and it will be selected by default)
+2026-05-08 16:17:53 [restartedMain] INFO  o.h.e.t.j.p.i.JtaPlatformInitiator - HHH000489: No JTA platform available (set 'hibernate.transaction.jta.platform' to enable JTA platform integration)
+2026-05-08 16:17:53 [restartedMain] INFO  o.s.o.j.LocalContainerEntityManagerFactoryBean - Initialized JPA EntityManagerFactory for persistence unit 'default'
+2026-05-08 16:17:53 [restartedMain] DEBUG c.F.e.s.JwtAuthenticationFilter - Filter 'jwtAuthenticationFilter' configured for use
+2026-05-08 16:17:54 [restartedMain] WARN  o.s.b.a.o.j.JpaBaseConfiguration$JpaWebConfiguration - spring.jpa.open-in-view is enabled by default. Therefore, database queries may be performed during view rendering. Explicitly configure spring.jpa.open-in-view to disable this warning
+2026-05-08 16:17:54 [restartedMain] INFO  o.s.s.web.DefaultSecurityFilterChain - Will secure any request with [org.springframework.security.web.session.DisableEncodeUrlFilter@4b743905, org.springframework.security.web.context.request.async.WebAsyncManagerIntegrationFilter@60313d05, org.springframework.security.web.context.SecurityContextHolderFilter@41c31e85, org.springframework.security.web.header.HeaderWriterFilter@5ef83f0a, org.springframework.web.filter.CorsFilter@f7c33d2, org.springframework.security.web.authentication.logout.LogoutFilter@65ae041, com.Finn.everything_app.security.JwtAuthenticationFilter@3c00239c, org.springframework.security.web.savedrequest.RequestCacheAwareFilter@3b40422d, org.springframework.security.web.servletapi.SecurityContextHolderAwareRequestFilter@24df3a20, org.springframework.security.web.authentication.AnonymousAuthenticationFilter@79a08a4c, org.springframework.security.web.session.SessionManagementFilter@63f31c7b, org.springframework.security.web.access.ExceptionTranslationFilter@7c50d52d, org.springframework.security.web.access.intercept.AuthorizationFilter@1a7d8ae3]
+2026-05-08 16:17:54 [restartedMain] INFO  o.s.b.d.a.OptionalLiveReloadServer - LiveReload server is running on port 35729
+2026-05-08 16:17:54 [restartedMain] INFO  o.s.b.w.e.tomcat.TomcatWebServer - Tomcat started on port 8080 (http) with context path ''
+2026-05-08 16:17:54 [restartedMain] INFO  c.F.e.EverythingAppApplication - Started EverythingAppApplication in 1.51 seconds (process running for 395.219)
+2026-05-08 16:17:54 [restartedMain] INFO  o.s.b.d.a.ConditionEvaluationDeltaLoggingListener - Condition evaluation unchanged
+2026-05-08 16:18:40 [http-nio-8080-exec-1] INFO  o.a.c.c.C.[Tomcat].[localhost].[/] - Initializing Spring DispatcherServlet 'dispatcherServlet'
+2026-05-08 16:18:40 [http-nio-8080-exec-1] INFO  o.s.web.servlet.DispatcherServlet - Initializing Servlet 'dispatcherServlet'
+2026-05-08 16:18:40 [http-nio-8080-exec-1] INFO  o.s.web.servlet.DispatcherServlet - Completed initialization in 1 ms
+2026-05-08 16:18:40 [http-nio-8080-exec-1] DEBUG o.s.security.web.FilterChainProxy - Securing POST /api/auth/register
+2026-05-08 16:18:40 [http-nio-8080-exec-1] DEBUG o.s.s.w.a.AnonymousAuthenticationFilter - Set SecurityContextHolder to anonymous SecurityContext
+2026-05-08 16:18:40 [http-nio-8080-exec-1] WARN  o.s.w.s.h.HandlerMappingIntrospector - Cache miss for REQUEST dispatch to '/api/auth/register' (previous null). Performing MatchableHandlerMapping lookup. This is logged once only at WARN level, and every time at TRACE.
+2026-05-08 16:18:40 [http-nio-8080-exec-1] DEBUG o.s.security.web.FilterChainProxy - Secured POST /api/auth/register
+2026-05-08 16:18:40 [http-nio-8080-exec-1] DEBUG org.hibernate.SQL - 
+    select
+        u1_0.id 
+    from
+        users u1_0 
+    where
+        u1_0.username=? 
+    fetch
+        first ? rows only
+2026-05-08 16:18:40 [http-nio-8080-exec-1] DEBUG org.hibernate.SQL - 
+    select
+        u1_0.id 
+    from
+        users u1_0 
+    where
+        u1_0.email=? 
+    fetch
+        first ? rows only
+2026-05-08 16:18:41 [http-nio-8080-exec-1] DEBUG org.hibernate.SQL - 
+    insert 
+    into
+        users
+        (created_at, email, last_login, password_hash, username) 
+    values
+        (?, ?, ?, ?, ?)
+2026-05-08 16:18:41 [http-nio-8080-exec-2] DEBUG o.s.security.web.FilterChainProxy - Securing GET /api/tasks
+2026-05-08 16:18:41 [http-nio-8080-exec-2] DEBUG org.hibernate.SQL - 
+    select
+        u1_0.id,
+        u1_0.created_at,
+        u1_0.email,
+        u1_0.last_login,
+        u1_0.password_hash,
+        u1_0.username 
+    from
+        users u1_0 
+    where
+        u1_0.username=?
+2026-05-08 16:18:41 [http-nio-8080-exec-2] DEBUG org.hibernate.SQL - 
+    select
+        up1_0.id,
+        up1_0.break_duration_minutes,
+        up1_0.dark_mode,
+        up1_0.group_similar_tasks,
+        up1_0.hours_before_break,
+        up1_0.max_tasks_per_day,
+        up1_0.notifications_enabled,
+        up1_0.peak_productivity_time,
+        up1_0.reminder_minutes_before,
+        up1_0.theme_color,
+        up1_0.user_id,
+        u1_0.id,
+        u1_0.created_at,
+        u1_0.email,
+        u1_0.last_login,
+        u1_0.password_hash,
+        u1_0.username,
+        up1_0.workday_end,
+        up1_0.workday_start 
+    from
+        user_preferences up1_0 
+    join
+        users u1_0 
+            on u1_0.id=up1_0.user_id 
+    where
+        up1_0.user_id=?
+2026-05-08 16:18:41 [http-nio-8080-exec-2] DEBUG o.s.security.web.FilterChainProxy - Secured GET /api/tasks
+2026-05-08 16:18:41 [http-nio-8080-exec-2] DEBUG org.hibernate.SQL - 
+    select
+        t1_0.id,
+        t1_0.completed_at,
+        t1_0.created_at,
+        t1_0.deadline,
+        t1_0.description,
+        t1_0.estimated_duration_minutes,
+        t1_0.priority,
+        t1_0.project_id,
+        t1_0.scheduled_end_time,
+        t1_0.scheduled_start_time,
+        t1_0.space_type,
+        t1_0.status,
+        t1_0.title,
+        t1_0.updated_at,
+        t1_0.user_id 
+    from
+        tasks t1_0 
+    where
+        t1_0.user_id=?
+2026-05-08 16:18:41 [http-nio-8080-exec-3] DEBUG o.s.security.web.FilterChainProxy - Securing GET /api/calendar/events?startDate=2026-05-01T00:00:00.000&endDate=2026-05-31T23:59:59.000
+2026-05-08 16:18:41 [http-nio-8080-exec-3] DEBUG org.hibernate.SQL - 
+    select
+        u1_0.id,
+        u1_0.created_at,
+        u1_0.email,
+        u1_0.last_login,
+        u1_0.password_hash,
+        u1_0.username 
+    from
+        users u1_0 
+    where
+        u1_0.username=?
+2026-05-08 16:18:41 [http-nio-8080-exec-3] DEBUG org.hibernate.SQL - 
+    select
+        up1_0.id,
+        up1_0.break_duration_minutes,
+        up1_0.dark_mode,
+        up1_0.group_similar_tasks,
+        up1_0.hours_before_break,
+        up1_0.max_tasks_per_day,
+        up1_0.notifications_enabled,
+        up1_0.peak_productivity_time,
+        up1_0.reminder_minutes_before,
+        up1_0.theme_color,
+        up1_0.user_id,
+        u1_0.id,
+        u1_0.created_at,
+        u1_0.email,
+        u1_0.last_login,
+        u1_0.password_hash,
+        u1_0.username,
+        up1_0.workday_end,
+        up1_0.workday_start 
+    from
+        user_preferences up1_0 
+    join
+        users u1_0 
+            on u1_0.id=up1_0.user_id 
+    where
+        up1_0.user_id=?
+2026-05-08 16:18:41 [http-nio-8080-exec-3] DEBUG o.s.security.web.FilterChainProxy - Secured GET /api/calendar/events?startDate=2026-05-01T00:00:00.000&endDate=2026-05-31T23:59:59.000
+2026-05-08 16:18:41 [http-nio-8080-exec-3] DEBUG org.hibernate.SQL - 
+    select
+        ce1_0.id,
+        ce1_0.color,
+        ce1_0.created_at,
+        ce1_0.description,
+        ce1_0.end_time,
+        ce1_0.event_type,
+        ce1_0.is_fixed,
+        ce1_0.location,
+        ce1_0.notes,
+        ce1_0.related_habit_id,
+        ce1_0.related_task_id,
+        ce1_0.related_workout_id,
+        ce1_0.start_time,
+        ce1_0.title,
+        ce1_0.updated_at,
+        ce1_0.user_id 
+    from
+        calendar_events ce1_0 
+    where
+        ce1_0.user_id=? 
+        and ce1_0.start_time between ? and ?
+2026-05-08 16:18:44 [http-nio-8080-exec-4] DEBUG o.s.security.web.FilterChainProxy - Securing GET /api/calendar/events?startDate=2026-05-01T00:00:00.000&endDate=2026-05-31T23:59:59.000
+2026-05-08 16:18:44 [http-nio-8080-exec-4] DEBUG org.hibernate.SQL - 
+    select
+        u1_0.id,
+        u1_0.created_at,
+        u1_0.email,
+        u1_0.last_login,
+        u1_0.password_hash,
+        u1_0.username 
+    from
+        users u1_0 
+    where
+        u1_0.username=?
+2026-05-08 16:18:44 [http-nio-8080-exec-4] DEBUG org.hibernate.SQL - 
+    select
+        up1_0.id,
+        up1_0.break_duration_minutes,
+        up1_0.dark_mode,
+        up1_0.group_similar_tasks,
+        up1_0.hours_before_break,
+        up1_0.max_tasks_per_day,
+        up1_0.notifications_enabled,
+        up1_0.peak_productivity_time,
+        up1_0.reminder_minutes_before,
+        up1_0.theme_color,
+        up1_0.user_id,
+        u1_0.id,
+        u1_0.created_at,
+        u1_0.email,
+        u1_0.last_login,
+        u1_0.password_hash,
+        u1_0.username,
+        up1_0.workday_end,
+        up1_0.workday_start 
+    from
+        user_preferences up1_0 
+    join
+        users u1_0 
+            on u1_0.id=up1_0.user_id 
+    where
+        up1_0.user_id=?
+2026-05-08 16:18:44 [http-nio-8080-exec-4] DEBUG o.s.security.web.FilterChainProxy - Secured GET /api/calendar/events?startDate=2026-05-01T00:00:00.000&endDate=2026-05-31T23:59:59.000
+2026-05-08 16:18:44 [http-nio-8080-exec-4] DEBUG org.hibernate.SQL - 
+    select
+        ce1_0.id,
+        ce1_0.color,
+        ce1_0.created_at,
+        ce1_0.description,
+        ce1_0.end_time,
+        ce1_0.event_type,
+        ce1_0.is_fixed,
+        ce1_0.location,
+        ce1_0.notes,
+        ce1_0.related_habit_id,
+        ce1_0.related_task_id,
+        ce1_0.related_workout_id,
+        ce1_0.start_time,
+        ce1_0.title,
+        ce1_0.updated_at,
+        ce1_0.user_id 
+    from
+        calendar_events ce1_0 
+    where
+        ce1_0.user_id=? 
+        and ce1_0.start_time between ? and ?
+2026-05-08 16:18:52 [http-nio-8080-exec-5] DEBUG o.s.security.web.FilterChainProxy - Securing POST /api/calendar/events
+2026-05-08 16:18:52 [http-nio-8080-exec-5] DEBUG org.hibernate.SQL - 
+    select
+        u1_0.id,
+        u1_0.created_at,
+        u1_0.email,
+        u1_0.last_login,
+        u1_0.password_hash,
+        u1_0.username 
+    from
+        users u1_0 
+    where
+        u1_0.username=?
+2026-05-08 16:18:52 [http-nio-8080-exec-5] DEBUG org.hibernate.SQL - 
+    select
+        up1_0.id,
+        up1_0.break_duration_minutes,
+        up1_0.dark_mode,
+        up1_0.group_similar_tasks,
+        up1_0.hours_before_break,
+        up1_0.max_tasks_per_day,
+        up1_0.notifications_enabled,
+        up1_0.peak_productivity_time,
+        up1_0.reminder_minutes_before,
+        up1_0.theme_color,
+        up1_0.user_id,
+        u1_0.id,
+        u1_0.created_at,
+        u1_0.email,
+        u1_0.last_login,
+        u1_0.password_hash,
+        u1_0.username,
+        up1_0.workday_end,
+        up1_0.workday_start 
+    from
+        user_preferences up1_0 
+    join
+        users u1_0 
+            on u1_0.id=up1_0.user_id 
+    where
+        up1_0.user_id=?
+2026-05-08 16:18:52 [http-nio-8080-exec-5] DEBUG o.s.security.web.FilterChainProxy - Secured POST /api/calendar/events
+2026-05-08 16:18:52 [http-nio-8080-exec-5] DEBUG org.hibernate.SQL - 
+    select
+        u1_0.id,
+        u1_0.created_at,
+        u1_0.email,
+        u1_0.last_login,
+        u1_0.password_hash,
+        p1_0.id,
+        p1_0.break_duration_minutes,
+        p1_0.dark_mode,
+        p1_0.group_similar_tasks,
+        p1_0.hours_before_break,
+        p1_0.max_tasks_per_day,
+        p1_0.notifications_enabled,
+        p1_0.peak_productivity_time,
+        p1_0.reminder_minutes_before,
+        p1_0.theme_color,
+        p1_0.user_id,
+        p1_0.workday_end,
+        p1_0.workday_start,
+        u1_0.username 
+    from
+        users u1_0 
+    left join
+        user_preferences p1_0 
+            on u1_0.id=p1_0.user_id 
+    where
+        u1_0.id=?
+2026-05-08 16:18:52 [http-nio-8080-exec-5] DEBUG org.hibernate.SQL - 
+    insert 
+    into
+        tasks
+        (completed_at, created_at, deadline, description, estimated_duration_minutes, priority, project_id, scheduled_end_time, scheduled_start_time, space_type, status, title, updated_at, user_id) 
+    values
+        (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+2026-05-08 16:18:52 [http-nio-8080-exec-5] WARN  o.h.e.jdbc.spi.SqlExceptionHelper - SQL Error: 0, SQLState: 23514
+2026-05-08 16:18:52 [http-nio-8080-exec-5] ERROR o.h.e.jdbc.spi.SqlExceptionHelper - ERROR: new row for relation "tasks" violates check constraint "tasks_space_type_check"
+  Detail: Failing row contains (1, null, 2026-05-08 16:18:52.820863, 2026-05-08 17:00:00, null, 60, 3, 2026-05-08 17:00:00, 2026-05-08 16:00:00, ANYWHERE, TODO, Test, 2026-05-08 16:18:52.820868, null, 1).
+2026-05-08 16:18:52 [http-nio-8080-exec-5] WARN  o.s.w.s.m.m.a.ExceptionHandlerExceptionResolver - Resolved [org.springframework.dao.DataIntegrityViolationException: could not execute statement [ERROR: new row for relation "tasks" violates check constraint "tasks_space_type_check"<EOL>  Detail: Failing row contains (1, null, 2026-05-08 16:18:52.820863, 2026-05-08 17:00:00, null, 60, 3, 2026-05-08 17:00:00, 2026-05-08 16:00:00, ANYWHERE, TODO, Test, 2026-05-08 16:18:52.820868, null, 1).] [insert into tasks (completed_at,created_at,deadline,description,estimated_duration_minutes,priority,project_id,scheduled_end_time,scheduled_start_time,space_type,status,title,updated_at,user_id) values (?,?,?,?,?,?,?,?,?,?,?,?,?,?)]; SQL [insert into tasks (completed_at,created_at,deadline,description,estimated_duration_minutes,priority,project_id,scheduled_end_time,scheduled_start_time,space_type,status,title,updated_at,user_id) values (?,?,?,?,?,?,?,?,?,?,?,?,?,?)]; constraint [tasks_space_type_check]]
+2026-05-08 16:19:44 [File Watcher] INFO  o.s.b.d.a.LocalDevToolsAutoConfiguration$RestartingClassPathChangeChangedEventListener - Restarting due to 1 class path change (0 additions, 0 deletions, 1 modification)
+2026-05-08 16:19:44 [Thread-7] INFO  o.s.o.j.LocalContainerEntityManagerFactoryBean - Closing JPA EntityManagerFactory for persistence unit 'default'
+2026-05-08 16:19:44 [Thread-7] INFO  com.zaxxer.hikari.HikariDataSource - HikariPool-2 - Shutdown initiated...
+2026-05-08 16:19:44 [Thread-7] INFO  com.zaxxer.hikari.HikariDataSource - HikariPool-2 - Shutdown completed.
+2026-05-08 16:19:45 [restartedMain] INFO  c.F.e.EverythingAppApplication - Starting EverythingAppApplication using Java 17.0.18 with PID 26207 (/home/finn/Dokumente/Projekte/Everything-app/Everything-app-backend/everything-app/target/classes started by finn in /home/finn/Dokumente/Projekte/Everything-app/Everything-app-backend/everything-app)
+2026-05-08 16:19:45 [restartedMain] DEBUG c.F.e.EverythingAppApplication - Running with Spring Boot v3.2.0, Spring v6.1.1
+2026-05-08 16:19:45 [restartedMain] INFO  c.F.e.EverythingAppApplication - The following 1 profile is active: "development"
+2026-05-08 16:19:45 [restartedMain] INFO  o.s.d.r.c.RepositoryConfigurationDelegate - Bootstrapping Spring Data JPA repositories in DEFAULT mode.
+2026-05-08 16:19:45 [restartedMain] INFO  o.s.d.r.c.RepositoryConfigurationDelegate - Finished Spring Data repository scanning in 18 ms. Found 21 JPA repository interfaces.
+2026-05-08 16:19:45 [restartedMain] INFO  o.s.b.w.e.tomcat.TomcatWebServer - Tomcat initialized with port 8080 (http)
+2026-05-08 16:19:45 [restartedMain] INFO  o.a.catalina.core.StandardService - Starting service [Tomcat]
+2026-05-08 16:19:45 [restartedMain] INFO  o.a.catalina.core.StandardEngine - Starting Servlet engine: [Apache Tomcat/10.1.16]
+2026-05-08 16:19:45 [restartedMain] INFO  o.a.c.c.C.[Tomcat].[localhost].[/] - Initializing Spring embedded WebApplicationContext
+2026-05-08 16:19:45 [restartedMain] INFO  o.s.b.w.s.c.ServletWebServerApplicationContext - Root WebApplicationContext: initialization completed in 174 ms
+2026-05-08 16:19:45 [restartedMain] INFO  o.h.jpa.internal.util.LogHelper - HHH000204: Processing PersistenceUnitInfo [name: default]
+2026-05-08 16:19:45 [restartedMain] INFO  o.h.c.i.RegionFactoryInitiator - HHH000026: Second-level cache disabled
+2026-05-08 16:19:45 [restartedMain] INFO  o.s.o.j.p.SpringPersistenceUnitInfo - No LoadTimeWeaver setup: ignoring JPA class transformer
+2026-05-08 16:19:45 [restartedMain] INFO  com.zaxxer.hikari.HikariDataSource - HikariPool-3 - Starting...
+2026-05-08 16:19:45 [restartedMain] INFO  com.zaxxer.hikari.pool.HikariPool - HikariPool-3 - Added connection org.postgresql.jdbc.PgConnection@42f3259a
+2026-05-08 16:19:45 [restartedMain] INFO  com.zaxxer.hikari.HikariDataSource - HikariPool-3 - Start completed.
+2026-05-08 16:19:45 [restartedMain] WARN  org.hibernate.orm.deprecation - HHH90000025: PostgreSQLDialect does not need to be specified explicitly using 'hibernate.dialect' (remove the property setting and it will be selected by default)
+2026-05-08 16:19:45 [restartedMain] INFO  o.h.e.t.j.p.i.JtaPlatformInitiator - HHH000489: No JTA platform available (set 'hibernate.transaction.jta.platform' to enable JTA platform integration)
+2026-05-08 16:19:45 [restartedMain] INFO  o.s.o.j.LocalContainerEntityManagerFactoryBean - Initialized JPA EntityManagerFactory for persistence unit 'default'
+2026-05-08 16:19:45 [restartedMain] DEBUG c.F.e.s.JwtAuthenticationFilter - Filter 'jwtAuthenticationFilter' configured for use
+2026-05-08 16:19:46 [restartedMain] WARN  o.s.b.a.o.j.JpaBaseConfiguration$JpaWebConfiguration - spring.jpa.open-in-view is enabled by default. Therefore, database queries may be performed during view rendering. Explicitly configure spring.jpa.open-in-view to disable this warning
+2026-05-08 16:19:46 [restartedMain] INFO  o.s.s.web.DefaultSecurityFilterChain - Will secure any request with [org.springframework.security.web.session.DisableEncodeUrlFilter@6e646f7d, org.springframework.security.web.context.request.async.WebAsyncManagerIntegrationFilter@3da74dd8, org.springframework.security.web.context.SecurityContextHolderFilter@7b72aa11, org.springframework.security.web.header.HeaderWriterFilter@f7b62e1, org.springframework.web.filter.CorsFilter@76d1b6fe, org.springframework.security.web.authentication.logout.LogoutFilter@276e9fc6, com.Finn.everything_app.security.JwtAuthenticationFilter@7cb26088, org.springframework.security.web.savedrequest.RequestCacheAwareFilter@5b65b1d1, org.springframework.security.web.servletapi.SecurityContextHolderAwareRequestFilter@f5dbc36, org.springframework.security.web.authentication.AnonymousAuthenticationFilter@2a3e4028, org.springframework.security.web.session.SessionManagementFilter@929e21e, org.springframework.security.web.access.ExceptionTranslationFilter@5a6f5b1d, org.springframework.security.web.access.intercept.AuthorizationFilter@33adf3c7]
+2026-05-08 16:19:46 [restartedMain] INFO  o.s.b.d.a.OptionalLiveReloadServer - LiveReload server is running on port 35729
+2026-05-08 16:19:46 [restartedMain] INFO  o.s.b.w.e.tomcat.TomcatWebServer - Tomcat started on port 8080 (http) with context path ''
+2026-05-08 16:19:46 [restartedMain] INFO  c.F.e.EverythingAppApplication - Started EverythingAppApplication in 1.27 seconds (process running for 507.228)
+2026-05-08 16:19:46 [restartedMain] INFO  o.s.b.d.a.ConditionEvaluationDeltaLoggingListener - Condition evaluation unchanged
+2026-05-08 16:19:51 [File Watcher] INFO  o.s.b.d.a.LocalDevToolsAutoConfiguration$RestartingClassPathChangeChangedEventListener - Restarting due to 1 class path change (0 additions, 0 deletions, 1 modification)
+2026-05-08 16:19:51 [Thread-11] INFO  o.s.o.j.LocalContainerEntityManagerFactoryBean - Closing JPA EntityManagerFactory for persistence unit 'default'
+2026-05-08 16:19:51 [Thread-11] INFO  com.zaxxer.hikari.HikariDataSource - HikariPool-3 - Shutdown initiated...
+2026-05-08 16:19:51 [Thread-11] INFO  com.zaxxer.hikari.HikariDataSource - HikariPool-3 - Shutdown completed.
+2026-05-08 16:19:51 [restartedMain] INFO  c.F.e.EverythingAppApplication - Starting EverythingAppApplication using Java 17.0.18 with PID 26207 (/home/finn/Dokumente/Projekte/Everything-app/Everything-app-backend/everything-app/target/classes started by finn in /home/finn/Dokumente/Projekte/Everything-app/Everything-app-backend/everything-app)
+2026-05-08 16:19:51 [restartedMain] DEBUG c.F.e.EverythingAppApplication - Running with Spring Boot v3.2.0, Spring v6.1.1
+2026-05-08 16:19:51 [restartedMain] INFO  c.F.e.EverythingAppApplication - The following 1 profile is active: "development"
+2026-05-08 16:19:51 [restartedMain] INFO  o.s.d.r.c.RepositoryConfigurationDelegate - Bootstrapping Spring Data JPA repositories in DEFAULT mode.
+2026-05-08 16:19:51 [restartedMain] INFO  o.s.d.r.c.RepositoryConfigurationDelegate - Finished Spring Data repository scanning in 17 ms. Found 21 JPA repository interfaces.
+2026-05-08 16:19:51 [restartedMain] INFO  o.s.b.w.e.tomcat.TomcatWebServer - Tomcat initialized with port 8080 (http)
+2026-05-08 16:19:51 [restartedMain] INFO  o.a.catalina.core.StandardService - Starting service [Tomcat]
+2026-05-08 16:19:51 [restartedMain] INFO  o.a.catalina.core.StandardEngine - Starting Servlet engine: [Apache Tomcat/10.1.16]
+2026-05-08 16:19:51 [restartedMain] INFO  o.a.c.c.C.[Tomcat].[localhost].[/] - Initializing Spring embedded WebApplicationContext
+2026-05-08 16:19:51 [restartedMain] INFO  o.s.b.w.s.c.ServletWebServerApplicationContext - Root WebApplicationContext: initialization completed in 170 ms
+2026-05-08 16:19:51 [restartedMain] INFO  o.h.jpa.internal.util.LogHelper - HHH000204: Processing PersistenceUnitInfo [name: default]
+2026-05-08 16:19:51 [restartedMain] INFO  o.h.c.i.RegionFactoryInitiator - HHH000026: Second-level cache disabled
+2026-05-08 16:19:51 [restartedMain] INFO  o.s.o.j.p.SpringPersistenceUnitInfo - No LoadTimeWeaver setup: ignoring JPA class transformer
+2026-05-08 16:19:51 [restartedMain] INFO  com.zaxxer.hikari.HikariDataSource - HikariPool-4 - Starting...
+2026-05-08 16:19:51 [restartedMain] INFO  com.zaxxer.hikari.pool.HikariPool - HikariPool-4 - Added connection org.postgresql.jdbc.PgConnection@3a48837a
+2026-05-08 16:19:51 [restartedMain] INFO  com.zaxxer.hikari.HikariDataSource - HikariPool-4 - Start completed.
+2026-05-08 16:19:51 [restartedMain] WARN  org.hibernate.orm.deprecation - HHH90000025: PostgreSQLDialect does not need to be specified explicitly using 'hibernate.dialect' (remove the property setting and it will be selected by default)
+2026-05-08 16:19:52 [restartedMain] INFO  o.h.e.t.j.p.i.JtaPlatformInitiator - HHH000489: No JTA platform available (set 'hibernate.transaction.jta.platform' to enable JTA platform integration)
+2026-05-08 16:19:52 [restartedMain] INFO  o.s.o.j.LocalContainerEntityManagerFactoryBean - Initialized JPA EntityManagerFactory for persistence unit 'default'
+2026-05-08 16:19:52 [restartedMain] DEBUG c.F.e.s.JwtAuthenticationFilter - Filter 'jwtAuthenticationFilter' configured for use
+2026-05-08 16:19:52 [restartedMain] WARN  o.s.b.a.o.j.JpaBaseConfiguration$JpaWebConfiguration - spring.jpa.open-in-view is enabled by default. Therefore, database queries may be performed during view rendering. Explicitly configure spring.jpa.open-in-view to disable this warning
+2026-05-08 16:19:52 [restartedMain] INFO  o.s.s.web.DefaultSecurityFilterChain - Will secure any request with [org.springframework.security.web.session.DisableEncodeUrlFilter@4ebbf04, org.springframework.security.web.context.request.async.WebAsyncManagerIntegrationFilter@2bdf7f93, org.springframework.security.web.context.SecurityContextHolderFilter@30fea3f4, org.springframework.security.web.header.HeaderWriterFilter@63187aa4, org.springframework.web.filter.CorsFilter@47fa44d5, org.springframework.security.web.authentication.logout.LogoutFilter@58553d1, com.Finn.everything_app.security.JwtAuthenticationFilter@7ee24f12, org.springframework.security.web.savedrequest.RequestCacheAwareFilter@55d4ba59, org.springframework.security.web.servletapi.SecurityContextHolderAwareRequestFilter@75b9271d, org.springframework.security.web.authentication.AnonymousAuthenticationFilter@7d37fcdb, org.springframework.security.web.session.SessionManagementFilter@11849525, org.springframework.security.web.access.ExceptionTranslationFilter@274840e2, org.springframework.security.web.access.intercept.AuthorizationFilter@49ce7736]
+2026-05-08 16:19:52 [restartedMain] INFO  o.s.b.d.a.OptionalLiveReloadServer - LiveReload server is running on port 35729
+2026-05-08 16:19:52 [restartedMain] INFO  o.s.b.w.e.tomcat.TomcatWebServer - Tomcat started on port 8080 (http) with context path ''
+2026-05-08 16:19:52 [restartedMain] INFO  c.F.e.EverythingAppApplication - Started EverythingAppApplication in 1.244 seconds (process running for 513.92)
+2026-05-08 16:19:52 [restartedMain] INFO  o.s.b.d.a.ConditionEvaluationDeltaLoggingListener - Condition evaluation unchanged
+2026-05-08 16:20:36 [restartedMain] INFO  c.F.e.EverythingAppApplication - Starting EverythingAppApplication using Java 17.0.18 with PID 29649 (/home/finn/Dokumente/Projekte/Everything-app/Everything-app-backend/everything-app/target/classes started by finn in /home/finn/Dokumente/Projekte/Everything-app/Everything-app-backend/everything-app)
+2026-05-08 16:20:36 [restartedMain] DEBUG c.F.e.EverythingAppApplication - Running with Spring Boot v3.2.0, Spring v6.1.1
+2026-05-08 16:20:36 [restartedMain] INFO  c.F.e.EverythingAppApplication - The following 1 profile is active: "development"
+2026-05-08 16:20:36 [restartedMain] INFO  o.s.b.d.e.DevToolsPropertyDefaultsPostProcessor - Devtools property defaults active! Set 'spring.devtools.add-properties' to 'false' to disable
+2026-05-08 16:20:36 [restartedMain] INFO  o.s.b.d.e.DevToolsPropertyDefaultsPostProcessor - For additional web related logging consider setting the 'logging.level.web' property to 'DEBUG'
+2026-05-08 16:20:36 [restartedMain] INFO  o.s.d.r.c.RepositoryConfigurationDelegate - Bootstrapping Spring Data JPA repositories in DEFAULT mode.
+2026-05-08 16:20:36 [restartedMain] INFO  o.s.d.r.c.RepositoryConfigurationDelegate - Finished Spring Data repository scanning in 49 ms. Found 21 JPA repository interfaces.
+2026-05-08 16:20:37 [restartedMain] INFO  o.s.b.w.e.tomcat.TomcatWebServer - Tomcat initialized with port 8080 (http)
+2026-05-08 16:20:37 [restartedMain] INFO  o.a.catalina.core.StandardService - Starting service [Tomcat]
+2026-05-08 16:20:37 [restartedMain] INFO  o.a.catalina.core.StandardEngine - Starting Servlet engine: [Apache Tomcat/10.1.16]
+2026-05-08 16:20:37 [restartedMain] INFO  o.a.c.c.C.[Tomcat].[localhost].[/] - Initializing Spring embedded WebApplicationContext
+2026-05-08 16:20:37 [restartedMain] INFO  o.s.b.w.s.c.ServletWebServerApplicationContext - Root WebApplicationContext: initialization completed in 737 ms
+2026-05-08 16:20:37 [restartedMain] INFO  o.h.jpa.internal.util.LogHelper - HHH000204: Processing PersistenceUnitInfo [name: default]
+2026-05-08 16:20:37 [restartedMain] INFO  org.hibernate.Version - HHH000412: Hibernate ORM core version 6.3.1.Final
+2026-05-08 16:20:37 [restartedMain] INFO  o.h.c.i.RegionFactoryInitiator - HHH000026: Second-level cache disabled
+2026-05-08 16:20:37 [restartedMain] INFO  o.s.o.j.p.SpringPersistenceUnitInfo - No LoadTimeWeaver setup: ignoring JPA class transformer
+2026-05-08 16:20:37 [restartedMain] INFO  com.zaxxer.hikari.HikariDataSource - HikariPool-1 - Starting...
+2026-05-08 16:20:37 [restartedMain] INFO  com.zaxxer.hikari.pool.HikariPool - HikariPool-1 - Added connection org.postgresql.jdbc.PgConnection@28b8170b
+2026-05-08 16:20:37 [restartedMain] INFO  com.zaxxer.hikari.HikariDataSource - HikariPool-1 - Start completed.
+2026-05-08 16:20:37 [restartedMain] WARN  org.hibernate.orm.deprecation - HHH90000025: PostgreSQLDialect does not need to be specified explicitly using 'hibernate.dialect' (remove the property setting and it will be selected by default)
+2026-05-08 16:20:38 [restartedMain] INFO  o.h.e.t.j.p.i.JtaPlatformInitiator - HHH000489: No JTA platform available (set 'hibernate.transaction.jta.platform' to enable JTA platform integration)
+2026-05-08 16:20:38 [restartedMain] INFO  o.s.o.j.LocalContainerEntityManagerFactoryBean - Initialized JPA EntityManagerFactory for persistence unit 'default'
+2026-05-08 16:20:38 [restartedMain] DEBUG c.F.e.s.JwtAuthenticationFilter - Filter 'jwtAuthenticationFilter' configured for use
+2026-05-08 16:20:38 [restartedMain] INFO  o.s.d.j.r.query.QueryEnhancerFactory - Hibernate is in classpath; If applicable, HQL parser will be used.
+2026-05-08 16:20:39 [restartedMain] WARN  o.s.b.a.o.j.JpaBaseConfiguration$JpaWebConfiguration - spring.jpa.open-in-view is enabled by default. Therefore, database queries may be performed during view rendering. Explicitly configure spring.jpa.open-in-view to disable this warning
+2026-05-08 16:20:39 [restartedMain] INFO  o.s.s.web.DefaultSecurityFilterChain - Will secure any request with [org.springframework.security.web.session.DisableEncodeUrlFilter@227bb1bd, org.springframework.security.web.context.request.async.WebAsyncManagerIntegrationFilter@5f33c174, org.springframework.security.web.context.SecurityContextHolderFilter@1ad27529, org.springframework.security.web.header.HeaderWriterFilter@35631766, org.springframework.web.filter.CorsFilter@7b5620d9, org.springframework.security.web.authentication.logout.LogoutFilter@2db04a4a, com.Finn.everything_app.security.JwtAuthenticationFilter@8662bbc, org.springframework.security.web.savedrequest.RequestCacheAwareFilter@2ead60c, org.springframework.security.web.servletapi.SecurityContextHolderAwareRequestFilter@35772c01, org.springframework.security.web.authentication.AnonymousAuthenticationFilter@57d5513, org.springframework.security.web.session.SessionManagementFilter@1ae2987c, org.springframework.security.web.access.ExceptionTranslationFilter@183792a2, org.springframework.security.web.access.intercept.AuthorizationFilter@227be9d7]
+2026-05-08 16:20:39 [restartedMain] WARN  o.s.b.d.a.OptionalLiveReloadServer - Unable to start LiveReload server
+2026-05-08 16:20:39 [restartedMain] WARN  o.s.b.w.s.c.AnnotationConfigServletWebServerApplicationContext - Exception encountered during context initialization - cancelling refresh attempt: org.springframework.context.ApplicationContextException: Failed to start bean 'webServerStartStop'
+2026-05-08 16:20:39 [restartedMain] INFO  o.s.o.j.LocalContainerEntityManagerFactoryBean - Closing JPA EntityManagerFactory for persistence unit 'default'
+2026-05-08 16:20:39 [restartedMain] INFO  com.zaxxer.hikari.HikariDataSource - HikariPool-1 - Shutdown initiated...
+2026-05-08 16:20:39 [restartedMain] INFO  com.zaxxer.hikari.HikariDataSource - HikariPool-1 - Shutdown completed.
+2026-05-08 16:20:39 [restartedMain] INFO  o.s.b.a.l.ConditionEvaluationReportLogger - 
+
+Error starting ApplicationContext. To display the condition evaluation report re-run your application with 'debug' enabled.
+2026-05-08 16:20:39 [restartedMain] ERROR o.s.boot.SpringApplication - Application run failed
+org.springframework.context.ApplicationContextException: Failed to start bean 'webServerStartStop'
+	at org.springframework.context.support.DefaultLifecycleProcessor.doStart(DefaultLifecycleProcessor.java:287)
+	at org.springframework.context.support.DefaultLifecycleProcessor$LifecycleGroup.start(DefaultLifecycleProcessor.java:467)
+	at java.base/java.lang.Iterable.forEach(Iterable.java:75)
+	at org.springframework.context.support.DefaultLifecycleProcessor.startBeans(DefaultLifecycleProcessor.java:256)
+	at org.springframework.context.support.DefaultLifecycleProcessor.onRefresh(DefaultLifecycleProcessor.java:201)
+	at org.springframework.context.support.AbstractApplicationContext.finishRefresh(AbstractApplicationContext.java:965)
+	at org.springframework.context.support.AbstractApplicationContext.refresh(AbstractApplicationContext.java:619)
+	at org.springframework.boot.web.servlet.context.ServletWebServerApplicationContext.refresh(ServletWebServerApplicationContext.java:146)
+	at org.springframework.boot.SpringApplication.refresh(SpringApplication.java:753)
+	at org.springframework.boot.SpringApplication.refreshContext(SpringApplication.java:455)
+	at org.springframework.boot.SpringApplication.run(SpringApplication.java:323)
+	at org.springframework.boot.SpringApplication.run(SpringApplication.java:1342)
+	at org.springframework.boot.SpringApplication.run(SpringApplication.java:1331)
+	at com.Finn.everything_app.EverythingAppApplication.main(EverythingAppApplication.java:14)
+	at java.base/jdk.internal.reflect.NativeMethodAccessorImpl.invoke0(Native Method)
+	at java.base/jdk.internal.reflect.NativeMethodAccessorImpl.invoke(NativeMethodAccessorImpl.java:77)
+	at java.base/jdk.internal.reflect.DelegatingMethodAccessorImpl.invoke(DelegatingMethodAccessorImpl.java:43)
+	at java.base/java.lang.reflect.Method.invoke(Method.java:569)
+	at org.springframework.boot.devtools.restart.RestartLauncher.run(RestartLauncher.java:50)
+Caused by: org.springframework.boot.web.server.WebServerException: Unable to start embedded Tomcat server
+	at org.springframework.boot.web.embedded.tomcat.TomcatWebServer.start(TomcatWebServer.java:229)
+	at org.springframework.boot.web.servlet.context.WebServerStartStopLifecycle.start(WebServerStartStopLifecycle.java:44)
+	at org.springframework.context.support.DefaultLifecycleProcessor.doStart(DefaultLifecycleProcessor.java:284)
+	... 18 common frames omitted
+Caused by: java.lang.IllegalArgumentException: standardService.connector.startFailed
+	at org.apache.catalina.core.StandardService.addConnector(StandardService.java:235)
+	at org.springframework.boot.web.embedded.tomcat.TomcatWebServer.addPreviouslyRemovedConnectors(TomcatWebServer.java:286)
+	at org.springframework.boot.web.embedded.tomcat.TomcatWebServer.start(TomcatWebServer.java:214)
+	... 20 common frames omitted
+Caused by: org.apache.catalina.LifecycleException: Protocol handler start failed
+	at org.apache.catalina.connector.Connector.startInternal(Connector.java:1046)
+	at org.apache.catalina.util.LifecycleBase.start(LifecycleBase.java:171)
+	at org.apache.catalina.core.StandardService.addConnector(StandardService.java:232)
+	... 22 common frames omitted
+Caused by: java.net.BindException: Die Adresse wird bereits verwendet
+	at java.base/sun.nio.ch.Net.bind0(Native Method)
+	at java.base/sun.nio.ch.Net.bind(Net.java:567)
+	at java.base/sun.nio.ch.ServerSocketChannelImpl.netBind(ServerSocketChannelImpl.java:337)
+	at java.base/sun.nio.ch.ServerSocketChannelImpl.bind(ServerSocketChannelImpl.java:294)
+	at org.apache.tomcat.util.net.NioEndpoint.initServerSocket(NioEndpoint.java:247)
+	at org.apache.tomcat.util.net.NioEndpoint.bind(NioEndpoint.java:202)
+	at org.apache.tomcat.util.net.AbstractEndpoint.bindWithCleanup(AbstractEndpoint.java:1280)
+	at org.apache.tomcat.util.net.AbstractEndpoint.start(AbstractEndpoint.java:1366)
+	at org.apache.coyote.AbstractProtocol.start(AbstractProtocol.java:635)
+	at org.apache.catalina.connector.Connector.startInternal(Connector.java:1043)
+	... 24 common frames omitted
+2026-05-08 16:21:38 [restartedMain] INFO  c.F.e.EverythingAppApplication - Starting EverythingAppApplication using Java 17.0.18 with PID 29907 (/home/finn/Dokumente/Projekte/Everything-app/Everything-app-backend/everything-app/target/classes started by finn in /home/finn/Dokumente/Projekte/Everything-app/Everything-app-backend/everything-app)
+2026-05-08 16:21:38 [restartedMain] DEBUG c.F.e.EverythingAppApplication - Running with Spring Boot v3.2.0, Spring v6.1.1
+2026-05-08 16:21:38 [restartedMain] INFO  c.F.e.EverythingAppApplication - The following 1 profile is active: "development"
+2026-05-08 16:21:38 [restartedMain] INFO  o.s.b.d.e.DevToolsPropertyDefaultsPostProcessor - Devtools property defaults active! Set 'spring.devtools.add-properties' to 'false' to disable
+2026-05-08 16:21:38 [restartedMain] INFO  o.s.b.d.e.DevToolsPropertyDefaultsPostProcessor - For additional web related logging consider setting the 'logging.level.web' property to 'DEBUG'
+2026-05-08 16:21:38 [restartedMain] INFO  o.s.d.r.c.RepositoryConfigurationDelegate - Bootstrapping Spring Data JPA repositories in DEFAULT mode.
+2026-05-08 16:21:38 [restartedMain] INFO  o.s.d.r.c.RepositoryConfigurationDelegate - Finished Spring Data repository scanning in 49 ms. Found 21 JPA repository interfaces.
+2026-05-08 16:21:39 [restartedMain] INFO  o.s.b.w.e.tomcat.TomcatWebServer - Tomcat initialized with port 8080 (http)
+2026-05-08 16:21:39 [restartedMain] INFO  o.a.catalina.core.StandardService - Starting service [Tomcat]
+2026-05-08 16:21:39 [restartedMain] INFO  o.a.catalina.core.StandardEngine - Starting Servlet engine: [Apache Tomcat/10.1.16]
+2026-05-08 16:21:39 [restartedMain] INFO  o.a.c.c.C.[Tomcat].[localhost].[/] - Initializing Spring embedded WebApplicationContext
+2026-05-08 16:21:39 [restartedMain] INFO  o.s.b.w.s.c.ServletWebServerApplicationContext - Root WebApplicationContext: initialization completed in 726 ms
+2026-05-08 16:21:39 [restartedMain] INFO  o.h.jpa.internal.util.LogHelper - HHH000204: Processing PersistenceUnitInfo [name: default]
+2026-05-08 16:21:39 [restartedMain] INFO  org.hibernate.Version - HHH000412: Hibernate ORM core version 6.3.1.Final
+2026-05-08 16:21:39 [restartedMain] INFO  o.h.c.i.RegionFactoryInitiator - HHH000026: Second-level cache disabled
+2026-05-08 16:21:39 [restartedMain] INFO  o.s.o.j.p.SpringPersistenceUnitInfo - No LoadTimeWeaver setup: ignoring JPA class transformer
+2026-05-08 16:21:39 [restartedMain] INFO  com.zaxxer.hikari.HikariDataSource - HikariPool-1 - Starting...
+2026-05-08 16:21:39 [restartedMain] INFO  com.zaxxer.hikari.pool.HikariPool - HikariPool-1 - Added connection org.postgresql.jdbc.PgConnection@f75a1c7
+2026-05-08 16:21:39 [restartedMain] INFO  com.zaxxer.hikari.HikariDataSource - HikariPool-1 - Start completed.
+2026-05-08 16:21:39 [restartedMain] WARN  org.hibernate.orm.deprecation - HHH90000025: PostgreSQLDialect does not need to be specified explicitly using 'hibernate.dialect' (remove the property setting and it will be selected by default)
+2026-05-08 16:21:40 [restartedMain] INFO  o.h.e.t.j.p.i.JtaPlatformInitiator - HHH000489: No JTA platform available (set 'hibernate.transaction.jta.platform' to enable JTA platform integration)
+2026-05-08 16:21:40 [restartedMain] INFO  o.s.o.j.LocalContainerEntityManagerFactoryBean - Initialized JPA EntityManagerFactory for persistence unit 'default'
+2026-05-08 16:21:40 [restartedMain] DEBUG c.F.e.s.JwtAuthenticationFilter - Filter 'jwtAuthenticationFilter' configured for use
+2026-05-08 16:21:40 [restartedMain] INFO  o.s.d.j.r.query.QueryEnhancerFactory - Hibernate is in classpath; If applicable, HQL parser will be used.
+2026-05-08 16:21:41 [restartedMain] WARN  o.s.b.a.o.j.JpaBaseConfiguration$JpaWebConfiguration - spring.jpa.open-in-view is enabled by default. Therefore, database queries may be performed during view rendering. Explicitly configure spring.jpa.open-in-view to disable this warning
+2026-05-08 16:21:41 [restartedMain] INFO  o.s.s.web.DefaultSecurityFilterChain - Will secure any request with [org.springframework.security.web.session.DisableEncodeUrlFilter@1ead05bf, org.springframework.security.web.context.request.async.WebAsyncManagerIntegrationFilter@43560a08, org.springframework.security.web.context.SecurityContextHolderFilter@196b3fd5, org.springframework.security.web.header.HeaderWriterFilter@4dd97b39, org.springframework.web.filter.CorsFilter@15eddb45, org.springframework.security.web.authentication.logout.LogoutFilter@51921408, com.Finn.everything_app.security.JwtAuthenticationFilter@35ff62f, org.springframework.security.web.savedrequest.RequestCacheAwareFilter@3882634d, org.springframework.security.web.servletapi.SecurityContextHolderAwareRequestFilter@2d95187d, org.springframework.security.web.authentication.AnonymousAuthenticationFilter@5c295f20, org.springframework.security.web.session.SessionManagementFilter@3c856cbb, org.springframework.security.web.access.ExceptionTranslationFilter@18c87cc2, org.springframework.security.web.access.intercept.AuthorizationFilter@7af4fa58]
+2026-05-08 16:21:41 [restartedMain] INFO  o.s.b.d.a.OptionalLiveReloadServer - LiveReload server is running on port 35729
+2026-05-08 16:21:41 [restartedMain] INFO  o.s.b.w.e.tomcat.TomcatWebServer - Tomcat started on port 8080 (http) with context path ''
+2026-05-08 16:21:41 [restartedMain] INFO  c.F.e.EverythingAppApplication - Started EverythingAppApplication in 3.799 seconds (process running for 3.975)
+2026-05-08 16:22:04 [http-nio-8080-exec-1] INFO  o.a.c.c.C.[Tomcat].[localhost].[/] - Initializing Spring DispatcherServlet 'dispatcherServlet'
+2026-05-08 16:22:04 [http-nio-8080-exec-1] INFO  o.s.web.servlet.DispatcherServlet - Initializing Servlet 'dispatcherServlet'
+2026-05-08 16:22:04 [http-nio-8080-exec-1] INFO  o.s.web.servlet.DispatcherServlet - Completed initialization in 1 ms
+2026-05-08 16:22:04 [http-nio-8080-exec-1] DEBUG o.s.security.web.FilterChainProxy - Securing POST /api/auth/login
+2026-05-08 16:22:04 [http-nio-8080-exec-1] DEBUG org.hibernate.SQL - 
+    select
+        u1_0.id,
+        u1_0.created_at,
+        u1_0.email,
+        u1_0.last_login,
+        u1_0.password_hash,
+        u1_0.username 
+    from
+        users u1_0 
+    where
+        u1_0.username=?
+2026-05-08 16:22:04 [http-nio-8080-exec-1] DEBUG org.hibernate.SQL - 
+    select
+        up1_0.id,
+        up1_0.break_duration_minutes,
+        up1_0.dark_mode,
+        up1_0.group_similar_tasks,
+        up1_0.hours_before_break,
+        up1_0.max_tasks_per_day,
+        up1_0.notifications_enabled,
+        up1_0.peak_productivity_time,
+        up1_0.reminder_minutes_before,
+        up1_0.theme_color,
+        up1_0.user_id,
+        u1_0.id,
+        u1_0.created_at,
+        u1_0.email,
+        u1_0.last_login,
+        u1_0.password_hash,
+        u1_0.username,
+        up1_0.workday_end,
+        up1_0.workday_start 
+    from
+        user_preferences up1_0 
+    join
+        users u1_0 
+            on u1_0.id=up1_0.user_id 
+    where
+        up1_0.user_id=?
+2026-05-08 16:22:04 [http-nio-8080-exec-1] WARN  o.s.w.s.h.HandlerMappingIntrospector - Cache miss for REQUEST dispatch to '/api/auth/login' (previous null). Performing MatchableHandlerMapping lookup. This is logged once only at WARN level, and every time at TRACE.
+2026-05-08 16:22:04 [http-nio-8080-exec-1] DEBUG o.s.security.web.FilterChainProxy - Secured POST /api/auth/login
+2026-05-08 16:22:04 [http-nio-8080-exec-1] DEBUG org.hibernate.SQL - 
+    select
+        u1_0.id,
+        u1_0.created_at,
+        u1_0.email,
+        u1_0.last_login,
+        u1_0.password_hash,
+        u1_0.username 
+    from
+        users u1_0 
+    where
+        u1_0.username=?
+2026-05-08 16:22:04 [http-nio-8080-exec-1] DEBUG org.hibernate.SQL - 
+    select
+        up1_0.id,
+        up1_0.break_duration_minutes,
+        up1_0.dark_mode,
+        up1_0.group_similar_tasks,
+        up1_0.hours_before_break,
+        up1_0.max_tasks_per_day,
+        up1_0.notifications_enabled,
+        up1_0.peak_productivity_time,
+        up1_0.reminder_minutes_before,
+        up1_0.theme_color,
+        up1_0.user_id,
+        u1_0.id,
+        u1_0.created_at,
+        u1_0.email,
+        u1_0.last_login,
+        u1_0.password_hash,
+        u1_0.username,
+        up1_0.workday_end,
+        up1_0.workday_start 
+    from
+        user_preferences up1_0 
+    join
+        users u1_0 
+            on u1_0.id=up1_0.user_id 
+    where
+        up1_0.user_id=?
+2026-05-08 16:22:04 [http-nio-8080-exec-1] DEBUG o.s.s.a.d.DaoAuthenticationProvider - Authenticated user
+2026-05-08 16:22:04 [http-nio-8080-exec-1] DEBUG org.hibernate.SQL - 
+    select
+        u1_0.id,
+        u1_0.created_at,
+        u1_0.email,
+        u1_0.last_login,
+        u1_0.password_hash,
+        u1_0.username 
+    from
+        users u1_0 
+    where
+        u1_0.username=?
+2026-05-08 16:22:04 [http-nio-8080-exec-1] DEBUG org.hibernate.SQL - 
+    update
+        users 
+    set
+        created_at=?,
+        email=?,
+        last_login=?,
+        password_hash=?,
+        username=? 
+    where
+        id=?
+2026-05-08 16:22:04 [http-nio-8080-exec-2] DEBUG o.s.security.web.FilterChainProxy - Securing GET /api/tasks
+2026-05-08 16:22:04 [http-nio-8080-exec-2] DEBUG org.hibernate.SQL - 
+    select
+        u1_0.id,
+        u1_0.created_at,
+        u1_0.email,
+        u1_0.last_login,
+        u1_0.password_hash,
+        u1_0.username 
+    from
+        users u1_0 
+    where
+        u1_0.username=?
+2026-05-08 16:22:04 [http-nio-8080-exec-2] DEBUG org.hibernate.SQL - 
+    select
+        up1_0.id,
+        up1_0.break_duration_minutes,
+        up1_0.dark_mode,
+        up1_0.group_similar_tasks,
+        up1_0.hours_before_break,
+        up1_0.max_tasks_per_day,
+        up1_0.notifications_enabled,
+        up1_0.peak_productivity_time,
+        up1_0.reminder_minutes_before,
+        up1_0.theme_color,
+        up1_0.user_id,
+        u1_0.id,
+        u1_0.created_at,
+        u1_0.email,
+        u1_0.last_login,
+        u1_0.password_hash,
+        u1_0.username,
+        up1_0.workday_end,
+        up1_0.workday_start 
+    from
+        user_preferences up1_0 
+    join
+        users u1_0 
+            on u1_0.id=up1_0.user_id 
+    where
+        up1_0.user_id=?
+2026-05-08 16:22:04 [http-nio-8080-exec-2] DEBUG o.s.security.web.FilterChainProxy - Secured GET /api/tasks
+2026-05-08 16:22:04 [http-nio-8080-exec-2] DEBUG org.hibernate.SQL - 
+    select
+        t1_0.id,
+        t1_0.completed_at,
+        t1_0.created_at,
+        t1_0.deadline,
+        t1_0.description,
+        t1_0.estimated_duration_minutes,
+        t1_0.priority,
+        t1_0.project_id,
+        t1_0.scheduled_end_time,
+        t1_0.scheduled_start_time,
+        t1_0.space_type,
+        t1_0.status,
+        t1_0.title,
+        t1_0.updated_at,
+        t1_0.user_id 
+    from
+        tasks t1_0 
+    where
+        t1_0.user_id=?
+2026-05-08 16:22:04 [http-nio-8080-exec-3] DEBUG o.s.security.web.FilterChainProxy - Securing GET /api/calendar/events?startDate=2026-05-01T00:00:00.000&endDate=2026-05-31T23:59:59.000
+2026-05-08 16:22:04 [http-nio-8080-exec-3] DEBUG org.hibernate.SQL - 
+    select
+        u1_0.id,
+        u1_0.created_at,
+        u1_0.email,
+        u1_0.last_login,
+        u1_0.password_hash,
+        u1_0.username 
+    from
+        users u1_0 
+    where
+        u1_0.username=?
+2026-05-08 16:22:04 [http-nio-8080-exec-3] DEBUG org.hibernate.SQL - 
+    select
+        up1_0.id,
+        up1_0.break_duration_minutes,
+        up1_0.dark_mode,
+        up1_0.group_similar_tasks,
+        up1_0.hours_before_break,
+        up1_0.max_tasks_per_day,
+        up1_0.notifications_enabled,
+        up1_0.peak_productivity_time,
+        up1_0.reminder_minutes_before,
+        up1_0.theme_color,
+        up1_0.user_id,
+        u1_0.id,
+        u1_0.created_at,
+        u1_0.email,
+        u1_0.last_login,
+        u1_0.password_hash,
+        u1_0.username,
+        up1_0.workday_end,
+        up1_0.workday_start 
+    from
+        user_preferences up1_0 
+    join
+        users u1_0 
+            on u1_0.id=up1_0.user_id 
+    where
+        up1_0.user_id=?
+2026-05-08 16:22:04 [http-nio-8080-exec-3] DEBUG o.s.security.web.FilterChainProxy - Secured GET /api/calendar/events?startDate=2026-05-01T00:00:00.000&endDate=2026-05-31T23:59:59.000
+2026-05-08 16:22:04 [http-nio-8080-exec-3] DEBUG org.hibernate.SQL - 
+    select
+        ce1_0.id,
+        ce1_0.color,
+        ce1_0.created_at,
+        ce1_0.description,
+        ce1_0.end_time,
+        ce1_0.event_type,
+        ce1_0.is_fixed,
+        ce1_0.location,
+        ce1_0.notes,
+        ce1_0.related_habit_id,
+        ce1_0.related_task_id,
+        ce1_0.related_workout_id,
+        ce1_0.start_time,
+        ce1_0.title,
+        ce1_0.updated_at,
+        ce1_0.user_id 
+    from
+        calendar_events ce1_0 
+    where
+        ce1_0.user_id=? 
+        and ce1_0.start_time between ? and ?
+2026-05-08 16:22:08 [http-nio-8080-exec-4] DEBUG o.s.security.web.FilterChainProxy - Securing GET /api/calendar/events?startDate=2026-05-01T00:00:00.000&endDate=2026-05-31T23:59:59.000
+2026-05-08 16:22:08 [http-nio-8080-exec-4] DEBUG org.hibernate.SQL - 
+    select
+        u1_0.id,
+        u1_0.created_at,
+        u1_0.email,
+        u1_0.last_login,
+        u1_0.password_hash,
+        u1_0.username 
+    from
+        users u1_0 
+    where
+        u1_0.username=?
+2026-05-08 16:22:08 [http-nio-8080-exec-4] DEBUG org.hibernate.SQL - 
+    select
+        up1_0.id,
+        up1_0.break_duration_minutes,
+        up1_0.dark_mode,
+        up1_0.group_similar_tasks,
+        up1_0.hours_before_break,
+        up1_0.max_tasks_per_day,
+        up1_0.notifications_enabled,
+        up1_0.peak_productivity_time,
+        up1_0.reminder_minutes_before,
+        up1_0.theme_color,
+        up1_0.user_id,
+        u1_0.id,
+        u1_0.created_at,
+        u1_0.email,
+        u1_0.last_login,
+        u1_0.password_hash,
+        u1_0.username,
+        up1_0.workday_end,
+        up1_0.workday_start 
+    from
+        user_preferences up1_0 
+    join
+        users u1_0 
+            on u1_0.id=up1_0.user_id 
+    where
+        up1_0.user_id=?
+2026-05-08 16:22:08 [http-nio-8080-exec-4] DEBUG o.s.security.web.FilterChainProxy - Secured GET /api/calendar/events?startDate=2026-05-01T00:00:00.000&endDate=2026-05-31T23:59:59.000
+2026-05-08 16:22:08 [http-nio-8080-exec-4] DEBUG org.hibernate.SQL - 
+    select
+        ce1_0.id,
+        ce1_0.color,
+        ce1_0.created_at,
+        ce1_0.description,
+        ce1_0.end_time,
+        ce1_0.event_type,
+        ce1_0.is_fixed,
+        ce1_0.location,
+        ce1_0.notes,
+        ce1_0.related_habit_id,
+        ce1_0.related_task_id,
+        ce1_0.related_workout_id,
+        ce1_0.start_time,
+        ce1_0.title,
+        ce1_0.updated_at,
+        ce1_0.user_id 
+    from
+        calendar_events ce1_0 
+    where
+        ce1_0.user_id=? 
+        and ce1_0.start_time between ? and ?
+2026-05-08 16:22:16 [http-nio-8080-exec-5] DEBUG o.s.security.web.FilterChainProxy - Securing POST /api/calendar/events
+2026-05-08 16:22:16 [http-nio-8080-exec-5] DEBUG org.hibernate.SQL - 
+    select
+        u1_0.id,
+        u1_0.created_at,
+        u1_0.email,
+        u1_0.last_login,
+        u1_0.password_hash,
+        u1_0.username 
+    from
+        users u1_0 
+    where
+        u1_0.username=?
+2026-05-08 16:22:16 [http-nio-8080-exec-5] DEBUG org.hibernate.SQL - 
+    select
+        up1_0.id,
+        up1_0.break_duration_minutes,
+        up1_0.dark_mode,
+        up1_0.group_similar_tasks,
+        up1_0.hours_before_break,
+        up1_0.max_tasks_per_day,
+        up1_0.notifications_enabled,
+        up1_0.peak_productivity_time,
+        up1_0.reminder_minutes_before,
+        up1_0.theme_color,
+        up1_0.user_id,
+        u1_0.id,
+        u1_0.created_at,
+        u1_0.email,
+        u1_0.last_login,
+        u1_0.password_hash,
+        u1_0.username,
+        up1_0.workday_end,
+        up1_0.workday_start 
+    from
+        user_preferences up1_0 
+    join
+        users u1_0 
+            on u1_0.id=up1_0.user_id 
+    where
+        up1_0.user_id=?
+2026-05-08 16:22:16 [http-nio-8080-exec-5] DEBUG o.s.security.web.FilterChainProxy - Secured POST /api/calendar/events
+2026-05-08 16:22:16 [http-nio-8080-exec-5] DEBUG org.hibernate.SQL - 
+    select
+        u1_0.id,
+        u1_0.created_at,
+        u1_0.email,
+        u1_0.last_login,
+        u1_0.password_hash,
+        p1_0.id,
+        p1_0.break_duration_minutes,
+        p1_0.dark_mode,
+        p1_0.group_similar_tasks,
+        p1_0.hours_before_break,
+        p1_0.max_tasks_per_day,
+        p1_0.notifications_enabled,
+        p1_0.peak_productivity_time,
+        p1_0.reminder_minutes_before,
+        p1_0.theme_color,
+        p1_0.user_id,
+        p1_0.workday_end,
+        p1_0.workday_start,
+        u1_0.username 
+    from
+        users u1_0 
+    left join
+        user_preferences p1_0 
+            on u1_0.id=p1_0.user_id 
+    where
+        u1_0.id=?
+2026-05-08 16:22:16 [http-nio-8080-exec-5] DEBUG org.hibernate.SQL - 
+    insert 
+    into
+        tasks
+        (completed_at, created_at, deadline, description, estimated_duration_minutes, priority, project_id, scheduled_end_time, scheduled_start_time, space_type, status, title, updated_at, user_id) 
+    values
+        (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+2026-05-08 16:22:16 [http-nio-8080-exec-5] WARN  o.h.e.jdbc.spi.SqlExceptionHelper - SQL Error: 0, SQLState: 23514
+2026-05-08 16:22:16 [http-nio-8080-exec-5] ERROR o.h.e.jdbc.spi.SqlExceptionHelper - ERROR: new row for relation "tasks" violates check constraint "tasks_status_check"
+  Detail: Failing row contains (2, null, 2026-05-08 16:22:16.252088, 2026-05-08 22:00:00, null, 60, 3, 2026-05-08 22:00:00, 2026-05-08 21:00:00, TASKS, TODO, Test, 2026-05-08 16:22:16.252095, null, 1).
+2026-05-08 16:22:16 [http-nio-8080-exec-5] WARN  o.s.w.s.m.m.a.ExceptionHandlerExceptionResolver - Resolved [org.springframework.dao.DataIntegrityViolationException: could not execute statement [ERROR: new row for relation "tasks" violates check constraint "tasks_status_check"<EOL>  Detail: Failing row contains (2, null, 2026-05-08 16:22:16.252088, 2026-05-08 22:00:00, null, 60, 3, 2026-05-08 22:00:00, 2026-05-08 21:00:00, TASKS, TODO, Test, 2026-05-08 16:22:16.252095, null, 1).] [insert into tasks (completed_at,created_at,deadline,description,estimated_duration_minutes,priority,project_id,scheduled_end_time,scheduled_start_time,space_type,status,title,updated_at,user_id) values (?,?,?,?,?,?,?,?,?,?,?,?,?,?)]; SQL [insert into tasks (completed_at,created_at,deadline,description,estimated_duration_minutes,priority,project_id,scheduled_end_time,scheduled_start_time,space_type,status,title,updated_at,user_id) values (?,?,?,?,?,?,?,?,?,?,?,?,?,?)]; constraint [tasks_status_check]]
+2026-05-08 16:23:44 [http-nio-8080-exec-8] DEBUG o.s.security.web.FilterChainProxy - Securing POST /api/calendar/events
+2026-05-08 16:23:44 [http-nio-8080-exec-8] DEBUG org.hibernate.SQL - 
+    select
+        u1_0.id,
+        u1_0.created_at,
+        u1_0.email,
+        u1_0.last_login,
+        u1_0.password_hash,
+        u1_0.username 
+    from
+        users u1_0 
+    where
+        u1_0.username=?
+2026-05-08 16:23:44 [http-nio-8080-exec-8] DEBUG org.hibernate.SQL - 
+    select
+        up1_0.id,
+        up1_0.break_duration_minutes,
+        up1_0.dark_mode,
+        up1_0.group_similar_tasks,
+        up1_0.hours_before_break,
+        up1_0.max_tasks_per_day,
+        up1_0.notifications_enabled,
+        up1_0.peak_productivity_time,
+        up1_0.reminder_minutes_before,
+        up1_0.theme_color,
+        up1_0.user_id,
+        u1_0.id,
+        u1_0.created_at,
+        u1_0.email,
+        u1_0.last_login,
+        u1_0.password_hash,
+        u1_0.username,
+        up1_0.workday_end,
+        up1_0.workday_start 
+    from
+        user_preferences up1_0 
+    join
+        users u1_0 
+            on u1_0.id=up1_0.user_id 
+    where
+        up1_0.user_id=?
+2026-05-08 16:23:44 [http-nio-8080-exec-8] DEBUG o.s.security.web.FilterChainProxy - Secured POST /api/calendar/events
+2026-05-08 16:23:44 [http-nio-8080-exec-8] DEBUG org.hibernate.SQL - 
+    select
+        u1_0.id,
+        u1_0.created_at,
+        u1_0.email,
+        u1_0.last_login,
+        u1_0.password_hash,
+        p1_0.id,
+        p1_0.break_duration_minutes,
+        p1_0.dark_mode,
+        p1_0.group_similar_tasks,
+        p1_0.hours_before_break,
+        p1_0.max_tasks_per_day,
+        p1_0.notifications_enabled,
+        p1_0.peak_productivity_time,
+        p1_0.reminder_minutes_before,
+        p1_0.theme_color,
+        p1_0.user_id,
+        p1_0.workday_end,
+        p1_0.workday_start,
+        u1_0.username 
+    from
+        users u1_0 
+    left join
+        user_preferences p1_0 
+            on u1_0.id=p1_0.user_id 
+    where
+        u1_0.id=?
+2026-05-08 16:23:44 [http-nio-8080-exec-8] DEBUG org.hibernate.SQL - 
+    insert 
+    into
+        tasks
+        (completed_at, created_at, deadline, description, estimated_duration_minutes, priority, project_id, scheduled_end_time, scheduled_start_time, space_type, status, title, updated_at, user_id) 
+    values
+        (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+2026-05-08 16:23:44 [http-nio-8080-exec-8] DEBUG org.hibernate.SQL - 
+    insert 
+    into
+        calendar_events
+        (color, created_at, description, end_time, event_type, is_fixed, location, notes, related_habit_id, related_task_id, related_workout_id, start_time, title, updated_at, user_id) 
+    values
+        (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+2026-05-08 16:23:44 [task-1] INFO  c.F.e.service.SmartSchedulerService - Asynchrones Schedule-Update für User 1
+2026-05-08 16:23:44 [task-1] INFO  c.F.e.service.SmartSchedulerService - Generiere CP-SAT Schedule für User 1 | 2026-05-08 – 2026-05-22
+2026-05-08 16:23:44 [task-1] DEBUG org.hibernate.SQL - 
+    select
+        up1_0.id,
+        up1_0.break_duration_minutes,
+        up1_0.dark_mode,
+        up1_0.group_similar_tasks,
+        up1_0.hours_before_break,
+        up1_0.max_tasks_per_day,
+        up1_0.notifications_enabled,
+        up1_0.peak_productivity_time,
+        up1_0.reminder_minutes_before,
+        up1_0.theme_color,
+        up1_0.user_id,
+        up1_0.workday_end,
+        up1_0.workday_start 
+    from
+        user_preferences up1_0 
+    where
+        up1_0.user_id=?
+2026-05-08 16:23:44 [task-1] ERROR o.s.a.i.SimpleAsyncUncaughtExceptionHandler - Unexpected exception occurred invoking async method: public void com.Finn.everything_app.service.SmartSchedulerService.onScheduleChanged(com.Finn.everything_app.event.ScheduleChangedEvent)
+java.lang.RuntimeException: Preferences nicht gefunden
+	at com.Finn.everything_app.service.UserService.lambda$2(UserService.java:77)
+	at java.base/java.util.Optional.orElseThrow(Optional.java:403)
+	at com.Finn.everything_app.service.UserService.getUserPreferences(UserService.java:77)
+	at java.base/jdk.internal.reflect.NativeMethodAccessorImpl.invoke0(Native Method)
+	at java.base/jdk.internal.reflect.NativeMethodAccessorImpl.invoke(NativeMethodAccessorImpl.java:77)
+	at java.base/jdk.internal.reflect.DelegatingMethodAccessorImpl.invoke(DelegatingMethodAccessorImpl.java:43)
+	at java.base/java.lang.reflect.Method.invoke(Method.java:569)
+	at org.springframework.aop.support.AopUtils.invokeJoinpointUsingReflection(AopUtils.java:352)
+	at org.springframework.aop.framework.CglibAopProxy$DynamicAdvisedInterceptor.intercept(CglibAopProxy.java:713)
+	at com.Finn.everything_app.service.UserService$$SpringCGLIB$$0.getUserPreferences(<generated>)
+	at com.Finn.everything_app.service.SmartSchedulerService.generateOptimalSchedule(SmartSchedulerService.java:71)
+	at com.Finn.everything_app.service.SmartSchedulerService.onScheduleChanged(SmartSchedulerService.java:64)
+	at java.base/jdk.internal.reflect.NativeMethodAccessorImpl.invoke0(Native Method)
+	at java.base/jdk.internal.reflect.NativeMethodAccessorImpl.invoke(NativeMethodAccessorImpl.java:77)
+	at java.base/jdk.internal.reflect.DelegatingMethodAccessorImpl.invoke(DelegatingMethodAccessorImpl.java:43)
+	at java.base/java.lang.reflect.Method.invoke(Method.java:569)
+	at org.springframework.aop.support.AopUtils.invokeJoinpointUsingReflection(AopUtils.java:352)
+	at org.springframework.aop.framework.ReflectiveMethodInvocation.invokeJoinpoint(ReflectiveMethodInvocation.java:196)
+	at org.springframework.aop.framework.ReflectiveMethodInvocation.proceed(ReflectiveMethodInvocation.java:163)
+	at org.springframework.aop.framework.CglibAopProxy$CglibMethodInvocation.proceed(CglibAopProxy.java:765)
+	at org.springframework.aop.interceptor.AsyncExecutionInterceptor.lambda$invoke$0(AsyncExecutionInterceptor.java:115)
+	at java.base/java.util.concurrent.FutureTask.run(FutureTask.java:264)
+	at java.base/java.util.concurrent.ThreadPoolExecutor.runWorker(ThreadPoolExecutor.java:1136)
+	at java.base/java.util.concurrent.ThreadPoolExecutor$Worker.run(ThreadPoolExecutor.java:635)
+	at java.base/java.lang.Thread.run(Thread.java:840)
+2026-05-08 16:23:44 [http-nio-8080-exec-9] DEBUG o.s.security.web.FilterChainProxy - Securing GET /api/calendar/events?startDate=2026-05-01T00:00:00.000&endDate=2026-05-31T23:59:59.000
+2026-05-08 16:23:44 [http-nio-8080-exec-9] DEBUG org.hibernate.SQL - 
+    select
+        u1_0.id,
+        u1_0.created_at,
+        u1_0.email,
+        u1_0.last_login,
+        u1_0.password_hash,
+        u1_0.username 
+    from
+        users u1_0 
+    where
+        u1_0.username=?
+2026-05-08 16:23:44 [http-nio-8080-exec-9] DEBUG org.hibernate.SQL - 
+    select
+        up1_0.id,
+        up1_0.break_duration_minutes,
+        up1_0.dark_mode,
+        up1_0.group_similar_tasks,
+        up1_0.hours_before_break,
+        up1_0.max_tasks_per_day,
+        up1_0.notifications_enabled,
+        up1_0.peak_productivity_time,
+        up1_0.reminder_minutes_before,
+        up1_0.theme_color,
+        up1_0.user_id,
+        u1_0.id,
+        u1_0.created_at,
+        u1_0.email,
+        u1_0.last_login,
+        u1_0.password_hash,
+        u1_0.username,
+        up1_0.workday_end,
+        up1_0.workday_start 
+    from
+        user_preferences up1_0 
+    join
+        users u1_0 
+            on u1_0.id=up1_0.user_id 
+    where
+        up1_0.user_id=?
+2026-05-08 16:23:44 [http-nio-8080-exec-9] DEBUG o.s.security.web.FilterChainProxy - Secured GET /api/calendar/events?startDate=2026-05-01T00:00:00.000&endDate=2026-05-31T23:59:59.000
+2026-05-08 16:23:44 [http-nio-8080-exec-9] DEBUG org.hibernate.SQL - 
+    select
+        ce1_0.id,
+        ce1_0.color,
+        ce1_0.created_at,
+        ce1_0.description,
+        ce1_0.end_time,
+        ce1_0.event_type,
+        ce1_0.is_fixed,
+        ce1_0.location,
+        ce1_0.notes,
+        ce1_0.related_habit_id,
+        ce1_0.related_task_id,
+        ce1_0.related_workout_id,
+        ce1_0.start_time,
+        ce1_0.title,
+        ce1_0.updated_at,
+        ce1_0.user_id 
+    from
+        calendar_events ce1_0 
+    where
+        ce1_0.user_id=? 
+        and ce1_0.start_time between ? and ?
+2026-05-08 16:23:45 [http-nio-8080-exec-10] DEBUG o.s.security.web.FilterChainProxy - Securing GET /api/tasks
+2026-05-08 16:23:45 [http-nio-8080-exec-10] DEBUG org.hibernate.SQL - 
+    select
+        u1_0.id,
+        u1_0.created_at,
+        u1_0.email,
+        u1_0.last_login,
+        u1_0.password_hash,
+        u1_0.username 
+    from
+        users u1_0 
+    where
+        u1_0.username=?
+2026-05-08 16:23:45 [http-nio-8080-exec-10] DEBUG org.hibernate.SQL - 
+    select
+        up1_0.id,
+        up1_0.break_duration_minutes,
+        up1_0.dark_mode,
+        up1_0.group_similar_tasks,
+        up1_0.hours_before_break,
+        up1_0.max_tasks_per_day,
+        up1_0.notifications_enabled,
+        up1_0.peak_productivity_time,
+        up1_0.reminder_minutes_before,
+        up1_0.theme_color,
+        up1_0.user_id,
+        u1_0.id,
+        u1_0.created_at,
+        u1_0.email,
+        u1_0.last_login,
+        u1_0.password_hash,
+        u1_0.username,
+        up1_0.workday_end,
+        up1_0.workday_start 
+    from
+        user_preferences up1_0 
+    join
+        users u1_0 
+            on u1_0.id=up1_0.user_id 
+    where
+        up1_0.user_id=?
+2026-05-08 16:23:45 [http-nio-8080-exec-10] DEBUG o.s.security.web.FilterChainProxy - Secured GET /api/tasks
+2026-05-08 16:23:45 [http-nio-8080-exec-10] DEBUG org.hibernate.SQL - 
+    select
+        t1_0.id,
+        t1_0.completed_at,
+        t1_0.created_at,
+        t1_0.deadline,
+        t1_0.description,
+        t1_0.estimated_duration_minutes,
+        t1_0.priority,
+        t1_0.project_id,
+        t1_0.scheduled_end_time,
+        t1_0.scheduled_start_time,
+        t1_0.space_type,
+        t1_0.status,
+        t1_0.title,
+        t1_0.updated_at,
+        t1_0.user_id 
+    from
+        tasks t1_0 
+    where
+        t1_0.user_id=?
+2026-05-08 16:28:54 [http-nio-8080-exec-3] DEBUG o.s.security.web.FilterChainProxy - Securing GET /api/tasks
+2026-05-08 16:28:54 [http-nio-8080-exec-3] DEBUG org.hibernate.SQL - 
+    select
+        u1_0.id,
+        u1_0.created_at,
+        u1_0.email,
+        u1_0.last_login,
+        u1_0.password_hash,
+        u1_0.username 
+    from
+        users u1_0 
+    where
+        u1_0.username=?
+2026-05-08 16:28:54 [http-nio-8080-exec-3] DEBUG org.hibernate.SQL - 
+    select
+        up1_0.id,
+        up1_0.break_duration_minutes,
+        up1_0.dark_mode,
+        up1_0.group_similar_tasks,
+        up1_0.hours_before_break,
+        up1_0.max_tasks_per_day,
+        up1_0.notifications_enabled,
+        up1_0.peak_productivity_time,
+        up1_0.reminder_minutes_before,
+        up1_0.theme_color,
+        up1_0.user_id,
+        u1_0.id,
+        u1_0.created_at,
+        u1_0.email,
+        u1_0.last_login,
+        u1_0.password_hash,
+        u1_0.username,
+        up1_0.workday_end,
+        up1_0.workday_start 
+    from
+        user_preferences up1_0 
+    join
+        users u1_0 
+            on u1_0.id=up1_0.user_id 
+    where
+        up1_0.user_id=?
+2026-05-08 16:28:54 [http-nio-8080-exec-3] DEBUG o.s.security.web.FilterChainProxy - Secured GET /api/tasks
+2026-05-08 16:28:54 [http-nio-8080-exec-3] DEBUG org.hibernate.SQL - 
+    select
+        t1_0.id,
+        t1_0.completed_at,
+        t1_0.created_at,
+        t1_0.deadline,
+        t1_0.description,
+        t1_0.estimated_duration_minutes,
+        t1_0.priority,
+        t1_0.project_id,
+        t1_0.scheduled_end_time,
+        t1_0.scheduled_start_time,
+        t1_0.space_type,
+        t1_0.status,
+        t1_0.title,
+        t1_0.updated_at,
+        t1_0.user_id 
+    from
+        tasks t1_0 
+    where
+        t1_0.user_id=?
+2026-05-08 16:28:54 [http-nio-8080-exec-4] DEBUG o.s.security.web.FilterChainProxy - Securing GET /api/calendar/events?startDate=2026-05-01T00:00:00.000&endDate=2026-05-31T23:59:59.000
+2026-05-08 16:28:54 [http-nio-8080-exec-4] DEBUG org.hibernate.SQL - 
+    select
+        u1_0.id,
+        u1_0.created_at,
+        u1_0.email,
+        u1_0.last_login,
+        u1_0.password_hash,
+        u1_0.username 
+    from
+        users u1_0 
+    where
+        u1_0.username=?
+2026-05-08 16:28:54 [http-nio-8080-exec-4] DEBUG org.hibernate.SQL - 
+    select
+        up1_0.id,
+        up1_0.break_duration_minutes,
+        up1_0.dark_mode,
+        up1_0.group_similar_tasks,
+        up1_0.hours_before_break,
+        up1_0.max_tasks_per_day,
+        up1_0.notifications_enabled,
+        up1_0.peak_productivity_time,
+        up1_0.reminder_minutes_before,
+        up1_0.theme_color,
+        up1_0.user_id,
+        u1_0.id,
+        u1_0.created_at,
+        u1_0.email,
+        u1_0.last_login,
+        u1_0.password_hash,
+        u1_0.username,
+        up1_0.workday_end,
+        up1_0.workday_start 
+    from
+        user_preferences up1_0 
+    join
+        users u1_0 
+            on u1_0.id=up1_0.user_id 
+    where
+        up1_0.user_id=?
+2026-05-08 16:28:54 [http-nio-8080-exec-4] DEBUG o.s.security.web.FilterChainProxy - Secured GET /api/calendar/events?startDate=2026-05-01T00:00:00.000&endDate=2026-05-31T23:59:59.000
+2026-05-08 16:28:54 [http-nio-8080-exec-4] DEBUG org.hibernate.SQL - 
+    select
+        ce1_0.id,
+        ce1_0.color,
+        ce1_0.created_at,
+        ce1_0.description,
+        ce1_0.end_time,
+        ce1_0.event_type,
+        ce1_0.is_fixed,
+        ce1_0.location,
+        ce1_0.notes,
+        ce1_0.related_habit_id,
+        ce1_0.related_task_id,
+        ce1_0.related_workout_id,
+        ce1_0.start_time,
+        ce1_0.title,
+        ce1_0.updated_at,
+        ce1_0.user_id 
+    from
+        calendar_events ce1_0 
+    where
+        ce1_0.user_id=? 
+        and ce1_0.start_time between ? and ?
+2026-05-08 16:29:07 [http-nio-8080-exec-5] DEBUG o.s.security.web.FilterChainProxy - Securing PUT /api/tasks/3/complete
+2026-05-08 16:29:07 [http-nio-8080-exec-5] DEBUG org.hibernate.SQL - 
+    select
+        u1_0.id,
+        u1_0.created_at,
+        u1_0.email,
+        u1_0.last_login,
+        u1_0.password_hash,
+        u1_0.username 
+    from
+        users u1_0 
+    where
+        u1_0.username=?
+2026-05-08 16:29:07 [http-nio-8080-exec-5] DEBUG org.hibernate.SQL - 
+    select
+        up1_0.id,
+        up1_0.break_duration_minutes,
+        up1_0.dark_mode,
+        up1_0.group_similar_tasks,
+        up1_0.hours_before_break,
+        up1_0.max_tasks_per_day,
+        up1_0.notifications_enabled,
+        up1_0.peak_productivity_time,
+        up1_0.reminder_minutes_before,
+        up1_0.theme_color,
+        up1_0.user_id,
+        u1_0.id,
+        u1_0.created_at,
+        u1_0.email,
+        u1_0.last_login,
+        u1_0.password_hash,
+        u1_0.username,
+        up1_0.workday_end,
+        up1_0.workday_start 
+    from
+        user_preferences up1_0 
+    join
+        users u1_0 
+            on u1_0.id=up1_0.user_id 
+    where
+        up1_0.user_id=?
+2026-05-08 16:29:07 [http-nio-8080-exec-5] DEBUG o.s.security.web.FilterChainProxy - Secured PUT /api/tasks/3/complete
+2026-05-08 16:29:07 [http-nio-8080-exec-5] DEBUG org.hibernate.SQL - 
+    select
+        t1_0.id,
+        t1_0.completed_at,
+        t1_0.created_at,
+        t1_0.deadline,
+        t1_0.description,
+        t1_0.estimated_duration_minutes,
+        t1_0.priority,
+        t1_0.project_id,
+        t1_0.scheduled_end_time,
+        t1_0.scheduled_start_time,
+        t1_0.space_type,
+        t1_0.status,
+        t1_0.title,
+        t1_0.updated_at,
+        t1_0.user_id 
+    from
+        tasks t1_0 
+    where
+        t1_0.id=?
+2026-05-08 16:29:07 [http-nio-8080-exec-5] DEBUG org.hibernate.SQL - 
+    update
+        tasks 
+    set
+        completed_at=?,
+        created_at=?,
+        deadline=?,
+        description=?,
+        estimated_duration_minutes=?,
+        priority=?,
+        project_id=?,
+        scheduled_end_time=?,
+        scheduled_start_time=?,
+        space_type=?,
+        status=?,
+        title=?,
+        updated_at=?,
+        user_id=? 
+    where
+        id=?
+2026-05-08 16:29:07 [task-2] INFO  c.F.e.service.SmartSchedulerService - Asynchrones Schedule-Update für User 1
+2026-05-08 16:29:07 [task-2] INFO  c.F.e.service.SmartSchedulerService - Generiere CP-SAT Schedule für User 1 | 2026-05-08 – 2026-05-22
+2026-05-08 16:29:07 [task-2] DEBUG org.hibernate.SQL - 
+    select
+        up1_0.id,
+        up1_0.break_duration_minutes,
+        up1_0.dark_mode,
+        up1_0.group_similar_tasks,
+        up1_0.hours_before_break,
+        up1_0.max_tasks_per_day,
+        up1_0.notifications_enabled,
+        up1_0.peak_productivity_time,
+        up1_0.reminder_minutes_before,
+        up1_0.theme_color,
+        up1_0.user_id,
+        up1_0.workday_end,
+        up1_0.workday_start 
+    from
+        user_preferences up1_0 
+    where
+        up1_0.user_id=?
+2026-05-08 16:29:07 [task-2] ERROR o.s.a.i.SimpleAsyncUncaughtExceptionHandler - Unexpected exception occurred invoking async method: public void com.Finn.everything_app.service.SmartSchedulerService.onScheduleChanged(com.Finn.everything_app.event.ScheduleChangedEvent)
+java.lang.RuntimeException: Preferences nicht gefunden
+	at com.Finn.everything_app.service.UserService.lambda$2(UserService.java:77)
+	at java.base/java.util.Optional.orElseThrow(Optional.java:403)
+	at com.Finn.everything_app.service.UserService.getUserPreferences(UserService.java:77)
+	at java.base/jdk.internal.reflect.NativeMethodAccessorImpl.invoke0(Native Method)
+	at java.base/jdk.internal.reflect.NativeMethodAccessorImpl.invoke(NativeMethodAccessorImpl.java:77)
+	at java.base/jdk.internal.reflect.DelegatingMethodAccessorImpl.invoke(DelegatingMethodAccessorImpl.java:43)
+	at java.base/java.lang.reflect.Method.invoke(Method.java:569)
+	at org.springframework.aop.support.AopUtils.invokeJoinpointUsingReflection(AopUtils.java:352)
+	at org.springframework.aop.framework.CglibAopProxy$DynamicAdvisedInterceptor.intercept(CglibAopProxy.java:713)
+	at com.Finn.everything_app.service.UserService$$SpringCGLIB$$0.getUserPreferences(<generated>)
+	at com.Finn.everything_app.service.SmartSchedulerService.generateOptimalSchedule(SmartSchedulerService.java:71)
+	at com.Finn.everything_app.service.SmartSchedulerService.onScheduleChanged(SmartSchedulerService.java:64)
+	at java.base/jdk.internal.reflect.NativeMethodAccessorImpl.invoke0(Native Method)
+	at java.base/jdk.internal.reflect.NativeMethodAccessorImpl.invoke(NativeMethodAccessorImpl.java:77)
+	at java.base/jdk.internal.reflect.DelegatingMethodAccessorImpl.invoke(DelegatingMethodAccessorImpl.java:43)
+	at java.base/java.lang.reflect.Method.invoke(Method.java:569)
+	at org.springframework.aop.support.AopUtils.invokeJoinpointUsingReflection(AopUtils.java:352)
+	at org.springframework.aop.framework.ReflectiveMethodInvocation.invokeJoinpoint(ReflectiveMethodInvocation.java:196)
+	at org.springframework.aop.framework.ReflectiveMethodInvocation.proceed(ReflectiveMethodInvocation.java:163)
+	at org.springframework.aop.framework.CglibAopProxy$CglibMethodInvocation.proceed(CglibAopProxy.java:765)
+	at org.springframework.aop.interceptor.AsyncExecutionInterceptor.lambda$invoke$0(AsyncExecutionInterceptor.java:115)
+	at java.base/java.util.concurrent.FutureTask.run(FutureTask.java:264)
+	at java.base/java.util.concurrent.ThreadPoolExecutor.runWorker(ThreadPoolExecutor.java:1136)
+	at java.base/java.util.concurrent.ThreadPoolExecutor$Worker.run(ThreadPoolExecutor.java:635)
+	at java.base/java.lang.Thread.run(Thread.java:840)
+2026-05-08 16:29:07 [http-nio-8080-exec-6] DEBUG o.s.security.web.FilterChainProxy - Securing GET /api/tasks
+2026-05-08 16:29:07 [http-nio-8080-exec-6] DEBUG org.hibernate.SQL - 
+    select
+        u1_0.id,
+        u1_0.created_at,
+        u1_0.email,
+        u1_0.last_login,
+        u1_0.password_hash,
+        u1_0.username 
+    from
+        users u1_0 
+    where
+        u1_0.username=?
+2026-05-08 16:29:07 [http-nio-8080-exec-6] DEBUG org.hibernate.SQL - 
+    select
+        up1_0.id,
+        up1_0.break_duration_minutes,
+        up1_0.dark_mode,
+        up1_0.group_similar_tasks,
+        up1_0.hours_before_break,
+        up1_0.max_tasks_per_day,
+        up1_0.notifications_enabled,
+        up1_0.peak_productivity_time,
+        up1_0.reminder_minutes_before,
+        up1_0.theme_color,
+        up1_0.user_id,
+        u1_0.id,
+        u1_0.created_at,
+        u1_0.email,
+        u1_0.last_login,
+        u1_0.password_hash,
+        u1_0.username,
+        up1_0.workday_end,
+        up1_0.workday_start 
+    from
+        user_preferences up1_0 
+    join
+        users u1_0 
+            on u1_0.id=up1_0.user_id 
+    where
+        up1_0.user_id=?
+2026-05-08 16:29:07 [http-nio-8080-exec-6] DEBUG o.s.security.web.FilterChainProxy - Secured GET /api/tasks
+2026-05-08 16:29:07 [http-nio-8080-exec-6] DEBUG org.hibernate.SQL - 
+    select
+        t1_0.id,
+        t1_0.completed_at,
+        t1_0.created_at,
+        t1_0.deadline,
+        t1_0.description,
+        t1_0.estimated_duration_minutes,
+        t1_0.priority,
+        t1_0.project_id,
+        t1_0.scheduled_end_time,
+        t1_0.scheduled_start_time,
+        t1_0.space_type,
+        t1_0.status,
+        t1_0.title,
+        t1_0.updated_at,
+        t1_0.user_id 
+    from
+        tasks t1_0 
+    where
+        t1_0.user_id=?
+2026-05-08 16:29:10 [http-nio-8080-exec-8] DEBUG o.s.security.web.FilterChainProxy - Securing GET /api/calendar/events?startDate=2026-05-01T00:00:00.000&endDate=2026-05-31T23:59:59.000
+2026-05-08 16:29:10 [http-nio-8080-exec-8] DEBUG org.hibernate.SQL - 
+    select
+        u1_0.id,
+        u1_0.created_at,
+        u1_0.email,
+        u1_0.last_login,
+        u1_0.password_hash,
+        u1_0.username 
+    from
+        users u1_0 
+    where
+        u1_0.username=?
+2026-05-08 16:29:10 [http-nio-8080-exec-8] DEBUG org.hibernate.SQL - 
+    select
+        up1_0.id,
+        up1_0.break_duration_minutes,
+        up1_0.dark_mode,
+        up1_0.group_similar_tasks,
+        up1_0.hours_before_break,
+        up1_0.max_tasks_per_day,
+        up1_0.notifications_enabled,
+        up1_0.peak_productivity_time,
+        up1_0.reminder_minutes_before,
+        up1_0.theme_color,
+        up1_0.user_id,
+        u1_0.id,
+        u1_0.created_at,
+        u1_0.email,
+        u1_0.last_login,
+        u1_0.password_hash,
+        u1_0.username,
+        up1_0.workday_end,
+        up1_0.workday_start 
+    from
+        user_preferences up1_0 
+    join
+        users u1_0 
+            on u1_0.id=up1_0.user_id 
+    where
+        up1_0.user_id=?
+2026-05-08 16:29:10 [http-nio-8080-exec-8] DEBUG o.s.security.web.FilterChainProxy - Secured GET /api/calendar/events?startDate=2026-05-01T00:00:00.000&endDate=2026-05-31T23:59:59.000
+2026-05-08 16:29:10 [http-nio-8080-exec-8] DEBUG org.hibernate.SQL - 
+    select
+        ce1_0.id,
+        ce1_0.color,
+        ce1_0.created_at,
+        ce1_0.description,
+        ce1_0.end_time,
+        ce1_0.event_type,
+        ce1_0.is_fixed,
+        ce1_0.location,
+        ce1_0.notes,
+        ce1_0.related_habit_id,
+        ce1_0.related_task_id,
+        ce1_0.related_workout_id,
+        ce1_0.start_time,
+        ce1_0.title,
+        ce1_0.updated_at,
+        ce1_0.user_id 
+    from
+        calendar_events ce1_0 
+    where
+        ce1_0.user_id=? 
+        and ce1_0.start_time between ? and ?
+2026-05-08 16:29:14 [http-nio-8080-exec-9] DEBUG o.s.security.web.FilterChainProxy - Securing GET /api/tasks
+2026-05-08 16:29:14 [http-nio-8080-exec-9] DEBUG org.hibernate.SQL - 
+    select
+        u1_0.id,
+        u1_0.created_at,
+        u1_0.email,
+        u1_0.last_login,
+        u1_0.password_hash,
+        u1_0.username 
+    from
+        users u1_0 
+    where
+        u1_0.username=?
+2026-05-08 16:29:14 [http-nio-8080-exec-9] DEBUG org.hibernate.SQL - 
+    select
+        up1_0.id,
+        up1_0.break_duration_minutes,
+        up1_0.dark_mode,
+        up1_0.group_similar_tasks,
+        up1_0.hours_before_break,
+        up1_0.max_tasks_per_day,
+        up1_0.notifications_enabled,
+        up1_0.peak_productivity_time,
+        up1_0.reminder_minutes_before,
+        up1_0.theme_color,
+        up1_0.user_id,
+        u1_0.id,
+        u1_0.created_at,
+        u1_0.email,
+        u1_0.last_login,
+        u1_0.password_hash,
+        u1_0.username,
+        up1_0.workday_end,
+        up1_0.workday_start 
+    from
+        user_preferences up1_0 
+    join
+        users u1_0 
+            on u1_0.id=up1_0.user_id 
+    where
+        up1_0.user_id=?
+2026-05-08 16:29:14 [http-nio-8080-exec-9] DEBUG o.s.security.web.FilterChainProxy - Secured GET /api/tasks
+2026-05-08 16:29:14 [http-nio-8080-exec-9] DEBUG org.hibernate.SQL - 
+    select
+        t1_0.id,
+        t1_0.completed_at,
+        t1_0.created_at,
+        t1_0.deadline,
+        t1_0.description,
+        t1_0.estimated_duration_minutes,
+        t1_0.priority,
+        t1_0.project_id,
+        t1_0.scheduled_end_time,
+        t1_0.scheduled_start_time,
+        t1_0.space_type,
+        t1_0.status,
+        t1_0.title,
+        t1_0.updated_at,
+        t1_0.user_id 
+    from
+        tasks t1_0 
+    where
+        t1_0.user_id=?
+2026-05-08 16:29:14 [http-nio-8080-exec-10] DEBUG o.s.security.web.FilterChainProxy - Securing GET /api/calendar/events?startDate=2026-05-01T00:00:00.000&endDate=2026-05-31T23:59:59.000
+2026-05-08 16:29:14 [http-nio-8080-exec-10] DEBUG org.hibernate.SQL - 
+    select
+        u1_0.id,
+        u1_0.created_at,
+        u1_0.email,
+        u1_0.last_login,
+        u1_0.password_hash,
+        u1_0.username 
+    from
+        users u1_0 
+    where
+        u1_0.username=?
+2026-05-08 16:29:14 [http-nio-8080-exec-10] DEBUG org.hibernate.SQL - 
+    select
+        up1_0.id,
+        up1_0.break_duration_minutes,
+        up1_0.dark_mode,
+        up1_0.group_similar_tasks,
+        up1_0.hours_before_break,
+        up1_0.max_tasks_per_day,
+        up1_0.notifications_enabled,
+        up1_0.peak_productivity_time,
+        up1_0.reminder_minutes_before,
+        up1_0.theme_color,
+        up1_0.user_id,
+        u1_0.id,
+        u1_0.created_at,
+        u1_0.email,
+        u1_0.last_login,
+        u1_0.password_hash,
+        u1_0.username,
+        up1_0.workday_end,
+        up1_0.workday_start 
+    from
+        user_preferences up1_0 
+    join
+        users u1_0 
+            on u1_0.id=up1_0.user_id 
+    where
+        up1_0.user_id=?
+2026-05-08 16:29:14 [http-nio-8080-exec-10] DEBUG o.s.security.web.FilterChainProxy - Secured GET /api/calendar/events?startDate=2026-05-01T00:00:00.000&endDate=2026-05-31T23:59:59.000
+2026-05-08 16:29:14 [http-nio-8080-exec-10] DEBUG org.hibernate.SQL - 
+    select
+        ce1_0.id,
+        ce1_0.color,
+        ce1_0.created_at,
+        ce1_0.description,
+        ce1_0.end_time,
+        ce1_0.event_type,
+        ce1_0.is_fixed,
+        ce1_0.location,
+        ce1_0.notes,
+        ce1_0.related_habit_id,
+        ce1_0.related_task_id,
+        ce1_0.related_workout_id,
+        ce1_0.start_time,
+        ce1_0.title,
+        ce1_0.updated_at,
+        ce1_0.user_id 
+    from
+        calendar_events ce1_0 
+    where
+        ce1_0.user_id=? 
+        and ce1_0.start_time between ? and ?
+2026-05-08 16:29:18 [http-nio-8080-exec-1] DEBUG o.s.security.web.FilterChainProxy - Securing GET /api/tasks
+2026-05-08 16:29:18 [http-nio-8080-exec-1] DEBUG org.hibernate.SQL - 
+    select
+        u1_0.id,
+        u1_0.created_at,
+        u1_0.email,
+        u1_0.last_login,
+        u1_0.password_hash,
+        u1_0.username 
+    from
+        users u1_0 
+    where
+        u1_0.username=?
+2026-05-08 16:29:18 [http-nio-8080-exec-1] DEBUG org.hibernate.SQL - 
+    select
+        up1_0.id,
+        up1_0.break_duration_minutes,
+        up1_0.dark_mode,
+        up1_0.group_similar_tasks,
+        up1_0.hours_before_break,
+        up1_0.max_tasks_per_day,
+        up1_0.notifications_enabled,
+        up1_0.peak_productivity_time,
+        up1_0.reminder_minutes_before,
+        up1_0.theme_color,
+        up1_0.user_id,
+        u1_0.id,
+        u1_0.created_at,
+        u1_0.email,
+        u1_0.last_login,
+        u1_0.password_hash,
+        u1_0.username,
+        up1_0.workday_end,
+        up1_0.workday_start 
+    from
+        user_preferences up1_0 
+    join
+        users u1_0 
+            on u1_0.id=up1_0.user_id 
+    where
+        up1_0.user_id=?
+2026-05-08 16:29:18 [http-nio-8080-exec-1] DEBUG o.s.security.web.FilterChainProxy - Secured GET /api/tasks
+2026-05-08 16:29:18 [http-nio-8080-exec-1] DEBUG org.hibernate.SQL - 
+    select
+        t1_0.id,
+        t1_0.completed_at,
+        t1_0.created_at,
+        t1_0.deadline,
+        t1_0.description,
+        t1_0.estimated_duration_minutes,
+        t1_0.priority,
+        t1_0.project_id,
+        t1_0.scheduled_end_time,
+        t1_0.scheduled_start_time,
+        t1_0.space_type,
+        t1_0.status,
+        t1_0.title,
+        t1_0.updated_at,
+        t1_0.user_id 
+    from
+        tasks t1_0 
+    where
+        t1_0.user_id=?
+2026-05-08 16:29:47 [http-nio-8080-exec-4] DEBUG o.s.security.web.FilterChainProxy - Securing GET /api/tasks
+2026-05-08 16:29:47 [http-nio-8080-exec-4] DEBUG org.hibernate.SQL - 
+    select
+        u1_0.id,
+        u1_0.created_at,
+        u1_0.email,
+        u1_0.last_login,
+        u1_0.password_hash,
+        u1_0.username 
+    from
+        users u1_0 
+    where
+        u1_0.username=?
+2026-05-08 16:29:47 [http-nio-8080-exec-4] DEBUG org.hibernate.SQL - 
+    select
+        up1_0.id,
+        up1_0.break_duration_minutes,
+        up1_0.dark_mode,
+        up1_0.group_similar_tasks,
+        up1_0.hours_before_break,
+        up1_0.max_tasks_per_day,
+        up1_0.notifications_enabled,
+        up1_0.peak_productivity_time,
+        up1_0.reminder_minutes_before,
+        up1_0.theme_color,
+        up1_0.user_id,
+        u1_0.id,
+        u1_0.created_at,
+        u1_0.email,
+        u1_0.last_login,
+        u1_0.password_hash,
+        u1_0.username,
+        up1_0.workday_end,
+        up1_0.workday_start 
+    from
+        user_preferences up1_0 
+    join
+        users u1_0 
+            on u1_0.id=up1_0.user_id 
+    where
+        up1_0.user_id=?
+2026-05-08 16:29:47 [http-nio-8080-exec-4] DEBUG o.s.security.web.FilterChainProxy - Secured GET /api/tasks
+2026-05-08 16:29:47 [http-nio-8080-exec-4] DEBUG org.hibernate.SQL - 
+    select
+        t1_0.id,
+        t1_0.completed_at,
+        t1_0.created_at,
+        t1_0.deadline,
+        t1_0.description,
+        t1_0.estimated_duration_minutes,
+        t1_0.priority,
+        t1_0.project_id,
+        t1_0.scheduled_end_time,
+        t1_0.scheduled_start_time,
+        t1_0.space_type,
+        t1_0.status,
+        t1_0.title,
+        t1_0.updated_at,
+        t1_0.user_id 
+    from
+        tasks t1_0 
+    where
+        t1_0.user_id=?
+2026-05-08 16:29:47 [http-nio-8080-exec-5] DEBUG o.s.security.web.FilterChainProxy - Securing GET /api/calendar/events?startDate=2026-05-01T00:00:00.000&endDate=2026-05-31T23:59:59.000
+2026-05-08 16:29:47 [http-nio-8080-exec-5] DEBUG org.hibernate.SQL - 
+    select
+        u1_0.id,
+        u1_0.created_at,
+        u1_0.email,
+        u1_0.last_login,
+        u1_0.password_hash,
+        u1_0.username 
+    from
+        users u1_0 
+    where
+        u1_0.username=?
+2026-05-08 16:29:47 [http-nio-8080-exec-5] DEBUG org.hibernate.SQL - 
+    select
+        up1_0.id,
+        up1_0.break_duration_minutes,
+        up1_0.dark_mode,
+        up1_0.group_similar_tasks,
+        up1_0.hours_before_break,
+        up1_0.max_tasks_per_day,
+        up1_0.notifications_enabled,
+        up1_0.peak_productivity_time,
+        up1_0.reminder_minutes_before,
+        up1_0.theme_color,
+        up1_0.user_id,
+        u1_0.id,
+        u1_0.created_at,
+        u1_0.email,
+        u1_0.last_login,
+        u1_0.password_hash,
+        u1_0.username,
+        up1_0.workday_end,
+        up1_0.workday_start 
+    from
+        user_preferences up1_0 
+    join
+        users u1_0 
+            on u1_0.id=up1_0.user_id 
+    where
+        up1_0.user_id=?
+2026-05-08 16:29:47 [http-nio-8080-exec-5] DEBUG o.s.security.web.FilterChainProxy - Secured GET /api/calendar/events?startDate=2026-05-01T00:00:00.000&endDate=2026-05-31T23:59:59.000
+2026-05-08 16:29:47 [http-nio-8080-exec-5] DEBUG org.hibernate.SQL - 
+    select
+        ce1_0.id,
+        ce1_0.color,
+        ce1_0.created_at,
+        ce1_0.description,
+        ce1_0.end_time,
+        ce1_0.event_type,
+        ce1_0.is_fixed,
+        ce1_0.location,
+        ce1_0.notes,
+        ce1_0.related_habit_id,
+        ce1_0.related_task_id,
+        ce1_0.related_workout_id,
+        ce1_0.start_time,
+        ce1_0.title,
+        ce1_0.updated_at,
+        ce1_0.user_id 
+    from
+        calendar_events ce1_0 
+    where
+        ce1_0.user_id=? 
+        and ce1_0.start_time between ? and ?
+2026-05-08 16:29:55 [http-nio-8080-exec-6] DEBUG o.s.security.web.FilterChainProxy - Securing GET /api/calendar/events?startDate=2026-05-01T00:00:00.000&endDate=2026-05-31T23:59:59.000
+2026-05-08 16:29:55 [http-nio-8080-exec-6] DEBUG org.hibernate.SQL - 
+    select
+        u1_0.id,
+        u1_0.created_at,
+        u1_0.email,
+        u1_0.last_login,
+        u1_0.password_hash,
+        u1_0.username 
+    from
+        users u1_0 
+    where
+        u1_0.username=?
+2026-05-08 16:29:55 [http-nio-8080-exec-6] DEBUG org.hibernate.SQL - 
+    select
+        up1_0.id,
+        up1_0.break_duration_minutes,
+        up1_0.dark_mode,
+        up1_0.group_similar_tasks,
+        up1_0.hours_before_break,
+        up1_0.max_tasks_per_day,
+        up1_0.notifications_enabled,
+        up1_0.peak_productivity_time,
+        up1_0.reminder_minutes_before,
+        up1_0.theme_color,
+        up1_0.user_id,
+        u1_0.id,
+        u1_0.created_at,
+        u1_0.email,
+        u1_0.last_login,
+        u1_0.password_hash,
+        u1_0.username,
+        up1_0.workday_end,
+        up1_0.workday_start 
+    from
+        user_preferences up1_0 
+    join
+        users u1_0 
+            on u1_0.id=up1_0.user_id 
+    where
+        up1_0.user_id=?
+2026-05-08 16:29:55 [http-nio-8080-exec-6] DEBUG o.s.security.web.FilterChainProxy - Secured GET /api/calendar/events?startDate=2026-05-01T00:00:00.000&endDate=2026-05-31T23:59:59.000
+2026-05-08 16:29:55 [http-nio-8080-exec-6] DEBUG org.hibernate.SQL - 
+    select
+        ce1_0.id,
+        ce1_0.color,
+        ce1_0.created_at,
+        ce1_0.description,
+        ce1_0.end_time,
+        ce1_0.event_type,
+        ce1_0.is_fixed,
+        ce1_0.location,
+        ce1_0.notes,
+        ce1_0.related_habit_id,
+        ce1_0.related_task_id,
+        ce1_0.related_workout_id,
+        ce1_0.start_time,
+        ce1_0.title,
+        ce1_0.updated_at,
+        ce1_0.user_id 
+    from
+        calendar_events ce1_0 
+    where
+        ce1_0.user_id=? 
+        and ce1_0.start_time between ? and ?

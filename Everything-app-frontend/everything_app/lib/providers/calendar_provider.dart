@@ -83,15 +83,21 @@ class CalendarProvider with ChangeNotifier {
 
   
   Future<bool> addEvent(CalendarEvent event) async {
+    debugPrint('🕒 [CalendarProvider] addEvent started');
     try {
+      debugPrint('🌐 [CalendarProvider] Calling service.createEvent');
       final created = await _calendarService.createEvent(event);
       
       if (created != null) {
+        debugPrint('✅ [CalendarProvider] Event created successfully, reloading month');
         await loadEventsForMonth(_focusedDay);
+        debugPrint('📊 [CalendarProvider] Month reloaded');
         return true;
       }
+      debugPrint('⚠️ [CalendarProvider] service.createEvent returned null');
       return false;
     } catch (e) {
+      debugPrint('🔥 [CalendarProvider] Error in addEvent: $e');
       _error = 'Fehler beim Erstellen des Events: $e';
       notifyListeners();
       return false;

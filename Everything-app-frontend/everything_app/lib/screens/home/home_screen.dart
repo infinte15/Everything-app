@@ -79,6 +79,10 @@ class _HomeScreenState extends State<HomeScreen> {
               ),
               centerTitle: true,
               actions: [
+                IconButton(
+                  icon: const Icon(Icons.exit_to_app, color: _primary),
+                  onPressed: () => auth.logout(),
+                ),
                 Padding(
                   padding: const EdgeInsets.only(right: 16.0),
                   child: CircleAvatar(

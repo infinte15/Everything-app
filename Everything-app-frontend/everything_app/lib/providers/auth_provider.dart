@@ -5,11 +5,16 @@ import '../services/auth_service.dart';
 class AuthProvider with ChangeNotifier {
   final AuthService _authService = AuthService();
   
-  bool _isLoggedIn = true; // CHANGED FOR TESTING
+  AuthProvider() {
+    checkLoginStatus();
+  }
+  
+  // TEST MODE: Always logged in for easy testing
+  bool _isLoggedIn = true; 
   bool _isLoading = false;
-  String? _username = "TestUser"; // CHANGED FOR TESTING
-  String? _email = "test@example.com"; // CHANGED FOR TESTING
-  int? _userId = 1; // CHANGED FOR TESTING
+  String? _username = "Tester";
+  String? _email = "test@everything.app";
+  int? _userId = 1;
   String? _error;
 
   // Getters
@@ -25,7 +30,8 @@ class AuthProvider with ChangeNotifier {
     _isLoading = true;
     notifyListeners();
 
-    // CHANGED FOR TESTING: Always logged in
+    // In Test Mode, we skip the actual token check
+    // _isLoggedIn = await _authService.isLoggedIn();
     _isLoggedIn = true;
     
     _isLoading = false;

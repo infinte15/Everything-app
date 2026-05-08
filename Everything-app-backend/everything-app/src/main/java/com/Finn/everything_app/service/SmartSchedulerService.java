@@ -7,9 +7,11 @@ import com.google.ortools.Loader;
 import com.google.ortools.sat.*;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.context.event.EventListener;
+import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.event.TransactionPhase;
+import org.springframework.transaction.event.TransactionalEventListener;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -55,9 +57,10 @@ public class SmartSchedulerService {
     // PUBLIC API
     // =========================================================================
 
-    @EventListener
+    @Async
+    @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
     public void onScheduleChanged(ScheduleChangedEvent event) {
-        log.info("ScheduleChangedEvent für User {}", event.getUserId());
+        log.info("Asynchrones Schedule-Update für User {}", event.getUserId());
         generateOptimalSchedule(event.getUserId(), LocalDate.now(), LocalDate.now().plusDays(14));
     }
 

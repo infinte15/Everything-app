@@ -16,6 +16,7 @@ public class CalendarEventService {
 
     private final CalendarEventRepository calendarEventRepository;
     private final UserRepository userRepository;
+    private final TaskRepository taskRepository;
 
     private final ApplicationEventPublisher eventPublisher;
 
@@ -45,6 +46,26 @@ public class CalendarEventService {
 
         if (event.getEventType() == null) {
             event.setEventType(EventType.OTHER);
+        }
+
+        // When creating a TASK-type event, also create a corresponding Task
+        if (event.getEventType() == EventType.TASK && event.getRelatedTask() == null) {
+            Task task = new Task();
+            task.setUser(user);
+            task.setTitle(event.getTitle());
+            task.setDescription(event.getDescription());
+            task.setPriority(3);
+            task.setEstimatedDurationMinutes(
+                    (int) java.time.Duration.between(event.getStartTime(), event.getEndTime()).toMinutes());
+            task.setDeadline(event.getEndTime());
+            task.setScheduledStartTime(event.getStartTime());
+            task.setScheduledEndTime(event.getEndTime());
+            task.setStatus(TaskStatus.TODO);
+            task.setSpaceType(SpaceType.TASKS);
+            task.setCreatedAt(LocalDateTime.now());
+
+            Task savedTask = taskRepository.save(task);
+            event.setRelatedTask(savedTask);
         }
 
         CalendarEvent savedEvent = calendarEventRepository.save(event);

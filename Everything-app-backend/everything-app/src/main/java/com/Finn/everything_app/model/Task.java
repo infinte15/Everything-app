@@ -39,8 +39,8 @@ public class Task {
     private TaskStatus status = TaskStatus.TODO;
 
     @Enumerated(EnumType.STRING)
-    @Column(name = "space_type")
-    private SpaceType spaceType = SpaceType.ANYWHERE;
+    @Column(name = "space_type", nullable = false)
+    private SpaceType spaceType = SpaceType.TASKS;
 
     @Column(name = "created_at")
     private LocalDateTime createdAt;

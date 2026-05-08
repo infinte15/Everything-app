@@ -30,6 +30,11 @@ class ApiService {
   /// Get Headers
   Future<Map<String, String>> getHeaders() async {
     final token = await getToken();
+    if (token == null) {
+      debugPrint('🔑 [ApiService] WARNING: No token found in storage!');
+    } else {
+      debugPrint('🔑 [ApiService] Token found (length: ${token.length})');
+    }
     
     return {
       'Content-Type': 'application/json',

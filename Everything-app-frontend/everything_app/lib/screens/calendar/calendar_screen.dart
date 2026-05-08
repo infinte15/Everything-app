@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
 import '../../providers/calendar_provider.dart';
+import '../../providers/task_provider.dart';
 import '../../config/app_theme.dart';
 import '../../models/calendar_event.dart';
 
@@ -740,12 +741,16 @@ class _TimelineGridState extends State<_TimelineGrid> {
                           for (int c = 0; c < widget.columnDates.length; c++) {
                             if (isSameDay(widget.columnDates[c], now)) {
                               final colW = constraints.maxWidth / widget.columns;
-                              return Positioned(
-                                left: c * colW,
-                                top: 0,
-                                width: colW,
-                                height: totalHeight,
-                                child: Container(color: AppTheme.primaryColor.withValues(alpha: 0.03)),
+                              return Stack(
+                                children: [
+                                  Positioned(
+                                    left: c * colW,
+                                    top: 0,
+                                    width: colW,
+                                    height: totalHeight,
+                                    child: Container(color: AppTheme.primaryColor.withValues(alpha: 0.03)),
+                                  ),
+                                ],
                               );
                             }
                           }
@@ -1630,7 +1635,11 @@ class _CreateEventSheetState extends State<_CreateEventSheet> {
                     shape: const RoundedRectangleBorder(borderRadius: BorderRadius.zero),
                   ),
                   onPressed: () async {
-                    if (_titleController.text.trim().isEmpty) return;
+                    debugPrint('🚀 [CreateEvent] Button pressed');
+                    if (_titleController.text.trim().isEmpty) {
+                      debugPrint('⚠️ [CreateEvent] Title is empty, returning');
+                      return;
+                    }
                     final event = CalendarEvent(
                       title: _titleController.text.trim(),
                       description: _descController.text.trim().isEmpty ? null : _descController.text.trim(),
@@ -1639,8 +1648,36 @@ class _CreateEventSheetState extends State<_CreateEventSheet> {
                       eventType: _type,
                       isFixed: _isFixed,
                     );
-                    await context.read<CalendarProvider>().addEvent(event);
-                    if (context.mounted) Navigator.pop(context);
+                    debugPrint('📡 [CreateEvent] Calling addEvent for: ${event.title}');
+                    final success = await context.read<CalendarProvider>().addEvent(event);
+                    debugPrint('🏁 [CreateEvent] addEvent result: $success');
+                    
+                    if (context.mounted) {
+                      debugPrint('🚪 [CreateEvent] Context is mounted, popping and showing feedback');
+                      if (success) {
+                        if (_type == 'TASK') {
+                          context.read<TaskProvider>().loadTasks();
+                        }
+                        Navigator.pop(context);
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: Text('✅ ${_type == 'TASK' ? 'Task' : 'Event'} "${event.title}" created'),
+                            behavior: SnackBarBehavior.floating,
+                            backgroundColor: const Color(0xFF1A1A24),
+                          ),
+                        );
+                      } else {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                            content: Text('❌ Failed to create event. Please try again.'),
+                            behavior: SnackBarBehavior.floating,
+                            backgroundColor: Color(0xFFEF4444),
+                          ),
+                        );
+                      }
+                    } else {
+                      debugPrint('❌ [CreateEvent] Context NOT mounted after await');
+                    }
                   },
                   child: const Text('Create Event', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: Colors.white)),
                 ),
