@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import 'package:provider/provider.dart';
 import '../config/app_theme.dart';
+import '../models/habit.dart';
+import '../providers/habit_provider.dart';
 
 class CreateHabitSheet extends StatefulWidget {
   const CreateHabitSheet({super.key});
@@ -371,7 +374,51 @@ class _CreateHabitSheetState extends State<CreateHabitSheet> {
               ),
 
             const SizedBox(height: 32),
-            SizedBox(width: double.infinity, height: 48, child: FilledButton(onPressed: () => Navigator.pop(context), style: FilledButton.styleFrom(backgroundColor: accentColor, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8))), child: const Text('Save Habit', style: TextStyle(fontWeight: FontWeight.bold)))),
+            SizedBox(
+              width: double.infinity,
+              height: 48,
+              child: FilledButton(
+                onPressed: () async {
+                  if (_nameController.text.isEmpty) {
+                    setState(() => _showNameError = true);
+                    return;
+                  }
+
+                  final now = DateTime.now();
+                  final preferredTime = DateTime(now.year, now.month, now.day, _idealTime.hour, _idealTime.minute);
+                  
+                  final habit = Habit(
+                    name: _nameController.text,
+                    description: _notesController.text.isEmpty ? null : _notesController.text,
+                    frequency: _repeatType.toUpperCase(),
+                    monday: _idealDays.contains(1),
+                    tuesday: _idealDays.contains(2),
+                    wednesday: _idealDays.contains(3),
+                    thursday: _idealDays.contains(4),
+                    friday: _idealDays.contains(5),
+                    saturday: _idealDays.contains(6),
+                    sunday: _idealDays.contains(7),
+                    preferredTime: preferredTime,
+                    durationMinutes: int.tryParse(_minDurationController.text) ?? 30,
+                    startDate: _startDate,
+                    endDate: _endDate,
+                  );
+
+                  final success = await context.read<HabitProvider>().addHabit(habit);
+                  if (success && mounted) {
+                    Navigator.pop(context);
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('Habit gespeichert')),
+                    );
+                  }
+                },
+                style: FilledButton.styleFrom(
+                  backgroundColor: accentColor,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                ),
+                child: const Text('Save Habit', style: TextStyle(fontWeight: FontWeight.bold)),
+              ),
+            ),
             const SizedBox(height: 20),
           ],
         ),

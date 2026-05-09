@@ -10,11 +10,11 @@ class AuthProvider with ChangeNotifier {
   }
   
   // TEST MODE: Always logged in for easy testing
-  bool _isLoggedIn = true; 
+  bool _isLoggedIn = false; 
   bool _isLoading = false;
-  String? _username = "Tester";
-  String? _email = "test@everything.app";
-  int? _userId = 1;
+  String? _username;
+  String? _email;
+  int? _userId;
   String? _error;
 
   // Getters
@@ -30,9 +30,7 @@ class AuthProvider with ChangeNotifier {
     _isLoading = true;
     notifyListeners();
 
-    // In Test Mode, we skip the actual token check
-    // _isLoggedIn = await _authService.isLoggedIn();
-    _isLoggedIn = true;
+    _isLoggedIn = await _authService.isLoggedIn();
     
     _isLoading = false;
     notifyListeners();

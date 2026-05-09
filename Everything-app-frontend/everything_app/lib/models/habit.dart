@@ -1,4 +1,6 @@
 
+import 'package:intl/intl.dart';
+
 class Habit {
   final int? id;
   final String name;
@@ -84,11 +86,11 @@ class Habit {
       'saturday': saturday,
       'sunday': sunday,
       'preferredTime': preferredTime != null
-          ? '${preferredTime!.hour.toString().padLeft(2, '0')}:${preferredTime!.minute.toString().padLeft(2, '0')}'
+          ? '${preferredTime!.hour.toString().padLeft(2, '0')}:${preferredTime!.minute.toString().padLeft(2, '0')}:00'
           : null,
       'durationMinutes': durationMinutes,
-      'startDate': startDate?.toIso8601String(),
-      'endDate': endDate?.toIso8601String(),
+      'startDate': startDate != null ? DateFormat('yyyy-MM-dd').format(startDate!) : null,
+      'endDate': endDate != null ? DateFormat('yyyy-MM-dd').format(endDate!) : null,
       'currentStreak': currentStreak,
       'longestStreak': longestStreak,
     };

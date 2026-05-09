@@ -2,9 +2,12 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
 import '../../providers/task_provider.dart';
+import '../../providers/habit_provider.dart';
 import '../../config/app_theme.dart';
 import '../../models/task.dart';
+import '../../models/habit.dart';
 import '../../widgets/create_task_sheet.dart';
+import '../../widgets/create_habit_sheet.dart';
 
 class TasksScreen extends StatefulWidget {
   final String title;
@@ -30,7 +33,11 @@ class _TasksScreenState extends State<TasksScreen>
     super.initState();
     _tabController = TabController(length: 3, vsync: this);
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      context.read<TaskProvider>().loadTasks();
+      if (widget.spaceType == 'HABITS') {
+        context.read<HabitProvider>().loadHabits();
+      } else {
+        context.read<TaskProvider>().loadTasks();
+      }
     });
   }
 
@@ -42,6 +49,42 @@ class _TasksScreenState extends State<TasksScreen>
 
   @override
   Widget build(BuildContext context) {
+    if (widget.spaceType == 'HABITS') {
+      final habitProvider = context.watch<HabitProvider>();
+      final habits = habitProvider.habits;
+
+      return Scaffold(
+        appBar: AppBar(
+          leading: const BackButton(),
+          title: Text(widget.title),
+        ),
+        body: habitProvider.isLoading
+            ? const Center(child: CircularProgressIndicator())
+            : ListView.builder(
+                padding: const EdgeInsets.all(16),
+                itemCount: habits.length,
+                itemBuilder: (_, i) {
+                  final h = habits[i];
+                  return Card(
+                    margin: const EdgeInsets.only(bottom: 12),
+                    child: ListTile(
+                      leading: const CircleAvatar(child: Icon(Icons.repeat)),
+                      title: Text(h.name),
+                      subtitle: Text(h.frequency),
+                      trailing: Checkbox(value: false, onChanged: (v) {}),
+                    ),
+                  );
+                },
+              ),
+        floatingActionButton: FloatingActionButton.extended(
+          onPressed: () => _showCreateHabitDialog(context),
+          icon: const Icon(Icons.add),
+          label: const Text('Neuer Habit'),
+          backgroundColor: const Color(0xFF81C784),
+        ),
+      );
+    }
+
     final tasksProvider = context.watch<TaskProvider>();
     
     // Filter tasks based on spaceType if provided
@@ -84,6 +127,15 @@ class _TasksScreenState extends State<TasksScreen>
         label: const Text('Neue Aufgabe'),
         backgroundColor: AppTheme.tasksColor,
       ),
+    );
+  }
+
+  void _showCreateHabitDialog(BuildContext context) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => const CreateHabitSheet(),
     );
   }
 

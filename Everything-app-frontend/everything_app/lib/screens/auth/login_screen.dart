@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:go_router/go_router.dart';
@@ -217,6 +218,17 @@ class _LoginScreenState extends State<LoginScreen>
                                 ),
                               ),
                               const SizedBox(height: 12),
+                              const SizedBox(height: 12),
+                              if (kDebugMode)
+                                TextButton(
+                                  onPressed: () {
+                                    _usernameController.text = 'tester';
+                                    _passwordController.text = 'password123';
+                                    _login();
+                                  },
+                                  child: const Text('Quick Login (Dev)',
+                                      style: TextStyle(color: Colors.grey)),
+                                ),
                               Row(
                                 mainAxisAlignment: MainAxisAlignment.center,
                                 children: [
