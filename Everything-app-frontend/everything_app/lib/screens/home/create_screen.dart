@@ -6,6 +6,8 @@ import '../../providers/calendar_provider.dart';
 import '../../config/app_theme.dart';
 import '../../models/task.dart';
 import '../../models/calendar_event.dart';
+import '../../widgets/create_task_sheet.dart';
+import '../../widgets/create_event_sheet.dart';
 
 class CreateScreen extends StatelessWidget {
   const CreateScreen({super.key});
@@ -68,165 +70,20 @@ class CreateScreen extends StatelessWidget {
   }
 
   void _showCreateTask(BuildContext context) {
-    final titleController = TextEditingController();
-    int priority = 3;
-    int duration = 60;
-
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
-      shape: const RoundedRectangleBorder(
-          borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
-      builder: (ctx) => StatefulBuilder(
-        builder: (ctx2, setState) => Padding(
-          padding: EdgeInsets.only(
-              left: 24,
-              right: 24,
-              top: 24,
-              bottom: MediaQuery.of(ctx2).viewInsets.bottom + 24),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Row(children: [
-                Container(
-                  padding: const EdgeInsets.all(8),
-                  decoration: BoxDecoration(
-                    color: AppTheme.tasksColor.withValues(alpha: 0.1),
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: Icon(Icons.task_alt, color: AppTheme.tasksColor),
-                ),
-                const SizedBox(width: 12),
-                const Text('Neue Aufgabe',
-                    style:
-                        TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
-              ]),
-              const SizedBox(height: 20),
-              TextField(
-                controller: titleController,
-                autofocus: true,
-                decoration: const InputDecoration(
-                  labelText: 'Titel',
-                  border: OutlineInputBorder(),
-                ),
-              ),
-              const SizedBox(height: 16),
-              Text('Priorität', style: Theme.of(ctx2).textTheme.labelLarge),
-              const SizedBox(height: 8),
-              Row(
-                children: [1, 2, 3, 4, 5].map((p) {
-                  final color = AppTheme.getPriorityColor(p);
-                  return Expanded(
-                    child: Padding(
-                      padding: const EdgeInsets.only(right: 4),
-                      child: GestureDetector(
-                        onTap: () => setState(() => priority = p),
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(vertical: 10),
-                          decoration: BoxDecoration(
-                            color: priority == p
-                                ? color
-                                : color.withValues(alpha: 0.1),
-                            borderRadius: BorderRadius.circular(8),
-                          ),
-                          child: Text('P$p',
-                              textAlign: TextAlign.center,
-                              style: TextStyle(
-                                color: priority == p ? Colors.white : color,
-                                fontWeight: FontWeight.bold,
-                              )),
-                        ),
-                      ),
-                    ),
-                  );
-                }).toList(),
-              ),
-              const SizedBox(height: 16),
-              FilledButton(
-                onPressed: () async {
-                  if (titleController.text.isEmpty) return;
-                  await context.read<TaskProvider>().addTask(Task(
-                        title: titleController.text,
-                        priority: priority,
-                        estimatedDurationMinutes: duration,
-                        status: 'TODO',
-                      ));
-                  if (context.mounted) Navigator.pop(context);
-                },
-                style: FilledButton.styleFrom(
-                    backgroundColor: AppTheme.tasksColor),
-                child: const Text('Aufgabe erstellen'),
-              ),
-            ],
-          ),
-        ),
-      ),
+      backgroundColor: Colors.transparent,
+      builder: (_) => const CreateTaskSheet(),
     );
   }
 
   void _showCreateEvent(BuildContext context) {
-    final titleController = TextEditingController();
-    DateTime startTime = DateTime.now().add(const Duration(hours: 1));
-    DateTime endTime = DateTime.now().add(const Duration(hours: 2));
-
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
-      shape: const RoundedRectangleBorder(
-          borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
-      builder: (ctx) => Padding(
-        padding: EdgeInsets.only(
-            left: 24,
-            right: 24,
-            top: 24,
-            bottom: MediaQuery.of(ctx).viewInsets.bottom + 24),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Row(children: [
-              Container(
-                padding: const EdgeInsets.all(8),
-                decoration: BoxDecoration(
-                  color: AppTheme.primaryColor.withValues(alpha: 0.1),
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: Icon(Icons.event, color: AppTheme.primaryColor),
-              ),
-              const SizedBox(width: 12),
-              const Text('Neues Event',
-                  style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
-            ]),
-            const SizedBox(height: 20),
-            TextField(
-              controller: titleController,
-              autofocus: true,
-              decoration: const InputDecoration(
-                labelText: 'Titel',
-                border: OutlineInputBorder(),
-              ),
-            ),
-            const SizedBox(height: 16),
-            const Text('Start- und Endzeit im Kalender wählen',
-                style: TextStyle(color: Colors.grey)),
-            const SizedBox(height: 16),
-            FilledButton(
-              onPressed: () async {
-                if (titleController.text.isEmpty) return;
-                await context.read<CalendarProvider>().addEvent(CalendarEvent(
-                      title: titleController.text,
-                      startTime: startTime,
-                      endTime: endTime,
-                      eventType: 'OTHER',
-                    ));
-                if (context.mounted) Navigator.pop(context);
-              },
-              child: const Text('Event erstellen'),
-            ),
-          ],
-        ),
-      ),
+      backgroundColor: Colors.transparent,
+      builder: (_) => CreateEventSheet(selectedDay: DateTime.now()),
     );
   }
 }

@@ -4,6 +4,7 @@ import 'package:intl/intl.dart';
 import '../../providers/task_provider.dart';
 import '../../config/app_theme.dart';
 import '../../models/task.dart';
+import '../../widgets/create_task_sheet.dart';
 
 class TasksScreen extends StatefulWidget {
   final String title;
@@ -111,9 +112,8 @@ class _TasksScreenState extends State<TasksScreen>
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
-      shape: const RoundedRectangleBorder(
-          borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
-      builder: (_) => _CreateTaskSheet(spaceType: widget.spaceType),
+      backgroundColor: Colors.transparent,
+      builder: (_) => CreateTaskSheet(spaceType: widget.spaceType),
     );
   }
 }
@@ -307,183 +307,6 @@ class _TaskTile extends StatelessWidget {
   }
 }
 
-// ─── Create Task Sheet ─────────────────────────────────────────────────────────
-
-class _CreateTaskSheet extends StatefulWidget {
-  final String? spaceType;
-  const _CreateTaskSheet({this.spaceType});
-
-  @override
-  State<_CreateTaskSheet> createState() => _CreateTaskSheetState();
-}
-
-class _CreateTaskSheetState extends State<_CreateTaskSheet> {
-  final _titleController = TextEditingController();
-  final _descController = TextEditingController();
-  int _priority = 3;
-  DateTime? _deadline;
-  int _duration = 60;
-
-  @override
-  void dispose() {
-    _titleController.dispose();
-    _descController.dispose();
-    super.dispose();
-  }
-
-  Future<void> _create() async {
-    if (_titleController.text.isEmpty) return;
-    final task = Task(
-      title: _titleController.text.trim(),
-      description: _descController.text.trim().isEmpty
-          ? null
-          : _descController.text.trim(),
-      priority: _priority,
-      deadline: _deadline,
-      estimatedDurationMinutes: _duration,
-      status: 'TODO',
-      spaceType: widget.spaceType ?? 'TASKS', // Default to current space
-    );
-    await context.read<TaskProvider>().addTask(task);
-    if (mounted) Navigator.pop(context);
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    return Padding(
-      padding: EdgeInsets.only(
-        left: 24,
-        right: 24,
-        top: 24,
-        bottom: MediaQuery.of(context).viewInsets.bottom + 24,
-      ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Text('Neue Aufgabe',
-              style:
-                  theme.textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold)),
-          const SizedBox(height: 20),
-          TextField(
-            controller: _titleController,
-            autofocus: true,
-            decoration: const InputDecoration(
-              labelText: 'Titel *',
-              border: OutlineInputBorder(),
-            ),
-          ),
-          const SizedBox(height: 12),
-          TextField(
-            controller: _descController,
-            maxLines: 2,
-            decoration: const InputDecoration(
-              labelText: 'Beschreibung (optional)',
-              border: OutlineInputBorder(),
-            ),
-          ),
-          const SizedBox(height: 16),
-
-          // Priority
-          Text('Priorität', style: theme.textTheme.labelLarge),
-          const SizedBox(height: 8),
-          Row(
-            children: [1, 2, 3, 4, 5].map((p) {
-              final color = AppTheme.getPriorityColor(p);
-              return Expanded(
-                child: Padding(
-                  padding: const EdgeInsets.only(right: 4),
-                  child: InkWell(
-                    onTap: () => setState(() => _priority = p),
-                    borderRadius: BorderRadius.circular(8),
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(vertical: 12),
-                      decoration: BoxDecoration(
-                        color: _priority == p
-                            ? color
-                            : color.withValues(alpha: 0.1),
-                        borderRadius: BorderRadius.circular(8),
-                        border: Border.all(color: color.withValues(alpha: 0.5)),
-                      ),
-                      child: Text(
-                        'P$p',
-                        textAlign: TextAlign.center,
-                        style: TextStyle(
-                          color: _priority == p ? Colors.white : color,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-              );
-            }).toList(),
-          ),
-          const SizedBox(height: 16),
-
-          // Deadline
-          ListTile(
-            contentPadding: EdgeInsets.zero,
-            leading: const Icon(Icons.calendar_today),
-            title: Text(_deadline == null
-                ? 'Fälligkeitsdatum wählen'
-                : DateFormat('dd.MM.yyyy HH:mm').format(_deadline!)),
-            trailing: _deadline != null
-                ? IconButton(
-                    icon: const Icon(Icons.clear),
-                    onPressed: () => setState(() => _deadline = null),
-                  )
-                : null,
-            onTap: () async {
-              final date = await showDatePicker(
-                context: context,
-                initialDate: DateTime.now(),
-                firstDate: DateTime.now(),
-                lastDate: DateTime.now().add(const Duration(days: 365)),
-              );
-              if (date != null && mounted) {
-                setState(() => _deadline = date);
-              }
-            },
-          ),
-          const SizedBox(height: 16),
-
-          // Duration
-          Row(
-            children: [
-              const Icon(Icons.timer_outlined),
-              const SizedBox(width: 8),
-              Text('Dauer: $_duration Min.',
-                  style: theme.textTheme.bodyMedium),
-              Expanded(
-                child: Slider(
-                  value: _duration.toDouble(),
-                  min: 15,
-                  max: 480,
-                  divisions: 31,
-                  label: '$_duration Min.',
-                  onChanged: (v) => setState(() => _duration = v.round()),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 16),
-
-          FilledButton(
-            onPressed: _create,
-            style: FilledButton.styleFrom(
-              padding: const EdgeInsets.symmetric(vertical: 16),
-              backgroundColor: AppTheme.tasksColor,
-            ),
-            child: const Text('Aufgabe erstellen',
-                style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
-          ),
-        ],
-      ),
-    );
-  }
-}
 
 // ─── Search Delegate ───────────────────────────────────────────────────────────
 
