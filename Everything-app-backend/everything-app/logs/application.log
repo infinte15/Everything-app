@@ -2146,3 +2146,17 @@ java.lang.RuntimeException: Preferences nicht gefunden
         tasks t1_0 
     where
         t1_0.user_id=?
+2026-05-09 16:58:45 [http-nio-8080-exec-7] DEBUG o.s.security.web.FilterChainProxy - Securing GET /api/tasks
+2026-05-09 16:58:45 [http-nio-8080-exec-7] ERROR c.F.e.s.JwtAuthenticationFilter - JWT Token validation failed: JWT expired 1529454 milliseconds ago at 2026-05-09T14:33:16.000Z. Current time: 2026-05-09T14:58:45.454Z. Allowed clock skew: 0 milliseconds.
+2026-05-09 16:58:45 [http-nio-8080-exec-7] DEBUG o.s.s.w.a.AnonymousAuthenticationFilter - Set SecurityContextHolder to anonymous SecurityContext
+2026-05-09 16:58:45 [http-nio-8080-exec-7] DEBUG o.s.s.w.a.Http403ForbiddenEntryPoint - Pre-authenticated entry point called. Rejecting access
+2026-05-09 16:58:45 [http-nio-8080-exec-7] DEBUG o.s.security.web.FilterChainProxy - Securing GET /error
+2026-05-09 16:58:45 [http-nio-8080-exec-7] DEBUG o.s.security.web.FilterChainProxy - Secured GET /error
+2026-05-09 16:58:45 [http-nio-8080-exec-7] DEBUG o.s.s.w.a.AnonymousAuthenticationFilter - Set SecurityContextHolder to anonymous SecurityContext
+2026-05-09 16:58:45 [http-nio-8080-exec-8] DEBUG o.s.security.web.FilterChainProxy - Securing GET /api/calendar/events?startDate=2026-05-01T00:00:00.000&endDate=2026-05-31T23:59:59.000
+2026-05-09 16:58:45 [http-nio-8080-exec-8] ERROR c.F.e.s.JwtAuthenticationFilter - JWT Token validation failed: JWT expired 1529534 milliseconds ago at 2026-05-09T14:33:16.000Z. Current time: 2026-05-09T14:58:45.534Z. Allowed clock skew: 0 milliseconds.
+2026-05-09 16:58:45 [http-nio-8080-exec-8] DEBUG o.s.s.w.a.AnonymousAuthenticationFilter - Set SecurityContextHolder to anonymous SecurityContext
+2026-05-09 16:58:45 [http-nio-8080-exec-8] DEBUG o.s.s.w.a.Http403ForbiddenEntryPoint - Pre-authenticated entry point called. Rejecting access
+2026-05-09 16:58:45 [http-nio-8080-exec-8] DEBUG o.s.security.web.FilterChainProxy - Securing GET /error?startDate=2026-05-01T00:00:00.000&endDate=2026-05-31T23:59:59.000
+2026-05-09 16:58:45 [http-nio-8080-exec-8] DEBUG o.s.security.web.FilterChainProxy - Secured GET /error?startDate=2026-05-01T00:00:00.000&endDate=2026-05-31T23:59:59.000
+2026-05-09 16:58:45 [http-nio-8080-exec-8] DEBUG o.s.s.w.a.AnonymousAuthenticationFilter - Set SecurityContextHolder to anonymous SecurityContext

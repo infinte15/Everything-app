@@ -8,6 +8,7 @@ import '../../models/task.dart';
 import '../../models/calendar_event.dart';
 import '../../widgets/create_task_sheet.dart';
 import '../../widgets/create_event_sheet.dart';
+import '../../widgets/create_habit_sheet.dart';
 
 class CreateScreen extends StatelessWidget {
   const CreateScreen({super.key});
@@ -28,6 +29,13 @@ class CreateScreen extends StatelessWidget {
         subtitle: 'Kalendereintrag oder Termin',
         color: AppTheme.primaryColor,
         onTap: () => _showCreateEvent(context),
+      ),
+      _CreateOption(
+        icon: Icons.repeat,
+        title: 'Neuer Habit',
+        subtitle: 'Gewohnheiten aufbauen und tracken',
+        color: const Color(0xFF81C784),
+        onTap: () => _showCreateHabit(context),
       ),
       _CreateOption(
         icon: Icons.notes,
@@ -84,6 +92,15 @@ class CreateScreen extends StatelessWidget {
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
       builder: (_) => CreateEventSheet(selectedDay: DateTime.now()),
+    );
+  }
+
+  void _showCreateHabit(BuildContext context) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => const CreateHabitSheet(),
     );
   }
 }
