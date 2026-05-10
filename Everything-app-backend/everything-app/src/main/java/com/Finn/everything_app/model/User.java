@@ -2,7 +2,7 @@ package com.Finn.everything_app.model;
 
 import jakarta.persistence.*;
 import lombok.Data;
-import com.Finn.everything_app.model.*;
+
 
 import java.time.LocalDateTime;
 import java.util.List;

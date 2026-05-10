@@ -36,7 +36,7 @@ import java.util.stream.Collectors;
 @Slf4j
 public class SmartSchedulerService {
 
-    private final TaskRepository             taskRepository;
+
     private final CalendarEventRepository    calendarEventRepository;
     private final HabitRepository            habitRepository;
     private final WorkoutSessionRepository   workoutSessionRepository;

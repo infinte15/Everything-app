@@ -5,7 +5,7 @@ import com.Finn.everything_app.model.TaskStatus;
 import com.Finn.everything_app.model.User;
 import com.Finn.everything_app.repository.TaskRepository;
 import lombok.RequiredArgsConstructor;
-import org.springframework.stereotype.Repository;
+
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.context.ApplicationEventPublisher;

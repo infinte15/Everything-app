@@ -3,7 +3,7 @@ package com.Finn.everything_app.model;
 import jakarta.persistence.*;
 import lombok.Data;
 import java.time.LocalDateTime;
-import java.util.List;
+
 
 @Entity
 @Table(name = "study_notes")
