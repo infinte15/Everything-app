@@ -221,10 +221,9 @@ class _LoginScreenState extends State<LoginScreen>
                               const SizedBox(height: 12),
                               if (kDebugMode)
                                 TextButton(
-                                  onPressed: () {
-                                    _usernameController.text = 'tester';
-                                    _passwordController.text = 'password123';
-                                    _login();
+                                  onPressed: () async {
+                                    final success = await context.read<AuthProvider>().devLogin();
+                                    if (success && mounted) context.go('/home');
                                   },
                                   child: const Text('Quick Login (Dev)',
                                       style: TextStyle(color: Colors.grey)),

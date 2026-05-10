@@ -60,6 +60,28 @@ class AuthProvider with ChangeNotifier {
     return result['success'];
   }
 
+  Future<bool> devLogin() async {
+    _isLoading = true;
+    _error = null;
+    notifyListeners();
+
+    final result = await _authService.devLogin();
+
+    if (result['success']) {
+      _isLoggedIn = true;
+      _username = result['data']['username'];
+      _email = result['data']['email'];
+      _userId = result['data']['userId'];
+      _error = null;
+    } else {
+      _error = result['error'];
+    }
+
+    _isLoading = false;
+    notifyListeners();
+
+    return result['success'];
+  }
 
   Future<bool> register(String username, String email, String password) async {
     _isLoading = true;

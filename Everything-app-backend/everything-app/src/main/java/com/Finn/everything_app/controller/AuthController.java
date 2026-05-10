@@ -73,4 +73,31 @@ public class AuthController {
             );
         }
     }
+
+    //POST /api/auth/dev-login --> Auto-Login für Testing
+    @PostMapping("/dev-login")
+    public ResponseEntity<?> devLogin() {
+        try {
+            User user = null;
+            try {
+                user = userService.findByUsername("dev_tester");
+            } catch (Exception e) {
+                // User existiert nicht, erstellen wir ihn
+                user = userService.registerUser("dev_tester", "dev@tester.com", "devpassword123");
+            }
+
+            userService.updateLastLogin(user.getId());
+
+            String token = jwtUtil.generateToken(user.getUsername(), user.getId());
+
+            return ResponseEntity.ok(
+                    new LoginResponse(token, user.getId(), user.getUsername(), user.getEmail())
+            );
+
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(
+                    new ErrorResponse("Fehler beim Dev-Login: " + e.getMessage())
+            );
+        }
+    }
 }

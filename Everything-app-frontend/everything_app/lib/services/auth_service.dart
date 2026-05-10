@@ -40,6 +40,38 @@ class AuthService {
     }
   }
 
+  /// Dev Login Bypass
+  Future<Map<String, dynamic>> devLogin() async {
+    try {
+      final response = await _apiService.post(
+        ApiConfig.devLogin,
+        {},
+      );
+
+      if (_apiService.isSuccess(response)) {
+        final data = _apiService.parseResponse(response);
+        
+        // Token speichern
+        await _apiService.saveToken(data['token']);
+        
+        return {
+          'success': true,
+          'data': data,
+        };
+      } else {
+        return {
+          'success': false,
+          'error': _apiService.getErrorMessage(response),
+        };
+      }
+    } catch (e) {
+      return {
+        'success': false,
+        'error': 'Verbindungsfehler: $e',
+      };
+    }
+  }
+
   /// Register
   Future<Map<String, dynamic>> register(
     String username,

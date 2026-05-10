@@ -3,6 +3,7 @@
 /// - Echtes Gerät im gleichen WLAN: http://DEINE_IP:8080/api
 /// - iOS Simulator: http://localhost:8080/api
 class ApiConfig {
+  // Wir nutzen jetzt adb reverse tcp:8080 tcp:8080, daher funktioniert localhost auch auf dem echten Handy!
   static const String baseUrl = 'http://localhost:8080/api';
   
   static const Duration timeout = Duration(seconds: 30);
@@ -10,6 +11,7 @@ class ApiConfig {
   //AUTH ENDPOINTS
   static const String login = '$baseUrl/auth/login';
   static const String register = '$baseUrl/auth/register';
+  static const String devLogin = '$baseUrl/auth/dev-login';
   
   //TASK ENDPOINTS 
   static const String tasks = '$baseUrl/tasks';
