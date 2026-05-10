@@ -4,6 +4,7 @@ import 'package:google_fonts/google_fonts.dart';
 import '../../providers/study_provider.dart';
 import '../../models/study_note.dart';
 import '../../config/app_theme.dart';
+import '../../widgets/create_note_sheet.dart';
 
 class NotesScreen extends StatefulWidget {
   const NotesScreen({super.key});
@@ -87,7 +88,7 @@ class _NotesScreenState extends State<NotesScreen> {
                           crossAxisCount: 2,
                           mainAxisSpacing: 12,
                           crossAxisSpacing: 12,
-                          childAspectRatio: 0.85,
+                          childAspectRatio: 1.8,
                         ),
                         itemCount: notes.length,
                         itemBuilder: (context, index) => _NoteCard(note: notes[index]),
@@ -96,10 +97,19 @@ class _NotesScreenState extends State<NotesScreen> {
         ],
       ),
       floatingActionButton: FloatingActionButton(
-        onPressed: () => _showAddNoteDialog(context),
+        onPressed: () => _showCreateNote(context),
         backgroundColor: const Color(0xFFC2C1FF),
         child: const Icon(Icons.add, color: Colors.black),
       ),
+    );
+  }
+
+  void _showCreateNote(BuildContext context) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => const CreateNoteSheet(),
     );
   }
 
@@ -119,80 +129,7 @@ class _NotesScreenState extends State<NotesScreen> {
     );
   }
 
-  void _showAddNoteDialog(BuildContext context) {
-    final titleController = TextEditingController();
-    final contentController = TextEditingController();
 
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: const Color(0xFF131313),
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
-      ),
-      builder: (context) => Padding(
-        padding: EdgeInsets.only(
-          bottom: MediaQuery.of(context).viewInsets.bottom + 24,
-          left: 24,
-          right: 24,
-          top: 24,
-        ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Text(
-              'Neue Notiz',
-              style: GoogleFonts.manrope(
-                fontSize: 20,
-                fontWeight: FontWeight.w800,
-                color: Colors.white,
-              ),
-            ),
-            const SizedBox(height: 20),
-            TextField(
-              controller: titleController,
-              style: const TextStyle(color: Colors.white),
-              decoration: const InputDecoration(
-                labelText: 'Titel',
-                labelStyle: TextStyle(color: Colors.grey),
-                enabledBorder: UnderlineInputBorder(borderSide: BorderSide(color: Colors.grey)),
-              ),
-            ),
-            const SizedBox(height: 16),
-            TextField(
-              controller: contentController,
-              maxLines: 5,
-              style: const TextStyle(color: Colors.white),
-              decoration: const InputDecoration(
-                hintText: 'Inhalt schreiben...',
-                hintStyle: TextStyle(color: Colors.grey),
-                border: InputBorder.none,
-              ),
-            ),
-            const SizedBox(height: 24),
-            ElevatedButton(
-              onPressed: () {
-                if (titleController.text.isNotEmpty) {
-                  context.read<StudyProvider>().addNote(
-                    title: titleController.text,
-                    content: contentController.text,
-                  );
-                  Navigator.pop(context);
-                }
-              },
-              style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFFC2C1FF),
-                foregroundColor: Colors.black,
-                padding: const EdgeInsets.symmetric(vertical: 16),
-              ),
-              child: const Text('Speichern', style: TextStyle(fontWeight: FontWeight.bold)),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
 }
 
 class _NoteCard extends StatelessWidget {
@@ -204,46 +141,96 @@ class _NoteCard extends StatelessWidget {
     return Container(
       decoration: BoxDecoration(
         color: const Color(0xFF252626),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: Colors.white.withValues(alpha: 0.1)),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.05)),
       ),
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.all(6),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.end,
+            children: [
+              SizedBox(
+                height: 16,
+                width: 16,
+                child: Checkbox(
+                  value: false,
+                  onChanged: (v) {
+                    if (v == true) _confirmDelete(context, note);
+                  },
+                  activeColor: const Color(0xFFC2C1FF),
+                  checkColor: Colors.black,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(2)),
+                  side: const BorderSide(color: Colors.grey, width: 0.8),
+                ),
+              ),
+            ],
+          ),
           Text(
             note.title,
             style: const TextStyle(
               color: Colors.white,
               fontWeight: FontWeight.bold,
-              fontSize: 16,
+              fontSize: 11,
             ),
-            maxLines: 2,
+            maxLines: 1,
             overflow: TextOverflow.ellipsis,
           ),
-          const SizedBox(height: 8),
+          const SizedBox(height: 1),
           Expanded(
             child: Text(
               note.content,
               style: TextStyle(
-                color: Colors.white.withValues(alpha: 0.7),
-                fontSize: 13,
+                color: Colors.white.withValues(alpha: 0.6),
+                fontSize: 9,
               ),
-              maxLines: 5,
+              maxLines: 1,
               overflow: TextOverflow.ellipsis,
             ),
           ),
-          const SizedBox(height: 8),
+          const SizedBox(height: 2),
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text(
-                'Heute',
-                style: TextStyle(color: Colors.white.withValues(alpha: 0.4), fontSize: 11),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFC2C1FF).withOpacity(0.08),
+                  borderRadius: BorderRadius.circular(2),
+                ),
+                child: Text(
+                  note.category?.toUpperCase() ?? 'PERSONAL',
+                  style: GoogleFonts.inter(color: const Color(0xFFC2C1FF), fontSize: 7, fontWeight: FontWeight.bold),
+                ),
               ),
               if (note.isFavorite)
-                const Icon(Icons.star, color: Colors.amber, size: 14),
+                const Icon(Icons.star, color: Colors.amber, size: 8),
             ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _confirmDelete(BuildContext context, StudyNote note) {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: const Color(0xFF1E1E1E),
+        title: const Text('Notiz löschen?', style: TextStyle(color: Colors.white)),
+        content: Text('Möchtest du "${note.title}" wirklich löschen?', style: const TextStyle(color: Colors.grey)),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Abbrechen', style: TextStyle(color: Colors.grey)),
+          ),
+          TextButton(
+            onPressed: () {
+              context.read<StudyProvider>().deleteNote(note.id!);
+              Navigator.pop(ctx);
+            },
+            child: const Text('Löschen', style: TextStyle(color: Colors.redAccent)),
           ),
         ],
       ),

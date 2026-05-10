@@ -6,8 +6,11 @@ import '../models/lesson_plan_entry.dart';
 import '../models/study_subject.dart';
 import '../models/study_grade.dart';
 import '../models/flashcard_deck.dart';
+import '../services/api_service.dart';
 
 class StudyProvider with ChangeNotifier {
+  final ApiService _apiService = ApiService();
+
   // ── Core data ───────────────────────────────────────────────────────────────
   List<StudyNote> _notes = [];
   List<StudyFolder> _folders = [];
@@ -122,42 +125,18 @@ class StudyProvider with ChangeNotifier {
   }
 
   Future<void> _loadNotes() async {
-    await Future.delayed(const Duration(milliseconds: 100));
-    _notes = [
-      StudyNote(
-        id: 1,
-        title: 'Analysis – Kapitel 3',
-        content: '# Integralrechnung\n\nDer **Hauptsatz** der Differentialrechnung verbindet Differentiation und Integration.\n\n## Formel\n\n∫ f(x) dx = F(b) - F(a)\n\n- [] Übungsaufgaben lösen\n- [] Klausurvorbereitung',
-        courseId: 1,
-        courseName: 'Mathematik',
-        category: 'f1',
-        tags: 'Analysis,Integration,status:in_progress',
-        isFavorite: true,
-        createdAt: DateTime.now().subtract(const Duration(days: 1)),
-      ),
-      StudyNote(
-        id: 2,
-        title: 'Java OOP Grundlagen',
-        content: '# Objektorientierte Programmierung\n\nKlassen, Objekte, Vererbung, Polymorphismus.\n\n## Prinzipien\n\n- Encapsulation\n- Inheritance\n- Polymorphism\n- Abstraction\n\n- [x] Klassen verstanden\n- [] Vererbung üben',
-        courseId: 2,
-        courseName: 'Programmierung',
-        category: 'f2',
-        tags: 'Java,OOP,status:todo',
-        isFavorite: false,
-        createdAt: DateTime.now().subtract(const Duration(days: 3)),
-      ),
-      StudyNote(
-        id: 3,
-        title: 'Klausurvorbereitung Mathe',
-        content: '# Klausur Cheat Sheet\n\nWichtige Formeln und Tipps für die Klausur.\n\n- [x] Kapitel 1 wiederholt\n- [x] Kapitel 2 wiederholt\n- [] Kapitel 3 wiederholt',
-        courseId: 1,
-        courseName: 'Mathematik',
-        category: 'f1',
-        tags: 'Klausur,status:done',
-        isFavorite: false,
-        createdAt: DateTime.now().subtract(const Duration(days: 7)),
-      ),
-    ];
+    try {
+      final response = await _apiService.get('/study/notes');
+      if (_apiService.isSuccess(response)) {
+        final List<dynamic> data = _apiService.parseResponse(response) ?? [];
+        _notes = data.map((n) => StudyNote.fromJson(n)).toList();
+        _notes.sort((a, b) => (b.id ?? 0).compareTo(a.id ?? 0));
+      } else {
+        debugPrint('Failed to load notes: ${response.statusCode}');
+      }
+    } catch (e) {
+      debugPrint('Error loading notes: $e');
+    }
   }
 
   Future<void> _loadStudyPlan() async {
@@ -287,7 +266,39 @@ class StudyProvider with ChangeNotifier {
   // ── Note CRUD ────────────────────────────────────────────────────────────────
   Future<StudyNote> addNote({required String title, String content = '',
       String? folderId, String? courseName}) async {
-    final note = StudyNote(
+    
+    final newNoteData = {
+      'title': title,
+      'content': content,
+      'courseName': courseName,
+      'category': folderId,
+      'tags': 'status:todo',
+    };
+
+    try {
+      final response = await _apiService.post('/study/notes', newNoteData);
+      if (_apiService.isSuccess(response)) {
+        final data = _apiService.parseResponse(response);
+        final note = StudyNote.fromJson(data);
+        _notes.insert(0, note);
+
+        if (folderId != null) {
+          final idx = _folders.indexWhere((f) => f.id == folderId);
+          if (idx != -1) {
+            _folders[idx] = _folders[idx].copyWith(
+              noteIds: [..._folders[idx].noteIds, note.id.toString()],
+            );
+          }
+        }
+        notifyListeners();
+        return note;
+      }
+    } catch (e) {
+      debugPrint('Error adding note: $e');
+    }
+
+    // Fallback if API fails
+    final fallbackNote = StudyNote(
       id: DateTime.now().millisecondsSinceEpoch,
       title: title,
       content: content,
@@ -296,18 +307,9 @@ class StudyProvider with ChangeNotifier {
       tags: 'status:todo',
       createdAt: DateTime.now(),
     );
-    _notes.insert(0, note);
-
-    if (folderId != null) {
-      final idx = _folders.indexWhere((f) => f.id == folderId);
-      if (idx != -1) {
-        _folders[idx] = _folders[idx].copyWith(
-          noteIds: [..._folders[idx].noteIds, note.id.toString()],
-        );
-      }
-    }
+    _notes.insert(0, fallbackNote);
     notifyListeners();
-    return note;
+    return fallbackNote;
   }
 
   Future<void> updateNote(StudyNote note) async {
@@ -319,8 +321,18 @@ class StudyProvider with ChangeNotifier {
   }
 
   Future<void> deleteNote(int id) async {
-    _notes.removeWhere((n) => n.id == id);
-    notifyListeners();
+    try {
+      final response = await _apiService.delete('/study/notes/$id');
+      if (_apiService.isSuccess(response)) {
+        _notes.removeWhere((n) => n.id == id);
+        notifyListeners();
+      }
+    } catch (e) {
+      debugPrint('Error deleting note: $e');
+      // Even if API fails, remove locally for better UX, or handle as needed
+      _notes.removeWhere((n) => n.id == id);
+      notifyListeners();
+    }
   }
 
   Future<void> toggleFavorite(int noteId) async {

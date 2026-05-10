@@ -9,6 +9,7 @@ import '../../models/calendar_event.dart';
 import '../../widgets/create_task_sheet.dart';
 import '../../widgets/create_event_sheet.dart';
 import '../../widgets/create_habit_sheet.dart';
+import '../../widgets/create_note_sheet.dart';
 
 class CreateScreen extends StatelessWidget {
   const CreateScreen({super.key});
@@ -42,7 +43,7 @@ class CreateScreen extends StatelessWidget {
         title: 'Neue Notiz',
         subtitle: 'Notiz für Studium oder Alltag',
         color: AppTheme.studyColor,
-        onTap: () => context.go('/study'),
+        onTap: () => _showCreateNote(context),
       ),
       _CreateOption(
         icon: Icons.fitness_center,
@@ -101,6 +102,15 @@ class CreateScreen extends StatelessWidget {
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
       builder: (_) => const CreateHabitSheet(),
+    );
+  }
+
+  void _showCreateNote(BuildContext context) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => const CreateNoteSheet(),
     );
   }
 }
