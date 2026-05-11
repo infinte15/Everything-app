@@ -17,23 +17,21 @@ class CreateEventSheet extends StatefulWidget {
 class _CreateEventSheetState extends State<CreateEventSheet> {
   final _titleController = TextEditingController();
   final _descController = TextEditingController();
-  late DateTime _date;
-  late DateTime _start;
-  late DateTime _end;
-  int _durationMinutes = 60;
-  String _type = 'TASK';
+  
+  late DateTime _startTime;
+  late DateTime _endTime;
+  String _type = 'Personal';
   bool _isFixed = false;
+  bool _showTitleError = false;
 
-  static const _types = ['TASK', 'STUDY', 'OTHER'];
-  static const _durations = [15, 30, 45, 60, 90, 120];
+  static const _types = ['Personal', 'Uni'];
 
   @override
   void initState() {
     super.initState();
-    _date = widget.selectedDay;
     final now = DateTime.now();
-    _start = DateTime(_date.year, _date.month, _date.day, now.hour, 0);
-    _end = _start.add(const Duration(hours: 1));
+    _startTime = DateTime(widget.selectedDay.year, widget.selectedDay.month, widget.selectedDay.day, now.hour, 0);
+    _endTime = _startTime.add(const Duration(hours: 1));
   }
 
   @override
@@ -43,275 +41,324 @@ class _CreateEventSheetState extends State<CreateEventSheet> {
     super.dispose();
   }
 
-  Future<void> _pickDate() async {
-    final picked = await showDatePicker(
+  Future<void> _pickDateTime(bool isEndTime) async {
+    final initialDate = isEndTime ? _endTime : _startTime;
+    final date = await showDatePicker(
       context: context,
-      initialDate: _date,
+      initialDate: initialDate,
       firstDate: DateTime.now().subtract(const Duration(days: 365)),
       lastDate: DateTime.now().add(const Duration(days: 365 * 2)),
     );
-    if (picked == null) return;
-    setState(() {
-      _date = picked;
-      _start = DateTime(_date.year, _date.month, _date.day, _start.hour, _start.minute);
-      _end = _start.add(Duration(minutes: _durationMinutes));
-    });
-  }
+    if (date == null) return;
 
-  Future<void> _pickTime() async {
-    final picked = await showTimePicker(
+    if (!mounted) return;
+    final time = await showTimePicker(
       context: context,
-      initialTime: TimeOfDay.fromDateTime(_start),
+      initialTime: TimeOfDay.fromDateTime(initialDate),
     );
-    if (picked == null) return;
+    if (time == null) return;
+
     setState(() {
-      _start = DateTime(_date.year, _date.month, _date.day, picked.hour, picked.minute);
-      _end = _start.add(Duration(minutes: _durationMinutes));
+      final newDateTime = DateTime(date.year, date.month, date.day, time.hour, time.minute);
+      if (isEndTime) {
+        _endTime = newDateTime;
+        if (_endTime.isBefore(_startTime)) {
+          _startTime = _endTime.subtract(const Duration(hours: 1));
+        }
+      } else {
+        _startTime = newDateTime;
+        if (_endTime.isBefore(_startTime)) {
+          _endTime = _startTime.add(const Duration(hours: 1));
+        }
+      }
     });
   }
 
-  void _setDuration(int minutes) {
-    setState(() {
-      _durationMinutes = minutes;
-      _end = _start.add(Duration(minutes: minutes));
-    });
-  }
-
-  String _formatDuration(int min) {
-    if (min < 60) return '${min}m';
-    if (min % 60 == 0) return '${min ~/ 60}h';
-    return '${min ~/ 60}h ${min % 60}m';
-  }
-
-  Color _typeColor(String type) {
-    switch (type.toUpperCase()) {
-      case 'TASK': return AppTheme.primaryColor;
-      case 'STUDY': return AppTheme.studyColor;
-      default: return AppTheme.primaryColor;
+  Future<void> _createEvent() async {
+    if (_titleController.text.trim().isEmpty) {
+      setState(() => _showTitleError = true);
+      return;
     }
-  }
 
-  IconData _typeIcon(String type) {
-    switch (type.toUpperCase()) {
-      case 'TASK': return Icons.check_circle_outline_rounded;
-      case 'STUDY': return Icons.menu_book_rounded;
-      default: return Icons.event_rounded;
+    final event = CalendarEvent(
+      title: _titleController.text.trim(),
+      description: _descController.text.trim().isEmpty ? null : _descController.text.trim(),
+      startTime: _startTime,
+      endTime: _endTime,
+      eventType: _type,
+      isFixed: _isFixed,
+    );
+
+    final success = await context.read<CalendarProvider>().addEvent(event);
+    if (mounted && success) {
+      if (_type == 'TASK') context.read<TaskProvider>().loadTasks();
+      Navigator.pop(context);
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text('✅ ${_type == 'TASK' ? 'Task' : 'Event'} "${event.title}" created'),
+        behavior: SnackBarBehavior.floating,
+        backgroundColor: const Color(0xFF1A1A24),
+      ));
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    final bg = isDark ? const Color(0xFF1A1A24) : Colors.white;
-    final borderCol = isDark ? const Color(0xFF2A2A38) : const Color(0xFFE8EAF0);
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+    final backgroundColor = isDark ? const Color(0xFF131313) : Colors.white;
+    final inputBgColor = isDark ? const Color(0xFF1E1E1E) : const Color(0xFFF7F8FC);
+    final borderColor = isDark ? const Color(0xFF333333) : const Color(0xFFE8EAF0);
+    const accentColor = Color(0xFF5856D6);
 
-    return Padding(
-      padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
-      child: Container(
-        margin: const EdgeInsets.all(12),
-        decoration: BoxDecoration(color: bg, borderRadius: BorderRadius.zero),
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.fromLTRB(20, 16, 20, 24),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Center(
-                child: Container(
-                  width: 40, height: 4,
-                  decoration: BoxDecoration(
-                    color: Colors.grey.withValues(alpha: 0.3),
-                    borderRadius: BorderRadius.circular(2),
+    return Container(
+      decoration: BoxDecoration(
+        color: backgroundColor,
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
+      ),
+      padding: EdgeInsets.only(
+        bottom: MediaQuery.of(context).viewInsets.bottom + 16,
+        left: 20,
+        right: 20,
+        top: 12,
+      ),
+      child: SingleChildScrollView(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Header
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                const Text('New Event', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700)),
+                IconButton(
+                  onPressed: () => Navigator.pop(context),
+                  icon: const Icon(Icons.close, size: 20),
+                  padding: EdgeInsets.zero,
+                  constraints: const BoxConstraints(),
+                ),
+              ],
+            ),
+            const SizedBox(height: 16),
+            
+            // Event Title Input
+            TextField(
+              controller: _titleController,
+              autofocus: true,
+              style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w500),
+              decoration: InputDecoration(
+                hintText: 'Event title...',
+                prefixIcon: const Icon(Icons.event_note, size: 22, color: Colors.grey),
+                filled: true,
+                fillColor: Colors.transparent,
+                enabledBorder: OutlineInputBorder(
+                  borderSide: BorderSide(color: _showTitleError ? Colors.red : borderColor),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                focusedBorder: OutlineInputBorder(
+                  borderSide: BorderSide(color: _showTitleError ? Colors.red : accentColor, width: 2),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                contentPadding: const EdgeInsets.symmetric(vertical: 12),
+              ),
+              onChanged: (val) {
+                if (_showTitleError && val.isNotEmpty) {
+                  setState(() => _showTitleError = false);
+                }
+              },
+            ),
+            if (_showTitleError)
+              const Padding(
+                padding: EdgeInsets.only(top: 4, left: 4),
+                child: Text('Event title is required', style: TextStyle(color: Colors.red, fontSize: 12)),
+              ),
+            
+            const SizedBox(height: 20),
+            
+            // Type Selection (Category style)
+            _BuildLabeledField(
+              label: 'Type',
+              child: Container(
+                height: 48,
+                decoration: BoxDecoration(
+                  border: Border.all(color: borderColor),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Row(
+                  children: _types.map((t) {
+                    final isSel = _type == t;
+                    return Expanded(
+                      child: GestureDetector(
+                        onTap: () => setState(() => _type = t),
+                        child: Container(
+                          decoration: BoxDecoration(
+                            color: isSel ? accentColor.withValues(alpha: 0.2) : null,
+                            borderRadius: BorderRadius.circular(7),
+                          ),
+                          child: Center(
+                            child: Text(
+                              t,
+                              style: TextStyle(
+                                fontWeight: isSel ? FontWeight.bold : FontWeight.normal,
+                                color: isSel ? accentColor : Colors.grey,
+                                fontSize: 14,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                    );
+                  }).toList(),
+                ),
+              ),
+            ),
+            
+            const SizedBox(height: 16),
+            
+            // Start Time / End Time
+            Row(
+              children: [
+                Expanded(
+                  child: _BuildLabeledField(
+                    label: 'Start Time',
+                    child: GestureDetector(
+                      onTap: () => _pickDateTime(false),
+                      child: _BuildReadonlyBox(text: DateFormat('MMM d, h:mm a').format(_startTime)),
+                    ),
                   ),
                 ),
-              ),
-              const SizedBox(height: 16),
-              const Text('New Event', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800, letterSpacing: -0.4)),
-              const SizedBox(height: 16),
-
-              TextField(
-                controller: _titleController,
-                autofocus: true,
-                decoration: const InputDecoration(
-                  hintText: 'Event title',
-                  prefixIcon: Icon(Icons.title_rounded, size: 18),
-                  border: OutlineInputBorder(borderRadius: BorderRadius.zero),
-                ),
-              ),
-              const SizedBox(height: 12),
-
-              const Text('TYPE', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: Colors.grey, letterSpacing: 1.5)),
-              const SizedBox(height: 8),
-              Wrap(
-                spacing: 8,
-                children: _types.map((t) {
-                  final sel = _type == t;
-                  final color = _typeColor(t);
-                  return GestureDetector(
-                    onTap: () => setState(() => _type = t),
-                    child: AnimatedContainer(
-                      duration: const Duration(milliseconds: 150),
-                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
-                      decoration: BoxDecoration(
-                        color: sel ? color : color.withValues(alpha: 0.1),
-                        borderRadius: BorderRadius.zero,
-                        border: Border.all(color: sel ? color : Colors.transparent),
-                      ),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Icon(_typeIcon(t), size: 13, color: sel ? Colors.white : color),
-                          const SizedBox(width: 5),
-                          Text(t, style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: sel ? Colors.white : color)),
-                        ],
-                      ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: _BuildLabeledField(
+                    label: 'End Time',
+                    child: GestureDetector(
+                      onTap: () => _pickDateTime(true),
+                      child: _BuildReadonlyBox(text: DateFormat('MMM d, h:mm a').format(_endTime)),
                     ),
-                  );
-                }).toList(),
-              ),
-              const SizedBox(height: 14),
+                  ),
+                ),
+              ],
+            ),
+            
+            const SizedBox(height: 16),
 
-              const Text('DATE & TIME', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: Colors.grey, letterSpacing: 1.5)),
-              const SizedBox(height: 8),
-              Row(
+            // Fixed Time Switch
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              decoration: BoxDecoration(
+                border: Border.all(color: borderColor),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Row(
                 children: [
-                  Expanded(
-                    flex: 3,
-                    child: GestureDetector(
-                      onTap: _pickDate,
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-                        decoration: BoxDecoration(border: Border.all(color: borderCol)),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            const Text('Date', style: TextStyle(fontSize: 11, color: Colors.grey, fontWeight: FontWeight.w600)),
-                            const SizedBox(height: 2),
-                            Text(DateFormat('EEE, MMM d').format(_date), style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700)),
-                          ],
-                        ),
-                      ),
+                  const Icon(Icons.lock_outline_rounded, size: 18, color: Colors.grey),
+                  const SizedBox(width: 12),
+                  const Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text('Fixed time', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
+                        Text("AI won't reschedule this", style: TextStyle(fontSize: 11, color: Colors.grey)),
+                      ],
                     ),
                   ),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    flex: 2,
-                    child: GestureDetector(
-                      onTap: _pickTime,
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-                        decoration: BoxDecoration(border: Border.all(color: borderCol)),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            const Text('Start', style: TextStyle(fontSize: 11, color: Colors.grey, fontWeight: FontWeight.w600)),
-                            const SizedBox(height: 2),
-                            Text(DateFormat('h:mm a').format(_start), style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700)),
-                          ],
-                        ),
-                      ),
-                    ),
+                  Switch(
+                    value: _isFixed,
+                    onChanged: (v) => setState(() => _isFixed = v),
+                    activeColor: accentColor,
                   ),
                 ],
               ),
-              const SizedBox(height: 12),
+            ),
+            
+            const SizedBox(height: 16),
 
-              const Text('DURATION', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: Colors.grey, letterSpacing: 1.5)),
-              const SizedBox(height: 8),
-              Wrap(
-                spacing: 8,
-                runSpacing: 8,
-                children: _durations.map((min) {
-                  final sel = _durationMinutes == min;
-                  return GestureDetector(
-                    onTap: () => _setDuration(min),
-                    child: AnimatedContainer(
-                      duration: const Duration(milliseconds: 120),
-                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-                      decoration: BoxDecoration(
-                        color: sel ? AppTheme.primaryColor : Colors.transparent,
-                        border: Border.all(color: sel ? AppTheme.primaryColor : borderCol),
-                      ),
-                      child: Text(_formatDuration(min), style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: sel ? Colors.white : Colors.grey)),
-                    ),
-                  );
-                }).toList(),
-              ),
-              const SizedBox(height: 12),
-
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-                decoration: BoxDecoration(border: Border.all(color: borderCol)),
-                child: Row(
-                  children: [
-                    const Icon(Icons.lock_outline_rounded, size: 16, color: Colors.grey),
-                    const SizedBox(width: 10),
-                    const Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text('Fixed time', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
-                          Text("AI won't reschedule this", style: TextStyle(fontSize: 11, color: Colors.grey)),
-                        ],
-                      ),
-                    ),
-                    Switch(
-                      value: _isFixed,
-                      onChanged: (v) => setState(() => _isFixed = v),
-                      activeColor: AppTheme.primaryColor,
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 12),
-
-              TextField(
+            // Notes field
+            _BuildLabeledField(
+              label: 'Notes',
+              child: TextField(
                 controller: _descController,
-                maxLines: 2,
-                decoration: const InputDecoration(
-                  hintText: 'Notes (optional)',
-                  prefixIcon: Icon(Icons.notes_rounded, size: 18),
-                  border: OutlineInputBorder(borderRadius: BorderRadius.zero),
-                ),
-              ),
-              const SizedBox(height: 20),
-
-              SizedBox(
-                width: double.infinity,
-                child: FilledButton(
-                  style: FilledButton.styleFrom(
-                    backgroundColor: AppTheme.primaryColor,
-                    padding: const EdgeInsets.symmetric(vertical: 16),
-                    shape: const RoundedRectangleBorder(borderRadius: BorderRadius.zero),
+                maxLines: 3,
+                style: const TextStyle(fontSize: 14),
+                decoration: InputDecoration(
+                  hintText: 'Add notes...',
+                  filled: true,
+                  fillColor: inputBgColor,
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(8),
+                    borderSide: BorderSide(color: borderColor),
                   ),
-                  onPressed: () async {
-                    if (_titleController.text.trim().isEmpty) return;
-                    final event = CalendarEvent(
-                      title: _titleController.text.trim(),
-                      description: _descController.text.trim().isEmpty ? null : _descController.text.trim(),
-                      startTime: _start,
-                      endTime: _end,
-                      eventType: _type,
-                      isFixed: _isFixed,
-                    );
-                    final success = await context.read<CalendarProvider>().addEvent(event);
-                    if (context.mounted && success) {
-                      if (_type == 'TASK') context.read<TaskProvider>().loadTasks();
-                      Navigator.pop(context);
-                      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-                        content: Text('✅ ${_type == 'TASK' ? 'Task' : 'Event'} "${event.title}" created'),
-                        behavior: SnackBarBehavior.floating,
-                        backgroundColor: const Color(0xFF1A1A24),
-                      ));
-                    }
-                  },
-                  child: const Text('Create Event', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: Colors.white)),
+                  enabledBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(8),
+                    borderSide: BorderSide(color: borderColor),
+                  ),
+                  contentPadding: const EdgeInsets.all(12),
                 ),
               ),
-            ],
-          ),
+            ),
+            
+            const SizedBox(height: 24),
+            
+            // Bottom Actions
+            Row(
+              children: [
+                const Spacer(),
+                SizedBox(
+                  height: 40,
+                  child: FilledButton(
+                    onPressed: _createEvent,
+                    style: FilledButton.styleFrom(
+                      backgroundColor: accentColor,
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+                      padding: const EdgeInsets.symmetric(horizontal: 24),
+                    ),
+                    child: const Text('Create', style: TextStyle(fontWeight: FontWeight.bold)),
+                  ),
+                ),
+              ],
+            ),
+          ],
         ),
       ),
+    );
+  }
+}
+
+class _BuildLabeledField extends StatelessWidget {
+  final String label;
+  final Widget child;
+  const _BuildLabeledField({required this.label, required this.child});
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(label, style: const TextStyle(fontSize: 12, color: Colors.grey, fontWeight: FontWeight.w600)),
+        const SizedBox(height: 8),
+        child,
+      ],
+    );
+  }
+}
+
+class _BuildReadonlyBox extends StatelessWidget {
+  final String text;
+  const _BuildReadonlyBox({required this.text});
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final borderColor = isDark ? const Color(0xFF333333) : const Color(0xFFE8EAF0);
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+      decoration: BoxDecoration(
+        border: Border.all(color: borderColor),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Text(text, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500)),
     );
   }
 }

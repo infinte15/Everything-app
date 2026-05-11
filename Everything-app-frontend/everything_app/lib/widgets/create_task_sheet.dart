@@ -23,7 +23,7 @@ class _CreateTaskSheetState extends State<CreateTaskSheet> {
   int _durationMinutes = 60;
   int _priority = 3;
   bool _splitUp = true;
-  String _category = 'Studying';
+  String _category = 'Personal';
   DateTime _scheduleAfter = DateTime.now();
   DateTime _dueDate = DateTime.now().add(const Duration(days: 3, hours: 3));
   
@@ -293,29 +293,36 @@ class _CreateTaskSheetState extends State<CreateTaskSheet> {
             _BuildLabeledField(
               label: 'Category',
               child: Container(
+                height: 48,
                 decoration: BoxDecoration(
                   border: Border.all(color: borderColor),
                   borderRadius: BorderRadius.circular(8),
                 ),
-                child: PopupMenuButton<String>(
-                  initialValue: _category,
-                  onSelected: (val) => setState(() => _category = val),
-                  itemBuilder: (context) => [
-                    const PopupMenuItem(value: 'Studying', child: Text('Studying')),
-                    const PopupMenuItem(value: 'Personal', child: Text('Personal')),
-                  ],
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-                    child: Row(
-                      children: [
-                        const Icon(Icons.category_outlined, size: 18, color: Colors.blue),
-                        const SizedBox(width: 8),
-                        Text(_category, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500)),
-                        const Spacer(),
-                        const Icon(Icons.keyboard_arrow_down, size: 18, color: Colors.grey),
-                      ],
-                    ),
-                  ),
+                child: Row(
+                  children: ['Personal', 'Uni'].map((cat) {
+                    final isSel = _category == cat;
+                    return Expanded(
+                      child: GestureDetector(
+                        onTap: () => setState(() => _category = cat),
+                        child: Container(
+                          decoration: BoxDecoration(
+                            color: isSel ? accentColor.withValues(alpha: 0.2) : null,
+                            borderRadius: BorderRadius.circular(7),
+                          ),
+                          child: Center(
+                            child: Text(
+                              cat,
+                              style: TextStyle(
+                                fontWeight: isSel ? FontWeight.bold : FontWeight.normal,
+                                color: isSel ? accentColor : Colors.grey,
+                                fontSize: 14,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                    );
+                  }).toList(),
                 ),
               ),
             ),

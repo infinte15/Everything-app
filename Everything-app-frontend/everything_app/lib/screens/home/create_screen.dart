@@ -1,11 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:go_router/go_router.dart';
-import 'package:provider/provider.dart';
-import '../../providers/task_provider.dart';
-import '../../providers/calendar_provider.dart';
 import '../../config/app_theme.dart';
-import '../../models/task.dart';
-import '../../models/calendar_event.dart';
 import '../../widgets/create_task_sheet.dart';
 import '../../widgets/create_event_sheet.dart';
 import '../../widgets/create_habit_sheet.dart';
@@ -21,8 +15,15 @@ class CreateScreen extends StatelessWidget {
         icon: Icons.task_alt,
         title: 'Neue Aufgabe',
         subtitle: 'Task erstellen mit Priorität und Deadline',
-        color: AppTheme.tasksColor,
+        color: const Color(0xFF5856D6),
         onTap: () => _showCreateTask(context),
+      ),
+      _CreateOption(
+        icon: Icons.notes,
+        title: 'Neue Notiz',
+        subtitle: 'Notiz für Studium oder Alltag',
+        color: AppTheme.sportsColor,
+        onTap: () => _showCreateNote(context),
       ),
       _CreateOption(
         icon: Icons.event,
@@ -35,37 +36,10 @@ class CreateScreen extends StatelessWidget {
         icon: Icons.repeat,
         title: 'Neuer Habit',
         subtitle: 'Gewohnheiten aufbauen und tracken',
-        color: const Color(0xFF81C784),
+        color: AppTheme.financeColor,
         onTap: () => _showCreateHabit(context),
       ),
-      _CreateOption(
-        icon: Icons.notes,
-        title: 'Neue Notiz',
-        subtitle: 'Notiz für Studium oder Alltag',
-        color: AppTheme.studyColor,
-        onTap: () => _showCreateNote(context),
-      ),
-      _CreateOption(
-        icon: Icons.fitness_center,
-        title: 'Workout starten',
-        subtitle: 'Training beginnen oder planen',
-        color: AppTheme.sportsColor,
-        onTap: () => context.go('/sports'),
-      ),
-      _CreateOption(
-        icon: Icons.restaurant_menu,
-        title: 'Neues Rezept',
-        subtitle: 'Rezept hinzufügen oder suchen',
-        color: AppTheme.recipesColor,
-        onTap: () => context.go('/recipes'),
-      ),
-      _CreateOption(
-        icon: Icons.account_balance_wallet,
-        title: 'Transaktion',
-        subtitle: 'Einnahme oder Ausgabe erfassen',
-        color: AppTheme.financeColor,
-        onTap: () => context.go('/finance'),
-      ),
+      
     ];
 
     return Scaffold(
@@ -87,6 +61,15 @@ class CreateScreen extends StatelessWidget {
     );
   }
 
+  void _showCreateNote(BuildContext context) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => const CreateNoteSheet(),
+    );
+  }
+
   void _showCreateEvent(BuildContext context) {
     showModalBottomSheet(
       context: context,
@@ -105,14 +88,7 @@ class CreateScreen extends StatelessWidget {
     );
   }
 
-  void _showCreateNote(BuildContext context) {
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (_) => const CreateNoteSheet(),
-    );
-  }
+  
 }
 
 class _CreateOption {

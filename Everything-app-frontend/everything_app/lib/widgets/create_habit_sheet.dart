@@ -20,7 +20,7 @@ class _CreateHabitSheetState extends State<CreateHabitSheet> {
   
   int _priority = 3;
   Color _selectedColor = Colors.blue;
-  String _category = 'Work';
+  String _category = 'Personal';
   
   String _repeatType = 'Weekly';
   int _timesPerWeek = 1;
@@ -180,7 +180,7 @@ class _CreateHabitSheetState extends State<CreateHabitSheet> {
                       height: 48,
                       decoration: BoxDecoration(border: Border.all(color: borderColor), borderRadius: BorderRadius.circular(8)),
                       child: Row(
-                        children: ['Studying', 'Personal'].map((cat) {
+                        children: ['Personal', 'Uni'].map((cat) {
                           final isSel = _category == cat;
                           return Expanded(
                             child: GestureDetector(
