@@ -17,56 +17,42 @@ class SpacesScreen extends StatelessWidget {
     _SpaceData(
       icon: Icons.school,
       title: 'Study',
-      statusLabel: 'PHASE',
-      statusSub: 'Exam Prep Active',
       route: '/study',
       accentColor: Color(0xFF3B82F6),
     ),
     _SpaceData(
       icon: Icons.fitness_center,
       title: 'Gym',
-      statusLabel: 'TRACK',
-      statusSub: 'Leg Day Scheduled',
       route: '/sports',
       accentColor: Color(0xFFF97316),
     ),
     _SpaceData(
       icon: Icons.checklist,
       title: 'Task',
-      statusLabel: 'ACTIVE',
-      statusSub: '12 Active',
       route: '/tasks?type=TASKS&title=Aufgaben',
       accentColor: Color(0xFF5856D6),
     ),
     _SpaceData(
       icon: Icons.description_outlined,
       title: 'Notes',
-      statusLabel: 'RECENT',
-      statusSub: 'Updated 2h ago',
       route: '/notes',
       accentColor: Color(0xFFF59E0B),
     ),
     _SpaceData(
       icon: Icons.refresh,
       title: 'Habits',
-      statusLabel: 'TODAY',
-      statusSub: '85% Completion',
       route: '/habits',
       accentColor: Color(0xFF2DD4BF),
     ),
     _SpaceData(
       icon: Icons.restaurant,
       title: 'Rezepte',
-      statusLabel: 'MEAL PLAN',
-      statusSub: '4 New Ideas',
       route: '/recipes',
       accentColor: Color(0xFF4ADE80),
     ),
     _SpaceData(
       icon: Icons.account_balance_wallet,
       title: 'Finanzen',
-      statusLabel: 'BUDGET',
-      statusSub: 'On Track',
       route: '/finance',
       accentColor: Color(0xFFA855F7),
     ),
@@ -124,16 +110,12 @@ class SpacesScreen extends StatelessWidget {
 class _SpaceData {
   final IconData icon;
   final String title;
-  final String statusLabel; // top-right tag e.g. "ACTIVE"
-  final String statusSub;   // bottom subtitle e.g. "12 Active"
   final String route;
   final Color accentColor;
 
   const _SpaceData({
     required this.icon,
     required this.title,
-    required this.statusLabel,
-    required this.statusSub,
     required this.route,
     required this.accentColor,
   });
@@ -178,52 +160,19 @@ class _SpaceGridCardState extends State<_SpaceGridCard> {
             crossAxisAlignment: CrossAxisAlignment.start,
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              // Top row: icon left, status label right
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Icon(
-                    widget.space.icon,
-                    color: widget.space.accentColor,
-                    size: 28,
-                  ),
-                  Text(
-                    widget.space.statusLabel,
-                    style: GoogleFonts.manrope(
-                      fontSize: 10,
-                      fontWeight: FontWeight.w700,
-                      color: _onSurfaceVariant,
-                      letterSpacing: 1.5,
-                    ),
-                  ),
-                ],
+              Icon(
+                widget.space.icon,
+                color: widget.space.accentColor,
+                size: 32,
               ),
-              // Bottom: title + subtitle
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    widget.space.title,
-                    style: GoogleFonts.manrope(
-                      fontSize: 22,
-                      fontWeight: FontWeight.w800,
-                      color: _hovered ? _primaryColor : _onSurface,
-                      letterSpacing: -0.3,
-                    ),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    widget.space.statusSub,
-                    style: GoogleFonts.manrope(
-                      fontSize: 13,
-                      fontWeight: FontWeight.w500,
-                      color: _onSurfaceVariant,
-                    ),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ],
+              Text(
+                widget.space.title,
+                style: GoogleFonts.manrope(
+                  fontSize: 22,
+                  fontWeight: FontWeight.w800,
+                  color: _hovered ? _primaryColor : _onSurface,
+                  letterSpacing: -0.3,
+                ),
               ),
             ],
           ),
