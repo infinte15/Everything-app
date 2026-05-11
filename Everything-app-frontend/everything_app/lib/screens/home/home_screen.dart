@@ -64,12 +64,8 @@ class _HomeScreenState extends State<HomeScreen> {
               floating: true,
               pinned: true,
               elevation: 0,
-              leading: IconButton(
-                icon: const Icon(Icons.search, color: _primary),
-                onPressed: () {},
-              ),
               title: Text(
-                'KINETIC MONO',
+                'Everything-App',
                 style: GoogleFonts.manrope(
                   color: _onSurface,
                   fontWeight: FontWeight.w900,
@@ -121,7 +117,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   _SectionTitle(
                     title: "AUSSTEHENDE AUFGABEN",
                     rightAction: GestureDetector(
-                      onTap: () => context.go('/tasks'),
+                      onTap: () => context.push('/tasks'),
                       child: const Icon(Icons.arrow_forward_ios, size: 12, color: _onSurfaceVariant),
                     ),
                   ),
@@ -139,7 +135,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   _SectionTitle(
                     title: "SCHNELLZUGRIFF AUF SPACES",
                     rightLabel: "SEE ALL",
-                    onRightLabelTap: () => context.go('/spaces'),
+                    onRightLabelTap: () => context.push('/spaces'),
                   ),
                   const SizedBox(height: 24),
                   const _SpacesHorizontalList(),
@@ -404,9 +400,9 @@ class _SpacesHorizontalList extends StatelessWidget {
 
   static const spaces = [
     _SpaceData(icon: Icons.school, title: 'STUDY', subtitle: '12 RESOURCES', route: '/study'),
-    _SpaceData(icon: Icons.account_balance_wallet, title: 'FINANCES', subtitle: 'UPDATED 2H AGO', route: '/finance'),
     _SpaceData(icon: Icons.fitness_center, title: 'GYM', subtitle: 'DAILY LOG', route: '/sports'),
-    _SpaceData(icon: Icons.restaurant_menu, title: 'RECIPES', subtitle: '3 NEW', route: '/recipes'),
+    _SpaceData(icon: Icons.checklist, title: 'TASKS', subtitle: '8 PENDING', route: '/tasks'),
+    _SpaceData(icon: Icons.description_outlined, title: 'NOTES', subtitle: 'REPORTS', route: '/notes'),
   ];
 
   @override
@@ -463,7 +459,7 @@ class _SpaceCardState extends State<_SpaceCard> {
       onEnter: (_) => setState(() => _hovered = true),
       onExit: (_) => setState(() => _hovered = false),
       child: GestureDetector(
-        onTap: () => context.go(widget.space.route),
+        onTap: () => context.push(widget.space.route),
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 150),
           margin: EdgeInsets.only(right: widget.isLast ? 0 : 16),

@@ -35,7 +35,7 @@ class _RecipesScreenState extends State<RecipesScreen> {
             ? null
             : IconButton(
                 icon: const Icon(Icons.arrow_back),
-                onPressed: () => context.go('/spaces'),
+                onPressed: () => context.pop(),
               ),
         title: Row(
           mainAxisSize: MainAxisSize.min,
@@ -68,7 +68,7 @@ class _RecipesScreenState extends State<RecipesScreen> {
                 children: [
                   IconButton(
                     icon: const Icon(Icons.arrow_back),
-                    onPressed: () => context.go('/spaces'),
+                    onPressed: () => context.pop(),
                   ),
                   const SizedBox(height: 16),
                 ],

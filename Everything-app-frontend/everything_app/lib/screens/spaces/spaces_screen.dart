@@ -15,32 +15,8 @@ class SpacesScreen extends StatelessWidget {
 
   static const _spaces = [
     _SpaceData(
-      icon: Icons.checklist,
-      title: 'Aufgaben',
-      statusLabel: 'ACTIVE',
-      statusSub: '12 Active',
-      route: '/tasks?type=TASKS&title=Aufgaben',
-      accentColor: Color(0xFF5856D6),
-    ),
-    _SpaceData(
-      icon: Icons.refresh,
-      title: 'Habits',
-      statusLabel: 'TODAY',
-      statusSub: '85% Completion',
-      route: '/habits',
-      accentColor: Color(0xFF2DD4BF),
-    ),
-    _SpaceData(
-      icon: Icons.description_outlined,
-      title: 'Notizen',
-      statusLabel: 'RECENT',
-      statusSub: 'Updated 2h ago',
-      route: '/notes',
-      accentColor: Color(0xFFF59E0B),
-    ),
-    _SpaceData(
       icon: Icons.school,
-      title: 'Studium',
+      title: 'Study',
       statusLabel: 'PHASE',
       statusSub: 'Exam Prep Active',
       route: '/study',
@@ -53,6 +29,30 @@ class SpacesScreen extends StatelessWidget {
       statusSub: 'Leg Day Scheduled',
       route: '/sports',
       accentColor: Color(0xFFF97316),
+    ),
+    _SpaceData(
+      icon: Icons.checklist,
+      title: 'Task',
+      statusLabel: 'ACTIVE',
+      statusSub: '12 Active',
+      route: '/tasks?type=TASKS&title=Aufgaben',
+      accentColor: Color(0xFF5856D6),
+    ),
+    _SpaceData(
+      icon: Icons.description_outlined,
+      title: 'Notes',
+      statusLabel: 'RECENT',
+      statusSub: 'Updated 2h ago',
+      route: '/notes',
+      accentColor: Color(0xFFF59E0B),
+    ),
+    _SpaceData(
+      icon: Icons.refresh,
+      title: 'Habits',
+      statusLabel: 'TODAY',
+      statusSub: '85% Completion',
+      route: '/habits',
+      accentColor: Color(0xFF2DD4BF),
     ),
     _SpaceData(
       icon: Icons.restaurant,
@@ -93,12 +93,6 @@ class SpacesScreen extends StatelessWidget {
             letterSpacing: 0,
           ),
         ),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.search, color: _primaryColor),
-            onPressed: () {},
-          ),
-        ],
       ),
       body: LayoutBuilder(
         builder: (context, constraints) {

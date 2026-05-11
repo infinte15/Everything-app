@@ -61,7 +61,7 @@ class _StudyScreenState extends State<StudyScreen> {
               selectedIndex: _selectedIndex,
               navItems: _navItems,
               onSelect: (i) => setState(() => _selectedIndex = i),
-              onBack: () => context.go('/spaces'),
+              onBack: () => context.pop(),
             ),
             Expanded(
               child: AnimatedSwitcher(
