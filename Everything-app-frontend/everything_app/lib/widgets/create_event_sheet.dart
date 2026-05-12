@@ -24,7 +24,7 @@ class _CreateEventSheetState extends State<CreateEventSheet> {
   bool _isFixed = false;
   bool _showTitleError = false;
 
-  static const _types = ['Personal', 'Uni'];
+  static const _types = ['Personal', 'Studium'];
 
   @override
   void initState() {

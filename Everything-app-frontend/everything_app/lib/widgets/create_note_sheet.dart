@@ -88,9 +88,9 @@ class _CreateNoteSheetState extends State<CreateNoteSheet> {
                 const SizedBox(width: 16),
                 Expanded(
                   child: _CategoryButton(
-                    title: 'Study',
-                    isSelected: _selectedCategory == 'Study',
-                    onTap: () => setState(() => _selectedCategory = 'Study'),
+                    title: 'Studium',
+                    isSelected: _selectedCategory == 'Studium',
+                    onTap: () => setState(() => _selectedCategory = 'Studium'),
                     primaryColor: _primary,
                   ),
                 ),

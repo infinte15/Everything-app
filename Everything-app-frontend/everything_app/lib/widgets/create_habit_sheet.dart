@@ -180,7 +180,7 @@ class _CreateHabitSheetState extends State<CreateHabitSheet> {
                       height: 48,
                       decoration: BoxDecoration(border: Border.all(color: borderColor), borderRadius: BorderRadius.circular(8)),
                       child: Row(
-                        children: ['Personal', 'Uni'].map((cat) {
+                        children: ['Personal', 'Studium'].map((cat) {
                           final isSel = _category == cat;
                           return Expanded(
                             child: GestureDetector(
