@@ -299,7 +299,7 @@ class _CreateTaskSheetState extends State<CreateTaskSheet> {
                   borderRadius: BorderRadius.circular(8),
                 ),
                 child: Row(
-                  children: ['Personal', 'Uni'].map((cat) {
+                  children: ['Personal', 'Studium'].map((cat) {
                     final isSel = _category == cat;
                     return Expanded(
                       child: GestureDetector(

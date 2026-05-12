@@ -485,10 +485,9 @@ class _WeekStrip extends StatelessWidget {
                             style: TextStyle(
                               fontSize: 15,
                               fontWeight: FontWeight.w800,
-                              color: 
-                              isToday
-                                  ? theme.colorScheme.primary
-                                  :theme.colorScheme.onSurfaceVariant,
+                              color: isToday
+                                  ? const Color(0xFF918AFA)
+                                  : theme.colorScheme.onSurfaceVariant,
                             
                               letterSpacing: 1.0,
                               fontFamily: 'Manrope',
@@ -502,7 +501,7 @@ class _WeekStrip extends StatelessWidget {
                               fontWeight: FontWeight.w800,
                               fontFamily: 'Manrope',
                               color: isToday
-                                  ? theme.colorScheme.primary
+                                  ? const Color(0xFF918AFA)
                                   : (day.weekday >= 6 ? theme.colorScheme.error : Colors.white),
                             ),
                           ),
@@ -1099,7 +1098,7 @@ class _MonthView extends StatelessWidget {
                         style: TextStyle(
                           fontSize: 13,
                           fontWeight: FontWeight.w700,
-                          color: isSel ? Colors.white : isToday ? AppTheme.primaryColor : null,
+                          color: isSel ? Colors.white : isToday ? const Color(0xFF918AFA) : null,
                         ),
                       ),
                       const SizedBox(height: 3),
