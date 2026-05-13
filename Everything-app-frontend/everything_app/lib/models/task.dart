@@ -135,6 +135,26 @@ class Task {
            deadline!.day == now.day;
   }
 
+String get displayCategory {
+  if (description != null && description!.startsWith('[')) {
+    final closeBracketIndex = description!.indexOf(']');
+    if (closeBracketIndex != -1) {
+      return description!.substring(1, closeBracketIndex);
+    }
+  }
+  return 'Personal';
+}
+
+String get displayDescription {
+  if (description != null && description!.startsWith('[')) {
+    final closeBracketIndex = description!.indexOf(']');
+    if (closeBracketIndex != -1) {
+      return description!.substring(closeBracketIndex + 1).trim();
+    }
+  }
+  return description ?? '';
+}
+
   
   bool get isCompleted => status == 'COMPLETED';
 

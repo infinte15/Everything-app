@@ -26,7 +26,6 @@ class TasksScreen extends StatefulWidget {
 class _TasksScreenState extends State<TasksScreen>
     with SingleTickerProviderStateMixin {
   late TabController _tabController;
-  final String _searchQuery = '';
   
   // Consolidated Filter & Sort State Options
   String _selectedCategoryFilter = 'All'; // 'All', 'Personal', 'Studium'
@@ -150,35 +149,30 @@ class _TasksScreenState extends State<TasksScreen>
   }
 
   List<Task> _processTasksPipeline(List<Task> rawTasks) {
-    // 1. Space Type Filtering
-    List<Task> filtered = widget.spaceType == null 
-        ? List.from(rawTasks)
-        : rawTasks.where((t) => t.spaceType == widget.spaceType).toList();
-
-    // 2. Category Filtering
-    if (_selectedCategoryFilter != 'All') {
-      filtered = filtered.where((t) => t.category == _selectedCategoryFilter).toList();
-    }
-
-    // 3. Sorting Execution Block
-    filtered.sort((a, b) {
-      if (_selectedSortOption.startsWith('datum')) {
-        if (a.deadline == null && b.deadline == null) return 0;
-        if (a.deadline == null) return 1;
-        if (b.deadline == null) return -1;
-        return _selectedSortOption == 'datum_auf'
-            ? a.deadline!.compareTo(b.deadline!)
-            : b.deadline!.compareTo(a.deadline!);
-      } else if (_selectedSortOption.startsWith('prio')) {
-        return _selectedSortOption == 'prio_ab'
-            ? b.priority.compareTo(a.priority)
-            : a.priority.compareTo(b.priority);
-      }
-      return 0;
-    });
-
-    return filtered;
+  List<Task> filtered = widget.spaceType == null 
+      ? List.from(rawTasks)
+      : rawTasks.where((t) => t.spaceType == widget.spaceType).toList();
+  if (_selectedCategoryFilter != 'All') {
+    filtered = filtered.where((t) => t.displayCategory == _selectedCategoryFilter).toList();
   }
+  filtered.sort((a, b) {
+    if (_selectedSortOption.startsWith('datum')) {
+      if (a.deadline == null && b.deadline == null) return 0;
+      if (a.deadline == null) return 1;
+      if (b.deadline == null) return -1;
+      return _selectedSortOption == 'datum_auf'
+          ? a.deadline!.compareTo(b.deadline!)
+          : b.deadline!.compareTo(a.deadline!);
+    } else if (_selectedSortOption.startsWith('prio')) {
+      return _selectedSortOption == 'prio_ab'
+          ? b.priority.compareTo(a.priority)
+          : a.priority.compareTo(b.priority);
+    }
+    return 0;
+  });
+
+  return filtered;
+}
 
   @override
   Widget build(BuildContext context) {
@@ -243,7 +237,6 @@ class _TasksScreenState extends State<TasksScreen>
               delegate: _TaskSearchDelegate(tasks: todoProcessed + completedProcessed),
             ),
           ),
-          // Clean unified filter icon action inside top bar
           IconButton(
             icon: Icon(
               Icons.filter_list,
@@ -462,28 +455,38 @@ class _TaskTile extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.end,
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                    margin: const EdgeInsets.only(bottom: 6),
-                    decoration: BoxDecoration(
-                      color: isDark 
-                          ? Colors.white.withValues(alpha: 0.1) 
-                          : Colors.black.withValues(alpha: 0.05),
-                      borderRadius: BorderRadius.circular(4),
-                    ),
-                    child: Text(
-                      task.category.isNotEmpty ? task.category : 'Personal',
-                      style: TextStyle(
-                        fontSize: 10,
-                        fontWeight: FontWeight.w600,
-                        color: isDark ? Colors.grey[300] : Colors.grey[700],
-                      ),
-                    ),
-                  ),
+                  // 1. Inside the _TaskTile description paragraph display element step:
+if (task.displayDescription.isNotEmpty)
+  Text(
+    task.displayDescription, // 🟢 Renders notes without revealing the technical tag bracket prefix
+    maxLines: 1,
+    overflow: TextOverflow.ellipsis,
+    style: theme.textTheme.bodySmall?.copyWith(color: Colors.grey),
+  ),
+
+// 2. Inside the right-side layout details segment column area badge:
+Container(
+  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+  margin: const EdgeInsets.only(bottom: 6),
+  decoration: BoxDecoration(
+    color: isDark 
+        ? Colors.white.withOpacity(0.1) 
+        : Colors.black.withOpacity(0.05),
+    borderRadius: BorderRadius.circular(4),
+  ),
+  child: Text(
+    task.displayCategory, // 🟢 Nicely displays 'Personal' or 'Studium' on your card rows
+    style: TextStyle(
+      fontSize: 10,
+      fontWeight: FontWeight.w600,
+      color: isDark ? Colors.grey[300] : Colors.grey[700],
+    ),
+  ),
+),
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                     decoration: BoxDecoration(
-                      color: priorityColor.withValues(alpha: 0.1),
+                      color: priorityColor.withOpacity(0.1),
                       borderRadius: BorderRadius.circular(8),
                     ),
                     child: Text(
@@ -532,7 +535,7 @@ class _TaskSearchDelegate extends SearchDelegate<String> {
       itemCount: filtered.length,
       itemBuilder: (_, i) => ListTile(
         title: Text(filtered[i].title),
-        subtitle: Text('Prio: P${filtered[i].priority} | Kategorie: ${filtered[i].category}'),
+        subtitle: Text('Prio: P${filtered[i].priority} | Kategorie: ${filtered[i].spaceType ?? 'Personal'}'),
         leading: const Icon(Icons.task_alt),
         onTap: () {
           close(context, filtered[i].title);
