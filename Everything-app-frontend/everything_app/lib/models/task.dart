@@ -14,6 +14,7 @@ class Task {
   final DateTime? createdAt;
   final DateTime? updatedAt;
   final DateTime? completedAt;
+  final String category;
 
   Task({
     this.id,
@@ -30,6 +31,7 @@ class Task {
     this.createdAt,
     this.updatedAt,
     this.completedAt,
+    this.category = 'Personal'
   });
 
   // JSON zu Task
@@ -78,6 +80,7 @@ class Task {
       'status': status,
       'spaceType': spaceType,
       'projectId': projectId,
+      'category': category,
     };
   }
 
@@ -97,6 +100,7 @@ class Task {
     DateTime? createdAt,
     DateTime? updatedAt,
     DateTime? completedAt,
+    String? category,
   }) {
     return Task(
       id: id ?? this.id,

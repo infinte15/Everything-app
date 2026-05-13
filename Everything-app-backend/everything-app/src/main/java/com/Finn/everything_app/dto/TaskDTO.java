@@ -5,6 +5,7 @@ import com.Finn.everything_app.model.TaskStatus;
 import lombok.Data;
 import jakarta.validation.constraints.*;
 import java.time.LocalDateTime;
+import com.fasterxml.jackson.annotation.JsonProperty;
 
 @Data
 public class TaskDTO {
@@ -37,4 +38,7 @@ public class TaskDTO {
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
     private LocalDateTime completedAt;
+
+    @JsonProperty("category")
+    private String category;
 }

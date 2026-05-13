@@ -20,10 +20,9 @@ public class Task {
     private String description;
 
     @Column(nullable = false)
-    private Integer priority;  // 1 = niedrig, 5 = hoch
+    private Integer priority; // 1 = niedrig, 5 = hoch
 
     private LocalDateTime deadline;
-
 
     @Column(name = "estimated_duration_minutes")
     private Integer estimatedDurationMinutes;
@@ -48,6 +47,9 @@ public class Task {
     @Column(name = "updated_at")
     private LocalDateTime updatedAt;
 
+    @Column(name = "category")
+    private String category = "Personal";
+
     @Column(name = "completed_at")
     private LocalDateTime completedAt;
 
@@ -58,7 +60,6 @@ public class Task {
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "project_id")
     private Project project;
-
 
     @PrePersist
     protected void onCreate() {
@@ -71,4 +72,3 @@ public class Task {
         updatedAt = LocalDateTime.now();
     }
 }
-

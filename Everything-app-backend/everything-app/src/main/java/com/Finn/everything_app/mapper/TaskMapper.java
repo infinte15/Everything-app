@@ -8,7 +8,8 @@ import org.springframework.stereotype.Component;
 public class TaskMapper {
 
     public TaskDTO toDTO(Task task) {
-        if (task == null) return null;
+        if (task == null)
+            return null;
 
         TaskDTO dto = new TaskDTO();
         dto.setId(task.getId());
@@ -25,12 +26,14 @@ public class TaskMapper {
         dto.setCreatedAt(task.getCreatedAt());
         dto.setUpdatedAt(task.getUpdatedAt());
         dto.setCompletedAt(task.getCompletedAt());
+        dto.setCategory(task.getCategory());
 
         return dto;
     }
 
     public Task toEntity(TaskDTO dto) {
-        if (dto == null) return null;
+        if (dto == null)
+            return null;
 
         Task task = new Task();
         task.setId(dto.getId());
@@ -41,6 +44,7 @@ public class TaskMapper {
         task.setEstimatedDurationMinutes(dto.getEstimatedDurationMinutes());
         task.setStatus(dto.getStatus());
         task.setSpaceType(dto.getSpaceType());
+        task.setCategory(dto.getCategory());
 
         return task;
     }

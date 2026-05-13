@@ -46,13 +46,6 @@ class _CreateTaskSheetState extends State<CreateTaskSheet> {
     });
   }
 
-  String _formatDuration(int minutes) {
-    if (minutes < 60) return '$minutes min';
-    final hours = minutes / 60;
-    if (hours == hours.toInt()) return '${hours.toInt()} hr';
-    return '${hours.toStringAsFixed(1)} hrs';
-  }
-
   Future<void> _pickDateTime(bool isDueDate) async {
     final initialDate = isDueDate ? _dueDate : _scheduleAfter;
     final date = await showDatePicker(
@@ -94,6 +87,7 @@ class _CreateTaskSheetState extends State<CreateTaskSheet> {
       deadline: _dueDate,
       status: 'TODO',
       spaceType: widget.spaceType ?? 'TASKS',
+      category: _category, // Pass selected selection state here
     );
 
     await context.read<TaskProvider>().addTask(task);
@@ -107,7 +101,7 @@ class _CreateTaskSheetState extends State<CreateTaskSheet> {
     final backgroundColor = isDark ? const Color(0xFF131313) : Colors.white;
     final inputBgColor = isDark ? const Color(0xFF1E1E1E) : const Color(0xFFF7F8FC);
     final borderColor = isDark ? const Color(0xFF333333) : const Color(0xFFE8EAF0);
-    final accentColor = const Color(0xFF5856D6); // Reclaim-style blue
+    final accentColor = const Color(0xFF5856D6);
 
     return Container(
       decoration: BoxDecoration(
@@ -125,7 +119,6 @@ class _CreateTaskSheetState extends State<CreateTaskSheet> {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Header
             Row(
               mainAxisAlignment: MainAxisAlignment.end,
               children: [
@@ -138,7 +131,6 @@ class _CreateTaskSheetState extends State<CreateTaskSheet> {
               ],
             ),
             
-            // Task Name Input
             TextField(
               controller: _titleController,
               autofocus: true,
@@ -172,7 +164,6 @@ class _CreateTaskSheetState extends State<CreateTaskSheet> {
             
             const SizedBox(height: 20),
             
-            // Duration Row
             Row(
               children: [
                 Expanded(
@@ -234,7 +225,7 @@ class _CreateTaskSheetState extends State<CreateTaskSheet> {
                 Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const SizedBox(height: 20), // Align with input
+                    const SizedBox(height: 20),
                     Row(
                       children: [
                         Checkbox(
@@ -254,7 +245,6 @@ class _CreateTaskSheetState extends State<CreateTaskSheet> {
             
             const SizedBox(height: 16),
             
-            // Priority Selection
             const Text('Priority', style: TextStyle(fontSize: 12, color: Colors.grey, fontWeight: FontWeight.w600)),
             const SizedBox(height: 8),
             Row(
@@ -289,7 +279,6 @@ class _CreateTaskSheetState extends State<CreateTaskSheet> {
             
             const SizedBox(height: 16),
             
-            // Hours selection
             _BuildLabeledField(
               label: 'Category',
               child: Container(
@@ -332,7 +321,6 @@ class _CreateTaskSheetState extends State<CreateTaskSheet> {
             
             const SizedBox(height: 16),
             
-            // Schedule after / Due date
             Row(
               children: [
                 Expanded(
@@ -359,7 +347,6 @@ class _CreateTaskSheetState extends State<CreateTaskSheet> {
             
             const SizedBox(height: 16),
 
-            // Notes field
             _BuildLabeledField(
               label: 'Notes',
               child: TextField(
@@ -385,7 +372,6 @@ class _CreateTaskSheetState extends State<CreateTaskSheet> {
             
             const SizedBox(height: 24),
             
-            // Bottom Actions
             Row(
               children: [
                 const Spacer(),

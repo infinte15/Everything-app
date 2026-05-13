@@ -13,7 +13,6 @@ import com.Finn.everything_app.event.ScheduleChangedEvent;
 import java.time.LocalDateTime;
 import java.util.List;
 
-
 @Service
 @RequiredArgsConstructor
 public class TaskService {
@@ -51,11 +50,11 @@ public class TaskService {
         }
 
         if (task.getPriority() == null) {
-            task.setPriority(3);  // Standard
+            task.setPriority(3); // Standard
         }
 
         if (task.getEstimatedDurationMinutes() == null) {
-            task.setEstimatedDurationMinutes(60);  // Standard
+            task.setEstimatedDurationMinutes(60); // Standard
         }
 
         Task savedTask = taskRepository.save(task);
@@ -84,6 +83,9 @@ public class TaskService {
         }
         if (updatedTask.getStatus() != null) {
             existing.setStatus(updatedTask.getStatus());
+        }
+        if (updatedTask.getCategory() != null) {
+            existing.setCategory(updatedTask.getCategory());
         }
 
         existing.setUpdatedAt(LocalDateTime.now());

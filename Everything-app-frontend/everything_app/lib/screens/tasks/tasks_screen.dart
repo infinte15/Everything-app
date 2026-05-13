@@ -27,11 +27,15 @@ class _TasksScreenState extends State<TasksScreen>
     with SingleTickerProviderStateMixin {
   late TabController _tabController;
   final String _searchQuery = '';
+  
+  // Consolidated Filter & Sort State Options
+  String _selectedCategoryFilter = 'All'; // 'All', 'Personal', 'Studium'
+  String _selectedSortOption = 'datum_ab'; // 'datum_ab', 'datum_auf', 'prio_auf', 'prio_ab'
 
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 3, vsync: this);
+    _tabController = TabController(length: 2, vsync: this);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (widget.spaceType == 'HABITS') {
         context.read<HabitProvider>().loadHabits();
@@ -45,6 +49,135 @@ class _TasksScreenState extends State<TasksScreen>
   void dispose() {
     _tabController.dispose();
     super.dispose();
+  }
+
+  // Helper method to display a bottom modal sheet containing all parameters at once
+  void _showFilterAndSortMenu() {
+    showModalBottomSheet(
+      context: context,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+      ),
+      builder: (BuildContext context) {
+        return StatefulBuilder(
+          builder: (BuildContext context, StateSetter setModalState) {
+            final isDark = Theme.of(context).brightness == Brightness.dark;
+            
+            return Padding(
+              padding: const EdgeInsets.all(20.0),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      const Text(
+                        'Filter & Sortierung',
+                        style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                      ),
+                      IconButton(
+                        icon: const Icon(Icons.close),
+                        onPressed: () => Navigator.pop(context),
+                      )
+                    ],
+                  ),
+                  const Divider(),
+                  const SizedBox(height: 8),
+                  
+                  // Category Filter Section
+                  const Text(
+                    'Kategorie filtern',
+                    style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: Colors.grey),
+                  ),
+                  const SizedBox(height: 8),
+                  Row(
+                    children: ['All', 'Personal', 'Studium'].map((cat) {
+                      final isSelected = _selectedCategoryFilter == cat;
+                      return Padding(
+                        padding: const EdgeInsets.only(right: 8.0),
+                        child: ChoiceChip(
+                          label: Text(cat == 'All' ? 'Alle' : cat),
+                          selected: isSelected,
+                          onSelected: (bool selected) {
+                            if (selected) {
+                              setModalState(() => _selectedCategoryFilter = cat);
+                              setState(() => _selectedCategoryFilter = cat);
+                            }
+                          },
+                        ),
+                      );
+                    }).toList(),
+                  ),
+                  
+                  const SizedBox(height: 20),
+                  
+                  // Sorting Direction Section
+                  const Text(
+                    'Sortieren nach',
+                    style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: Colors.grey),
+                  ),
+                  const SizedBox(height: 8),
+                  DropdownButtonFormField<String>(
+                    value: _selectedSortOption,
+                    decoration: InputDecoration(
+                      contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                      filled: true,
+                      fillColor: isDark ? const Color(0xFF1E1E1E) : const Color(0xFFF7F8FC),
+                    ),
+                    items: const [
+                      DropdownMenuItem(value: 'datum_ab', child: Text('Fälligkeit: Späteste zuerst')),
+                      DropdownMenuItem(value: 'datum_auf', child: Text('Fälligkeit: Früheste zuerst')),
+                      DropdownMenuItem(value: 'prio_ab', child: Text('Priorität: Hoch zu Niedrig')),
+                      DropdownMenuItem(value: 'prio_auf', child: Text('Priorität: Niedrig zu Hoch')),
+                    ],
+                    onChanged: (String? newValue) {
+                      if (newValue != null) {
+                        setModalState(() => _selectedSortOption = newValue);
+                        setState(() => _selectedSortOption = newValue);
+                      }
+                    },
+                  ),
+                  const SizedBox(height: 16),
+                ],
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
+  List<Task> _processTasksPipeline(List<Task> rawTasks) {
+    // 1. Space Type Filtering
+    List<Task> filtered = widget.spaceType == null 
+        ? List.from(rawTasks)
+        : rawTasks.where((t) => t.spaceType == widget.spaceType).toList();
+
+    // 2. Category Filtering
+    if (_selectedCategoryFilter != 'All') {
+      filtered = filtered.where((t) => t.category == _selectedCategoryFilter).toList();
+    }
+
+    // 3. Sorting Execution Block
+    filtered.sort((a, b) {
+      if (_selectedSortOption.startsWith('datum')) {
+        if (a.deadline == null && b.deadline == null) return 0;
+        if (a.deadline == null) return 1;
+        if (b.deadline == null) return -1;
+        return _selectedSortOption == 'datum_auf'
+            ? a.deadline!.compareTo(b.deadline!)
+            : b.deadline!.compareTo(a.deadline!);
+      } else if (_selectedSortOption.startsWith('prio')) {
+        return _selectedSortOption == 'prio_ab'
+            ? b.priority.compareTo(a.priority)
+            : a.priority.compareTo(b.priority);
+      }
+      return 0;
+    });
+
+    return filtered;
   }
 
   @override
@@ -87,10 +220,9 @@ class _TasksScreenState extends State<TasksScreen>
 
     final tasksProvider = context.watch<TaskProvider>();
     
-    // Filter tasks based on spaceType if provided
-    final todo = _applySpaceFilter(tasksProvider.todoTasks);
-    final inProgress = _applySpaceFilter(tasksProvider.inProgressTasks);
-    final completed = _applySpaceFilter(tasksProvider.completedTasks);
+    // Process input pipelines through sorting/filtering logic mappings
+    final todoProcessed = _processTasksPipeline(tasksProvider.todoTasks);
+    final completedProcessed = _processTasksPipeline(tasksProvider.completedTasks);
 
     return Scaffold(
       appBar: AppBar(
@@ -99,15 +231,27 @@ class _TasksScreenState extends State<TasksScreen>
         bottom: TabBar(
           controller: _tabController,
           tabs: [
-            Tab(text: 'Offen (${todo.length})'),
-            Tab(text: 'Aktiv (${inProgress.length})'),
-            Tab(text: 'Fertig (${completed.length})'),
+            Tab(text: 'Offen (${todoProcessed.length})'),
+            Tab(text: 'Fertig (${completedProcessed.length})'),
           ],
         ),
         actions: [
           IconButton(
             icon: const Icon(Icons.search),
-            onPressed: () => _showSearch(context, todo + inProgress + completed),
+            onPressed: () => showSearch(
+              context: context,
+              delegate: _TaskSearchDelegate(tasks: todoProcessed + completedProcessed),
+            ),
+          ),
+          // Clean unified filter icon action inside top bar
+          IconButton(
+            icon: Icon(
+              Icons.filter_list,
+              color: (_selectedCategoryFilter != 'All' || _selectedSortOption != 'datum_ab')
+                  ? AppTheme.tasksColor
+                  : null,
+            ),
+            onPressed: _showFilterAndSortMenu,
           ),
         ],
       ),
@@ -116,9 +260,8 @@ class _TasksScreenState extends State<TasksScreen>
           : TabBarView(
               controller: _tabController,
               children: [
-                _TaskList(tasks: _filterTasks(todo)),
-                _TaskList(tasks: _filterTasks(inProgress)),
-                _TaskList(tasks: _filterTasks(completed)),
+                _TaskList(tasks: todoProcessed),
+                _TaskList(tasks: completedProcessed),
               ],
             ),
       floatingActionButton: FloatingActionButton.extended(
@@ -136,27 +279,6 @@ class _TasksScreenState extends State<TasksScreen>
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
       builder: (_) => const CreateHabitSheet(),
-    );
-  }
-
-  List<Task> _applySpaceFilter(List<Task> tasks) {
-    if (widget.spaceType == null) return tasks;
-    return tasks.where((t) => t.spaceType == widget.spaceType).toList();
-  }
-
-  List<Task> _filterTasks(List<Task> tasks) {
-    if (_searchQuery.isEmpty) return tasks;
-    return tasks
-        .where((t) =>
-            t.title.toLowerCase().contains(_searchQuery.toLowerCase()))
-        .toList();
-  }
-
-  void _showSearch(BuildContext context, List<Task> filteredTasks) {
-    showSearch(
-      context: context,
-      delegate: _TaskSearchDelegate(
-          tasks: filteredTasks),
     );
   }
 
@@ -209,6 +331,7 @@ class _TaskTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
     final priorityColor = AppTheme.getPriorityColor(task.priority);
 
     return Dismissible(
@@ -258,7 +381,6 @@ class _TaskTile extends StatelessWidget {
           padding: const EdgeInsets.all(12),
           child: Row(
             children: [
-              // Priority Bar
               Container(
                 width: 4,
                 height: 50,
@@ -269,7 +391,6 @@ class _TaskTile extends StatelessWidget {
               ),
               const SizedBox(width: 12),
 
-              // Checkbox
               Checkbox(
                 value: task.isCompleted,
                 onChanged: (_) =>
@@ -277,7 +398,6 @@ class _TaskTile extends StatelessWidget {
                 shape: const CircleBorder(),
               ),
 
-              // Content
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -335,21 +455,46 @@ class _TaskTile extends StatelessWidget {
                   ],
                 ),
               ),
+              
+              const SizedBox(width: 8),
 
-              // Priority Badge
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                decoration: BoxDecoration(
-                  color: priorityColor.withValues(alpha: 0.1),
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: Text(
-                  'P${task.priority}',
-                  style: TextStyle(
-                      color: priorityColor,
-                      fontSize: 11,
-                      fontWeight: FontWeight.bold),
-                ),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                    margin: const EdgeInsets.only(bottom: 6),
+                    decoration: BoxDecoration(
+                      color: isDark 
+                          ? Colors.white.withValues(alpha: 0.1) 
+                          : Colors.black.withValues(alpha: 0.05),
+                      borderRadius: BorderRadius.circular(4),
+                    ),
+                    child: Text(
+                      task.category.isNotEmpty ? task.category : 'Personal',
+                      style: TextStyle(
+                        fontSize: 10,
+                        fontWeight: FontWeight.w600,
+                        color: isDark ? Colors.grey[300] : Colors.grey[700],
+                      ),
+                    ),
+                  ),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: priorityColor.withValues(alpha: 0.1),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Text(
+                      'P${task.priority}',
+                      style: TextStyle(
+                          color: priorityColor,
+                          fontSize: 11,
+                          fontWeight: FontWeight.bold),
+                    ),
+                  ),
+                ],
               ),
             ],
           ),
@@ -358,7 +503,6 @@ class _TaskTile extends StatelessWidget {
     );
   }
 }
-
 
 // ─── Search Delegate ───────────────────────────────────────────────────────────
 
@@ -388,9 +532,11 @@ class _TaskSearchDelegate extends SearchDelegate<String> {
       itemCount: filtered.length,
       itemBuilder: (_, i) => ListTile(
         title: Text(filtered[i].title),
-        subtitle: Text(filtered[i].status),
+        subtitle: Text('Prio: P${filtered[i].priority} | Kategorie: ${filtered[i].category}'),
         leading: const Icon(Icons.task_alt),
-        onTap: () => close(context, filtered[i].title),
+        onTap: () {
+          close(context, filtered[i].title);
+        },
       ),
     );
   }
