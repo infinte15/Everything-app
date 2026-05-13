@@ -14,6 +14,7 @@ import '../screens/recipes/recipes_screen.dart';
 import '../screens/finance/finance_screen.dart';
 import '../screens/notes/notes_screen.dart';
 import '../widgets/bottom_nav.dart';
+import '../screens/habits/habits_screen.dart';
 
 final router = GoRouter(
   initialLocation: '/login',
@@ -80,7 +81,7 @@ final router = GoRouter(
     ),
     GoRoute(
       path: '/habits',
-      builder: (_, _) => const TasksScreen(title: 'Habits', spaceType: 'HABITS'),
+      builder: (_, _) => const HabitsScreen(title: 'Habits'),
     ),
     GoRoute(
       path: '/notes',

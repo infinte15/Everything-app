@@ -6254,3 +6254,2378 @@ java.lang.RuntimeException: Preferences nicht gefunden
         study_notes sn1_0 
     where
         sn1_0.user_id=?
+2026-05-13 16:09:15 [http-nio-8080-exec-2] DEBUG o.s.security.web.FilterChainProxy - Securing POST /api/auth/dev-login
+2026-05-13 16:09:15 [http-nio-8080-exec-2] DEBUG org.hibernate.SQL - 
+    select
+        u1_0.id,
+        u1_0.created_at,
+        u1_0.email,
+        u1_0.last_login,
+        u1_0.password_hash,
+        u1_0.username 
+    from
+        users u1_0 
+    where
+        u1_0.username=?
+2026-05-13 16:09:15 [http-nio-8080-exec-2] DEBUG org.hibernate.SQL - 
+    select
+        up1_0.id,
+        up1_0.break_duration_minutes,
+        up1_0.dark_mode,
+        up1_0.group_similar_tasks,
+        up1_0.hours_before_break,
+        up1_0.max_tasks_per_day,
+        up1_0.notifications_enabled,
+        up1_0.peak_productivity_time,
+        up1_0.reminder_minutes_before,
+        up1_0.theme_color,
+        up1_0.user_id,
+        u1_0.id,
+        u1_0.created_at,
+        u1_0.email,
+        u1_0.last_login,
+        u1_0.password_hash,
+        u1_0.username,
+        up1_0.workday_end,
+        up1_0.workday_start 
+    from
+        user_preferences up1_0 
+    join
+        users u1_0 
+            on u1_0.id=up1_0.user_id 
+    where
+        up1_0.user_id=?
+2026-05-13 16:09:15 [http-nio-8080-exec-2] DEBUG o.s.security.web.FilterChainProxy - Secured POST /api/auth/dev-login
+2026-05-13 16:09:15 [http-nio-8080-exec-2] DEBUG org.hibernate.SQL - 
+    select
+        u1_0.id,
+        u1_0.created_at,
+        u1_0.email,
+        u1_0.last_login,
+        u1_0.password_hash,
+        u1_0.username 
+    from
+        users u1_0 
+    where
+        u1_0.username=?
+2026-05-13 16:09:15 [http-nio-8080-exec-2] DEBUG org.hibernate.SQL - 
+    select
+        up1_0.id,
+        up1_0.break_duration_minutes,
+        up1_0.dark_mode,
+        up1_0.group_similar_tasks,
+        up1_0.hours_before_break,
+        up1_0.max_tasks_per_day,
+        up1_0.notifications_enabled,
+        up1_0.peak_productivity_time,
+        up1_0.reminder_minutes_before,
+        up1_0.theme_color,
+        up1_0.user_id,
+        u1_0.id,
+        u1_0.created_at,
+        u1_0.email,
+        u1_0.last_login,
+        u1_0.password_hash,
+        u1_0.username,
+        up1_0.workday_end,
+        up1_0.workday_start 
+    from
+        user_preferences up1_0 
+    join
+        users u1_0 
+            on u1_0.id=up1_0.user_id 
+    where
+        up1_0.user_id=?
+2026-05-13 16:09:15 [http-nio-8080-exec-2] DEBUG org.hibernate.SQL - 
+    update
+        users 
+    set
+        created_at=?,
+        email=?,
+        last_login=?,
+        password_hash=?,
+        username=? 
+    where
+        id=?
+2026-05-13 16:09:15 [http-nio-8080-exec-3] DEBUG o.s.security.web.FilterChainProxy - Securing GET /api/tasks
+2026-05-13 16:09:15 [http-nio-8080-exec-3] DEBUG org.hibernate.SQL - 
+    select
+        u1_0.id,
+        u1_0.created_at,
+        u1_0.email,
+        u1_0.last_login,
+        u1_0.password_hash,
+        u1_0.username 
+    from
+        users u1_0 
+    where
+        u1_0.username=?
+2026-05-13 16:09:15 [http-nio-8080-exec-3] DEBUG org.hibernate.SQL - 
+    select
+        up1_0.id,
+        up1_0.break_duration_minutes,
+        up1_0.dark_mode,
+        up1_0.group_similar_tasks,
+        up1_0.hours_before_break,
+        up1_0.max_tasks_per_day,
+        up1_0.notifications_enabled,
+        up1_0.peak_productivity_time,
+        up1_0.reminder_minutes_before,
+        up1_0.theme_color,
+        up1_0.user_id,
+        u1_0.id,
+        u1_0.created_at,
+        u1_0.email,
+        u1_0.last_login,
+        u1_0.password_hash,
+        u1_0.username,
+        up1_0.workday_end,
+        up1_0.workday_start 
+    from
+        user_preferences up1_0 
+    join
+        users u1_0 
+            on u1_0.id=up1_0.user_id 
+    where
+        up1_0.user_id=?
+2026-05-13 16:09:15 [http-nio-8080-exec-3] DEBUG o.s.security.web.FilterChainProxy - Secured GET /api/tasks
+2026-05-13 16:09:15 [http-nio-8080-exec-3] DEBUG org.hibernate.SQL - 
+    select
+        t1_0.id,
+        t1_0.category,
+        t1_0.completed_at,
+        t1_0.created_at,
+        t1_0.deadline,
+        t1_0.description,
+        t1_0.estimated_duration_minutes,
+        t1_0.priority,
+        t1_0.project_id,
+        t1_0.scheduled_end_time,
+        t1_0.scheduled_start_time,
+        t1_0.space_type,
+        t1_0.status,
+        t1_0.title,
+        t1_0.updated_at,
+        t1_0.user_id 
+    from
+        tasks t1_0 
+    where
+        t1_0.user_id=?
+2026-05-13 16:09:15 [http-nio-8080-exec-4] DEBUG o.s.security.web.FilterChainProxy - Securing GET /api/calendar/events?startDate=2026-05-01T00:00:00.000&endDate=2026-05-31T23:59:59.000
+2026-05-13 16:09:15 [http-nio-8080-exec-4] DEBUG org.hibernate.SQL - 
+    select
+        u1_0.id,
+        u1_0.created_at,
+        u1_0.email,
+        u1_0.last_login,
+        u1_0.password_hash,
+        u1_0.username 
+    from
+        users u1_0 
+    where
+        u1_0.username=?
+2026-05-13 16:09:15 [http-nio-8080-exec-4] DEBUG org.hibernate.SQL - 
+    select
+        up1_0.id,
+        up1_0.break_duration_minutes,
+        up1_0.dark_mode,
+        up1_0.group_similar_tasks,
+        up1_0.hours_before_break,
+        up1_0.max_tasks_per_day,
+        up1_0.notifications_enabled,
+        up1_0.peak_productivity_time,
+        up1_0.reminder_minutes_before,
+        up1_0.theme_color,
+        up1_0.user_id,
+        u1_0.id,
+        u1_0.created_at,
+        u1_0.email,
+        u1_0.last_login,
+        u1_0.password_hash,
+        u1_0.username,
+        up1_0.workday_end,
+        up1_0.workday_start 
+    from
+        user_preferences up1_0 
+    join
+        users u1_0 
+            on u1_0.id=up1_0.user_id 
+    where
+        up1_0.user_id=?
+2026-05-13 16:09:15 [http-nio-8080-exec-4] DEBUG o.s.security.web.FilterChainProxy - Secured GET /api/calendar/events?startDate=2026-05-01T00:00:00.000&endDate=2026-05-31T23:59:59.000
+2026-05-13 16:09:15 [http-nio-8080-exec-4] DEBUG org.hibernate.SQL - 
+    select
+        ce1_0.id,
+        ce1_0.color,
+        ce1_0.created_at,
+        ce1_0.description,
+        ce1_0.end_time,
+        ce1_0.event_type,
+        ce1_0.is_fixed,
+        ce1_0.location,
+        ce1_0.notes,
+        ce1_0.related_habit_id,
+        ce1_0.related_task_id,
+        ce1_0.related_workout_id,
+        ce1_0.start_time,
+        ce1_0.title,
+        ce1_0.updated_at,
+        ce1_0.user_id 
+    from
+        calendar_events ce1_0 
+    where
+        ce1_0.user_id=? 
+        and ce1_0.start_time between ? and ?
+2026-05-13 16:09:22 [http-nio-8080-exec-5] DEBUG o.s.security.web.FilterChainProxy - Securing GET /api/habits
+2026-05-13 16:09:22 [http-nio-8080-exec-5] DEBUG org.hibernate.SQL - 
+    select
+        u1_0.id,
+        u1_0.created_at,
+        u1_0.email,
+        u1_0.last_login,
+        u1_0.password_hash,
+        u1_0.username 
+    from
+        users u1_0 
+    where
+        u1_0.username=?
+2026-05-13 16:09:22 [http-nio-8080-exec-5] DEBUG org.hibernate.SQL - 
+    select
+        up1_0.id,
+        up1_0.break_duration_minutes,
+        up1_0.dark_mode,
+        up1_0.group_similar_tasks,
+        up1_0.hours_before_break,
+        up1_0.max_tasks_per_day,
+        up1_0.notifications_enabled,
+        up1_0.peak_productivity_time,
+        up1_0.reminder_minutes_before,
+        up1_0.theme_color,
+        up1_0.user_id,
+        u1_0.id,
+        u1_0.created_at,
+        u1_0.email,
+        u1_0.last_login,
+        u1_0.password_hash,
+        u1_0.username,
+        up1_0.workday_end,
+        up1_0.workday_start 
+    from
+        user_preferences up1_0 
+    join
+        users u1_0 
+            on u1_0.id=up1_0.user_id 
+    where
+        up1_0.user_id=?
+2026-05-13 16:09:22 [http-nio-8080-exec-5] DEBUG o.s.security.web.FilterChainProxy - Secured GET /api/habits
+2026-05-13 16:09:22 [http-nio-8080-exec-5] DEBUG org.hibernate.SQL - 
+    select
+        h1_0.id,
+        h1_0.created_at,
+        h1_0.current_streak,
+        h1_0.description,
+        h1_0.duration_minutes,
+        h1_0.end_date,
+        h1_0.frequency,
+        h1_0.friday,
+        h1_0.longest_streak,
+        h1_0.monday,
+        h1_0.name,
+        h1_0.preferred_time,
+        h1_0.saturday,
+        h1_0.start_date,
+        h1_0.sunday,
+        h1_0.thursday,
+        h1_0.tuesday,
+        h1_0.updated_at,
+        h1_0.user_id,
+        h1_0.wednesday 
+    from
+        habits h1_0 
+    where
+        h1_0.user_id=?
+2026-05-13 16:09:36 [http-nio-8080-exec-9] DEBUG o.s.security.web.FilterChainProxy - Securing GET /api/habits
+2026-05-13 16:09:36 [http-nio-8080-exec-9] DEBUG org.hibernate.SQL - 
+    select
+        u1_0.id,
+        u1_0.created_at,
+        u1_0.email,
+        u1_0.last_login,
+        u1_0.password_hash,
+        u1_0.username 
+    from
+        users u1_0 
+    where
+        u1_0.username=?
+2026-05-13 16:09:36 [http-nio-8080-exec-9] DEBUG org.hibernate.SQL - 
+    select
+        up1_0.id,
+        up1_0.break_duration_minutes,
+        up1_0.dark_mode,
+        up1_0.group_similar_tasks,
+        up1_0.hours_before_break,
+        up1_0.max_tasks_per_day,
+        up1_0.notifications_enabled,
+        up1_0.peak_productivity_time,
+        up1_0.reminder_minutes_before,
+        up1_0.theme_color,
+        up1_0.user_id,
+        u1_0.id,
+        u1_0.created_at,
+        u1_0.email,
+        u1_0.last_login,
+        u1_0.password_hash,
+        u1_0.username,
+        up1_0.workday_end,
+        up1_0.workday_start 
+    from
+        user_preferences up1_0 
+    join
+        users u1_0 
+            on u1_0.id=up1_0.user_id 
+    where
+        up1_0.user_id=?
+2026-05-13 16:09:36 [http-nio-8080-exec-9] DEBUG o.s.security.web.FilterChainProxy - Secured GET /api/habits
+2026-05-13 16:09:36 [http-nio-8080-exec-9] DEBUG org.hibernate.SQL - 
+    select
+        h1_0.id,
+        h1_0.created_at,
+        h1_0.current_streak,
+        h1_0.description,
+        h1_0.duration_minutes,
+        h1_0.end_date,
+        h1_0.frequency,
+        h1_0.friday,
+        h1_0.longest_streak,
+        h1_0.monday,
+        h1_0.name,
+        h1_0.preferred_time,
+        h1_0.saturday,
+        h1_0.start_date,
+        h1_0.sunday,
+        h1_0.thursday,
+        h1_0.tuesday,
+        h1_0.updated_at,
+        h1_0.user_id,
+        h1_0.wednesday 
+    from
+        habits h1_0 
+    where
+        h1_0.user_id=?
+2026-05-13 16:14:32 [http-nio-8080-exec-1] DEBUG o.s.security.web.FilterChainProxy - Securing GET /api/habits
+2026-05-13 16:14:32 [http-nio-8080-exec-1] DEBUG org.hibernate.SQL - 
+    select
+        u1_0.id,
+        u1_0.created_at,
+        u1_0.email,
+        u1_0.last_login,
+        u1_0.password_hash,
+        u1_0.username 
+    from
+        users u1_0 
+    where
+        u1_0.username=?
+2026-05-13 16:14:32 [http-nio-8080-exec-1] DEBUG org.hibernate.SQL - 
+    select
+        up1_0.id,
+        up1_0.break_duration_minutes,
+        up1_0.dark_mode,
+        up1_0.group_similar_tasks,
+        up1_0.hours_before_break,
+        up1_0.max_tasks_per_day,
+        up1_0.notifications_enabled,
+        up1_0.peak_productivity_time,
+        up1_0.reminder_minutes_before,
+        up1_0.theme_color,
+        up1_0.user_id,
+        u1_0.id,
+        u1_0.created_at,
+        u1_0.email,
+        u1_0.last_login,
+        u1_0.password_hash,
+        u1_0.username,
+        up1_0.workday_end,
+        up1_0.workday_start 
+    from
+        user_preferences up1_0 
+    join
+        users u1_0 
+            on u1_0.id=up1_0.user_id 
+    where
+        up1_0.user_id=?
+2026-05-13 16:14:32 [http-nio-8080-exec-1] DEBUG o.s.security.web.FilterChainProxy - Secured GET /api/habits
+2026-05-13 16:14:32 [http-nio-8080-exec-1] DEBUG org.hibernate.SQL - 
+    select
+        h1_0.id,
+        h1_0.created_at,
+        h1_0.current_streak,
+        h1_0.description,
+        h1_0.duration_minutes,
+        h1_0.end_date,
+        h1_0.frequency,
+        h1_0.friday,
+        h1_0.longest_streak,
+        h1_0.monday,
+        h1_0.name,
+        h1_0.preferred_time,
+        h1_0.saturday,
+        h1_0.start_date,
+        h1_0.sunday,
+        h1_0.thursday,
+        h1_0.tuesday,
+        h1_0.updated_at,
+        h1_0.user_id,
+        h1_0.wednesday 
+    from
+        habits h1_0 
+    where
+        h1_0.user_id=?
+2026-05-13 16:21:28 [http-nio-8080-exec-3] DEBUG o.s.security.web.FilterChainProxy - Securing GET /api/habits
+2026-05-13 16:21:28 [http-nio-8080-exec-3] DEBUG org.hibernate.SQL - 
+    select
+        u1_0.id,
+        u1_0.created_at,
+        u1_0.email,
+        u1_0.last_login,
+        u1_0.password_hash,
+        u1_0.username 
+    from
+        users u1_0 
+    where
+        u1_0.username=?
+2026-05-13 16:21:28 [http-nio-8080-exec-3] DEBUG org.hibernate.SQL - 
+    select
+        up1_0.id,
+        up1_0.break_duration_minutes,
+        up1_0.dark_mode,
+        up1_0.group_similar_tasks,
+        up1_0.hours_before_break,
+        up1_0.max_tasks_per_day,
+        up1_0.notifications_enabled,
+        up1_0.peak_productivity_time,
+        up1_0.reminder_minutes_before,
+        up1_0.theme_color,
+        up1_0.user_id,
+        u1_0.id,
+        u1_0.created_at,
+        u1_0.email,
+        u1_0.last_login,
+        u1_0.password_hash,
+        u1_0.username,
+        up1_0.workday_end,
+        up1_0.workday_start 
+    from
+        user_preferences up1_0 
+    join
+        users u1_0 
+            on u1_0.id=up1_0.user_id 
+    where
+        up1_0.user_id=?
+2026-05-13 16:21:28 [http-nio-8080-exec-3] DEBUG o.s.security.web.FilterChainProxy - Secured GET /api/habits
+2026-05-13 16:21:28 [http-nio-8080-exec-3] DEBUG org.hibernate.SQL - 
+    select
+        h1_0.id,
+        h1_0.created_at,
+        h1_0.current_streak,
+        h1_0.description,
+        h1_0.duration_minutes,
+        h1_0.end_date,
+        h1_0.frequency,
+        h1_0.friday,
+        h1_0.longest_streak,
+        h1_0.monday,
+        h1_0.name,
+        h1_0.preferred_time,
+        h1_0.saturday,
+        h1_0.start_date,
+        h1_0.sunday,
+        h1_0.thursday,
+        h1_0.tuesday,
+        h1_0.updated_at,
+        h1_0.user_id,
+        h1_0.wednesday 
+    from
+        habits h1_0 
+    where
+        h1_0.user_id=?
+2026-05-13 16:21:35 [http-nio-8080-exec-4] DEBUG o.s.security.web.FilterChainProxy - Securing GET /api/tasks
+2026-05-13 16:21:35 [http-nio-8080-exec-4] DEBUG org.hibernate.SQL - 
+    select
+        u1_0.id,
+        u1_0.created_at,
+        u1_0.email,
+        u1_0.last_login,
+        u1_0.password_hash,
+        u1_0.username 
+    from
+        users u1_0 
+    where
+        u1_0.username=?
+2026-05-13 16:21:35 [http-nio-8080-exec-4] DEBUG org.hibernate.SQL - 
+    select
+        up1_0.id,
+        up1_0.break_duration_minutes,
+        up1_0.dark_mode,
+        up1_0.group_similar_tasks,
+        up1_0.hours_before_break,
+        up1_0.max_tasks_per_day,
+        up1_0.notifications_enabled,
+        up1_0.peak_productivity_time,
+        up1_0.reminder_minutes_before,
+        up1_0.theme_color,
+        up1_0.user_id,
+        u1_0.id,
+        u1_0.created_at,
+        u1_0.email,
+        u1_0.last_login,
+        u1_0.password_hash,
+        u1_0.username,
+        up1_0.workday_end,
+        up1_0.workday_start 
+    from
+        user_preferences up1_0 
+    join
+        users u1_0 
+            on u1_0.id=up1_0.user_id 
+    where
+        up1_0.user_id=?
+2026-05-13 16:21:35 [http-nio-8080-exec-4] DEBUG o.s.security.web.FilterChainProxy - Secured GET /api/tasks
+2026-05-13 16:21:35 [http-nio-8080-exec-4] DEBUG org.hibernate.SQL - 
+    select
+        t1_0.id,
+        t1_0.category,
+        t1_0.completed_at,
+        t1_0.created_at,
+        t1_0.deadline,
+        t1_0.description,
+        t1_0.estimated_duration_minutes,
+        t1_0.priority,
+        t1_0.project_id,
+        t1_0.scheduled_end_time,
+        t1_0.scheduled_start_time,
+        t1_0.space_type,
+        t1_0.status,
+        t1_0.title,
+        t1_0.updated_at,
+        t1_0.user_id 
+    from
+        tasks t1_0 
+    where
+        t1_0.user_id=?
+2026-05-13 16:25:58 [http-nio-8080-exec-7] DEBUG o.s.security.web.FilterChainProxy - Securing POST /api/auth/dev-login
+2026-05-13 16:25:58 [http-nio-8080-exec-7] DEBUG org.hibernate.SQL - 
+    select
+        u1_0.id,
+        u1_0.created_at,
+        u1_0.email,
+        u1_0.last_login,
+        u1_0.password_hash,
+        u1_0.username 
+    from
+        users u1_0 
+    where
+        u1_0.username=?
+2026-05-13 16:25:58 [http-nio-8080-exec-7] DEBUG org.hibernate.SQL - 
+    select
+        up1_0.id,
+        up1_0.break_duration_minutes,
+        up1_0.dark_mode,
+        up1_0.group_similar_tasks,
+        up1_0.hours_before_break,
+        up1_0.max_tasks_per_day,
+        up1_0.notifications_enabled,
+        up1_0.peak_productivity_time,
+        up1_0.reminder_minutes_before,
+        up1_0.theme_color,
+        up1_0.user_id,
+        u1_0.id,
+        u1_0.created_at,
+        u1_0.email,
+        u1_0.last_login,
+        u1_0.password_hash,
+        u1_0.username,
+        up1_0.workday_end,
+        up1_0.workday_start 
+    from
+        user_preferences up1_0 
+    join
+        users u1_0 
+            on u1_0.id=up1_0.user_id 
+    where
+        up1_0.user_id=?
+2026-05-13 16:25:58 [http-nio-8080-exec-7] DEBUG o.s.security.web.FilterChainProxy - Secured POST /api/auth/dev-login
+2026-05-13 16:25:58 [http-nio-8080-exec-7] DEBUG org.hibernate.SQL - 
+    select
+        u1_0.id,
+        u1_0.created_at,
+        u1_0.email,
+        u1_0.last_login,
+        u1_0.password_hash,
+        u1_0.username 
+    from
+        users u1_0 
+    where
+        u1_0.username=?
+2026-05-13 16:25:58 [http-nio-8080-exec-7] DEBUG org.hibernate.SQL - 
+    select
+        up1_0.id,
+        up1_0.break_duration_minutes,
+        up1_0.dark_mode,
+        up1_0.group_similar_tasks,
+        up1_0.hours_before_break,
+        up1_0.max_tasks_per_day,
+        up1_0.notifications_enabled,
+        up1_0.peak_productivity_time,
+        up1_0.reminder_minutes_before,
+        up1_0.theme_color,
+        up1_0.user_id,
+        u1_0.id,
+        u1_0.created_at,
+        u1_0.email,
+        u1_0.last_login,
+        u1_0.password_hash,
+        u1_0.username,
+        up1_0.workday_end,
+        up1_0.workday_start 
+    from
+        user_preferences up1_0 
+    join
+        users u1_0 
+            on u1_0.id=up1_0.user_id 
+    where
+        up1_0.user_id=?
+2026-05-13 16:25:58 [http-nio-8080-exec-7] DEBUG org.hibernate.SQL - 
+    update
+        users 
+    set
+        created_at=?,
+        email=?,
+        last_login=?,
+        password_hash=?,
+        username=? 
+    where
+        id=?
+2026-05-13 16:25:58 [http-nio-8080-exec-8] DEBUG o.s.security.web.FilterChainProxy - Securing GET /api/tasks
+2026-05-13 16:25:58 [http-nio-8080-exec-8] DEBUG org.hibernate.SQL - 
+    select
+        u1_0.id,
+        u1_0.created_at,
+        u1_0.email,
+        u1_0.last_login,
+        u1_0.password_hash,
+        u1_0.username 
+    from
+        users u1_0 
+    where
+        u1_0.username=?
+2026-05-13 16:25:58 [http-nio-8080-exec-8] DEBUG org.hibernate.SQL - 
+    select
+        up1_0.id,
+        up1_0.break_duration_minutes,
+        up1_0.dark_mode,
+        up1_0.group_similar_tasks,
+        up1_0.hours_before_break,
+        up1_0.max_tasks_per_day,
+        up1_0.notifications_enabled,
+        up1_0.peak_productivity_time,
+        up1_0.reminder_minutes_before,
+        up1_0.theme_color,
+        up1_0.user_id,
+        u1_0.id,
+        u1_0.created_at,
+        u1_0.email,
+        u1_0.last_login,
+        u1_0.password_hash,
+        u1_0.username,
+        up1_0.workday_end,
+        up1_0.workday_start 
+    from
+        user_preferences up1_0 
+    join
+        users u1_0 
+            on u1_0.id=up1_0.user_id 
+    where
+        up1_0.user_id=?
+2026-05-13 16:25:58 [http-nio-8080-exec-8] DEBUG o.s.security.web.FilterChainProxy - Secured GET /api/tasks
+2026-05-13 16:25:58 [http-nio-8080-exec-8] DEBUG org.hibernate.SQL - 
+    select
+        t1_0.id,
+        t1_0.category,
+        t1_0.completed_at,
+        t1_0.created_at,
+        t1_0.deadline,
+        t1_0.description,
+        t1_0.estimated_duration_minutes,
+        t1_0.priority,
+        t1_0.project_id,
+        t1_0.scheduled_end_time,
+        t1_0.scheduled_start_time,
+        t1_0.space_type,
+        t1_0.status,
+        t1_0.title,
+        t1_0.updated_at,
+        t1_0.user_id 
+    from
+        tasks t1_0 
+    where
+        t1_0.user_id=?
+2026-05-13 16:25:58 [http-nio-8080-exec-9] DEBUG o.s.security.web.FilterChainProxy - Securing GET /api/calendar/events?startDate=2026-05-01T00:00:00.000&endDate=2026-05-31T23:59:59.000
+2026-05-13 16:25:58 [http-nio-8080-exec-9] DEBUG org.hibernate.SQL - 
+    select
+        u1_0.id,
+        u1_0.created_at,
+        u1_0.email,
+        u1_0.last_login,
+        u1_0.password_hash,
+        u1_0.username 
+    from
+        users u1_0 
+    where
+        u1_0.username=?
+2026-05-13 16:25:58 [http-nio-8080-exec-9] DEBUG org.hibernate.SQL - 
+    select
+        up1_0.id,
+        up1_0.break_duration_minutes,
+        up1_0.dark_mode,
+        up1_0.group_similar_tasks,
+        up1_0.hours_before_break,
+        up1_0.max_tasks_per_day,
+        up1_0.notifications_enabled,
+        up1_0.peak_productivity_time,
+        up1_0.reminder_minutes_before,
+        up1_0.theme_color,
+        up1_0.user_id,
+        u1_0.id,
+        u1_0.created_at,
+        u1_0.email,
+        u1_0.last_login,
+        u1_0.password_hash,
+        u1_0.username,
+        up1_0.workday_end,
+        up1_0.workday_start 
+    from
+        user_preferences up1_0 
+    join
+        users u1_0 
+            on u1_0.id=up1_0.user_id 
+    where
+        up1_0.user_id=?
+2026-05-13 16:25:58 [http-nio-8080-exec-9] DEBUG o.s.security.web.FilterChainProxy - Secured GET /api/calendar/events?startDate=2026-05-01T00:00:00.000&endDate=2026-05-31T23:59:59.000
+2026-05-13 16:25:58 [http-nio-8080-exec-9] DEBUG org.hibernate.SQL - 
+    select
+        ce1_0.id,
+        ce1_0.color,
+        ce1_0.created_at,
+        ce1_0.description,
+        ce1_0.end_time,
+        ce1_0.event_type,
+        ce1_0.is_fixed,
+        ce1_0.location,
+        ce1_0.notes,
+        ce1_0.related_habit_id,
+        ce1_0.related_task_id,
+        ce1_0.related_workout_id,
+        ce1_0.start_time,
+        ce1_0.title,
+        ce1_0.updated_at,
+        ce1_0.user_id 
+    from
+        calendar_events ce1_0 
+    where
+        ce1_0.user_id=? 
+        and ce1_0.start_time between ? and ?
+2026-05-13 16:26:02 [http-nio-8080-exec-10] DEBUG o.s.security.web.FilterChainProxy - Securing GET /api/tasks
+2026-05-13 16:26:02 [http-nio-8080-exec-10] DEBUG org.hibernate.SQL - 
+    select
+        u1_0.id,
+        u1_0.created_at,
+        u1_0.email,
+        u1_0.last_login,
+        u1_0.password_hash,
+        u1_0.username 
+    from
+        users u1_0 
+    where
+        u1_0.username=?
+2026-05-13 16:26:02 [http-nio-8080-exec-10] DEBUG org.hibernate.SQL - 
+    select
+        up1_0.id,
+        up1_0.break_duration_minutes,
+        up1_0.dark_mode,
+        up1_0.group_similar_tasks,
+        up1_0.hours_before_break,
+        up1_0.max_tasks_per_day,
+        up1_0.notifications_enabled,
+        up1_0.peak_productivity_time,
+        up1_0.reminder_minutes_before,
+        up1_0.theme_color,
+        up1_0.user_id,
+        u1_0.id,
+        u1_0.created_at,
+        u1_0.email,
+        u1_0.last_login,
+        u1_0.password_hash,
+        u1_0.username,
+        up1_0.workday_end,
+        up1_0.workday_start 
+    from
+        user_preferences up1_0 
+    join
+        users u1_0 
+            on u1_0.id=up1_0.user_id 
+    where
+        up1_0.user_id=?
+2026-05-13 16:26:02 [http-nio-8080-exec-10] DEBUG o.s.security.web.FilterChainProxy - Secured GET /api/tasks
+2026-05-13 16:26:02 [http-nio-8080-exec-10] DEBUG org.hibernate.SQL - 
+    select
+        t1_0.id,
+        t1_0.category,
+        t1_0.completed_at,
+        t1_0.created_at,
+        t1_0.deadline,
+        t1_0.description,
+        t1_0.estimated_duration_minutes,
+        t1_0.priority,
+        t1_0.project_id,
+        t1_0.scheduled_end_time,
+        t1_0.scheduled_start_time,
+        t1_0.space_type,
+        t1_0.status,
+        t1_0.title,
+        t1_0.updated_at,
+        t1_0.user_id 
+    from
+        tasks t1_0 
+    where
+        t1_0.user_id=?
+2026-05-13 16:26:19 [http-nio-8080-exec-4] DEBUG o.s.security.web.FilterChainProxy - Securing GET /api/tasks
+2026-05-13 16:26:19 [http-nio-8080-exec-4] DEBUG org.hibernate.SQL - 
+    select
+        u1_0.id,
+        u1_0.created_at,
+        u1_0.email,
+        u1_0.last_login,
+        u1_0.password_hash,
+        u1_0.username 
+    from
+        users u1_0 
+    where
+        u1_0.username=?
+2026-05-13 16:26:19 [http-nio-8080-exec-4] DEBUG org.hibernate.SQL - 
+    select
+        up1_0.id,
+        up1_0.break_duration_minutes,
+        up1_0.dark_mode,
+        up1_0.group_similar_tasks,
+        up1_0.hours_before_break,
+        up1_0.max_tasks_per_day,
+        up1_0.notifications_enabled,
+        up1_0.peak_productivity_time,
+        up1_0.reminder_minutes_before,
+        up1_0.theme_color,
+        up1_0.user_id,
+        u1_0.id,
+        u1_0.created_at,
+        u1_0.email,
+        u1_0.last_login,
+        u1_0.password_hash,
+        u1_0.username,
+        up1_0.workday_end,
+        up1_0.workday_start 
+    from
+        user_preferences up1_0 
+    join
+        users u1_0 
+            on u1_0.id=up1_0.user_id 
+    where
+        up1_0.user_id=?
+2026-05-13 16:26:19 [http-nio-8080-exec-4] DEBUG o.s.security.web.FilterChainProxy - Secured GET /api/tasks
+2026-05-13 16:26:19 [http-nio-8080-exec-4] DEBUG org.hibernate.SQL - 
+    select
+        t1_0.id,
+        t1_0.category,
+        t1_0.completed_at,
+        t1_0.created_at,
+        t1_0.deadline,
+        t1_0.description,
+        t1_0.estimated_duration_minutes,
+        t1_0.priority,
+        t1_0.project_id,
+        t1_0.scheduled_end_time,
+        t1_0.scheduled_start_time,
+        t1_0.space_type,
+        t1_0.status,
+        t1_0.title,
+        t1_0.updated_at,
+        t1_0.user_id 
+    from
+        tasks t1_0 
+    where
+        t1_0.user_id=?
+2026-05-13 16:26:35 [http-nio-8080-exec-6] DEBUG o.s.security.web.FilterChainProxy - Securing GET /api/tasks
+2026-05-13 16:26:35 [http-nio-8080-exec-6] DEBUG org.hibernate.SQL - 
+    select
+        u1_0.id,
+        u1_0.created_at,
+        u1_0.email,
+        u1_0.last_login,
+        u1_0.password_hash,
+        u1_0.username 
+    from
+        users u1_0 
+    where
+        u1_0.username=?
+2026-05-13 16:26:35 [http-nio-8080-exec-6] DEBUG org.hibernate.SQL - 
+    select
+        up1_0.id,
+        up1_0.break_duration_minutes,
+        up1_0.dark_mode,
+        up1_0.group_similar_tasks,
+        up1_0.hours_before_break,
+        up1_0.max_tasks_per_day,
+        up1_0.notifications_enabled,
+        up1_0.peak_productivity_time,
+        up1_0.reminder_minutes_before,
+        up1_0.theme_color,
+        up1_0.user_id,
+        u1_0.id,
+        u1_0.created_at,
+        u1_0.email,
+        u1_0.last_login,
+        u1_0.password_hash,
+        u1_0.username,
+        up1_0.workday_end,
+        up1_0.workday_start 
+    from
+        user_preferences up1_0 
+    join
+        users u1_0 
+            on u1_0.id=up1_0.user_id 
+    where
+        up1_0.user_id=?
+2026-05-13 16:26:35 [http-nio-8080-exec-6] DEBUG o.s.security.web.FilterChainProxy - Secured GET /api/tasks
+2026-05-13 16:26:35 [http-nio-8080-exec-6] DEBUG org.hibernate.SQL - 
+    select
+        t1_0.id,
+        t1_0.category,
+        t1_0.completed_at,
+        t1_0.created_at,
+        t1_0.deadline,
+        t1_0.description,
+        t1_0.estimated_duration_minutes,
+        t1_0.priority,
+        t1_0.project_id,
+        t1_0.scheduled_end_time,
+        t1_0.scheduled_start_time,
+        t1_0.space_type,
+        t1_0.status,
+        t1_0.title,
+        t1_0.updated_at,
+        t1_0.user_id 
+    from
+        tasks t1_0 
+    where
+        t1_0.user_id=?
+2026-05-13 16:28:48 [http-nio-8080-exec-8] DEBUG o.s.security.web.FilterChainProxy - Securing GET /api/tasks
+2026-05-13 16:28:48 [http-nio-8080-exec-8] DEBUG org.hibernate.SQL - 
+    select
+        u1_0.id,
+        u1_0.created_at,
+        u1_0.email,
+        u1_0.last_login,
+        u1_0.password_hash,
+        u1_0.username 
+    from
+        users u1_0 
+    where
+        u1_0.username=?
+2026-05-13 16:28:48 [http-nio-8080-exec-8] DEBUG org.hibernate.SQL - 
+    select
+        up1_0.id,
+        up1_0.break_duration_minutes,
+        up1_0.dark_mode,
+        up1_0.group_similar_tasks,
+        up1_0.hours_before_break,
+        up1_0.max_tasks_per_day,
+        up1_0.notifications_enabled,
+        up1_0.peak_productivity_time,
+        up1_0.reminder_minutes_before,
+        up1_0.theme_color,
+        up1_0.user_id,
+        u1_0.id,
+        u1_0.created_at,
+        u1_0.email,
+        u1_0.last_login,
+        u1_0.password_hash,
+        u1_0.username,
+        up1_0.workday_end,
+        up1_0.workday_start 
+    from
+        user_preferences up1_0 
+    join
+        users u1_0 
+            on u1_0.id=up1_0.user_id 
+    where
+        up1_0.user_id=?
+2026-05-13 16:28:48 [http-nio-8080-exec-8] DEBUG o.s.security.web.FilterChainProxy - Secured GET /api/tasks
+2026-05-13 16:28:48 [http-nio-8080-exec-8] DEBUG org.hibernate.SQL - 
+    select
+        t1_0.id,
+        t1_0.category,
+        t1_0.completed_at,
+        t1_0.created_at,
+        t1_0.deadline,
+        t1_0.description,
+        t1_0.estimated_duration_minutes,
+        t1_0.priority,
+        t1_0.project_id,
+        t1_0.scheduled_end_time,
+        t1_0.scheduled_start_time,
+        t1_0.space_type,
+        t1_0.status,
+        t1_0.title,
+        t1_0.updated_at,
+        t1_0.user_id 
+    from
+        tasks t1_0 
+    where
+        t1_0.user_id=?
+2026-05-13 16:30:04 [http-nio-8080-exec-10] DEBUG o.s.security.web.FilterChainProxy - Securing GET /api/tasks
+2026-05-13 16:30:04 [http-nio-8080-exec-10] DEBUG org.hibernate.SQL - 
+    select
+        u1_0.id,
+        u1_0.created_at,
+        u1_0.email,
+        u1_0.last_login,
+        u1_0.password_hash,
+        u1_0.username 
+    from
+        users u1_0 
+    where
+        u1_0.username=?
+2026-05-13 16:30:04 [http-nio-8080-exec-10] DEBUG org.hibernate.SQL - 
+    select
+        up1_0.id,
+        up1_0.break_duration_minutes,
+        up1_0.dark_mode,
+        up1_0.group_similar_tasks,
+        up1_0.hours_before_break,
+        up1_0.max_tasks_per_day,
+        up1_0.notifications_enabled,
+        up1_0.peak_productivity_time,
+        up1_0.reminder_minutes_before,
+        up1_0.theme_color,
+        up1_0.user_id,
+        u1_0.id,
+        u1_0.created_at,
+        u1_0.email,
+        u1_0.last_login,
+        u1_0.password_hash,
+        u1_0.username,
+        up1_0.workday_end,
+        up1_0.workday_start 
+    from
+        user_preferences up1_0 
+    join
+        users u1_0 
+            on u1_0.id=up1_0.user_id 
+    where
+        up1_0.user_id=?
+2026-05-13 16:30:04 [http-nio-8080-exec-10] DEBUG o.s.security.web.FilterChainProxy - Secured GET /api/tasks
+2026-05-13 16:30:04 [http-nio-8080-exec-10] DEBUG org.hibernate.SQL - 
+    select
+        t1_0.id,
+        t1_0.category,
+        t1_0.completed_at,
+        t1_0.created_at,
+        t1_0.deadline,
+        t1_0.description,
+        t1_0.estimated_duration_minutes,
+        t1_0.priority,
+        t1_0.project_id,
+        t1_0.scheduled_end_time,
+        t1_0.scheduled_start_time,
+        t1_0.space_type,
+        t1_0.status,
+        t1_0.title,
+        t1_0.updated_at,
+        t1_0.user_id 
+    from
+        tasks t1_0 
+    where
+        t1_0.user_id=?
+2026-05-13 16:30:10 [http-nio-8080-exec-1] DEBUG o.s.security.web.FilterChainProxy - Securing GET /api/tasks
+2026-05-13 16:30:10 [http-nio-8080-exec-1] DEBUG org.hibernate.SQL - 
+    select
+        u1_0.id,
+        u1_0.created_at,
+        u1_0.email,
+        u1_0.last_login,
+        u1_0.password_hash,
+        u1_0.username 
+    from
+        users u1_0 
+    where
+        u1_0.username=?
+2026-05-13 16:30:10 [http-nio-8080-exec-1] DEBUG org.hibernate.SQL - 
+    select
+        up1_0.id,
+        up1_0.break_duration_minutes,
+        up1_0.dark_mode,
+        up1_0.group_similar_tasks,
+        up1_0.hours_before_break,
+        up1_0.max_tasks_per_day,
+        up1_0.notifications_enabled,
+        up1_0.peak_productivity_time,
+        up1_0.reminder_minutes_before,
+        up1_0.theme_color,
+        up1_0.user_id,
+        u1_0.id,
+        u1_0.created_at,
+        u1_0.email,
+        u1_0.last_login,
+        u1_0.password_hash,
+        u1_0.username,
+        up1_0.workday_end,
+        up1_0.workday_start 
+    from
+        user_preferences up1_0 
+    join
+        users u1_0 
+            on u1_0.id=up1_0.user_id 
+    where
+        up1_0.user_id=?
+2026-05-13 16:30:10 [http-nio-8080-exec-1] DEBUG o.s.security.web.FilterChainProxy - Secured GET /api/tasks
+2026-05-13 16:30:10 [http-nio-8080-exec-1] DEBUG org.hibernate.SQL - 
+    select
+        t1_0.id,
+        t1_0.category,
+        t1_0.completed_at,
+        t1_0.created_at,
+        t1_0.deadline,
+        t1_0.description,
+        t1_0.estimated_duration_minutes,
+        t1_0.priority,
+        t1_0.project_id,
+        t1_0.scheduled_end_time,
+        t1_0.scheduled_start_time,
+        t1_0.space_type,
+        t1_0.status,
+        t1_0.title,
+        t1_0.updated_at,
+        t1_0.user_id 
+    from
+        tasks t1_0 
+    where
+        t1_0.user_id=?
+2026-05-13 16:31:36 [http-nio-8080-exec-3] DEBUG o.s.security.web.FilterChainProxy - Securing GET /api/tasks
+2026-05-13 16:31:36 [http-nio-8080-exec-3] DEBUG org.hibernate.SQL - 
+    select
+        u1_0.id,
+        u1_0.created_at,
+        u1_0.email,
+        u1_0.last_login,
+        u1_0.password_hash,
+        u1_0.username 
+    from
+        users u1_0 
+    where
+        u1_0.username=?
+2026-05-13 16:31:36 [http-nio-8080-exec-3] DEBUG org.hibernate.SQL - 
+    select
+        up1_0.id,
+        up1_0.break_duration_minutes,
+        up1_0.dark_mode,
+        up1_0.group_similar_tasks,
+        up1_0.hours_before_break,
+        up1_0.max_tasks_per_day,
+        up1_0.notifications_enabled,
+        up1_0.peak_productivity_time,
+        up1_0.reminder_minutes_before,
+        up1_0.theme_color,
+        up1_0.user_id,
+        u1_0.id,
+        u1_0.created_at,
+        u1_0.email,
+        u1_0.last_login,
+        u1_0.password_hash,
+        u1_0.username,
+        up1_0.workday_end,
+        up1_0.workday_start 
+    from
+        user_preferences up1_0 
+    join
+        users u1_0 
+            on u1_0.id=up1_0.user_id 
+    where
+        up1_0.user_id=?
+2026-05-13 16:31:36 [http-nio-8080-exec-3] DEBUG o.s.security.web.FilterChainProxy - Secured GET /api/tasks
+2026-05-13 16:31:36 [http-nio-8080-exec-3] DEBUG org.hibernate.SQL - 
+    select
+        t1_0.id,
+        t1_0.category,
+        t1_0.completed_at,
+        t1_0.created_at,
+        t1_0.deadline,
+        t1_0.description,
+        t1_0.estimated_duration_minutes,
+        t1_0.priority,
+        t1_0.project_id,
+        t1_0.scheduled_end_time,
+        t1_0.scheduled_start_time,
+        t1_0.space_type,
+        t1_0.status,
+        t1_0.title,
+        t1_0.updated_at,
+        t1_0.user_id 
+    from
+        tasks t1_0 
+    where
+        t1_0.user_id=?
+2026-05-13 16:32:57 [http-nio-8080-exec-5] DEBUG o.s.security.web.FilterChainProxy - Securing POST /api/auth/dev-login
+2026-05-13 16:32:57 [http-nio-8080-exec-5] DEBUG org.hibernate.SQL - 
+    select
+        u1_0.id,
+        u1_0.created_at,
+        u1_0.email,
+        u1_0.last_login,
+        u1_0.password_hash,
+        u1_0.username 
+    from
+        users u1_0 
+    where
+        u1_0.username=?
+2026-05-13 16:32:57 [http-nio-8080-exec-5] DEBUG org.hibernate.SQL - 
+    select
+        up1_0.id,
+        up1_0.break_duration_minutes,
+        up1_0.dark_mode,
+        up1_0.group_similar_tasks,
+        up1_0.hours_before_break,
+        up1_0.max_tasks_per_day,
+        up1_0.notifications_enabled,
+        up1_0.peak_productivity_time,
+        up1_0.reminder_minutes_before,
+        up1_0.theme_color,
+        up1_0.user_id,
+        u1_0.id,
+        u1_0.created_at,
+        u1_0.email,
+        u1_0.last_login,
+        u1_0.password_hash,
+        u1_0.username,
+        up1_0.workday_end,
+        up1_0.workday_start 
+    from
+        user_preferences up1_0 
+    join
+        users u1_0 
+            on u1_0.id=up1_0.user_id 
+    where
+        up1_0.user_id=?
+2026-05-13 16:32:57 [http-nio-8080-exec-5] DEBUG o.s.security.web.FilterChainProxy - Secured POST /api/auth/dev-login
+2026-05-13 16:32:57 [http-nio-8080-exec-5] DEBUG org.hibernate.SQL - 
+    select
+        u1_0.id,
+        u1_0.created_at,
+        u1_0.email,
+        u1_0.last_login,
+        u1_0.password_hash,
+        u1_0.username 
+    from
+        users u1_0 
+    where
+        u1_0.username=?
+2026-05-13 16:32:57 [http-nio-8080-exec-5] DEBUG org.hibernate.SQL - 
+    select
+        up1_0.id,
+        up1_0.break_duration_minutes,
+        up1_0.dark_mode,
+        up1_0.group_similar_tasks,
+        up1_0.hours_before_break,
+        up1_0.max_tasks_per_day,
+        up1_0.notifications_enabled,
+        up1_0.peak_productivity_time,
+        up1_0.reminder_minutes_before,
+        up1_0.theme_color,
+        up1_0.user_id,
+        u1_0.id,
+        u1_0.created_at,
+        u1_0.email,
+        u1_0.last_login,
+        u1_0.password_hash,
+        u1_0.username,
+        up1_0.workday_end,
+        up1_0.workday_start 
+    from
+        user_preferences up1_0 
+    join
+        users u1_0 
+            on u1_0.id=up1_0.user_id 
+    where
+        up1_0.user_id=?
+2026-05-13 16:32:57 [http-nio-8080-exec-5] DEBUG org.hibernate.SQL - 
+    update
+        users 
+    set
+        created_at=?,
+        email=?,
+        last_login=?,
+        password_hash=?,
+        username=? 
+    where
+        id=?
+2026-05-13 16:32:57 [http-nio-8080-exec-6] DEBUG o.s.security.web.FilterChainProxy - Securing GET /api/tasks
+2026-05-13 16:32:57 [http-nio-8080-exec-6] DEBUG org.hibernate.SQL - 
+    select
+        u1_0.id,
+        u1_0.created_at,
+        u1_0.email,
+        u1_0.last_login,
+        u1_0.password_hash,
+        u1_0.username 
+    from
+        users u1_0 
+    where
+        u1_0.username=?
+2026-05-13 16:32:57 [http-nio-8080-exec-6] DEBUG org.hibernate.SQL - 
+    select
+        up1_0.id,
+        up1_0.break_duration_minutes,
+        up1_0.dark_mode,
+        up1_0.group_similar_tasks,
+        up1_0.hours_before_break,
+        up1_0.max_tasks_per_day,
+        up1_0.notifications_enabled,
+        up1_0.peak_productivity_time,
+        up1_0.reminder_minutes_before,
+        up1_0.theme_color,
+        up1_0.user_id,
+        u1_0.id,
+        u1_0.created_at,
+        u1_0.email,
+        u1_0.last_login,
+        u1_0.password_hash,
+        u1_0.username,
+        up1_0.workday_end,
+        up1_0.workday_start 
+    from
+        user_preferences up1_0 
+    join
+        users u1_0 
+            on u1_0.id=up1_0.user_id 
+    where
+        up1_0.user_id=?
+2026-05-13 16:32:57 [http-nio-8080-exec-6] DEBUG o.s.security.web.FilterChainProxy - Secured GET /api/tasks
+2026-05-13 16:32:57 [http-nio-8080-exec-6] DEBUG org.hibernate.SQL - 
+    select
+        t1_0.id,
+        t1_0.category,
+        t1_0.completed_at,
+        t1_0.created_at,
+        t1_0.deadline,
+        t1_0.description,
+        t1_0.estimated_duration_minutes,
+        t1_0.priority,
+        t1_0.project_id,
+        t1_0.scheduled_end_time,
+        t1_0.scheduled_start_time,
+        t1_0.space_type,
+        t1_0.status,
+        t1_0.title,
+        t1_0.updated_at,
+        t1_0.user_id 
+    from
+        tasks t1_0 
+    where
+        t1_0.user_id=?
+2026-05-13 16:32:57 [http-nio-8080-exec-7] DEBUG o.s.security.web.FilterChainProxy - Securing GET /api/calendar/events?startDate=2026-05-01T00:00:00.000&endDate=2026-05-31T23:59:59.000
+2026-05-13 16:32:57 [http-nio-8080-exec-7] DEBUG org.hibernate.SQL - 
+    select
+        u1_0.id,
+        u1_0.created_at,
+        u1_0.email,
+        u1_0.last_login,
+        u1_0.password_hash,
+        u1_0.username 
+    from
+        users u1_0 
+    where
+        u1_0.username=?
+2026-05-13 16:32:57 [http-nio-8080-exec-7] DEBUG org.hibernate.SQL - 
+    select
+        up1_0.id,
+        up1_0.break_duration_minutes,
+        up1_0.dark_mode,
+        up1_0.group_similar_tasks,
+        up1_0.hours_before_break,
+        up1_0.max_tasks_per_day,
+        up1_0.notifications_enabled,
+        up1_0.peak_productivity_time,
+        up1_0.reminder_minutes_before,
+        up1_0.theme_color,
+        up1_0.user_id,
+        u1_0.id,
+        u1_0.created_at,
+        u1_0.email,
+        u1_0.last_login,
+        u1_0.password_hash,
+        u1_0.username,
+        up1_0.workday_end,
+        up1_0.workday_start 
+    from
+        user_preferences up1_0 
+    join
+        users u1_0 
+            on u1_0.id=up1_0.user_id 
+    where
+        up1_0.user_id=?
+2026-05-13 16:32:57 [http-nio-8080-exec-7] DEBUG o.s.security.web.FilterChainProxy - Secured GET /api/calendar/events?startDate=2026-05-01T00:00:00.000&endDate=2026-05-31T23:59:59.000
+2026-05-13 16:32:57 [http-nio-8080-exec-7] DEBUG org.hibernate.SQL - 
+    select
+        ce1_0.id,
+        ce1_0.color,
+        ce1_0.created_at,
+        ce1_0.description,
+        ce1_0.end_time,
+        ce1_0.event_type,
+        ce1_0.is_fixed,
+        ce1_0.location,
+        ce1_0.notes,
+        ce1_0.related_habit_id,
+        ce1_0.related_task_id,
+        ce1_0.related_workout_id,
+        ce1_0.start_time,
+        ce1_0.title,
+        ce1_0.updated_at,
+        ce1_0.user_id 
+    from
+        calendar_events ce1_0 
+    where
+        ce1_0.user_id=? 
+        and ce1_0.start_time between ? and ?
+2026-05-13 16:32:59 [http-nio-8080-exec-8] DEBUG o.s.security.web.FilterChainProxy - Securing GET /api/tasks
+2026-05-13 16:32:59 [http-nio-8080-exec-8] DEBUG org.hibernate.SQL - 
+    select
+        u1_0.id,
+        u1_0.created_at,
+        u1_0.email,
+        u1_0.last_login,
+        u1_0.password_hash,
+        u1_0.username 
+    from
+        users u1_0 
+    where
+        u1_0.username=?
+2026-05-13 16:32:59 [http-nio-8080-exec-8] DEBUG org.hibernate.SQL - 
+    select
+        up1_0.id,
+        up1_0.break_duration_minutes,
+        up1_0.dark_mode,
+        up1_0.group_similar_tasks,
+        up1_0.hours_before_break,
+        up1_0.max_tasks_per_day,
+        up1_0.notifications_enabled,
+        up1_0.peak_productivity_time,
+        up1_0.reminder_minutes_before,
+        up1_0.theme_color,
+        up1_0.user_id,
+        u1_0.id,
+        u1_0.created_at,
+        u1_0.email,
+        u1_0.last_login,
+        u1_0.password_hash,
+        u1_0.username,
+        up1_0.workday_end,
+        up1_0.workday_start 
+    from
+        user_preferences up1_0 
+    join
+        users u1_0 
+            on u1_0.id=up1_0.user_id 
+    where
+        up1_0.user_id=?
+2026-05-13 16:32:59 [http-nio-8080-exec-8] DEBUG o.s.security.web.FilterChainProxy - Secured GET /api/tasks
+2026-05-13 16:32:59 [http-nio-8080-exec-8] DEBUG org.hibernate.SQL - 
+    select
+        t1_0.id,
+        t1_0.category,
+        t1_0.completed_at,
+        t1_0.created_at,
+        t1_0.deadline,
+        t1_0.description,
+        t1_0.estimated_duration_minutes,
+        t1_0.priority,
+        t1_0.project_id,
+        t1_0.scheduled_end_time,
+        t1_0.scheduled_start_time,
+        t1_0.space_type,
+        t1_0.status,
+        t1_0.title,
+        t1_0.updated_at,
+        t1_0.user_id 
+    from
+        tasks t1_0 
+    where
+        t1_0.user_id=?
+2026-05-13 16:33:03 [http-nio-8080-exec-9] DEBUG o.s.security.web.FilterChainProxy - Securing GET /api/tasks
+2026-05-13 16:33:03 [http-nio-8080-exec-9] DEBUG org.hibernate.SQL - 
+    select
+        u1_0.id,
+        u1_0.created_at,
+        u1_0.email,
+        u1_0.last_login,
+        u1_0.password_hash,
+        u1_0.username 
+    from
+        users u1_0 
+    where
+        u1_0.username=?
+2026-05-13 16:33:03 [http-nio-8080-exec-9] DEBUG org.hibernate.SQL - 
+    select
+        up1_0.id,
+        up1_0.break_duration_minutes,
+        up1_0.dark_mode,
+        up1_0.group_similar_tasks,
+        up1_0.hours_before_break,
+        up1_0.max_tasks_per_day,
+        up1_0.notifications_enabled,
+        up1_0.peak_productivity_time,
+        up1_0.reminder_minutes_before,
+        up1_0.theme_color,
+        up1_0.user_id,
+        u1_0.id,
+        u1_0.created_at,
+        u1_0.email,
+        u1_0.last_login,
+        u1_0.password_hash,
+        u1_0.username,
+        up1_0.workday_end,
+        up1_0.workday_start 
+    from
+        user_preferences up1_0 
+    join
+        users u1_0 
+            on u1_0.id=up1_0.user_id 
+    where
+        up1_0.user_id=?
+2026-05-13 16:33:03 [http-nio-8080-exec-9] DEBUG o.s.security.web.FilterChainProxy - Secured GET /api/tasks
+2026-05-13 16:33:03 [http-nio-8080-exec-9] DEBUG org.hibernate.SQL - 
+    select
+        t1_0.id,
+        t1_0.category,
+        t1_0.completed_at,
+        t1_0.created_at,
+        t1_0.deadline,
+        t1_0.description,
+        t1_0.estimated_duration_minutes,
+        t1_0.priority,
+        t1_0.project_id,
+        t1_0.scheduled_end_time,
+        t1_0.scheduled_start_time,
+        t1_0.space_type,
+        t1_0.status,
+        t1_0.title,
+        t1_0.updated_at,
+        t1_0.user_id 
+    from
+        tasks t1_0 
+    where
+        t1_0.user_id=?
+2026-05-13 16:33:08 [http-nio-8080-exec-10] DEBUG o.s.security.web.FilterChainProxy - Securing GET /api/study/notes
+2026-05-13 16:33:08 [http-nio-8080-exec-10] DEBUG org.hibernate.SQL - 
+    select
+        u1_0.id,
+        u1_0.created_at,
+        u1_0.email,
+        u1_0.last_login,
+        u1_0.password_hash,
+        u1_0.username 
+    from
+        users u1_0 
+    where
+        u1_0.username=?
+2026-05-13 16:33:08 [http-nio-8080-exec-10] DEBUG org.hibernate.SQL - 
+    select
+        up1_0.id,
+        up1_0.break_duration_minutes,
+        up1_0.dark_mode,
+        up1_0.group_similar_tasks,
+        up1_0.hours_before_break,
+        up1_0.max_tasks_per_day,
+        up1_0.notifications_enabled,
+        up1_0.peak_productivity_time,
+        up1_0.reminder_minutes_before,
+        up1_0.theme_color,
+        up1_0.user_id,
+        u1_0.id,
+        u1_0.created_at,
+        u1_0.email,
+        u1_0.last_login,
+        u1_0.password_hash,
+        u1_0.username,
+        up1_0.workday_end,
+        up1_0.workday_start 
+    from
+        user_preferences up1_0 
+    join
+        users u1_0 
+            on u1_0.id=up1_0.user_id 
+    where
+        up1_0.user_id=?
+2026-05-13 16:33:08 [http-nio-8080-exec-10] DEBUG o.s.security.web.FilterChainProxy - Secured GET /api/study/notes
+2026-05-13 16:33:08 [http-nio-8080-exec-10] DEBUG org.hibernate.SQL - 
+    select
+        sn1_0.id,
+        sn1_0.category,
+        sn1_0.content,
+        sn1_0.course_id,
+        sn1_0.created_at,
+        sn1_0.file_path,
+        sn1_0.file_type,
+        sn1_0.is_favorite,
+        sn1_0.last_reviewed_at,
+        sn1_0.tags,
+        sn1_0.title,
+        sn1_0.updated_at,
+        sn1_0.user_id 
+    from
+        study_notes sn1_0 
+    where
+        sn1_0.user_id=?
+2026-05-13 16:33:11 [http-nio-8080-exec-1] DEBUG o.s.security.web.FilterChainProxy - Securing GET /api/tasks
+2026-05-13 16:33:11 [http-nio-8080-exec-1] DEBUG org.hibernate.SQL - 
+    select
+        u1_0.id,
+        u1_0.created_at,
+        u1_0.email,
+        u1_0.last_login,
+        u1_0.password_hash,
+        u1_0.username 
+    from
+        users u1_0 
+    where
+        u1_0.username=?
+2026-05-13 16:33:11 [http-nio-8080-exec-1] DEBUG org.hibernate.SQL - 
+    select
+        up1_0.id,
+        up1_0.break_duration_minutes,
+        up1_0.dark_mode,
+        up1_0.group_similar_tasks,
+        up1_0.hours_before_break,
+        up1_0.max_tasks_per_day,
+        up1_0.notifications_enabled,
+        up1_0.peak_productivity_time,
+        up1_0.reminder_minutes_before,
+        up1_0.theme_color,
+        up1_0.user_id,
+        u1_0.id,
+        u1_0.created_at,
+        u1_0.email,
+        u1_0.last_login,
+        u1_0.password_hash,
+        u1_0.username,
+        up1_0.workday_end,
+        up1_0.workday_start 
+    from
+        user_preferences up1_0 
+    join
+        users u1_0 
+            on u1_0.id=up1_0.user_id 
+    where
+        up1_0.user_id=?
+2026-05-13 16:33:11 [http-nio-8080-exec-1] DEBUG o.s.security.web.FilterChainProxy - Secured GET /api/tasks
+2026-05-13 16:33:11 [http-nio-8080-exec-1] DEBUG org.hibernate.SQL - 
+    select
+        t1_0.id,
+        t1_0.category,
+        t1_0.completed_at,
+        t1_0.created_at,
+        t1_0.deadline,
+        t1_0.description,
+        t1_0.estimated_duration_minutes,
+        t1_0.priority,
+        t1_0.project_id,
+        t1_0.scheduled_end_time,
+        t1_0.scheduled_start_time,
+        t1_0.space_type,
+        t1_0.status,
+        t1_0.title,
+        t1_0.updated_at,
+        t1_0.user_id 
+    from
+        tasks t1_0 
+    where
+        t1_0.user_id=?
+2026-05-13 16:37:21 [http-nio-8080-exec-6] DEBUG o.s.security.web.FilterChainProxy - Securing GET /api/tasks
+2026-05-13 16:37:21 [http-nio-8080-exec-6] DEBUG org.hibernate.SQL - 
+    select
+        u1_0.id,
+        u1_0.created_at,
+        u1_0.email,
+        u1_0.last_login,
+        u1_0.password_hash,
+        u1_0.username 
+    from
+        users u1_0 
+    where
+        u1_0.username=?
+2026-05-13 16:37:21 [http-nio-8080-exec-6] DEBUG org.hibernate.SQL - 
+    select
+        up1_0.id,
+        up1_0.break_duration_minutes,
+        up1_0.dark_mode,
+        up1_0.group_similar_tasks,
+        up1_0.hours_before_break,
+        up1_0.max_tasks_per_day,
+        up1_0.notifications_enabled,
+        up1_0.peak_productivity_time,
+        up1_0.reminder_minutes_before,
+        up1_0.theme_color,
+        up1_0.user_id,
+        u1_0.id,
+        u1_0.created_at,
+        u1_0.email,
+        u1_0.last_login,
+        u1_0.password_hash,
+        u1_0.username,
+        up1_0.workday_end,
+        up1_0.workday_start 
+    from
+        user_preferences up1_0 
+    join
+        users u1_0 
+            on u1_0.id=up1_0.user_id 
+    where
+        up1_0.user_id=?
+2026-05-13 16:37:21 [http-nio-8080-exec-6] DEBUG o.s.security.web.FilterChainProxy - Secured GET /api/tasks
+2026-05-13 16:37:21 [http-nio-8080-exec-6] DEBUG org.hibernate.SQL - 
+    select
+        t1_0.id,
+        t1_0.category,
+        t1_0.completed_at,
+        t1_0.created_at,
+        t1_0.deadline,
+        t1_0.description,
+        t1_0.estimated_duration_minutes,
+        t1_0.priority,
+        t1_0.project_id,
+        t1_0.scheduled_end_time,
+        t1_0.scheduled_start_time,
+        t1_0.space_type,
+        t1_0.status,
+        t1_0.title,
+        t1_0.updated_at,
+        t1_0.user_id 
+    from
+        tasks t1_0 
+    where
+        t1_0.user_id=?
+2026-05-13 16:37:35 [http-nio-8080-exec-8] DEBUG o.s.security.web.FilterChainProxy - Securing POST /api/auth/dev-login
+2026-05-13 16:37:35 [http-nio-8080-exec-8] DEBUG org.hibernate.SQL - 
+    select
+        u1_0.id,
+        u1_0.created_at,
+        u1_0.email,
+        u1_0.last_login,
+        u1_0.password_hash,
+        u1_0.username 
+    from
+        users u1_0 
+    where
+        u1_0.username=?
+2026-05-13 16:37:35 [http-nio-8080-exec-8] DEBUG org.hibernate.SQL - 
+    select
+        up1_0.id,
+        up1_0.break_duration_minutes,
+        up1_0.dark_mode,
+        up1_0.group_similar_tasks,
+        up1_0.hours_before_break,
+        up1_0.max_tasks_per_day,
+        up1_0.notifications_enabled,
+        up1_0.peak_productivity_time,
+        up1_0.reminder_minutes_before,
+        up1_0.theme_color,
+        up1_0.user_id,
+        u1_0.id,
+        u1_0.created_at,
+        u1_0.email,
+        u1_0.last_login,
+        u1_0.password_hash,
+        u1_0.username,
+        up1_0.workday_end,
+        up1_0.workday_start 
+    from
+        user_preferences up1_0 
+    join
+        users u1_0 
+            on u1_0.id=up1_0.user_id 
+    where
+        up1_0.user_id=?
+2026-05-13 16:37:35 [http-nio-8080-exec-8] DEBUG o.s.security.web.FilterChainProxy - Secured POST /api/auth/dev-login
+2026-05-13 16:37:35 [http-nio-8080-exec-8] DEBUG org.hibernate.SQL - 
+    select
+        u1_0.id,
+        u1_0.created_at,
+        u1_0.email,
+        u1_0.last_login,
+        u1_0.password_hash,
+        u1_0.username 
+    from
+        users u1_0 
+    where
+        u1_0.username=?
+2026-05-13 16:37:35 [http-nio-8080-exec-8] DEBUG org.hibernate.SQL - 
+    select
+        up1_0.id,
+        up1_0.break_duration_minutes,
+        up1_0.dark_mode,
+        up1_0.group_similar_tasks,
+        up1_0.hours_before_break,
+        up1_0.max_tasks_per_day,
+        up1_0.notifications_enabled,
+        up1_0.peak_productivity_time,
+        up1_0.reminder_minutes_before,
+        up1_0.theme_color,
+        up1_0.user_id,
+        u1_0.id,
+        u1_0.created_at,
+        u1_0.email,
+        u1_0.last_login,
+        u1_0.password_hash,
+        u1_0.username,
+        up1_0.workday_end,
+        up1_0.workday_start 
+    from
+        user_preferences up1_0 
+    join
+        users u1_0 
+            on u1_0.id=up1_0.user_id 
+    where
+        up1_0.user_id=?
+2026-05-13 16:37:35 [http-nio-8080-exec-8] DEBUG org.hibernate.SQL - 
+    update
+        users 
+    set
+        created_at=?,
+        email=?,
+        last_login=?,
+        password_hash=?,
+        username=? 
+    where
+        id=?
+2026-05-13 16:37:35 [http-nio-8080-exec-9] DEBUG o.s.security.web.FilterChainProxy - Securing GET /api/tasks
+2026-05-13 16:37:35 [http-nio-8080-exec-9] DEBUG org.hibernate.SQL - 
+    select
+        u1_0.id,
+        u1_0.created_at,
+        u1_0.email,
+        u1_0.last_login,
+        u1_0.password_hash,
+        u1_0.username 
+    from
+        users u1_0 
+    where
+        u1_0.username=?
+2026-05-13 16:37:35 [http-nio-8080-exec-9] DEBUG org.hibernate.SQL - 
+    select
+        up1_0.id,
+        up1_0.break_duration_minutes,
+        up1_0.dark_mode,
+        up1_0.group_similar_tasks,
+        up1_0.hours_before_break,
+        up1_0.max_tasks_per_day,
+        up1_0.notifications_enabled,
+        up1_0.peak_productivity_time,
+        up1_0.reminder_minutes_before,
+        up1_0.theme_color,
+        up1_0.user_id,
+        u1_0.id,
+        u1_0.created_at,
+        u1_0.email,
+        u1_0.last_login,
+        u1_0.password_hash,
+        u1_0.username,
+        up1_0.workday_end,
+        up1_0.workday_start 
+    from
+        user_preferences up1_0 
+    join
+        users u1_0 
+            on u1_0.id=up1_0.user_id 
+    where
+        up1_0.user_id=?
+2026-05-13 16:37:35 [http-nio-8080-exec-9] DEBUG o.s.security.web.FilterChainProxy - Secured GET /api/tasks
+2026-05-13 16:37:35 [http-nio-8080-exec-9] DEBUG org.hibernate.SQL - 
+    select
+        t1_0.id,
+        t1_0.category,
+        t1_0.completed_at,
+        t1_0.created_at,
+        t1_0.deadline,
+        t1_0.description,
+        t1_0.estimated_duration_minutes,
+        t1_0.priority,
+        t1_0.project_id,
+        t1_0.scheduled_end_time,
+        t1_0.scheduled_start_time,
+        t1_0.space_type,
+        t1_0.status,
+        t1_0.title,
+        t1_0.updated_at,
+        t1_0.user_id 
+    from
+        tasks t1_0 
+    where
+        t1_0.user_id=?
+2026-05-13 16:37:35 [http-nio-8080-exec-10] DEBUG o.s.security.web.FilterChainProxy - Securing GET /api/calendar/events?startDate=2026-05-01T00:00:00.000&endDate=2026-05-31T23:59:59.000
+2026-05-13 16:37:35 [http-nio-8080-exec-10] DEBUG org.hibernate.SQL - 
+    select
+        u1_0.id,
+        u1_0.created_at,
+        u1_0.email,
+        u1_0.last_login,
+        u1_0.password_hash,
+        u1_0.username 
+    from
+        users u1_0 
+    where
+        u1_0.username=?
+2026-05-13 16:37:35 [http-nio-8080-exec-10] DEBUG org.hibernate.SQL - 
+    select
+        up1_0.id,
+        up1_0.break_duration_minutes,
+        up1_0.dark_mode,
+        up1_0.group_similar_tasks,
+        up1_0.hours_before_break,
+        up1_0.max_tasks_per_day,
+        up1_0.notifications_enabled,
+        up1_0.peak_productivity_time,
+        up1_0.reminder_minutes_before,
+        up1_0.theme_color,
+        up1_0.user_id,
+        u1_0.id,
+        u1_0.created_at,
+        u1_0.email,
+        u1_0.last_login,
+        u1_0.password_hash,
+        u1_0.username,
+        up1_0.workday_end,
+        up1_0.workday_start 
+    from
+        user_preferences up1_0 
+    join
+        users u1_0 
+            on u1_0.id=up1_0.user_id 
+    where
+        up1_0.user_id=?
+2026-05-13 16:37:35 [http-nio-8080-exec-10] DEBUG o.s.security.web.FilterChainProxy - Secured GET /api/calendar/events?startDate=2026-05-01T00:00:00.000&endDate=2026-05-31T23:59:59.000
+2026-05-13 16:37:35 [http-nio-8080-exec-10] DEBUG org.hibernate.SQL - 
+    select
+        ce1_0.id,
+        ce1_0.color,
+        ce1_0.created_at,
+        ce1_0.description,
+        ce1_0.end_time,
+        ce1_0.event_type,
+        ce1_0.is_fixed,
+        ce1_0.location,
+        ce1_0.notes,
+        ce1_0.related_habit_id,
+        ce1_0.related_task_id,
+        ce1_0.related_workout_id,
+        ce1_0.start_time,
+        ce1_0.title,
+        ce1_0.updated_at,
+        ce1_0.user_id 
+    from
+        calendar_events ce1_0 
+    where
+        ce1_0.user_id=? 
+        and ce1_0.start_time between ? and ?
+2026-05-13 16:37:38 [http-nio-8080-exec-1] DEBUG o.s.security.web.FilterChainProxy - Securing GET /api/tasks
+2026-05-13 16:37:38 [http-nio-8080-exec-1] DEBUG org.hibernate.SQL - 
+    select
+        u1_0.id,
+        u1_0.created_at,
+        u1_0.email,
+        u1_0.last_login,
+        u1_0.password_hash,
+        u1_0.username 
+    from
+        users u1_0 
+    where
+        u1_0.username=?
+2026-05-13 16:37:38 [http-nio-8080-exec-1] DEBUG org.hibernate.SQL - 
+    select
+        up1_0.id,
+        up1_0.break_duration_minutes,
+        up1_0.dark_mode,
+        up1_0.group_similar_tasks,
+        up1_0.hours_before_break,
+        up1_0.max_tasks_per_day,
+        up1_0.notifications_enabled,
+        up1_0.peak_productivity_time,
+        up1_0.reminder_minutes_before,
+        up1_0.theme_color,
+        up1_0.user_id,
+        u1_0.id,
+        u1_0.created_at,
+        u1_0.email,
+        u1_0.last_login,
+        u1_0.password_hash,
+        u1_0.username,
+        up1_0.workday_end,
+        up1_0.workday_start 
+    from
+        user_preferences up1_0 
+    join
+        users u1_0 
+            on u1_0.id=up1_0.user_id 
+    where
+        up1_0.user_id=?
+2026-05-13 16:37:38 [http-nio-8080-exec-1] DEBUG o.s.security.web.FilterChainProxy - Secured GET /api/tasks
+2026-05-13 16:37:38 [http-nio-8080-exec-1] DEBUG org.hibernate.SQL - 
+    select
+        t1_0.id,
+        t1_0.category,
+        t1_0.completed_at,
+        t1_0.created_at,
+        t1_0.deadline,
+        t1_0.description,
+        t1_0.estimated_duration_minutes,
+        t1_0.priority,
+        t1_0.project_id,
+        t1_0.scheduled_end_time,
+        t1_0.scheduled_start_time,
+        t1_0.space_type,
+        t1_0.status,
+        t1_0.title,
+        t1_0.updated_at,
+        t1_0.user_id 
+    from
+        tasks t1_0 
+    where
+        t1_0.user_id=?
+2026-05-13 16:37:44 [http-nio-8080-exec-2] DEBUG o.s.security.web.FilterChainProxy - Securing GET /api/study/notes
+2026-05-13 16:37:44 [http-nio-8080-exec-2] DEBUG org.hibernate.SQL - 
+    select
+        u1_0.id,
+        u1_0.created_at,
+        u1_0.email,
+        u1_0.last_login,
+        u1_0.password_hash,
+        u1_0.username 
+    from
+        users u1_0 
+    where
+        u1_0.username=?
+2026-05-13 16:37:44 [http-nio-8080-exec-2] DEBUG org.hibernate.SQL - 
+    select
+        up1_0.id,
+        up1_0.break_duration_minutes,
+        up1_0.dark_mode,
+        up1_0.group_similar_tasks,
+        up1_0.hours_before_break,
+        up1_0.max_tasks_per_day,
+        up1_0.notifications_enabled,
+        up1_0.peak_productivity_time,
+        up1_0.reminder_minutes_before,
+        up1_0.theme_color,
+        up1_0.user_id,
+        u1_0.id,
+        u1_0.created_at,
+        u1_0.email,
+        u1_0.last_login,
+        u1_0.password_hash,
+        u1_0.username,
+        up1_0.workday_end,
+        up1_0.workday_start 
+    from
+        user_preferences up1_0 
+    join
+        users u1_0 
+            on u1_0.id=up1_0.user_id 
+    where
+        up1_0.user_id=?
+2026-05-13 16:37:44 [http-nio-8080-exec-2] DEBUG o.s.security.web.FilterChainProxy - Secured GET /api/study/notes
+2026-05-13 16:37:44 [http-nio-8080-exec-2] DEBUG org.hibernate.SQL - 
+    select
+        sn1_0.id,
+        sn1_0.category,
+        sn1_0.content,
+        sn1_0.course_id,
+        sn1_0.created_at,
+        sn1_0.file_path,
+        sn1_0.file_type,
+        sn1_0.is_favorite,
+        sn1_0.last_reviewed_at,
+        sn1_0.tags,
+        sn1_0.title,
+        sn1_0.updated_at,
+        sn1_0.user_id 
+    from
+        study_notes sn1_0 
+    where
+        sn1_0.user_id=?
+2026-05-13 16:37:45 [http-nio-8080-exec-3] DEBUG o.s.security.web.FilterChainProxy - Securing GET /api/habits
+2026-05-13 16:37:45 [http-nio-8080-exec-3] DEBUG org.hibernate.SQL - 
+    select
+        u1_0.id,
+        u1_0.created_at,
+        u1_0.email,
+        u1_0.last_login,
+        u1_0.password_hash,
+        u1_0.username 
+    from
+        users u1_0 
+    where
+        u1_0.username=?
+2026-05-13 16:37:45 [http-nio-8080-exec-3] DEBUG org.hibernate.SQL - 
+    select
+        up1_0.id,
+        up1_0.break_duration_minutes,
+        up1_0.dark_mode,
+        up1_0.group_similar_tasks,
+        up1_0.hours_before_break,
+        up1_0.max_tasks_per_day,
+        up1_0.notifications_enabled,
+        up1_0.peak_productivity_time,
+        up1_0.reminder_minutes_before,
+        up1_0.theme_color,
+        up1_0.user_id,
+        u1_0.id,
+        u1_0.created_at,
+        u1_0.email,
+        u1_0.last_login,
+        u1_0.password_hash,
+        u1_0.username,
+        up1_0.workday_end,
+        up1_0.workday_start 
+    from
+        user_preferences up1_0 
+    join
+        users u1_0 
+            on u1_0.id=up1_0.user_id 
+    where
+        up1_0.user_id=?
+2026-05-13 16:37:45 [http-nio-8080-exec-3] DEBUG o.s.security.web.FilterChainProxy - Secured GET /api/habits
+2026-05-13 16:37:45 [http-nio-8080-exec-3] DEBUG org.hibernate.SQL - 
+    select
+        h1_0.id,
+        h1_0.created_at,
+        h1_0.current_streak,
+        h1_0.description,
+        h1_0.duration_minutes,
+        h1_0.end_date,
+        h1_0.frequency,
+        h1_0.friday,
+        h1_0.longest_streak,
+        h1_0.monday,
+        h1_0.name,
+        h1_0.preferred_time,
+        h1_0.saturday,
+        h1_0.start_date,
+        h1_0.sunday,
+        h1_0.thursday,
+        h1_0.tuesday,
+        h1_0.updated_at,
+        h1_0.user_id,
+        h1_0.wednesday 
+    from
+        habits h1_0 
+    where
+        h1_0.user_id=?
+2026-05-13 16:37:58 [http-nio-8080-exec-7] DEBUG o.s.security.web.FilterChainProxy - Securing GET /api/study/notes
+2026-05-13 16:37:58 [http-nio-8080-exec-7] DEBUG org.hibernate.SQL - 
+    select
+        u1_0.id,
+        u1_0.created_at,
+        u1_0.email,
+        u1_0.last_login,
+        u1_0.password_hash,
+        u1_0.username 
+    from
+        users u1_0 
+    where
+        u1_0.username=?
+2026-05-13 16:37:58 [http-nio-8080-exec-7] DEBUG org.hibernate.SQL - 
+    select
+        up1_0.id,
+        up1_0.break_duration_minutes,
+        up1_0.dark_mode,
+        up1_0.group_similar_tasks,
+        up1_0.hours_before_break,
+        up1_0.max_tasks_per_day,
+        up1_0.notifications_enabled,
+        up1_0.peak_productivity_time,
+        up1_0.reminder_minutes_before,
+        up1_0.theme_color,
+        up1_0.user_id,
+        u1_0.id,
+        u1_0.created_at,
+        u1_0.email,
+        u1_0.last_login,
+        u1_0.password_hash,
+        u1_0.username,
+        up1_0.workday_end,
+        up1_0.workday_start 
+    from
+        user_preferences up1_0 
+    join
+        users u1_0 
+            on u1_0.id=up1_0.user_id 
+    where
+        up1_0.user_id=?
+2026-05-13 16:37:58 [http-nio-8080-exec-7] DEBUG o.s.security.web.FilterChainProxy - Secured GET /api/study/notes
+2026-05-13 16:37:58 [http-nio-8080-exec-7] DEBUG org.hibernate.SQL - 
+    select
+        sn1_0.id,
+        sn1_0.category,
+        sn1_0.content,
+        sn1_0.course_id,
+        sn1_0.created_at,
+        sn1_0.file_path,
+        sn1_0.file_type,
+        sn1_0.is_favorite,
+        sn1_0.last_reviewed_at,
+        sn1_0.tags,
+        sn1_0.title,
+        sn1_0.updated_at,
+        sn1_0.user_id 
+    from
+        study_notes sn1_0 
+    where
+        sn1_0.user_id=?
+2026-05-13 16:38:00 [http-nio-8080-exec-8] DEBUG o.s.security.web.FilterChainProxy - Securing GET /api/tasks
+2026-05-13 16:38:00 [http-nio-8080-exec-8] DEBUG org.hibernate.SQL - 
+    select
+        u1_0.id,
+        u1_0.created_at,
+        u1_0.email,
+        u1_0.last_login,
+        u1_0.password_hash,
+        u1_0.username 
+    from
+        users u1_0 
+    where
+        u1_0.username=?
+2026-05-13 16:38:00 [http-nio-8080-exec-8] DEBUG org.hibernate.SQL - 
+    select
+        up1_0.id,
+        up1_0.break_duration_minutes,
+        up1_0.dark_mode,
+        up1_0.group_similar_tasks,
+        up1_0.hours_before_break,
+        up1_0.max_tasks_per_day,
+        up1_0.notifications_enabled,
+        up1_0.peak_productivity_time,
+        up1_0.reminder_minutes_before,
+        up1_0.theme_color,
+        up1_0.user_id,
+        u1_0.id,
+        u1_0.created_at,
+        u1_0.email,
+        u1_0.last_login,
+        u1_0.password_hash,
+        u1_0.username,
+        up1_0.workday_end,
+        up1_0.workday_start 
+    from
+        user_preferences up1_0 
+    join
+        users u1_0 
+            on u1_0.id=up1_0.user_id 
+    where
+        up1_0.user_id=?
+2026-05-13 16:38:00 [http-nio-8080-exec-8] DEBUG o.s.security.web.FilterChainProxy - Secured GET /api/tasks
+2026-05-13 16:38:00 [http-nio-8080-exec-8] DEBUG org.hibernate.SQL - 
+    select
+        t1_0.id,
+        t1_0.category,
+        t1_0.completed_at,
+        t1_0.created_at,
+        t1_0.deadline,
+        t1_0.description,
+        t1_0.estimated_duration_minutes,
+        t1_0.priority,
+        t1_0.project_id,
+        t1_0.scheduled_end_time,
+        t1_0.scheduled_start_time,
+        t1_0.space_type,
+        t1_0.status,
+        t1_0.title,
+        t1_0.updated_at,
+        t1_0.user_id 
+    from
+        tasks t1_0 
+    where
+        t1_0.user_id=?
+2026-05-13 16:40:06 [http-nio-8080-exec-2] DEBUG o.s.security.web.FilterChainProxy - Securing GET /api/habits
+2026-05-13 16:40:06 [http-nio-8080-exec-2] DEBUG org.hibernate.SQL - 
+    select
+        u1_0.id,
+        u1_0.created_at,
+        u1_0.email,
+        u1_0.last_login,
+        u1_0.password_hash,
+        u1_0.username 
+    from
+        users u1_0 
+    where
+        u1_0.username=?
+2026-05-13 16:40:06 [http-nio-8080-exec-2] DEBUG org.hibernate.SQL - 
+    select
+        up1_0.id,
+        up1_0.break_duration_minutes,
+        up1_0.dark_mode,
+        up1_0.group_similar_tasks,
+        up1_0.hours_before_break,
+        up1_0.max_tasks_per_day,
+        up1_0.notifications_enabled,
+        up1_0.peak_productivity_time,
+        up1_0.reminder_minutes_before,
+        up1_0.theme_color,
+        up1_0.user_id,
+        u1_0.id,
+        u1_0.created_at,
+        u1_0.email,
+        u1_0.last_login,
+        u1_0.password_hash,
+        u1_0.username,
+        up1_0.workday_end,
+        up1_0.workday_start 
+    from
+        user_preferences up1_0 
+    join
+        users u1_0 
+            on u1_0.id=up1_0.user_id 
+    where
+        up1_0.user_id=?
+2026-05-13 16:40:06 [http-nio-8080-exec-2] DEBUG o.s.security.web.FilterChainProxy - Secured GET /api/habits
+2026-05-13 16:40:06 [http-nio-8080-exec-2] DEBUG org.hibernate.SQL - 
+    select
+        h1_0.id,
+        h1_0.created_at,
+        h1_0.current_streak,
+        h1_0.description,
+        h1_0.duration_minutes,
+        h1_0.end_date,
+        h1_0.frequency,
+        h1_0.friday,
+        h1_0.longest_streak,
+        h1_0.monday,
+        h1_0.name,
+        h1_0.preferred_time,
+        h1_0.saturday,
+        h1_0.start_date,
+        h1_0.sunday,
+        h1_0.thursday,
+        h1_0.tuesday,
+        h1_0.updated_at,
+        h1_0.user_id,
+        h1_0.wednesday 
+    from
+        habits h1_0 
+    where
+        h1_0.user_id=?

@@ -1,13 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
+import 'package:google_fonts/google_fonts.dart';
 import '../../providers/task_provider.dart';
-import '../../providers/habit_provider.dart';
 import '../../config/app_theme.dart';
 import '../../models/task.dart';
-import '../../models/habit.dart';
 import '../../widgets/create_task_sheet.dart';
-import '../../widgets/create_habit_sheet.dart';
 
 class TasksScreen extends StatefulWidget {
   final String title;
@@ -27,7 +25,7 @@ class _TasksScreenState extends State<TasksScreen>
     with SingleTickerProviderStateMixin {
   late TabController _tabController;
   
-  // Consolidated Filter & Sort State Options
+  // Filter & Sort State Options
   String _selectedCategoryFilter = 'All'; // 'All', 'Personal', 'Studium'
   String _selectedSortOption = 'datum_ab'; // 'datum_ab', 'datum_auf', 'prio_auf', 'prio_ab'
 
@@ -36,11 +34,7 @@ class _TasksScreenState extends State<TasksScreen>
     super.initState();
     _tabController = TabController(length: 2, vsync: this);
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (widget.spaceType == 'HABITS') {
-        context.read<HabitProvider>().loadHabits();
-      } else {
-        context.read<TaskProvider>().loadTasks();
-      }
+      context.read<TaskProvider>().loadTasks();
     });
   }
 
@@ -50,18 +44,48 @@ class _TasksScreenState extends State<TasksScreen>
     super.dispose();
   }
 
-  // Helper method to display a bottom modal sheet containing all parameters at once
-  void _showFilterAndSortMenu() {
+  // Filter- und Sortier-Pipeline für Tasks
+  List<Task> _processTasksPipeline(List<Task> rawTasks) {
+    // 1. Nach spaceType filtern falls vorhanden
+    List<Task> filtered = widget.spaceType == null
+        ? List.from(rawTasks)
+        : rawTasks.where((t) => t.spaceType == widget.spaceType).toList();
+
+    // 2. Nach unserer Beschreibungskategorie filtern
+    if (_selectedCategoryFilter != 'All') {
+      filtered = filtered.where((t) => t.displayCategory == _selectedCategoryFilter).toList();
+    }
+
+    // 3. Sortierung anwenden
+    filtered.sort((a, b) {
+      if (_selectedSortOption.startsWith('datum')) {
+        if (a.deadline == null && b.deadline == null) return 0;
+        if (a.deadline == null) return 1;
+        if (b.deadline == null) return -1;
+        return _selectedSortOption == 'datum_auf'
+            ? a.deadline!.compareTo(b.deadline!)
+            : b.deadline!.compareTo(a.deadline!);
+      } else if (_selectedSortOption.startsWith('prio')) {
+        return _selectedSortOption == 'prio_ab'
+            ? b.priority.compareTo(a.priority)
+            : a.priority.compareTo(b.priority);
+      }
+      return 0;
+    });
+
+    return filtered;
+  }
+
+  void _showFilterSortMenu() {
     showModalBottomSheet(
       context: context,
+      backgroundColor: const Color(0xFF131313),
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
       ),
       builder: (BuildContext context) {
         return StatefulBuilder(
           builder: (BuildContext context, StateSetter setModalState) {
-            final isDark = Theme.of(context).brightness == Brightness.dark;
-            
             return Padding(
               padding: const EdgeInsets.all(20.0),
               child: Column(
@@ -71,23 +95,21 @@ class _TasksScreenState extends State<TasksScreen>
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      const Text(
-                        'Filter & Sortierung',
-                        style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                      Text(
+                        'Filtern & Sortieren',
+                        style: GoogleFonts.manrope(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.white),
                       ),
                       IconButton(
-                        icon: const Icon(Icons.close),
+                        icon: const Icon(Icons.close, color: Colors.grey),
                         onPressed: () => Navigator.pop(context),
                       )
                     ],
                   ),
-                  const Divider(),
+                  const Divider(color: Color(0xFF222222)),
                   const SizedBox(height: 8),
-                  
-                  // Category Filter Section
-                  const Text(
-                    'Kategorie filtern',
-                    style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: Colors.grey),
+                  Text(
+                    'Kategorie',
+                    style: GoogleFonts.manrope(fontSize: 12, fontWeight: FontWeight.w600, color: Colors.grey),
                   ),
                   const SizedBox(height: 8),
                   Row(
@@ -96,6 +118,13 @@ class _TasksScreenState extends State<TasksScreen>
                       return Padding(
                         padding: const EdgeInsets.only(right: 8.0),
                         child: ChoiceChip(
+                          backgroundColor: const Color(0xFF1E1E1E),
+                          selectedColor: const Color(0xFF5856D6),
+                          labelStyle: GoogleFonts.manrope(
+                            color: isSelected ? Colors.white : Colors.grey,
+                            fontSize: 13,
+                            fontWeight: FontWeight.w600
+                          ),
                           label: Text(cat == 'All' ? 'Alle' : cat),
                           selected: isSelected,
                           onSelected: (bool selected) {
@@ -108,37 +137,23 @@ class _TasksScreenState extends State<TasksScreen>
                       );
                     }).toList(),
                   ),
-                  
-                  const SizedBox(height: 20),
-                  
-                  // Sorting Direction Section
-                  const Text(
+                  const SizedBox(height: 16),
+                  Text(
                     'Sortieren nach',
-                    style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: Colors.grey),
+                    style: GoogleFonts.manrope(fontSize: 12, fontWeight: FontWeight.w600, color: Colors.grey),
                   ),
                   const SizedBox(height: 8),
-                  DropdownButtonFormField<String>(
-                    value: _selectedSortOption,
-                    decoration: InputDecoration(
-                      contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
-                      filled: true,
-                      fillColor: isDark ? const Color(0xFF1E1E1E) : const Color(0xFFF7F8FC),
-                    ),
-                    items: const [
-                      DropdownMenuItem(value: 'datum_ab', child: Text('Fälligkeit: Späteste zuerst')),
-                      DropdownMenuItem(value: 'datum_auf', child: Text('Fälligkeit: Früheste zuerst')),
-                      DropdownMenuItem(value: 'prio_ab', child: Text('Priorität: Hoch zu Niedrig')),
-                      DropdownMenuItem(value: 'prio_auf', child: Text('Priorität: Niedrig zu Hoch')),
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: [
+                      _buildSortChip(setModalState, 'datum_ab', 'Datum: Späteste zuerst'),
+                      _buildSortChip(setModalState, 'datum_auf', 'Datum: Früheste zuerst'),
+                      _buildSortChip(setModalState, 'prio_ab', 'Prio: Hoch → Niedrig'),
+                      _buildSortChip(setModalState, 'prio_auf', 'Prio: Niedrig → Hoch'),
                     ],
-                    onChanged: (String? newValue) {
-                      if (newValue != null) {
-                        setModalState(() => _selectedSortOption = newValue);
-                        setState(() => _selectedSortOption = newValue);
-                      }
-                    },
                   ),
-                  const SizedBox(height: 16),
+                  const SizedBox(height: 20),
                 ],
               ),
             );
@@ -148,160 +163,111 @@ class _TasksScreenState extends State<TasksScreen>
     );
   }
 
-  List<Task> _processTasksPipeline(List<Task> rawTasks) {
-  List<Task> filtered = widget.spaceType == null 
-      ? List.from(rawTasks)
-      : rawTasks.where((t) => t.spaceType == widget.spaceType).toList();
-  if (_selectedCategoryFilter != 'All') {
-    filtered = filtered.where((t) => t.displayCategory == _selectedCategoryFilter).toList();
+  Widget _buildSortChip(StateSetter setModalState, String option, String label) {
+    final isSelected = _selectedSortOption == option;
+    return ChoiceChip(
+      backgroundColor: const Color(0xFF1E1E1E),
+      selectedColor: const Color(0xFF5856D6),
+      labelStyle: GoogleFonts.manrope(
+        color: isSelected ? Colors.white : Colors.grey,
+        fontSize: 12,
+        fontWeight: FontWeight.w500
+      ),
+      label: Text(label),
+      selected: isSelected,
+      onSelected: (bool selected) {
+        if (selected) {
+          setModalState(() => _selectedSortOption = option);
+          setState(() => _selectedSortOption = option);
+        }
+      },
+    );
   }
-  filtered.sort((a, b) {
-    if (_selectedSortOption.startsWith('datum')) {
-      if (a.deadline == null && b.deadline == null) return 0;
-      if (a.deadline == null) return 1;
-      if (b.deadline == null) return -1;
-      return _selectedSortOption == 'datum_auf'
-          ? a.deadline!.compareTo(b.deadline!)
-          : b.deadline!.compareTo(a.deadline!);
-    } else if (_selectedSortOption.startsWith('prio')) {
-      return _selectedSortOption == 'prio_ab'
-          ? b.priority.compareTo(a.priority)
-          : a.priority.compareTo(b.priority);
-    }
-    return 0;
-  });
-
-  return filtered;
-}
 
   @override
   Widget build(BuildContext context) {
-    if (widget.spaceType == 'HABITS') {
-      final habitProvider = context.watch<HabitProvider>();
-      final habits = habitProvider.habits;
+    final taskProvider = context.watch<TaskProvider>();
 
-      return Scaffold(
-        appBar: AppBar(
-          leading: const BackButton(),
-          title: Text(widget.title),
-        ),
-        body: habitProvider.isLoading
-            ? const Center(child: CircularProgressIndicator())
-            : ListView.builder(
-                padding: const EdgeInsets.all(16),
-                itemCount: habits.length,
-                itemBuilder: (_, i) {
-                  final h = habits[i];
-                  return Card(
-                    margin: const EdgeInsets.only(bottom: 12),
-                    child: ListTile(
-                      leading: const CircleAvatar(child: Icon(Icons.repeat)),
-                      title: Text(h.name),
-                      subtitle: Text(h.frequency),
-                      trailing: Checkbox(value: false, onChanged: (v) {}),
-                    ),
-                  );
-                },
-              ),
-        floatingActionButton: FloatingActionButton.extended(
-          onPressed: () => _showCreateHabitDialog(context),
-          icon: const Icon(Icons.add),
-          label: const Text('Neuer Habit'),
-          backgroundColor: const Color(0xFF81C784),
-        ),
-      );
-    }
-
-    final tasksProvider = context.watch<TaskProvider>();
-    
-    // Process input pipelines through sorting/filtering logic mappings
-    final todoProcessed = _processTasksPipeline(tasksProvider.todoTasks);
-    final completedProcessed = _processTasksPipeline(tasksProvider.completedTasks);
+    final filteredTodo = _processTasksPipeline(taskProvider.todoTasks);
+    final filteredCompleted = _processTasksPipeline(taskProvider.completedTasks);
 
     return Scaffold(
+      backgroundColor: const Color(0xFF0E0E0E),
       appBar: AppBar(
-        leading: const BackButton(),
-        title: Text(widget.title),
-        bottom: TabBar(
-          controller: _tabController,
-          tabs: [
-            Tab(text: 'Offen (${todoProcessed.length})'),
-            Tab(text: 'Fertig (${completedProcessed.length})'),
-          ],
+        backgroundColor: const Color(0xFF131313),
+        elevation: 0,
+        leading: const BackButton(color: Color(0xFFC2C1FF)),
+        title: Text(
+          widget.title,
+          style: GoogleFonts.spaceGrotesk(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 20),
         ),
         actions: [
           IconButton(
-            icon: const Icon(Icons.search),
-            onPressed: () => showSearch(
-              context: context,
-              delegate: _TaskSearchDelegate(tasks: todoProcessed + completedProcessed),
-            ),
+            icon: const Icon(Icons.search, color: Colors.grey),
+            onPressed: () {
+              showSearch(
+                context: context,
+                delegate: _TaskSearchDelegate(tasks: taskProvider.tasks),
+              );
+            },
           ),
           IconButton(
             icon: Icon(
               Icons.filter_list,
-              color: (_selectedCategoryFilter != 'All' || _selectedSortOption != 'datum_ab')
-                  ? AppTheme.tasksColor
-                  : null,
+              color: _selectedCategoryFilter != 'All' ? const Color(0xFF5856D6) : Colors.grey,
             ),
-            onPressed: _showFilterAndSortMenu,
+            onPressed: _showFilterSortMenu,
           ),
         ],
+        bottom: TabBar(
+          controller: _tabController,
+          indicatorColor: const Color(0xFF5856D6),
+          labelColor: const Color(0xFF5856D6),
+          unselectedLabelColor: Colors.grey,
+          labelStyle: GoogleFonts.manrope(fontWeight: FontWeight.bold, fontSize: 13),
+          tabs: [
+            Tab(text: 'Offen (${filteredTodo.length})'),
+            Tab(text: 'Erledigt (${filteredCompleted.length})'),
+          ],
+        ),
       ),
-      body: tasksProvider.isLoading
-          ? const Center(child: CircularProgressIndicator())
+      body: taskProvider.isLoading
+          ? const Center(child: CircularProgressIndicator(color: Color(0xFF5856D6)))
           : TabBarView(
               controller: _tabController,
               children: [
-                _TaskList(tasks: todoProcessed),
-                _TaskList(tasks: completedProcessed),
+                _buildTaskList(filteredTodo, isCompletedTab: false),
+                _buildTaskList(filteredCompleted, isCompletedTab: true),
               ],
             ),
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: () => _showCreateTaskDialog(context),
-        icon: const Icon(Icons.add),
-        label: const Text('Neue Aufgabe'),
-        backgroundColor: AppTheme.tasksColor,
+      floatingActionButton: FloatingActionButton(
+        backgroundColor: const Color(0xFF5856D6),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        onPressed: () {
+          showModalBottomSheet(
+            context: context,
+            isScrollControlled: true,
+            backgroundColor: Colors.transparent,
+            builder: (ctx) => CreateTaskSheet(spaceType: widget.spaceType),
+          );
+        },
+        child: const Icon(Icons.add, color: Colors.white),
       ),
     );
   }
 
-  void _showCreateHabitDialog(BuildContext context) {
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (_) => const CreateHabitSheet(),
-    );
-  }
-
-  void _showCreateTaskDialog(BuildContext context) {
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (_) => CreateTaskSheet(spaceType: widget.spaceType),
-    );
-  }
-}
-
-// ─── Task List ─────────────────────────────────────────────────────────────────
-
-class _TaskList extends StatelessWidget {
-  final List<Task> tasks;
-  const _TaskList({required this.tasks});
-
-  @override
-  Widget build(BuildContext context) {
-    if (tasks.isEmpty) {
-      return const Center(
+  Widget _buildTaskList(List<Task> list, {required bool isCompletedTab}) {
+    if (list.isEmpty) {
+      return Center(
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(Icons.task_alt, size: 64, color: Colors.grey),
-            SizedBox(height: 16),
-            Text('Keine Aufgaben vorhanden',
-                style: TextStyle(color: Colors.grey, fontSize: 16)),
+            const Icon(Icons.task_alt, size: 64, color: Colors.grey),
+            const SizedBox(height: 16),
+            Text(
+              'Keine Aufgaben vorhanden',
+              style: GoogleFonts.manrope(color: Colors.grey, fontSize: 16),
+            ),
           ],
         ),
       );
@@ -309,13 +275,15 @@ class _TaskList extends StatelessWidget {
 
     return ListView.builder(
       padding: const EdgeInsets.all(16),
-      itemCount: tasks.length,
-      itemBuilder: (_, i) => _TaskTile(task: tasks[i]),
+      itemCount: list.length,
+      itemBuilder: (ctx, index) {
+        return _TaskTile(task: list[index]);
+      },
     );
   }
 }
 
-// ─── Task Tile ─────────────────────────────────────────────────────────────────
+// ─── ORIGINAL TASK TILE FORMAT ─────────────────────────────────────────────────
 
 class _TaskTile extends StatelessWidget {
   final Task task;
@@ -326,6 +294,8 @@ class _TaskTile extends StatelessWidget {
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
     final priorityColor = AppTheme.getPriorityColor(task.priority);
+
+    final isCompleted = task.status == 'COMPLETED';
 
     return Dismissible(
       key: Key('task_${task.id}'),
@@ -374,6 +344,7 @@ class _TaskTile extends StatelessWidget {
           padding: const EdgeInsets.all(12),
           child: Row(
             children: [
+              // Die originale farbige Prioritäts-Leiste
               Container(
                 width: 4,
                 height: 50,
@@ -384,10 +355,10 @@ class _TaskTile extends StatelessWidget {
               ),
               const SizedBox(width: 12),
 
+              // Die runde originale Checkbox
               Checkbox(
-                value: task.isCompleted,
-                onChanged: (_) =>
-                    context.read<TaskProvider>().completeTask(task.id!),
+                value: isCompleted,
+                onChanged: (_) => context.read<TaskProvider>().completeTask(task.id!),
                 shape: const CircleBorder(),
               ),
 
@@ -399,18 +370,17 @@ class _TaskTile extends StatelessWidget {
                       task.title,
                       style: theme.textTheme.bodyMedium?.copyWith(
                         fontWeight: FontWeight.w600,
-                        decoration: task.isCompleted
-                            ? TextDecoration.lineThrough
-                            : null,
-                        color: task.isCompleted ? Colors.grey : null,
+                        decoration: isCompleted ? TextDecoration.lineThrough : null,
+                        color: isCompleted ? Colors.grey : null,
                       ),
                     ),
-                    if (task.description != null)
-                      Text(task.description!,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: theme.textTheme.bodySmall
-                              ?.copyWith(color: Colors.grey)),
+                    if (task.displayDescription.isNotEmpty)
+                      Text(
+                        task.displayDescription,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: theme.textTheme.bodySmall?.copyWith(color: Colors.grey),
+                      ),
                     const SizedBox(height: 4),
                     Row(
                       children: [
@@ -426,21 +396,17 @@ class _TaskTile extends StatelessWidget {
                             style: TextStyle(
                               fontSize: 11,
                               color: task.isOverdue ? Colors.red : Colors.grey,
-                              fontWeight: task.isOverdue
-                                  ? FontWeight.bold
-                                  : FontWeight.normal,
+                              fontWeight: task.isOverdue ? FontWeight.bold : FontWeight.normal,
                             ),
                           ),
                           const SizedBox(width: 8),
                         ],
                         if (task.estimatedDurationMinutes > 0) ...[
-                          const Icon(Icons.timer_outlined,
-                              size: 12, color: Colors.grey),
+                          const Icon(Icons.timer_outlined, size: 12, color: Colors.grey),
                           const SizedBox(width: 4),
                           Text(
                             '${task.estimatedDurationMinutes} Min.',
-                            style: const TextStyle(
-                                fontSize: 11, color: Colors.grey),
+                            style: const TextStyle(fontSize: 11, color: Colors.grey),
                           ),
                         ],
                       ],
@@ -451,38 +417,27 @@ class _TaskTile extends StatelessWidget {
               
               const SizedBox(width: 8),
 
+              // Rechter Infoblock (Kategorie-Badge & Prioritäts-Kästchen)
               Column(
                 crossAxisAlignment: CrossAxisAlignment.end,
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  // 1. Inside the _TaskTile description paragraph display element step:
-if (task.displayDescription.isNotEmpty)
-  Text(
-    task.displayDescription, // 🟢 Renders notes without revealing the technical tag bracket prefix
-    maxLines: 1,
-    overflow: TextOverflow.ellipsis,
-    style: theme.textTheme.bodySmall?.copyWith(color: Colors.grey),
-  ),
-
-// 2. Inside the right-side layout details segment column area badge:
-Container(
-  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-  margin: const EdgeInsets.only(bottom: 6),
-  decoration: BoxDecoration(
-    color: isDark 
-        ? Colors.white.withOpacity(0.1) 
-        : Colors.black.withOpacity(0.05),
-    borderRadius: BorderRadius.circular(4),
-  ),
-  child: Text(
-    task.displayCategory, // 🟢 Nicely displays 'Personal' or 'Studium' on your card rows
-    style: TextStyle(
-      fontSize: 10,
-      fontWeight: FontWeight.w600,
-      color: isDark ? Colors.grey[300] : Colors.grey[700],
-    ),
-  ),
-),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                    margin: const EdgeInsets.only(bottom: 6),
+                    decoration: BoxDecoration(
+                      color: isDark ? Colors.white.withOpacity(0.1) : Colors.black.withOpacity(0.05),
+                      borderRadius: BorderRadius.circular(4),
+                    ),
+                    child: Text(
+                      task.displayCategory,
+                      style: TextStyle(
+                        fontSize: 10,
+                        fontWeight: FontWeight.w600,
+                        color: isDark ? Colors.grey[300] : Colors.grey[700],
+                      ),
+                    ),
+                  ),
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                     decoration: BoxDecoration(
@@ -491,10 +446,7 @@ Container(
                     ),
                     child: Text(
                       'P${task.priority}',
-                      style: TextStyle(
-                          color: priorityColor,
-                          fontSize: 11,
-                          fontWeight: FontWeight.bold),
+                      style: TextStyle(color: priorityColor, fontSize: 11, fontWeight: FontWeight.bold),
                     ),
                   ),
                 ],
@@ -535,7 +487,7 @@ class _TaskSearchDelegate extends SearchDelegate<String> {
       itemCount: filtered.length,
       itemBuilder: (_, i) => ListTile(
         title: Text(filtered[i].title),
-        subtitle: Text('Prio: P${filtered[i].priority} | Kategorie: ${filtered[i].spaceType ?? 'Personal'}'),
+        subtitle: Text('Prio: P${filtered[i].priority} | Kategorie: ${filtered[i].displayCategory}'),
         leading: const Icon(Icons.task_alt),
         onTap: () {
           close(context, filtered[i].title);
