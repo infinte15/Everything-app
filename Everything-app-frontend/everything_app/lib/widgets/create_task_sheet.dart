@@ -79,18 +79,18 @@ class _CreateTaskSheetState extends State<CreateTaskSheet> {
       return;
     }
 
-   final String rawNotesText = _notesController.text.trim();
-  final String structuredDescription = '[$_category] $rawNotesText';
+    final String rawNotesText = _notesController.text.trim();
 
-  final task = Task(
-    title: _titleController.text.trim(),
-    description: structuredDescription, 
-    priority: _priority,
-    deadline: _dueDate,
-    estimatedDurationMinutes: _durationMinutes,
-    status: 'TODO',
-    spaceType: widget.spaceType ?? 'TASKS',
-  );
+    final task = Task(
+      title: _titleController.text.trim(),
+      description: rawNotesText.isNotEmpty ? rawNotesText : null,
+      priority: _priority,
+      deadline: _dueDate,
+      estimatedDurationMinutes: _durationMinutes,
+      status: 'TODO',
+      spaceType: widget.spaceType ?? 'TASKS',
+      category: _category,
+    );
 
     await context.read<TaskProvider>().addTask(task);
     if (mounted) Navigator.pop(context);

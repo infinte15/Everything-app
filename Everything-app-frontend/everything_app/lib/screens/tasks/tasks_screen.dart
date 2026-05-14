@@ -53,7 +53,7 @@ class _TasksScreenState extends State<TasksScreen>
 
     // 2. Nach unserer Beschreibungskategorie filtern
     if (_selectedCategoryFilter != 'All') {
-      filtered = filtered.where((t) => t.displayCategory == _selectedCategoryFilter).toList();
+      filtered = filtered.where((t) => t.category == _selectedCategoryFilter).toList();
     }
 
     // 3. Sortierung anwenden
@@ -374,9 +374,9 @@ class _TaskTile extends StatelessWidget {
                         color: isCompleted ? Colors.grey : null,
                       ),
                     ),
-                    if (task.displayDescription.isNotEmpty)
+                    if (task.description != null && task.description!.isNotEmpty)
                       Text(
-                        task.displayDescription,
+                        task.description!,
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: theme.textTheme.bodySmall?.copyWith(color: Colors.grey),
@@ -430,7 +430,7 @@ class _TaskTile extends StatelessWidget {
                       borderRadius: BorderRadius.circular(4),
                     ),
                     child: Text(
-                      task.displayCategory,
+                      task.category,
                       style: TextStyle(
                         fontSize: 10,
                         fontWeight: FontWeight.w600,
@@ -487,7 +487,7 @@ class _TaskSearchDelegate extends SearchDelegate<String> {
       itemCount: filtered.length,
       itemBuilder: (_, i) => ListTile(
         title: Text(filtered[i].title),
-        subtitle: Text('Prio: P${filtered[i].priority} | Kategorie: ${filtered[i].displayCategory}'),
+        subtitle: Text('Prio: P${filtered[i].priority} | Kategorie: ${filtered[i].category}'),
         leading: const Icon(Icons.task_alt),
         onTap: () {
           close(context, filtered[i].title);
