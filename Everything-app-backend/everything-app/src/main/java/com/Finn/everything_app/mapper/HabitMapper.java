@@ -1,15 +1,16 @@
 package com.Finn.everything_app.mapper;
 
-
 import com.Finn.everything_app.dto.HabitDTO;
 import com.Finn.everything_app.model.Habit;
 import org.springframework.stereotype.Component;
+import java.util.stream.Collectors;
 
 @Component
 public class HabitMapper {
 
     public HabitDTO toDTO(Habit habit) {
-        if (habit == null) return null;
+        if (habit == null)
+            return null;
 
         HabitDTO dto = new HabitDTO();
         dto.setId(habit.getId());
@@ -31,12 +32,22 @@ public class HabitMapper {
         dto.setEndDate(habit.getEndDate());
         dto.setCurrentStreak(habit.getCurrentStreak());
         dto.setLongestStreak(habit.getLongestStreak());
+        dto.setColor(habit.getColor());
+        dto.setPriority(habit.getPriority());
+        dto.setCategory(habit.getCategory());
+
+        if (habit.getCompletions() != null) {
+            dto.setCompletedDates(habit.getCompletions().stream()
+                    .map(c -> c.getCompletionDate().toString())
+                    .collect(Collectors.toList()));
+        }
 
         return dto;
     }
 
     public Habit toEntity(HabitDTO dto) {
-        if (dto == null) return null;
+        if (dto == null)
+            return null;
 
         Habit habit = new Habit();
         habit.setId(dto.getId());
@@ -56,6 +67,9 @@ public class HabitMapper {
         habit.setDurationMinutes(dto.getDurationMinutes());
         habit.setStartDate(dto.getStartDate());
         habit.setEndDate(dto.getEndDate());
+        habit.setColor(dto.getColor());
+        habit.setPriority(dto.getPriority());
+        habit.setCategory(dto.getCategory());
 
         return habit;
     }

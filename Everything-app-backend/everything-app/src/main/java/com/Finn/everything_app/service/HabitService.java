@@ -87,6 +87,15 @@ public class HabitService {
         if (updatedHabit.getEndDate() != null) {
             habit.setEndDate(updatedHabit.getEndDate());
         }
+        if (updatedHabit.getColor() != null) {
+            habit.setColor(updatedHabit.getColor());
+        }
+        if (updatedHabit.getPriority() != null) {
+            habit.setPriority(updatedHabit.getPriority());
+        }
+        if (updatedHabit.getCategory() != null) {
+            habit.setCategory(updatedHabit.getCategory());
+        }
 
         return habitRepository.save(habit);
     }
@@ -117,6 +126,21 @@ public class HabitService {
         completionRepository.save(completion);
 
         updateStreaks(habit);
+    }
+
+    @Transactional
+    public void unmarkHabitComplete(Long habitId, LocalDate date) {
+        Habit habit = getHabitById(habitId);
+
+        Optional<HabitCompletion> existing = completionRepository
+                .findByHabitIdAndCompletionDate(habitId, date);
+
+        if (existing.isPresent()) {
+            completionRepository.delete(existing.get());
+            // Need to flush so that updateStreaks sees the deletion
+            completionRepository.flush();
+            updateStreaks(habit);
+        }
     }
 
 

@@ -5,6 +5,7 @@ import lombok.Data;
 import jakarta.validation.constraints.*;
 import java.time.LocalDate;
 import java.time.LocalTime;
+import java.util.List;
 
 @Data
 public class HabitDTO {
@@ -32,4 +33,10 @@ public class HabitDTO {
 
     private Integer currentStreak;
     private Integer longestStreak;
+
+    private String color;
+    private Integer priority;
+    private String category;
+
+    private List<String> completedDates;
 }

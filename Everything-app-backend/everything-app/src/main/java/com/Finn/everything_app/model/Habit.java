@@ -53,6 +53,10 @@ public class Habit {
     @Column(name = "longest_streak")
     private Integer longestStreak = 0;
 
+    private String color;
+    private Integer priority;
+    private String category;
+
     @Column(name = "created_at")
     private LocalDateTime createdAt;
 

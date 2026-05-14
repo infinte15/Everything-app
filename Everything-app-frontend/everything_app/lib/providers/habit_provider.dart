@@ -45,16 +45,38 @@ class HabitProvider with ChangeNotifier {
     }
   }
 
-  Future<bool> completeHabit(int id, {DateTime? date}) async {
+  Future<bool> updateHabit(Habit habit) async {
     try {
-      final success = await _habitService.completeHabit(id, date: date);
+      final updated = await _habitService.updateHabit(habit);
+      if (updated != null) {
+        final index = _habits.indexWhere((h) => h.id == updated.id);
+        if (index != -1) {
+          _habits[index] = updated;
+          notifyListeners();
+        } else {
+          _habits.add(updated);
+          notifyListeners();
+        }
+        return true;
+      }
+      return false;
+    } catch (e) {
+      _error = 'Fehler beim Aktualisieren des Habits: $e';
+      notifyListeners();
+      return false;
+    }
+  }
+
+  Future<bool> toggleHabitComplete(int id, bool isCompleted, {DateTime? date}) async {
+    try {
+      final success = await _habitService.toggleHabitComplete(id, isCompleted, date: date);
       if (success) {
         await loadHabits();
         return true;
       }
       return false;
     } catch (e) {
-      _error = 'Fehler beim Abschließen des Habits: $e';
+      _error = 'Fehler beim Toggeln des Habits: $e';
       notifyListeners();
       return false;
     }

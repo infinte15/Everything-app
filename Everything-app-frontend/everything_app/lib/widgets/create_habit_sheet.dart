@@ -6,7 +6,9 @@ import '../models/habit.dart';
 import '../providers/habit_provider.dart';
 
 class CreateHabitSheet extends StatefulWidget {
-  const CreateHabitSheet({super.key});
+  final Habit? habitToEdit;
+
+  const CreateHabitSheet({super.key, this.habitToEdit});
 
   @override
   State<CreateHabitSheet> createState() => _CreateHabitSheetState();
@@ -44,6 +46,59 @@ class _CreateHabitSheetState extends State<CreateHabitSheet> {
   bool _showNameError = false;
 
   final List<Color> _colors = [Colors.blue, Colors.red, Colors.green, Colors.orange, Colors.purple, Colors.teal];
+
+  @override
+  void initState() {
+    super.initState();
+    if (widget.habitToEdit != null) {
+      final h = widget.habitToEdit!;
+      _nameController.text = h.name;
+      if (h.description != null && h.description!.isNotEmpty) {
+        _notesController.text = h.description!;
+        _showNotesField = true;
+      }
+      _minDurationController.text = (h.durationMinutes ?? 30).toString();
+      _maxDurationController.text = (h.durationMinutes ?? 30).toString();
+      
+      _priority = h.priority ?? 3;
+      _category = h.category ?? 'Personal';
+      
+      if (h.color != null && h.color!.isNotEmpty) {
+        try {
+          _selectedColor = Color(int.parse(h.color!.replaceFirst('#', '0xFF')));
+        } catch (_) {}
+      }
+      
+      _repeatType = (h.frequency == 'DAILY' ? 'Daily' :
+                     h.frequency == 'WEEKLY' ? 'Weekly' :
+                     h.frequency == 'MONTHLY' ? 'Monthly' : 'Daily');
+      
+      _idealDays = {};
+      if (h.monday) _idealDays.add(1);
+      if (h.tuesday) _idealDays.add(2);
+      if (h.wednesday) _idealDays.add(3);
+      if (h.thursday) _idealDays.add(4);
+      if (h.friday) _idealDays.add(5);
+      if (h.saturday) _idealDays.add(6);
+      if (h.sunday) _idealDays.add(7);
+      if (_idealDays.isEmpty) _idealDays.add(1);
+      
+      _timesPerWeek = _idealDays.length;
+      
+      if (h.preferredTime != null) {
+        _idealTime = TimeOfDay(hour: h.preferredTime!.hour, minute: h.preferredTime!.minute);
+      }
+      
+      if (h.startDate != null) {
+        _startDate = h.startDate;
+        _showDatesFields = true;
+      }
+      if (h.endDate != null) {
+        _endDate = h.endDate;
+        _showDatesFields = true;
+      }
+    }
+  }
 
   @override
   void dispose() {
@@ -388,6 +443,7 @@ class _CreateHabitSheetState extends State<CreateHabitSheet> {
                   final preferredTime = DateTime(now.year, now.month, now.day, _idealTime.hour, _idealTime.minute);
                   
                   final habit = Habit(
+                    id: widget.habitToEdit?.id,
                     name: _nameController.text,
                     description: _notesController.text.isEmpty ? null : _notesController.text,
                     frequency: _repeatType.toUpperCase(),
@@ -402,9 +458,20 @@ class _CreateHabitSheetState extends State<CreateHabitSheet> {
                     durationMinutes: int.tryParse(_minDurationController.text) ?? 30,
                     startDate: _startDate,
                     endDate: _endDate,
+                    priority: _priority,
+                    category: _category,
+                    color: '#${_selectedColor.value.toRadixString(16).substring(2, 8).toUpperCase()}',
+                    currentStreak: widget.habitToEdit?.currentStreak ?? 0,
+                    longestStreak: widget.habitToEdit?.longestStreak ?? 0,
                   );
 
-                  final success = await context.read<HabitProvider>().addHabit(habit);
+                  bool success;
+                  if (widget.habitToEdit != null) {
+                    success = await context.read<HabitProvider>().updateHabit(habit);
+                  } else {
+                    success = await context.read<HabitProvider>().addHabit(habit);
+                  }
+                  
                   if (success && mounted) {
                     Navigator.pop(context);
                     ScaffoldMessenger.of(context).showSnackBar(

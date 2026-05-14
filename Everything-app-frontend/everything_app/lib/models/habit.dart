@@ -21,6 +21,10 @@ class Habit {
   final DateTime? endDate;
   final int currentStreak;
   final int longestStreak;
+  final String? color;
+  final int priority;
+  final String category;
+  final List<String> completedDates;
 
   Habit({
     this.id,
@@ -40,6 +44,10 @@ class Habit {
     this.endDate,
     this.currentStreak = 0,
     this.longestStreak = 0,
+    this.color,
+    this.priority = 3,
+    this.category = 'Personal',
+    this.completedDates = const [],
   });
 
   // JSON zu Habit
@@ -68,6 +76,12 @@ class Habit {
           : null,
       currentStreak: json['currentStreak'] ?? 0,
       longestStreak: json['longestStreak'] ?? 0,
+      color: json['color'],
+      priority: json['priority'] ?? 3,
+      category: json['category'] ?? 'Personal',
+      completedDates: (json['completedDates'] as List<dynamic>?)
+          ?.map((e) => e.toString())
+          .toList() ?? [],
     );
   }
 
@@ -93,6 +107,10 @@ class Habit {
       'endDate': endDate != null ? DateFormat('yyyy-MM-dd').format(endDate!) : null,
       'currentStreak': currentStreak,
       'longestStreak': longestStreak,
+      'color': color,
+      'priority': priority,
+      'category': category,
+      'completedDates': completedDates,
     };
   }
 

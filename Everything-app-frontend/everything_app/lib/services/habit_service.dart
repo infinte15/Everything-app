@@ -42,15 +42,37 @@ class HabitService {
     }
   }
 
-  Future<bool> completeHabit(int id, {DateTime? date}) async {
+  Future<Habit?> updateHabit(Habit habit) async {
+    try {
+      final response = await _apiService.put(
+        '/api/habits/${habit.id}',
+        habit.toJson(),
+      );
+
+      if (_apiService.isSuccess(response)) {
+        final data = _apiService.parseResponse(response);
+        return Habit.fromJson(data);
+      } else {
+        throw Exception(_apiService.getErrorMessage(response));
+      }
+    } catch (e) {
+      debugPrint('Error updating habit: $e');
+      return null;
+    }
+  }
+
+  Future<bool> toggleHabitComplete(int id, bool isCompleted, {DateTime? date}) async {
     try {
       final dateStr = date != null ? DateFormat('yyyy-MM-dd').format(date) : null;
       final url = '/api/habits/$id/complete${dateStr != null ? '?date=$dateStr' : ''}';
       
-      final response = await _apiService.post(url, {});
+      final response = isCompleted 
+          ? await _apiService.post(url, {})
+          : await _apiService.delete(url);
+          
       return _apiService.isSuccess(response);
     } catch (e) {
-      debugPrint('Error completing habit: $e');
+      debugPrint('Error toggling habit: $e');
       return false;
     }
   }

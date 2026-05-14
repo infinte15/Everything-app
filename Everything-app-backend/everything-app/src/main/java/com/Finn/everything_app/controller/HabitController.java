@@ -45,6 +45,17 @@ public class HabitController {
         );
     }
 
+    @PutMapping("/{id}")
+    public ResponseEntity<HabitDTO> updateHabit(
+            @PathVariable Long id,
+            @Valid @RequestBody HabitDTO habitDTO) {
+
+        Habit updatedHabit = habitMapper.toEntity(habitDTO);
+        Habit saved = habitService.updateHabit(id, updatedHabit);
+
+        return ResponseEntity.ok(habitMapper.toDTO(saved));
+    }
+
 
     @PostMapping("/{id}/complete")
     public ResponseEntity<Void> completeHabit(
@@ -55,6 +66,18 @@ public class HabitController {
                 LocalDate.parse(date) : LocalDate.now();
 
         habitService.markHabitComplete(id, completionDate);
+        return ResponseEntity.ok().build();
+    }
+
+    @DeleteMapping("/{id}/complete")
+    public ResponseEntity<Void> uncompleteHabit(
+            @PathVariable Long id,
+            @RequestParam(required = false) String date) {
+
+        LocalDate completionDate = date != null ?
+                LocalDate.parse(date) : LocalDate.now();
+
+        habitService.unmarkHabitComplete(id, completionDate);
         return ResponseEntity.ok().build();
     }
 
