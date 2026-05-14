@@ -15,6 +15,7 @@ import '../screens/finance/finance_screen.dart';
 import '../screens/notes/notes_screen.dart';
 import '../widgets/bottom_nav.dart';
 import '../screens/habits/habits_screen.dart';
+import '../screens/projects/projects_screen.dart';
 
 final router = GoRouter(
   initialLocation: '/login',
@@ -94,6 +95,10 @@ final router = GoRouter(
     GoRoute(
       path: '/finance',
       builder: (_, _) => const FinanceScreen(),
+    ),
+    GoRoute(
+      path: '/projects',
+      builder: (_, _) => const ProjectsScreen(),
     ),
   ],
 );

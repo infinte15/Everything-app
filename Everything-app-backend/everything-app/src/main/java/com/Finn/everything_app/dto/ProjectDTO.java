@@ -20,4 +20,6 @@ public class ProjectDTO {
     private Integer completionPercentage;
     private Integer tasksTotal;
     private Integer tasksCompleted;
+    private Integer weeklySessionCount;
+    private Integer sessionDurationMinutes;
 }

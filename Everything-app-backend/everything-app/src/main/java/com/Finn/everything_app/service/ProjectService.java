@@ -67,6 +67,12 @@ public class ProjectService {
         if (updatedProject.getCompletionPercentage() != null) {
             project.setCompletionPercentage(updatedProject.getCompletionPercentage());
         }
+        if (updatedProject.getWeeklySessionCount() != null) {
+            project.setWeeklySessionCount(updatedProject.getWeeklySessionCount());
+        }
+        if (updatedProject.getSessionDurationMinutes() != null) {
+            project.setSessionDurationMinutes(updatedProject.getSessionDurationMinutes());
+        }
 
         return projectRepository.save(project);
     }

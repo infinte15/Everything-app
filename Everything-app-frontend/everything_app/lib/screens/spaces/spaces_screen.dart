@@ -56,6 +56,12 @@ class SpacesScreen extends StatelessWidget {
       route: '/finance',
       accentColor: Color(0xFFA855F7),
     ),
+    _SpaceData(
+      icon: Icons.folder_special_outlined,
+      title: 'Projekte',
+      route: '/projects',
+      accentColor: Color(0xFFEC4899),
+    ),
   ];
 
   @override

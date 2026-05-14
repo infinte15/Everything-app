@@ -21,6 +21,8 @@ public class ProjectMapper {
         dto.setCompletionPercentage(project.getCompletionPercentage());
         dto.setTasksTotal(project.getTasksTotal());
         dto.setTasksCompleted(project.getTasksCompleted());
+        dto.setWeeklySessionCount(project.getWeeklySessionCount());
+        dto.setSessionDurationMinutes(project.getSessionDurationMinutes());
 
         return dto;
     }
@@ -37,6 +39,8 @@ public class ProjectMapper {
         project.setActualEndDate(dto.getActualEndDate());
         project.setStatus(dto.getStatus());
         project.setCompletionPercentage(dto.getCompletionPercentage());
+        if (dto.getWeeklySessionCount() != null) project.setWeeklySessionCount(dto.getWeeklySessionCount());
+        if (dto.getSessionDurationMinutes() != null) project.setSessionDurationMinutes(dto.getSessionDurationMinutes());
 
         return project;
     }

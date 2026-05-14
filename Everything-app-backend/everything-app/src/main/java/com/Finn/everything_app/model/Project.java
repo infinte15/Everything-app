@@ -43,6 +43,12 @@ public class Project {
     @Column(name = "tasks_completed")
     private Integer tasksCompleted = 0;
 
+    @Column(name = "weekly_session_count")
+    private Integer weeklySessionCount = 1;
+
+    @Column(name = "session_duration_minutes")
+    private Integer sessionDurationMinutes = 60;
+
     @Column(name = "created_at")
     private LocalDateTime createdAt;
 
