@@ -7,10 +7,10 @@ import '../../models/project.dart';
 
 // ─── Column definitions ───────────────────────────────────────────────────────
 const _columns = [
-  _ColDef('PLANNING',   'Planung',        Color(0xFF60A5FA), ''),
-  _ColDef('ACTIVE',     'Aktiv',          Color(0xFF34D399), ''),
-  _ColDef('ON_HOLD',    'Pausiert',       Color(0xFFFBBF24), ''),
-  _ColDef('COMPLETED',  'Abgeschlossen',  Color(0xFF5856D6), ''),
+  _ColDef('PLANNING',     'New',          Color(0xFF34D399), 'This item hasn\'t been started'),
+  _ColDef('ON_HOLD',      'Planning',     Color(0xFF60A5FA), 'This is ready to be picked up'),
+  _ColDef('IN_PROGRESS',  'In progress',  Color(0xFFFBBF24), 'This is actively being worked on'),
+  _ColDef('COMPLETED',    'Done',         Color(0xFFF97316), 'This has been completed'),
 ];
 
 class _ColDef {
@@ -29,21 +29,19 @@ class ProjectsScreen extends StatefulWidget {
 }
 
 class _ProjectsScreenState extends State<ProjectsScreen> {
-  final _searchCtrl = TextEditingController();
-  String _query = '';
-  String? _draggingProjectId;
+  final PageController _pageCtrl = PageController();
+  int _currentPage = 0;
 
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) =>
         context.read<ProjectProvider>().loadProjects());
-    _searchCtrl.addListener(() => setState(() => _query = _searchCtrl.text.toLowerCase()));
   }
 
   @override
   void dispose() {
-    _searchCtrl.dispose();
+    _pageCtrl.dispose();
     super.dispose();
   }
 
@@ -59,9 +57,7 @@ class _ProjectsScreenState extends State<ProjectsScreen> {
   @override
   Widget build(BuildContext context) {
     final provider = context.watch<ProjectProvider>();
-    final projects = provider.projects
-        .where((p) => _query.isEmpty || p.name.toLowerCase().contains(_query))
-        .toList();
+    final projects = provider.projects;
 
     return Scaffold(
       backgroundColor: const Color(0xFF0A0A0B),
@@ -70,66 +66,121 @@ class _ProjectsScreenState extends State<ProjectsScreen> {
         elevation: 0,
         leading: const BackButton(color: Color(0xFFC2C1FF)),
         title: Text('Projekte', style: GoogleFonts.spaceGrotesk(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 20)),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.add, color: Color(0xFFC2C1FF)),
-            onPressed: () => _openCreate(),
-          ),
-        ],
+      ),
+      floatingActionButton: FloatingActionButton(
+        backgroundColor: const Color(0xFF5856D6),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        onPressed: () => _openCreate(),
+        child: const Icon(Icons.add, color: Colors.white),
       ),
       body: provider.isLoading
           ? const Center(child: CircularProgressIndicator(color: Color(0xFF5856D6)))
-          : Column(
-              children: [
-                // Search bar
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(12, 12, 12, 0),
-                  child: TextField(
-                    controller: _searchCtrl,
-                    style: const TextStyle(color: Colors.white, fontSize: 14),
-                    decoration: InputDecoration(
-                      hintText: 'Filter by keyword…',
-                      hintStyle: const TextStyle(color: Color(0xFF555555)),
-                      prefixIcon: const Icon(Icons.search, color: Color(0xFF555555), size: 18),
-                      filled: true,
-                      fillColor: const Color(0xFF1A1A1C),
-                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: Color(0xFF2A2A2D))),
-                      enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: Color(0xFF2A2A2D))),
-                      focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: Color(0xFF5856D6))),
-                      contentPadding: const EdgeInsets.symmetric(vertical: 10),
-                      isDense: true,
+          : LayoutBuilder(
+              builder: (context, constraints) {
+                final isNarrow = constraints.maxWidth < 600;
+                return Column(
+                  children: [
+                    const SizedBox(height: 16),
+                    // Narrow: column tab strip
+                    if (isNarrow) _buildColumnTabStrip(),
+                    Expanded(
+                      child: isNarrow
+                          ? _buildPageView(projects)
+                          : _buildWideRow(projects),
                     ),
-                  ),
-                ),
-                const SizedBox(height: 12),
-                // Kanban board
-                Expanded(
-                  child: ListView(
-                    scrollDirection: Axis.horizontal,
-                    padding: const EdgeInsets.symmetric(horizontal: 12),
-                    children: _columns.map((col) {
-                      final colProjects = projects.where((p) => p.status == col.status).toList();
-                      return _KanbanColumn(
-                        colDef: col,
-                        projects: colProjects,
-                        isDragging: _draggingProjectId != null,
-                        onDrop: (project) {
-                          final updated = project.copyWith(status: col.status);
-                          context.read<ProjectProvider>().updateProject(updated);
-                          setState(() => _draggingProjectId = null);
-                        },
-                        onDragStart: (id) => setState(() => _draggingProjectId = id),
-                        onDragEnd: () => setState(() => _draggingProjectId = null),
-                        onAdd: () => _openCreate(),
-                        onEdit: (p) => _openCreate(editing: p),
-                        onDelete: (p) => _confirmDelete(p),
-                        onTap: (p) => Navigator.push(context, MaterialPageRoute(builder: (_) => _ProjectDetailScreen(project: p))),
-                      );
-                    }).toList(),
-                  ),
-                ),
-              ],
+                  ],
+                );
+              },
             ),
+    );
+  }
+
+  Widget _buildColumnTabStrip() {
+    return SizedBox(
+      height: 40,
+      child: ListView.builder(
+        scrollDirection: Axis.horizontal,
+        padding: const EdgeInsets.symmetric(horizontal: 12),
+        itemCount: _columns.length,
+        itemBuilder: (_, i) {
+          final col = _columns[i];
+          final isSelected = _currentPage == i;
+          return GestureDetector(
+            onTap: () {
+              _pageCtrl.animateToPage(i, duration: const Duration(milliseconds: 250), curve: Curves.easeInOut);
+              setState(() => _currentPage = i);
+            },
+            child: AnimatedContainer(
+              duration: const Duration(milliseconds: 150),
+              margin: const EdgeInsets.only(right: 8),
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+              decoration: BoxDecoration(
+                color: isSelected ? col.color.withOpacity(0.15) : Colors.transparent,
+                borderRadius: BorderRadius.circular(20),
+                border: Border.all(
+                  color: isSelected ? col.color : const Color(0xFF333336),
+                  width: 1.5,
+                ),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(Icons.radio_button_unchecked, color: col.color, size: 12),
+                  const SizedBox(width: 6),
+                  Text(col.label, style: TextStyle(color: isSelected ? Colors.white : Colors.grey, fontSize: 12, fontWeight: FontWeight.w600)),
+                ],
+              ),
+            ),
+          );
+        },
+      ),
+    );
+  }
+
+  Widget _buildPageView(List<Project> projects) {
+    return PageView.builder(
+      controller: _pageCtrl,
+      onPageChanged: (i) => setState(() => _currentPage = i),
+      itemCount: _columns.length,
+      itemBuilder: (_, i) {
+        final col = _columns[i];
+        final colProjects = projects.where((p) => p.status == col.status).toList();
+        return Padding(
+          padding: const EdgeInsets.fromLTRB(12, 8, 12, 12),
+          child: _KanbanColumn(
+            colDef: col, projects: colProjects, isDragging: false,
+            onDrop: (p) => context.read<ProjectProvider>().updateProject(p.copyWith(status: col.status)),
+            onDragStart: (_) {}, onDragEnd: () {},
+            onAdd: () => _openCreate(),
+            onEdit: (p) => _openCreate(editing: p),
+            onDelete: (p) => _confirmDelete(p),
+            onTap: (p) => Navigator.push(context, MaterialPageRoute(builder: (_) => _ProjectDetailScreen(project: p))),
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildWideRow(List<Project> projects) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: _columns.map((col) {
+          final colProjects = projects.where((p) => p.status == col.status).toList();
+          return Expanded(
+            child: _KanbanColumn(
+              colDef: col, projects: colProjects, isDragging: false,
+              onDrop: (p) => context.read<ProjectProvider>().updateProject(p.copyWith(status: col.status)),
+              onDragStart: (_) {}, onDragEnd: () {},
+              onAdd: () => _openCreate(),
+              onEdit: (p) => _openCreate(editing: p),
+              onDelete: (p) => _confirmDelete(p),
+              onTap: (p) => Navigator.push(context, MaterialPageRoute(builder: (_) => _ProjectDetailScreen(project: p))),
+            ),
+          );
+        }).toList(),
+      ),
     );
   }
 
@@ -194,42 +245,41 @@ class _KanbanColumnState extends State<_KanbanColumn> {
       builder: (ctx, candidates, _) {
         return AnimatedContainer(
           duration: const Duration(milliseconds: 150),
-          width: 240,
-          margin: const EdgeInsets.only(right: 12, bottom: 12),
+          width: double.infinity,
+          margin: const EdgeInsets.only(right: 8, bottom: 8),
           decoration: BoxDecoration(
-            color: _isHovered ? col.color.withOpacity(0.07) : const Color(0xFF111113),
+            color: _isHovered ? col.color.withOpacity(0.07) : const Color(0xFF0F0F11),
             borderRadius: BorderRadius.circular(10),
-            border: Border.all(color: _isHovered ? col.color.withOpacity(0.5) : const Color(0xFF222225), width: 1.5),
+            border: Border.all(color: _isHovered ? col.color.withOpacity(0.5) : Colors.transparent, width: 1.5),
           ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               // Column header
               Padding(
-                padding: const EdgeInsets.fromLTRB(12, 12, 8, 8),
+                padding: const EdgeInsets.fromLTRB(16, 16, 12, 12),
                 child: Row(
                   children: [
-                    Container(width: 10, height: 10, decoration: BoxDecoration(shape: BoxShape.circle, color: col.color, border: Border.all(color: Colors.transparent, width: 2))),
+                    Icon(Icons.radio_button_unchecked, color: col.color, size: 16),
                     const SizedBox(width: 8),
-                    Text(col.label, style: GoogleFonts.manrope(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13)),
-                    const SizedBox(width: 6),
+                    Text(col.label, style: GoogleFonts.manrope(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14)),
+                    const SizedBox(width: 8),
                     Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
-                      decoration: BoxDecoration(color: const Color(0xFF222225), borderRadius: BorderRadius.circular(10)),
-                      child: Text('$count', style: const TextStyle(color: Colors.grey, fontSize: 11)),
-                    ),
-                    const Spacer(),
-                    GestureDetector(
-                      onTap: widget.onAdd,
-                      child: const Icon(Icons.add, color: Colors.grey, size: 18),
+                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                      decoration: BoxDecoration(color: const Color(0xFF222225), borderRadius: BorderRadius.circular(12)),
+                      child: Text('$count', style: const TextStyle(color: Colors.grey, fontSize: 11, fontWeight: FontWeight.w600)),
                     ),
                   ],
                 ),
               ),
-              const Divider(color: Color(0xFF222225), height: 1),
-              // Cards
+              // Cards or Empty state
               Expanded(
-                child: ListView.builder(
+                child: count == 0 
+                  ? Padding(
+                      padding: const EdgeInsets.only(left: 16.0, top: 8.0),
+                      child: Text(col.hint, style: const TextStyle(color: Color(0xFF555555), fontSize: 13)),
+                    )
+                  : ListView.builder(
                   padding: const EdgeInsets.all(8),
                   itemCount: widget.projects.length,
                   itemBuilder: (_, i) => _ProjectKanbanCard(
@@ -338,10 +388,6 @@ class _ProjectKanbanCard extends StatelessWidget {
           const SizedBox(height: 8),
           Row(
             children: [
-              const Icon(Icons.task_alt, size: 11, color: Colors.grey),
-              const SizedBox(width: 3),
-              Text('${project.tasksCompleted}/${project.tasksTotal}', style: const TextStyle(color: Colors.grey, fontSize: 10)),
-              const SizedBox(width: 8),
               const Icon(Icons.repeat, size: 11, color: Colors.grey),
               const SizedBox(width: 3),
               Text('${project.weeklySessionCount}×/Wo · ${project.sessionDurationMinutes ~/ 60}h', style: const TextStyle(color: Colors.grey, fontSize: 10)),
@@ -381,14 +427,6 @@ class _ProjectDetailScreen extends StatelessWidget {
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
-          // Status + progress
-          Row(children: [
-            _Chip(project.statusLabel),
-            const SizedBox(width: 8),
-            _Chip('${project.completionPercentage}%'),
-            const SizedBox(width: 8),
-            _Chip('${project.tasksCompleted}/${project.tasksTotal} Tasks'),
-          ]),
           const SizedBox(height: 16),
           ClipRRect(
             borderRadius: BorderRadius.circular(6),
@@ -452,7 +490,7 @@ class _CreateProjectSheet extends StatefulWidget {
 class _CreateProjectSheetState extends State<_CreateProjectSheet> {
   final _nameCtrl = TextEditingController();
   final _descCtrl = TextEditingController();
-  String _status = 'PLANNING';
+  String _status = 'NEW';
   DateTime? _startDate;
   DateTime? _targetEnd;
   int _sessions = 3;
