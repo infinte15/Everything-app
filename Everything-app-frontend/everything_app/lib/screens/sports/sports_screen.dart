@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
@@ -20,7 +19,7 @@ class _SportsScreenState extends State<SportsScreen>
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 4, vsync: this);
+    _tabController = TabController(length: 3, vsync: this);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       context.read<SportsProvider>().loadData();
     });
@@ -39,43 +38,65 @@ class _SportsScreenState extends State<SportsScreen>
       appBar: AppBar(
         leading: const BackButton(color: Color(0xFFC2C1FF)),
         title: Text(
-          'Lyfta Gym', 
-          style: GoogleFonts.spaceGrotesk(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 20),
+          'KINETIC MONO', 
+          style: GoogleFonts.spaceGrotesk(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 18, letterSpacing: 2),
         ),
+        centerTitle: true,
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.search, color: Colors.grey),
+            onPressed: () {},
+          ),
+          Padding(
+            padding: const EdgeInsets.only(right: 16),
+            child: CircleAvatar(
+              radius: 16,
+              backgroundColor: const Color(0xFF1E1E1E),
+              child: const Icon(Icons.person, color: Color(0xFFC2C1FF), size: 18),
+            ),
+          ),
+        ],
         backgroundColor: const Color(0xFF131313),
         elevation: 0,
         bottom: TabBar(
           controller: _tabController,
-          labelColor: const Color(0xFF5856D6),
+          labelColor: const Color(0xFFC2C1FF),
           unselectedLabelColor: Colors.grey,
-          indicatorColor: const Color(0xFF5856D6),
+          indicatorColor: const Color(0xFFC2C1FF),
           indicatorSize: TabBarIndicatorSize.label,
-          labelStyle: GoogleFonts.manrope(fontWeight: FontWeight.bold, fontSize: 13),
+          labelStyle: GoogleFonts.spaceGrotesk(fontWeight: FontWeight.bold, fontSize: 13, letterSpacing: 1),
           tabs: const [
-            Tab(icon: Icon(Icons.home_filled), text: 'Home'),
-            Tab(icon: Icon(Icons.fitness_center), text: 'Training'),
-            Tab(icon: Icon(Icons.history), text: 'Verlauf'),
-            Tab(icon: Icon(Icons.trending_up), text: 'Fortschritt'),
+            Tab(text: 'ÜBERSICHT'),
+            Tab(text: 'TRAINING'),
+            Tab(text: 'STATISTIK'),
           ],
         ),
       ),
       body: TabBarView(
         controller: _tabController,
-        children: const [
-          _StartTab(),
-          _TrainingTab(),
-          _HistoryTab(),
-          _ProgressTab(),
+        children: [
+          _UebersichtTab(tabController: _tabController),
+          const _TrainingTab(),
+          const _StatistikTab(),
         ],
+      ),
+      bottomNavigationBar: _GymBottomNav(
+        onStartWorkout: () => _showQuickStartSheet(context),
+        onNavigateTab: (index) {
+          if (index == 0) _tabController.animateTo(0);
+          if (index == 1) _tabController.animateTo(1);
+          if (index == 3) _tabController.animateTo(2);
+        },
       ),
     );
   }
 }
 
-// ─── TAB 1: Start Tab (Home Feed - Screenshot 1 & 3) ───────────────────────────
+// ─── TAB 1: Übersicht Tab (Gym Space Homescreen Parity) ────────────────────────
 
-class _StartTab extends StatelessWidget {
-  const _StartTab();
+class _UebersichtTab extends StatelessWidget {
+  final TabController tabController;
+  const _UebersichtTab({required this.tabController});
 
   @override
   Widget build(BuildContext context) {
@@ -83,321 +104,555 @@ class _StartTab extends StatelessWidget {
 
     return RefreshIndicator(
       onRefresh: () => sports.loadData(),
-      color: const Color(0xFF5856D6),
+      color: const Color(0xFFC2C1FF),
       backgroundColor: const Color(0xFF131313),
       child: sports.isLoading
-          ? const Center(child: CircularProgressIndicator(color: Color(0xFF5856D6)))
+          ? const Center(child: CircularProgressIndicator(color: Color(0xFFC2C1FF)))
           : ListView(
               padding: const EdgeInsets.all(16),
               children: [
-                // Active Workout Banner
+                // Active Workout Banner (if any)
                 if (sports.currentWorkout != null) ...[
                   const _ActiveWorkoutBanner(),
                   const SizedBox(height: 24),
                 ],
 
-                // Weekly Overview Calendar
-                Text('Wochenübersicht', style: GoogleFonts.manrope(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.white)),
-                const SizedBox(height: 12),
-                const _WeeklyOverview(),
-                const SizedBox(height: 24),
+                // Main Heading: ÜBERSICHT
+                Text(
+                  'ÜBERSICHT', 
+                  style: GoogleFonts.spaceGrotesk(fontSize: 28, fontWeight: FontWeight.bold, color: Colors.white, letterSpacing: 1),
+                ),
+                const SizedBox(height: 20),
 
-                // Huge "Workout starten" Button
+                // Card 1: TOTAL VOLUME
                 Container(
-                  width: double.infinity,
+                  padding: const EdgeInsets.all(20),
                   decoration: BoxDecoration(
-                    boxShadow: [
-                      BoxShadow(
-                        color: const Color(0xFF5856D6).withValues(alpha: 0.25),
-                        blurRadius: 20,
-                        spreadRadius: 2,
-                        offset: const Offset(0, 4),
+                    color: const Color(0xFF131313),
+                    border: Border.all(color: const Color(0xFF222222), width: 0.5),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'TOTAL VOLUME', 
+                        style: GoogleFonts.manrope(color: Colors.grey, fontSize: 11, fontWeight: FontWeight.bold, letterSpacing: 1.5),
+                      ),
+                      const SizedBox(height: 8),
+                      Row(
+                        children: [
+                          Text('34,135', style: GoogleFonts.spaceGrotesk(color: Colors.white, fontSize: 28, fontWeight: FontWeight.bold)),
+                          const SizedBox(width: 8),
+                          Text('kg', style: GoogleFonts.manrope(color: Colors.grey, fontSize: 16, fontWeight: FontWeight.bold)),
+                        ],
+                      ),
+                      const SizedBox(height: 16),
+                      ClipRRect(
+                        borderRadius: BorderRadius.circular(2),
+                        child: const LinearProgressIndicator(
+                          value: 0.72,
+                          backgroundColor: Color(0xFF222222),
+                          valueColor: AlwaysStoppedAnimation<Color>(Color(0xFFC2C1FF)),
+                          minHeight: 6,
+                        ),
                       ),
                     ],
                   ),
-                  child: FilledButton(
-                    style: FilledButton.styleFrom(
-                      backgroundColor: const Color(0xFF5856D6),
-                      foregroundColor: Colors.white,
-                      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.zero),
-                      padding: const EdgeInsets.symmetric(vertical: 20),
-                    ),
-                    onPressed: () => _showQuickStartSheet(context),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        const Icon(Icons.play_arrow, size: 28),
-                        const SizedBox(width: 12),
-                        Text('WORKOUT STARTEN', style: GoogleFonts.manrope(fontSize: 18, fontWeight: FontWeight.bold, letterSpacing: 1.5)),
-                      ],
-                    ),
+                ),
+                const SizedBox(height: 16),
+
+                // Card 2: WORKOUTS THIS WEEK
+                Container(
+                  padding: const EdgeInsets.all(20),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF131313),
+                    border: Border.all(color: const Color(0xFF222222), width: 0.5),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'WORKOUTS THIS WEEK', 
+                        style: GoogleFonts.manrope(color: Colors.grey, fontSize: 11, fontWeight: FontWeight.bold, letterSpacing: 1.5),
+                      ),
+                      const SizedBox(height: 8),
+                      Row(
+                        children: [
+                          Text('4', style: GoogleFonts.spaceGrotesk(color: Colors.white, fontSize: 28, fontWeight: FontWeight.bold)),
+                          const SizedBox(width: 8),
+                          Text('/ 5', style: GoogleFonts.manrope(color: Colors.grey, fontSize: 16, fontWeight: FontWeight.bold)),
+                        ],
+                      ),
+                      const SizedBox(height: 16),
+                      Row(
+                        children: List.generate(5, (index) => Expanded(
+                          child: Container(
+                            margin: EdgeInsets.only(right: index < 4 ? 4 : 0),
+                            height: 6,
+                            decoration: BoxDecoration(
+                              color: index < 4 ? const Color(0xFFC2C1FF) : const Color(0xFF222222),
+                              borderRadius: BorderRadius.circular(2),
+                            ),
+                          ),
+                        )),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 16),
+
+                // Card 3: ACTIVE STREAK
+                Container(
+                  padding: const EdgeInsets.all(20),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF131313),
+                    border: Border.all(color: const Color(0xFF222222), width: 0.5),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'ACTIVE STREAK', 
+                        style: GoogleFonts.manrope(color: Colors.grey, fontSize: 11, fontWeight: FontWeight.bold, letterSpacing: 1.5),
+                      ),
+                      const SizedBox(height: 8),
+                      Row(
+                        children: [
+                          Text('12', style: GoogleFonts.spaceGrotesk(color: Colors.white, fontSize: 28, fontWeight: FontWeight.bold)),
+                          const SizedBox(width: 8),
+                          Text('weeks', style: GoogleFonts.manrope(color: Colors.grey, fontSize: 16, fontWeight: FontWeight.bold)),
+                        ],
+                      ),
+                      const SizedBox(height: 16),
+                      Row(
+                        children: [
+                          const Icon(Icons.local_fire_department, color: Color(0xFFC2C1FF), size: 18),
+                          const SizedBox(width: 6),
+                          Text(
+                            'ON FIRE', 
+                            style: GoogleFonts.spaceGrotesk(color: const Color(0xFFC2C1FF), fontSize: 12, fontWeight: FontWeight.bold, letterSpacing: 1),
+                          ),
+                        ],
+                      ),
+                    ],
                   ),
                 ),
                 const SizedBox(height: 32),
 
-                // Social Feed / Recent Workouts (Screenshot 1 Parity)
-                Text('Aktivitätsfeed', style: GoogleFonts.manrope(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.white)),
-                const SizedBox(height: 16),
-                if (sports.workoutSessions.isEmpty)
-                  Container(
-                    padding: const EdgeInsets.all(24),
-                    alignment: Alignment.center,
-                    decoration: BoxDecoration(color: const Color(0xFF131313), border: Border.all(color: const Color(0xFF222222), width: 0.5)),
-                    child: Text('Noch keine Aktivitäten im Feed', style: GoogleFonts.inter(color: Colors.grey)),
-                  )
-                else
-                  ...sports.workoutSessions.map((session) => _SocialFeedCard(session: session)),
-              ],
-            ),
-    );
-  }
-
-  void _showQuickStartSheet(BuildContext context) {
-    final sports = context.read<SportsProvider>();
-    if (sports.currentWorkout != null) {
-      _showActiveWorkoutSheet(context);
-      return;
-    }
-
-    showModalBottomSheet(
-      context: context,
-      backgroundColor: const Color(0xFF131313),
-      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.zero),
-      builder: (ctx) {
-        final plans = sports.workoutPlans;
-        return SafeArea(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Padding(
-                padding: const EdgeInsets.all(16),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Text('Workout auswählen', style: GoogleFonts.manrope(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold)),
-                    IconButton(icon: const Icon(Icons.close, color: Colors.grey), onPressed: () => Navigator.pop(ctx)),
-                  ],
-                ),
-              ),
-              const Divider(color: Color(0xFF222222), height: 1),
-              ListTile(
-                contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
-                leading: Container(
-                  padding: const EdgeInsets.all(10),
-                  decoration: BoxDecoration(color: const Color(0xFF5856D6).withValues(alpha: 0.2), shape: BoxShape.circle),
-                  child: const Icon(Icons.add, color: Color(0xFF5856D6)),
-                ),
-                title: Text('Leeres Workout starten', style: GoogleFonts.manrope(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16)),
-                subtitle: Text('Freies Training ohne Vorlage', style: GoogleFonts.inter(color: Colors.grey, fontSize: 12)),
-                onTap: () {
-                  Navigator.pop(ctx);
-                  final planId = plans.isNotEmpty ? plans.first['id'] : 1;
-                  sports.startWorkout(planId).then((ok) {
-                    if (ok && context.mounted) _showActiveWorkoutSheet(context);
-                  });
-                },
-              ),
-              const Divider(color: Color(0xFF222222), height: 1),
-              Padding(
-                padding: const EdgeInsets.fromLTRB(20, 16, 20, 8),
-                child: Text('MEINE ROUTINEN', style: GoogleFonts.manrope(color: Colors.grey, fontSize: 12, fontWeight: FontWeight.bold, letterSpacing: 1)),
-              ),
-              if (plans.isEmpty)
-                Padding(padding: const EdgeInsets.all(20), child: Text('Keine Routinen verfügbar', style: GoogleFonts.inter(color: Colors.grey)))
-              else
-                ...plans.map((p) => ListTile(
-                  contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 6),
-                  leading: const CircleAvatar(backgroundColor: Color(0xFF1E1E1E), child: Icon(Icons.fitness_center, color: Color(0xFF5856D6), size: 18)),
-                  title: Text(p['name'] as String? ?? '', style: GoogleFonts.manrope(color: Colors.white, fontWeight: FontWeight.bold)),
-                  subtitle: Text('${p['day']} · ${p['estimatedDuration']} Min.', style: GoogleFonts.inter(color: Colors.grey, fontSize: 12)),
-                  trailing: const Icon(Icons.play_arrow, color: Color(0xFF5856D6)),
-                  onTap: () {
-                    Navigator.pop(ctx);
-                    sports.startWorkout(p['id'] as int).then((ok) {
-                      if (ok && context.mounted) _showActiveWorkoutSheet(context);
-                    });
-                  },
-                )),
-              const SizedBox(height: 16),
-            ],
-          ),
-        );
-      },
-    );
-  }
-}
-
-// ─── Social Feed Card (Screenshot 1 Parity) ────────────────────────────────────
-
-class _SocialFeedCard extends StatelessWidget {
-  final Map<String, dynamic> session;
-  const _SocialFeedCard({required this.session});
-
-  @override
-  Widget build(BuildContext context) {
-    final name = session['name'] as String? ?? 'Push Workout';
-    final date = session['date'] as DateTime? ?? DateTime.now();
-    final duration = session['durationMinutes'] as int? ?? 60;
-    final totalSets = session['totalSets'] as int? ?? 12;
-    final exercises = session['exercises'] as List? ?? [
-      {'name': 'Bench Press', 'sets': 4},
-      {'name': 'Incline Bench Press', 'sets': 4},
-      {'name': 'Cable Seated Row', 'sets': 4},
-    ];
-
-    // Mock volume calculation
-    final volume = totalSets * 12 * 20; // rough calculation for display
-    final records = max(1, totalSets ~/ 4);
-    final dateStr = DateFormat('MMMM dd, yyyy \'at\' hh:mm a').format(date);
-
-    return Container(
-      margin: const EdgeInsets.only(bottom: 24),
-      decoration: BoxDecoration(
-        color: const Color(0xFF131313),
-        border: Border.all(color: const Color(0xFF222222), width: 0.5),
-        borderRadius: BorderRadius.circular(4),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // User Profile Header
-          Padding(
-            padding: const EdgeInsets.all(16),
-            child: Row(
-              children: [
-                const CircleAvatar(
-                  radius: 20,
-                  backgroundColor: Color(0xFF1E1E1E),
-                  child: Icon(Icons.person, color: Color(0xFFC2C1FF)),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
+                // Card 4: RECENT WORKOUTS
+                Container(
+                  padding: const EdgeInsets.all(20),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF131313),
+                    border: Border.all(color: const Color(0xFF222222), width: 0.5),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text('Finn Lindberg', style: GoogleFonts.manrope(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 15)),
-                          const SizedBox(width: 4),
-                          const Icon(Icons.verified, color: Color(0xFF5856D6), size: 16),
+                          Text(
+                            'RECENT\nWORKOUTS', 
+                            style: GoogleFonts.spaceGrotesk(color: Colors.white, fontSize: 20, fontWeight: FontWeight.bold, height: 1.1),
+                          ),
+                          const Spacer(),
+                          TextButton(
+                            onPressed: () => tabController.animateTo(2),
+                            style: TextButton.styleFrom(padding: EdgeInsets.zero, minimumSize: Size.zero),
+                            child: Row(
+                              children: [
+                                Text(
+                                  'VIEW\nALL', 
+                                  textAlign: TextAlign.right, 
+                                  style: GoogleFonts.spaceGrotesk(color: const Color(0xFFC2C1FF), fontSize: 11, fontWeight: FontWeight.bold, height: 1.1),
+                                ),
+                                const SizedBox(width: 4),
+                                const Icon(Icons.arrow_forward, color: Color(0xFFC2C1FF), size: 16),
+                              ],
+                            ),
+                          ),
                         ],
                       ),
-                      Text(dateStr, style: GoogleFonts.inter(color: Colors.grey, fontSize: 12)),
+                      const SizedBox(height: 20),
+                      
+                      // Workout 1: Heavy Push Day
+                      Container(
+                        padding: const EdgeInsets.all(16),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF1A1A1A),
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(color: const Color(0xFF252525)),
+                        ),
+                        child: Column(
+                          children: [
+                            Row(
+                              children: [
+                                Container(
+                                  width: 44, height: 44,
+                                  decoration: BoxDecoration(color: const Color(0xFF252525), borderRadius: BorderRadius.circular(8)),
+                                  child: const Icon(Icons.fitness_center, color: Color(0xFFC2C1FF)),
+                                ),
+                                const SizedBox(width: 16),
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Text('Heavy Push Day', style: GoogleFonts.manrope(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold)),
+                                      const SizedBox(height: 2),
+                                      Text('Chest, Shoulders, Triceps', style: GoogleFonts.inter(color: Colors.grey, fontSize: 12)),
+                                    ],
+                                  ),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 16),
+                            const Divider(color: Color(0xFF252525), height: 1),
+                            const SizedBox(height: 12),
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceAround,
+                              children: [
+                                Column(
+                                  children: [
+                                    Text('VOLUME', style: GoogleFonts.manrope(color: Colors.grey, fontSize: 10, fontWeight: FontWeight.bold)),
+                                    const SizedBox(height: 2),
+                                    Text('4,548 kg', style: GoogleFonts.spaceGrotesk(color: Colors.white, fontSize: 14, fontWeight: FontWeight.bold)),
+                                  ],
+                                ),
+                                Column(
+                                  children: [
+                                    Text('TIME', style: GoogleFonts.manrope(color: Colors.grey, fontSize: 10, fontWeight: FontWeight.bold)),
+                                    const SizedBox(height: 2),
+                                    Text('1h 15m', style: GoogleFonts.spaceGrotesk(color: Colors.white, fontSize: 14, fontWeight: FontWeight.bold)),
+                                  ],
+                                ),
+                              ],
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+
+                      // Workout 2: Pull & Core Focus
+                      Container(
+                        padding: const EdgeInsets.all(16),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF1A1A1A),
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(color: const Color(0xFF252525)),
+                        ),
+                        child: Column(
+                          children: [
+                            Row(
+                              children: [
+                                Container(
+                                  width: 44, height: 44,
+                                  decoration: BoxDecoration(color: const Color(0xFF252525), borderRadius: BorderRadius.circular(8)),
+                                  child: const Icon(Icons.directions_run, color: Color(0xFFC2C1FF)),
+                                ),
+                                const SizedBox(width: 16),
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Text('Pull & Core Focus', style: GoogleFonts.manrope(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold)),
+                                      const SizedBox(height: 2),
+                                      Text('Back, Biceps, Abs', style: GoogleFonts.inter(color: Colors.grey, fontSize: 12)),
+                                    ],
+                                  ),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 16),
+                            const Divider(color: Color(0xFF252525), height: 1),
+                            const SizedBox(height: 12),
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceAround,
+                              children: [
+                                Column(
+                                  children: [
+                                    Text('VOLUME', style: GoogleFonts.manrope(color: Colors.grey, fontSize: 10, fontWeight: FontWeight.bold)),
+                                    const SizedBox(height: 2),
+                                    Text('3,820 kg', style: GoogleFonts.spaceGrotesk(color: Colors.white, fontSize: 14, fontWeight: FontWeight.bold)),
+                                  ],
+                                ),
+                                Column(
+                                  children: [
+                                    Text('TIME', style: GoogleFonts.manrope(color: Colors.grey, fontSize: 10, fontWeight: FontWeight.bold)),
+                                    const SizedBox(height: 2),
+                                    Text('1h 05m', style: GoogleFonts.spaceGrotesk(color: Colors.white, fontSize: 14, fontWeight: FontWeight.bold)),
+                                  ],
+                                ),
+                              ],
+                            ),
+                          ],
+                        ),
+                      ),
                     ],
                   ),
                 ),
-                IconButton(icon: const Icon(Icons.more_vert, color: Colors.grey), onPressed: () {}),
+                const SizedBox(height: 32),
+
+                // Card 5: MUSCLE RECOVERY
+                Container(
+                  padding: const EdgeInsets.all(20),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF131313),
+                    border: Border.all(color: const Color(0xFF222222), width: 0.5),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text('MUSCLE RECOVERY', style: GoogleFonts.spaceGrotesk(color: Colors.white, fontSize: 20, fontWeight: FontWeight.bold)),
+                      const SizedBox(height: 24),
+                      
+                      // Heatmap Graphic representation
+                      Center(
+                        child: Container(
+                          width: 220, height: 260,
+                          decoration: BoxDecoration(
+                            color: const Color(0xFF1A1A1A),
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(color: const Color(0xFF252525)),
+                            boxShadow: [
+                              BoxShadow(
+                                color: const Color(0xFFC2C1FF).withValues(alpha: 0.05),
+                                blurRadius: 30,
+                                spreadRadius: 5,
+                              ),
+                            ],
+                          ),
+                          child: Stack(
+                            alignment: Alignment.center,
+                            children: [
+                              // Glowing background gradients representing muscle fatigue/recovery
+                              Positioned(
+                                top: 40,
+                                child: Container(
+                                  width: 140, height: 80,
+                                  decoration: BoxDecoration(
+                                    shape: BoxShape.circle,
+                                    boxShadow: [
+                                      BoxShadow(color: Colors.redAccent.withValues(alpha: 0.3), blurRadius: 40, spreadRadius: 20),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                              Positioned(
+                                bottom: 60,
+                                child: Container(
+                                  width: 120, height: 80,
+                                  decoration: BoxDecoration(
+                                    shape: BoxShape.circle,
+                                    boxShadow: [
+                                      BoxShadow(color: const Color(0xFFC2C1FF).withValues(alpha: 0.3), blurRadius: 40, spreadRadius: 20),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                              // Abstract anatomical figure over the glow
+                              const _AnatomyFigure(),
+                            ],
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 28),
+                      
+                      // Legend
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Container(width: 10, height: 10, decoration: BoxDecoration(color: Colors.redAccent, borderRadius: BorderRadius.circular(2))),
+                          const SizedBox(width: 6),
+                          Text('FATIGUED', style: GoogleFonts.manrope(color: Colors.grey, fontSize: 11, fontWeight: FontWeight.bold, letterSpacing: 1)),
+                          const SizedBox(width: 24),
+                          Container(width: 10, height: 10, decoration: BoxDecoration(color: const Color(0xFFC2C1FF), borderRadius: BorderRadius.circular(2))),
+                          const SizedBox(width: 6),
+                          Text('RECOVERED', style: GoogleFonts.manrope(color: Colors.grey, fontSize: 11, fontWeight: FontWeight.bold, letterSpacing: 1)),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 32),
+
+                // Card 6: WEIGHT PROGRESSION
+                const _WeightProgressionCard(),
+                const SizedBox(height: 32),
               ],
             ),
-          ),
-          
-          // Workout Title
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16),
-            child: Text(name, style: GoogleFonts.manrope(color: Colors.white, fontSize: 20, fontWeight: FontWeight.bold)),
-          ),
-          const SizedBox(height: 16),
+    );
+  }
+}
 
-          // Summary Stats Bar (Duration, Volume, Records)
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16),
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-              decoration: BoxDecoration(color: const Color(0xFF1A1A1A), borderRadius: BorderRadius.circular(4)),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text('Duration', style: GoogleFonts.manrope(color: Colors.grey, fontSize: 12)),
-                      const SizedBox(height: 4),
-                      Text('${duration}h 0m', style: GoogleFonts.spaceGrotesk(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold)),
-                    ],
-                  ),
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text('Volume', style: GoogleFonts.manrope(color: Colors.grey, fontSize: 12)),
-                      const SizedBox(height: 4),
-                      Text('$volume kg', style: GoogleFonts.spaceGrotesk(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold)),
-                    ],
-                  ),
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text('Records', style: GoogleFonts.manrope(color: Colors.grey, fontSize: 12)),
-                      const SizedBox(height: 4),
-                      Row(
-                        children: [
-                          const Text('🏆🏆 ', style: TextStyle(fontSize: 14)),
-                          Text('$records', style: GoogleFonts.spaceGrotesk(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold)),
-                        ],
-                      ),
-                    ],
-                  ),
-                ],
-              ),
-            ),
+class _AnatomyFigure extends StatelessWidget {
+  const _AnatomyFigure();
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        // Head
+        CircleAvatar(radius: 14, backgroundColor: Colors.white.withValues(alpha: 0.8)),
+        const SizedBox(height: 4),
+        // Shoulders & Chest (Fatigued - Reddish)
+        Container(
+          width: 80, height: 45,
+          decoration: BoxDecoration(
+            color: Colors.redAccent.withValues(alpha: 0.85),
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(color: Colors.white24),
           ),
+          alignment: Alignment.center,
+          child: Text('CHEST', style: GoogleFonts.spaceGrotesk(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold)),
+        ),
+        const SizedBox(height: 4),
+        // Core / Abs (Recovered - Purple/Lilac)
+        Container(
+          width: 55, height: 35,
+          decoration: BoxDecoration(
+            color: const Color(0xFFC2C1FF).withValues(alpha: 0.9),
+            borderRadius: BorderRadius.circular(6),
+            border: Border.all(color: Colors.white24),
+          ),
+          alignment: Alignment.center,
+          child: Text('ABS', style: GoogleFonts.spaceGrotesk(color: const Color(0xFF131313), fontSize: 10, fontWeight: FontWeight.bold)),
+        ),
+        const SizedBox(height: 4),
+        // Legs
+        Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(width: 24, height: 65, decoration: BoxDecoration(color: const Color(0xFFC2C1FF).withValues(alpha: 0.7), borderRadius: BorderRadius.circular(6), border: Border.all(color: Colors.white24))),
+            const SizedBox(width: 7),
+            Container(width: 24, height: 65, decoration: BoxDecoration(color: const Color(0xFFC2C1FF).withValues(alpha: 0.7), borderRadius: BorderRadius.circular(6), border: Border.all(color: Colors.white24))),
+          ],
+        ),
+      ],
+    );
+  }
+}
+
+class _WeightProgressionCard extends StatefulWidget {
+  const _WeightProgressionCard();
+
+  @override
+  State<_WeightProgressionCard> createState() => _WeightProgressionCardState();
+}
+
+class _WeightProgressionCardState extends State<_WeightProgressionCard> {
+  String _selectedTab = '1M';
+
+  @override
+  Widget build(BuildContext context) {
+    final chartData = _selectedTab == '1M' 
+        ? [62, 65, 63, 68, 72, 96, 108] 
+        : _selectedTab == '3M' 
+        ? [50, 55, 60, 70, 85, 95, 108] 
+        : [40, 50, 65, 75, 88, 98, 108];
+
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: const Color(0xFF131313),
+        border: Border.all(color: const Color(0xFF222222), width: 0.5),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text('WEIGHT\nPROGRESSION', style: GoogleFonts.spaceGrotesk(color: Colors.white, fontSize: 20, fontWeight: FontWeight.bold, height: 1.1)),
+          const SizedBox(height: 4),
+          Text('Bench Press (1RM Estimated)', style: GoogleFonts.inter(color: Colors.grey, fontSize: 13)),
           const SizedBox(height: 20),
-
-          // Exercise Grid (3 columns with grey thumbnails)
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16),
-            child: GridView.builder(
-              shrinkWrap: true,
-              physics: const NeverScrollableScrollPhysics(),
-              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                crossAxisCount: 3,
-                crossAxisSpacing: 12,
-                mainAxisSpacing: 16,
-                childAspectRatio: 0.85,
-              ),
-              itemCount: exercises.length,
-              itemBuilder: (ctx, i) {
-                final ex = exercises[i];
-                final exName = ex['name'] as String? ?? '';
-                final exSets = ex['sets'] as int? ?? 4;
-
-                return Column(
-                  children: [
-                    Expanded(
-                      child: Container(
-                        width: double.infinity,
-                        decoration: BoxDecoration(color: const Color(0xFF252525), borderRadius: BorderRadius.circular(8)),
-                        child: const Icon(Icons.fitness_center, color: Colors.white70, size: 28),
+          
+          // Toggle Tabs
+          Container(
+            padding: const EdgeInsets.all(4),
+            decoration: BoxDecoration(color: const Color(0xFF1A1A1A), borderRadius: BorderRadius.circular(6)),
+            child: Row(
+              children: ['1M', '3M', 'YTD'].map((tab) {
+                final isSel = _selectedTab == tab;
+                return Expanded(
+                  child: GestureDetector(
+                    onTap: () => setState(() => _selectedTab = tab),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(vertical: 8),
+                      decoration: BoxDecoration(
+                        color: isSel ? const Color(0xFFC2C1FF) : Colors.transparent,
+                        borderRadius: BorderRadius.circular(4),
+                      ),
+                      alignment: Alignment.center,
+                      child: Text(
+                        tab, 
+                        style: GoogleFonts.manrope(
+                          color: isSel ? const Color(0xFF131313) : Colors.grey, 
+                          fontWeight: FontWeight.bold, 
+                          fontSize: 12,
+                        ),
                       ),
                     ),
-                    const SizedBox(height: 8),
-                    Text('$exSets x $exName', textAlign: TextAlign.center, maxLines: 2, overflow: TextOverflow.ellipsis, style: GoogleFonts.inter(color: Colors.grey, fontSize: 11)),
-                  ],
+                  ),
                 );
-              },
+              }).toList(),
             ),
           ),
-          const SizedBox(height: 20),
-          const Divider(color: Color(0xFF222222), height: 1),
+          const SizedBox(height: 28),
 
-          // Social Footer (Likes & Actions)
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          // Bar Chart matching image exactly
+          SizedBox(
+            height: 180,
             child: Row(
               children: [
-                const Row(
-                  children: [
-                    CircleAvatar(radius: 10, backgroundColor: Color(0xFF5856D6), child: Icon(Icons.person, size: 12, color: Colors.white)),
-                    SizedBox(width: 4),
-                    CircleAvatar(radius: 10, backgroundColor: Color(0xFFC2C1FF), child: Icon(Icons.person, size: 12, color: Color(0xFF131313))),
+                // Y-Axis Labels
+                Column(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  children: const [
+                    Text('120', style: TextStyle(color: Colors.grey, fontSize: 10)),
+                    Text('100', style: TextStyle(color: Colors.grey, fontSize: 10)),
+                    Text('80', style: TextStyle(color: Colors.grey, fontSize: 10)),
+                    Text('60', style: TextStyle(color: Colors.grey, fontSize: 10)),
                   ],
                 ),
-                const SizedBox(width: 8),
-                Text('17 Likes', style: GoogleFonts.inter(color: Colors.grey, fontSize: 13, fontWeight: FontWeight.bold)),
-                const Spacer(),
-                IconButton(icon: const Icon(Icons.thumb_up_outlined, color: Colors.grey, size: 20), onPressed: () {}),
-                IconButton(icon: const Icon(Icons.chat_bubble_outline, color: Colors.grey, size: 20), onPressed: () {}),
-                IconButton(icon: const Icon(Icons.share_outlined, color: Colors.grey, size: 20), onPressed: () {}),
+                const SizedBox(width: 16),
+                // Bars
+                Expanded(
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.end,
+                    mainAxisAlignment: MainAxisAlignment.spaceAround,
+                    children: chartData.asMap().entries.map((entry) {
+                      final idx = entry.key;
+                      final val = entry.value;
+                      final isLast = idx == chartData.length - 1;
+                      final heightPct = ((val - 50) / (120 - 50)).clamp(0.1, 1.0);
+
+                      return Column(
+                        mainAxisAlignment: MainAxisAlignment.end,
+                        children: [
+                          if (isLast) ...[
+                            Text('${val}kg', style: GoogleFonts.spaceGrotesk(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold)),
+                            const SizedBox(height: 4),
+                          ],
+                          Container(
+                            width: 28,
+                            height: 150 * heightPct,
+                            decoration: BoxDecoration(
+                              color: isLast ? const Color(0xFFC2C1FF) : const Color(0xFF252525),
+                              borderRadius: const BorderRadius.vertical(top: Radius.circular(2)),
+                            ),
+                          ),
+                        ],
+                      );
+                    }).toList(),
+                  ),
+                ),
               ],
             ),
           ),
@@ -407,57 +662,7 @@ class _SocialFeedCard extends StatelessWidget {
   }
 }
 
-// ─── Weekly Overview Calendar Widget ───────────────────────────────────────────
-
-class _WeeklyOverview extends StatelessWidget {
-  const _WeeklyOverview();
-
-  @override
-  Widget build(BuildContext context) {
-    final sports = context.watch<SportsProvider>();
-    final sessions = sports.workoutSessions;
-    final now = DateTime.now();
-    final monday = now.subtract(Duration(days: now.weekday - 1));
-    final workoutDays = sessions.map((s) => DateFormat('yyyy-MM-dd').format(s['date'] as DateTime)).toSet();
-    final dayNames = ['Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa', 'So'];
-
-    return Container(
-      padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 12),
-      decoration: BoxDecoration(color: const Color(0xFF131313), border: Border.all(color: const Color(0xFF222222), width: 0.5), borderRadius: BorderRadius.circular(4)),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceAround,
-        children: List.generate(7, (index) {
-          final dayDate = monday.add(Duration(days: index));
-          final dayStr = DateFormat('yyyy-MM-dd').format(dayDate);
-          final hasWorkout = workoutDays.contains(dayStr);
-          final isToday = dayDate.year == now.year && dayDate.month == now.month && dayDate.day == now.day;
-
-          return Column(
-            children: [
-              Text(dayNames[index], style: GoogleFonts.manrope(color: isToday ? const Color(0xFF5856D6) : Colors.grey, fontSize: 13, fontWeight: FontWeight.bold)),
-              const SizedBox(height: 8),
-              Container(
-                width: 38,
-                height: 38,
-                alignment: Alignment.center,
-                decoration: BoxDecoration(
-                  color: isToday ? const Color(0xFF5856D6).withValues(alpha: 0.2) : const Color(0xFF1E1E1E),
-                  shape: BoxShape.circle,
-                  border: Border.all(color: hasWorkout ? const Color(0xFF5856D6) : isToday ? const Color(0xFF5856D6) : Colors.white10, width: hasWorkout ? 2 : 1),
-                ),
-                child: hasWorkout
-                    ? const Icon(Icons.check, color: Color(0xFF5856D6), size: 18)
-                    : Text('${dayDate.day}', style: GoogleFonts.manrope(color: isToday ? const Color(0xFF5856D6) : Colors.white, fontWeight: FontWeight.bold, fontSize: 14)),
-              ),
-            ],
-          );
-        }),
-      ),
-    );
-  }
-}
-
-// ─── TAB 2: Training Tab (Create New Workouts & Manage Routines) ───────────────
+// ─── TAB 2: Training Tab (Routinen & Übungsbibliothek) ─────────────────────────
 
 class _TrainingTab extends StatelessWidget {
   const _TrainingTab();
@@ -468,10 +673,10 @@ class _TrainingTab extends StatelessWidget {
 
     return RefreshIndicator(
       onRefresh: () => sports.loadData(),
-      color: const Color(0xFF5856D6),
+      color: const Color(0xFFC2C1FF),
       backgroundColor: const Color(0xFF131313),
       child: sports.isLoading
-          ? const Center(child: CircularProgressIndicator(color: Color(0xFF5856D6)))
+          ? const Center(child: CircularProgressIndicator(color: Color(0xFFC2C1FF)))
           : ListView(
               padding: const EdgeInsets.all(16),
               children: [
@@ -482,11 +687,11 @@ class _TrainingTab extends StatelessWidget {
                     icon: const Icon(Icons.add, size: 22),
                     label: Text('NEUE ROUTINE ERSTELLEN', style: GoogleFonts.manrope(fontSize: 16, fontWeight: FontWeight.bold, letterSpacing: 1)),
                     style: OutlinedButton.styleFrom(
-                      foregroundColor: const Color(0xFF5856D6),
-                      side: const BorderSide(color: Color(0xFF5856D6), width: 2),
+                      foregroundColor: const Color(0xFFC2C1FF),
+                      side: const BorderSide(color: Color(0xFFC2C1FF), width: 2),
                       shape: const RoundedRectangleBorder(borderRadius: BorderRadius.zero),
                       padding: const EdgeInsets.symmetric(vertical: 18),
-                      backgroundColor: const Color(0xFF5856D6).withValues(alpha: 0.1),
+                      backgroundColor: const Color(0xFFC2C1FF).withValues(alpha: 0.1),
                     ),
                     onPressed: () => _showCreateRoutineSheet(context),
                   ),
@@ -595,9 +800,9 @@ class _CreateRoutineSheetState extends State<_CreateRoutineSheet> {
                   child: ChoiceChip(
                     label: Text(day, style: GoogleFonts.manrope(color: isSel ? Colors.white : Colors.grey, fontWeight: FontWeight.bold, fontSize: 13)),
                     selected: isSel,
-                    selectedColor: const Color(0xFF5856D6),
+                    selectedColor: const Color(0xFFC2C1FF),
                     backgroundColor: const Color(0xFF1E1E1E),
-                    side: BorderSide(color: isSel ? const Color(0xFF5856D6) : const Color(0xFF222222)),
+                    side: BorderSide(color: isSel ? const Color(0xFFC2C1FF) : const Color(0xFF222222)),
                     shape: const RoundedRectangleBorder(borderRadius: BorderRadius.zero),
                     onSelected: (sel) { if (sel) setState(() => _selectedDay = day); },
                   ),
@@ -610,7 +815,7 @@ class _CreateRoutineSheetState extends State<_CreateRoutineSheet> {
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               Text('Übungen in dieser Routine', style: GoogleFonts.manrope(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold)),
-              TextButton.icon(icon: const Icon(Icons.add, color: Color(0xFF5856D6), size: 18), label: Text('Übung hinzufügen', style: GoogleFonts.manrope(color: const Color(0xFF5856D6), fontWeight: FontWeight.bold)), onPressed: () => _showSelectExerciseDialog(context, allExercises)),
+              TextButton.icon(icon: const Icon(Icons.add, color: Color(0xFFC2C1FF), size: 18), label: Text('Übung hinzufügen', style: GoogleFonts.manrope(color: const Color(0xFFC2C1FF), fontWeight: FontWeight.bold)), onPressed: () => _showSelectExerciseDialog(context, allExercises)),
             ],
           ),
           const SizedBox(height: 8),
@@ -642,7 +847,7 @@ class _CreateRoutineSheetState extends State<_CreateRoutineSheet> {
           SizedBox(
             width: double.infinity,
             child: FilledButton(
-              style: FilledButton.styleFrom(backgroundColor: const Color(0xFF5856D6), foregroundColor: Colors.white, shape: const RoundedRectangleBorder(borderRadius: BorderRadius.zero), padding: const EdgeInsets.symmetric(vertical: 16)),
+              style: FilledButton.styleFrom(backgroundColor: const Color(0xFFC2C1FF), foregroundColor: const Color(0xFF131313), shape: const RoundedRectangleBorder(borderRadius: BorderRadius.zero), padding: const EdgeInsets.symmetric(vertical: 16)),
               onPressed: _save,
               child: Text('ROUTINE SPEICHERN', style: GoogleFonts.manrope(fontWeight: FontWeight.bold, fontSize: 16, letterSpacing: 1)),
             ),
@@ -662,7 +867,7 @@ class _CreateRoutineSheetState extends State<_CreateRoutineSheet> {
           Expanded(child: ListView.builder(itemCount: allExercises.length, itemBuilder: (_, i) {
             final ex = allExercises[i];
             return ListTile(
-              leading: const CircleAvatar(backgroundColor: Color(0xFF1E1E1E), child: Icon(Icons.fitness_center, color: Color(0xFF5856D6), size: 18)),
+              leading: const CircleAvatar(backgroundColor: Color(0xFF1E1E1E), child: Icon(Icons.fitness_center, color: Color(0xFFC2C1FF), size: 18)),
               title: Text(ex['name'] as String? ?? '', style: GoogleFonts.manrope(color: Colors.white, fontWeight: FontWeight.bold)),
               subtitle: Text('${ex['category']} · ${ex['equipment']}', style: GoogleFonts.inter(color: Colors.grey)),
               onTap: () { setState(() { _selectedExercises.add({'name': ex['name'], 'sets': 3, 'reps': 10, 'weight': 0}); }); Navigator.pop(ctx); },
@@ -673,8 +878,6 @@ class _CreateRoutineSheetState extends State<_CreateRoutineSheet> {
     );
   }
 }
-
-// ─── Exercise Library Section Widget (Screenshot 5 Detail Parity) ──────────────
 
 class _ExerciseLibrarySection extends StatefulWidget {
   @override
@@ -712,8 +915,8 @@ class _ExerciseLibrarySectionState extends State<_ExerciseLibrarySection> {
               return Padding(
                 padding: const EdgeInsets.only(right: 8),
                 child: ChoiceChip(
-                  label: Text(cat, style: GoogleFonts.manrope(color: isSel ? Colors.white : Colors.grey, fontWeight: FontWeight.bold, fontSize: 13)),
-                  selected: isSel, selectedColor: const Color(0xFF5856D6), backgroundColor: const Color(0xFF1E1E1E), side: BorderSide(color: isSel ? const Color(0xFF5856D6) : const Color(0xFF222222)), shape: const RoundedRectangleBorder(borderRadius: BorderRadius.zero),
+                  label: Text(cat, style: GoogleFonts.manrope(color: isSel ? const Color(0xFF131313) : Colors.grey, fontWeight: FontWeight.bold, fontSize: 13)),
+                  selected: isSel, selectedColor: const Color(0xFFC2C1FF), backgroundColor: const Color(0xFF1E1E1E), side: BorderSide(color: isSel ? const Color(0xFFC2C1FF) : const Color(0xFF222222)), shape: const RoundedRectangleBorder(borderRadius: BorderRadius.zero),
                   onSelected: (sel) { if (sel) setState(() => _category = cat); },
                 ),
               );
@@ -732,7 +935,7 @@ class _ExerciseLibrarySectionState extends State<_ExerciseLibrarySection> {
               margin: const EdgeInsets.only(bottom: 8), decoration: BoxDecoration(color: const Color(0xFF131313), border: Border.all(color: const Color(0xFF222222), width: 0.5), borderRadius: BorderRadius.circular(4)),
               child: ListTile(
                 contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-                leading: Container(width: 40, height: 40, decoration: BoxDecoration(color: const Color(0xFF252525), borderRadius: BorderRadius.circular(8)), child: const Icon(Icons.fitness_center, color: Colors.white70, size: 20)),
+                leading: Container(width: 40, height: 40, decoration: BoxDecoration(color: const Color(0xFF252525), borderRadius: BorderRadius.circular(8)), child: const Icon(Icons.fitness_center, color: Color(0xFFC2C1FF), size: 20)),
                 title: Text(ex['name'] as String? ?? '', style: GoogleFonts.manrope(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 15)),
                 subtitle: Text('${ex['category']} · ${ex['equipment']}', style: GoogleFonts.inter(color: Colors.grey, fontSize: 12)),
                 trailing: Container(padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4), decoration: BoxDecoration(color: color.withValues(alpha: 0.15), border: Border.all(color: color.withValues(alpha: 0.3)), borderRadius: BorderRadius.circular(2)), child: Text(diff.toUpperCase(), style: GoogleFonts.inter(color: color, fontSize: 10, fontWeight: FontWeight.bold))),
@@ -780,7 +983,7 @@ class _ExerciseDetailModalState extends State<_ExerciseDetailModal> with SingleT
               backgroundColor: const Color(0xFF131313), leading: IconButton(icon: const Icon(Icons.close, color: Colors.grey), onPressed: () => Navigator.pop(context)),
               title: Text(ex['name'] as String? ?? '', style: GoogleFonts.manrope(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 18)),
               bottom: TabBar(
-                controller: _subTab, indicatorColor: const Color(0xFF5856D6), labelColor: const Color(0xFF5856D6), unselectedLabelColor: Colors.grey,
+                controller: _subTab, indicatorColor: const Color(0xFFC2C1FF), labelColor: const Color(0xFFC2C1FF), unselectedLabelColor: Colors.grey,
                 tabs: const [Tab(text: 'About'), Tab(text: 'History'), Tab(text: 'Charts')],
               ),
             ),
@@ -791,13 +994,12 @@ class _ExerciseDetailModalState extends State<_ExerciseDetailModal> with SingleT
                   ListView(
                     padding: const EdgeInsets.all(20),
                     children: [
-                      // Large white illustration card (Screenshot 5 parity)
                       Container(height: 200, decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(12)), alignment: Alignment.center, child: const Column(mainAxisAlignment: MainAxisAlignment.center, children: [Icon(Icons.fitness_center, size: 80, color: Color(0xFF131313)), SizedBox(height: 12), Text('Exercise Visual Animation', style: TextStyle(color: Color(0xFF131313), fontWeight: FontWeight.bold))])),
                       const SizedBox(height: 24),
                       Text('Category', style: GoogleFonts.manrope(color: Colors.grey, fontSize: 12)), const SizedBox(height: 4), Text('${ex['category']}', style: GoogleFonts.inter(color: Colors.white, fontSize: 16)), const SizedBox(height: 16),
                       Text('Equipment', style: GoogleFonts.manrope(color: Colors.grey, fontSize: 12)), const SizedBox(height: 4), Text('${ex['equipment']}', style: GoogleFonts.inter(color: Colors.white, fontSize: 16)), const SizedBox(height: 24),
                       Text('Target Muscles', style: GoogleFonts.manrope(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16)), const SizedBox(height: 12),
-                      Wrap(spacing: 8, runSpacing: 8, children: muscles.map((m) => Container(padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6), decoration: BoxDecoration(color: const Color(0xFF5856D6).withValues(alpha: 0.15), border: Border.all(color: const Color(0xFF5856D6).withValues(alpha: 0.3)), borderRadius: BorderRadius.circular(4)), child: Text('$m', style: GoogleFonts.inter(color: const Color(0xFF5856D6), fontWeight: FontWeight.bold)))).toList()),
+                      Wrap(spacing: 8, runSpacing: 8, children: muscles.map((m) => Container(padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6), decoration: BoxDecoration(color: const Color(0xFFC2C1FF).withValues(alpha: 0.15), border: Border.all(color: const Color(0xFFC2C1FF).withValues(alpha: 0.3)), borderRadius: BorderRadius.circular(4)), child: Text('$m', style: GoogleFonts.inter(color: const Color(0xFFC2C1FF), fontWeight: FontWeight.bold)))).toList()),
                     ],
                   ),
                   const Center(child: Text('No past history for this exercise', style: TextStyle(color: Colors.grey))),
@@ -807,7 +1009,7 @@ class _ExerciseDetailModalState extends State<_ExerciseDetailModal> with SingleT
             ),
             Container(
               padding: const EdgeInsets.all(16), decoration: const BoxDecoration(color: Color(0xFF131313), border: Border(top: BorderSide(color: Color(0xFF222222)))),
-              child: SizedBox(width: double.infinity, child: FilledButton(style: FilledButton.styleFrom(backgroundColor: const Color(0xFF5856D6), padding: const EdgeInsets.symmetric(vertical: 16), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(25))), onPressed: () => Navigator.pop(context), child: Text('Add to routine', style: GoogleFonts.manrope(fontWeight: FontWeight.bold, fontSize: 16)))),
+              child: SizedBox(width: double.infinity, child: FilledButton(style: FilledButton.styleFrom(backgroundColor: const Color(0xFFC2C1FF), foregroundColor: const Color(0xFF131313), padding: const EdgeInsets.symmetric(vertical: 16), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(25))), onPressed: () => Navigator.pop(context), child: Text('Add to routine', style: GoogleFonts.manrope(fontWeight: FontWeight.bold, fontSize: 16)))),
             ),
           ],
         ),
@@ -816,18 +1018,95 @@ class _ExerciseDetailModalState extends State<_ExerciseDetailModal> with SingleT
   }
 }
 
-// ─── TAB 3: History Tab (Verlauf) ──────────────────────────────────────────────
+class _RoutineCard extends StatelessWidget {
+  final Map<String, dynamic> plan;
+  const _RoutineCard({required this.plan});
+  @override
+  Widget build(BuildContext context) {
+    final exercises = plan['exercises'] as List? ?? []; final duration = plan['estimatedDuration'] as int? ?? 60;
+    return Container(
+      margin: const EdgeInsets.only(bottom: 16), decoration: BoxDecoration(color: const Color(0xFF131313), border: Border.all(color: const Color(0xFF222222), width: 0.5), borderRadius: BorderRadius.circular(4)),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Padding(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [Text(plan['name'] as String? ?? '', style: GoogleFonts.manrope(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold)), Container(padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4), decoration: BoxDecoration(color: const Color(0xFFC2C1FF).withValues(alpha: 0.06), borderRadius: BorderRadius.circular(2)), child: Text(plan['day'] as String? ?? '', style: GoogleFonts.inter(color: const Color(0xFFC2C1FF), fontSize: 11, fontWeight: FontWeight.bold)))]),
+                const SizedBox(height: 8), Row(children: [const Icon(Icons.timer_outlined, size: 14, color: Colors.grey), const SizedBox(width: 4), Text('$duration Min.', style: GoogleFonts.inter(color: Colors.grey, fontSize: 13)), const SizedBox(width: 16), const Icon(Icons.fitness_center, size: 14, color: Colors.grey), const SizedBox(width: 4), Text('${exercises.length} Übungen', style: GoogleFonts.inter(color: Colors.grey, fontSize: 13))]),
+                const SizedBox(height: 16), Wrap(spacing: 6, runSpacing: 6, children: exercises.map((ex) { final name = ex['name'] as String? ?? ''; final sets = ex['sets'] as int? ?? 3; return Container(padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6), decoration: BoxDecoration(color: const Color(0xFF1E1E1E), border: Border.all(color: Colors.white10), borderRadius: BorderRadius.circular(2)), child: Text('$sets× $name', style: GoogleFonts.inter(color: Colors.white70, fontSize: 12))); }).toList()),
+              ],
+            ),
+          ),
+          Container(width: double.infinity, padding: const EdgeInsets.fromLTRB(16, 0, 16, 16), child: FilledButton(style: FilledButton.styleFrom(backgroundColor: const Color(0xFFC2C1FF), foregroundColor: const Color(0xFF131313), shape: const RoundedRectangleBorder(borderRadius: BorderRadius.zero), padding: const EdgeInsets.symmetric(vertical: 14)), onPressed: () { final sports = context.read<SportsProvider>(); if (sports.currentWorkout != null) { _showActiveWorkoutSheet(context); } else { sports.startWorkout(plan['id'] as int).then((ok) { if (ok && context.mounted) _showActiveWorkoutSheet(context); }); } }, child: Text('Workout starten', style: GoogleFonts.manrope(fontWeight: FontWeight.bold, fontSize: 15)))),
+        ],
+      ),
+    );
+  }
+}
 
-class _HistoryTab extends StatelessWidget {
-  const _HistoryTab();
+// ─── TAB 3: Statistik Tab (Verlauf & Körpermasse) ──────────────────────────────
+
+class _StatistikTab extends StatefulWidget {
+  const _StatistikTab();
+  @override
+  State<_StatistikTab> createState() => _StatistikTabState();
+}
+
+class _StatistikTabState extends State<_StatistikTab> with SingleTickerProviderStateMixin {
+  late TabController _statTab;
+  @override
+  void initState() { super.initState(); _statTab = TabController(length: 2, vsync: this); }
+  @override
+  void dispose() { _statTab.dispose(); super.dispose(); }
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: [
+        Container(
+          color: const Color(0xFF131313),
+          child: TabBar(
+            controller: _statTab,
+            indicatorColor: const Color(0xFFC2C1FF),
+            labelColor: const Color(0xFFC2C1FF),
+            unselectedLabelColor: Colors.grey,
+            labelStyle: GoogleFonts.spaceGrotesk(fontWeight: FontWeight.bold, fontSize: 13),
+            tabs: const [Tab(text: 'VERLAUF'), Tab(text: 'KÖRPERMASSE')],
+          ),
+        ),
+        Expanded(
+          child: TabBarView(
+            controller: _statTab,
+            children: const [
+              _HistorySubTab(),
+              _MeasuresSubTab(),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _HistorySubTab extends StatelessWidget {
+  const _HistorySubTab();
   @override
   Widget build(BuildContext context) {
     final sports = context.watch<SportsProvider>();
     final sessions = sports.workoutSessions;
 
     return RefreshIndicator(
-      onRefresh: () => sports.loadData(), color: const Color(0xFF5856D6), backgroundColor: const Color(0xFF131313),
-      child: sports.isLoading ? const Center(child: CircularProgressIndicator(color: Color(0xFF5856D6))) : sessions.isEmpty ? Center(child: Text('Noch keine Trainings absolviert', style: GoogleFonts.inter(color: Colors.grey))) : ListView.builder(padding: const EdgeInsets.all(16), itemCount: sessions.length, itemBuilder: (_, i) => _HistoryCard(session: sessions[i])),
+      onRefresh: () => sports.loadData(),
+      color: const Color(0xFFC2C1FF),
+      backgroundColor: const Color(0xFF131313),
+      child: sports.isLoading 
+          ? const Center(child: CircularProgressIndicator(color: Color(0xFFC2C1FF))) 
+          : sessions.isEmpty 
+          ? Center(child: Text('Noch keine Trainings absolviert', style: GoogleFonts.inter(color: Colors.grey))) 
+          : ListView.builder(padding: const EdgeInsets.all(16), itemCount: sessions.length, itemBuilder: (_, i) => _HistoryCard(session: sessions[i])),
     );
   }
 }
@@ -877,7 +1156,7 @@ class _HistoryCardState extends State<_HistoryCard> {
               color: const Color(0xFF1E1E1E).withValues(alpha: 0.5), padding: const EdgeInsets.all(16),
               child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: exercises.map((ex) {
                 final exName = ex['name'] as String? ?? ''; final exSets = ex['sets'] as int? ?? 0; final exReps = ex['reps'] as int? ?? 0; final exWeight = ex['weight'] ?? 0;
-                return Padding(padding: const EdgeInsets.only(bottom: 12), child: Row(children: [Container(width: 8, height: 8, decoration: const BoxDecoration(color: Color(0xFF5856D6), shape: BoxShape.circle)), const SizedBox(width: 12), Expanded(child: Text(exName, style: GoogleFonts.manrope(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14))), Text('$exSets Sätze · $exReps Wdh · $exWeight kg', style: GoogleFonts.inter(color: Colors.white70, fontSize: 13))]));
+                return Padding(padding: const EdgeInsets.only(bottom: 12), child: Row(children: [Container(width: 8, height: 8, decoration: const BoxDecoration(color: Color(0xFFC2C1FF), shape: BoxShape.circle)), const SizedBox(width: 12), Expanded(child: Text(exName, style: GoogleFonts.manrope(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14))), Text('$exSets Sätze · $exReps Wdh · $exWeight kg', style: GoogleFonts.inter(color: Colors.white70, fontSize: 13))]));
               }).toList()),
             ),
           ],
@@ -886,158 +1165,6 @@ class _HistoryCardState extends State<_HistoryCard> {
     );
   }
 }
-
-// ─── TAB 4: Progress Tab (Screenshot 2 & 4 Parity - Measures & Heat Map) ───────
-
-class _ProgressTab extends StatefulWidget {
-  const _ProgressTab();
-  @override
-  State<_ProgressTab> createState() => _ProgressTabState();
-}
-
-class _ProgressTabState extends State<_ProgressTab> with SingleTickerProviderStateMixin {
-  late TabController _progressTab;
-  @override
-  void initState() { super.initState(); _progressTab = TabController(length: 4, vsync: this); }
-  @override
-  void dispose() { _progressTab.dispose(); super.dispose(); }
-
-  @override
-  Widget build(BuildContext context) {
-    final sports = context.watch<SportsProvider>();
-
-    return Column(
-      children: [
-        Container(
-          color: const Color(0xFF131313),
-          child: TabBar(
-            controller: _progressTab, indicatorColor: const Color(0xFF5856D6), labelColor: const Color(0xFF5856D6), unselectedLabelColor: Colors.grey, labelStyle: GoogleFonts.manrope(fontWeight: FontWeight.bold, fontSize: 13),
-            tabs: const [Tab(text: 'Overview'), Tab(text: 'Exercises'), Tab(text: 'Measures'), Tab(text: 'Photos')],
-          ),
-        ),
-        Expanded(
-          child: TabBarView(
-            controller: _progressTab,
-            children: [
-              _OverviewSubTab(sports: sports),
-              const Center(child: Text('Exercise Volume Trends', style: TextStyle(color: Colors.grey))),
-              const _MeasuresSubTab(),
-              const Center(child: Text('Progress Photos Gallery', style: TextStyle(color: Colors.grey))),
-            ],
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-class _OverviewSubTab extends StatelessWidget {
-  final SportsProvider sports;
-  const _OverviewSubTab({required this.sports});
-
-  @override
-  Widget build(BuildContext context) {
-    return ListView(
-      padding: const EdgeInsets.all(16),
-      children: [
-        // This Week Volume Header (Screenshot 4 Parity)
-        Container(
-          padding: const EdgeInsets.all(20), decoration: BoxDecoration(color: const Color(0xFF131313), border: Border.all(color: const Color(0xFF222222), width: 0.5), borderRadius: BorderRadius.circular(4)),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text('This Week', style: GoogleFonts.manrope(color: Colors.grey, fontSize: 14)),
-              const SizedBox(height: 4),
-              Text('34 135 kg', style: GoogleFonts.spaceGrotesk(color: Colors.white, fontSize: 28, fontWeight: FontWeight.bold)),
-              const SizedBox(height: 24),
-              _LyftaBarChart(),
-            ],
-          ),
-        ),
-        const SizedBox(height: 24),
-
-        // Anatomical Muscle Heat Map Graphic (Screenshot 4 Parity)
-        Text('Muscle Recovery & Heat Map', style: GoogleFonts.manrope(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.white)),
-        const SizedBox(height: 16),
-        Container(
-          padding: const EdgeInsets.all(20), decoration: BoxDecoration(color: const Color(0xFF131313), border: Border.all(color: const Color(0xFF222222), width: 0.5), borderRadius: BorderRadius.circular(4)),
-          child: Column(
-            children: [
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceAround,
-                children: [
-                  Column(
-                    children: [
-                      Text('FRONT', style: GoogleFonts.manrope(color: Colors.grey, fontSize: 12, fontWeight: FontWeight.bold)),
-                      const SizedBox(height: 12),
-                      const _AnatomyModel(isFront: true),
-                    ],
-                  ),
-                  Column(
-                    children: [
-                      Text('BACK', style: GoogleFonts.manrope(color: Colors.grey, fontSize: 12, fontWeight: FontWeight.bold)),
-                      const SizedBox(height: 12),
-                      const _AnatomyModel(isFront: false),
-                    ],
-                  ),
-                ],
-              ),
-              const SizedBox(height: 20),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Container(width: 12, height: 12, decoration: const BoxDecoration(color: Colors.redAccent, shape: BoxShape.circle)), const SizedBox(width: 6), Text('Heavily Worked', style: GoogleFonts.inter(color: Colors.grey, fontSize: 12)), const SizedBox(width: 16),
-                  Container(width: 12, height: 12, decoration: const BoxDecoration(color: Colors.orangeAccent, shape: BoxShape.circle)), const SizedBox(width: 6), Text('Moderately Worked', style: GoogleFonts.inter(color: Colors.grey, fontSize: 12)),
-                ],
-              ),
-            ],
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-class _AnatomyModel extends StatelessWidget {
-  final bool isFront;
-  const _AnatomyModel({required this.isFront});
-
-  @override
-  Widget build(BuildContext context) {
-    // Beautiful abstract anatomical representation using custom stacked containers
-    return Container(
-      width: 120, height: 220,
-      padding: const EdgeInsets.all(8),
-      decoration: BoxDecoration(color: const Color(0xFF1A1A1A), borderRadius: BorderRadius.circular(8), border: Border.all(color: const Color(0xFF252525))),
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          // Head
-          CircleAvatar(radius: 16, backgroundColor: Colors.grey[800]),
-          // Torso / Chest / Back
-          Container(
-            width: 70, height: 60,
-            decoration: BoxDecoration(color: isFront ? Colors.redAccent : Colors.orangeAccent, borderRadius: BorderRadius.circular(8)),
-            alignment: Alignment.center,
-            child: Text(isFront ? 'CHEST\n& DELTS' : 'LATS\n& TRAPS', textAlign: TextAlign.center, style: GoogleFonts.spaceGrotesk(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold)),
-          ),
-          // Core / Lower Back
-          Container(width: 50, height: 30, decoration: BoxDecoration(color: Colors.grey[800], borderRadius: BorderRadius.circular(6))),
-          // Legs / Quads / Hamstrings
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceAround,
-            children: [
-              Container(width: 25, height: 60, decoration: BoxDecoration(color: isFront ? Colors.orangeAccent : Colors.grey[800], borderRadius: BorderRadius.circular(6))),
-              Container(width: 25, height: 60, decoration: BoxDecoration(color: isFront ? Colors.orangeAccent : Colors.grey[800], borderRadius: BorderRadius.circular(6))),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-// ─── Measures Sub Tab (Screenshot 2 Parity - Custom Sparklines) ────────────────
 
 class _MeasuresSubTab extends StatelessWidget {
   const _MeasuresSubTab();
@@ -1066,7 +1193,7 @@ class _MeasuresSubTab extends StatelessWidget {
           decoration: BoxDecoration(color: const Color(0xFF131313), border: Border.all(color: const Color(0xFF222222), width: 0.5), borderRadius: BorderRadius.circular(4)),
           child: Row(
             children: [
-              Container(width: 40, height: 40, decoration: BoxDecoration(color: const Color(0xFF1E1E1E), borderRadius: BorderRadius.circular(8)), child: const Icon(Icons.accessibility_new, color: Color(0xFF5856D6))),
+              Container(width: 40, height: 40, decoration: BoxDecoration(color: const Color(0xFF1E1E1E), borderRadius: BorderRadius.circular(8)), child: const Icon(Icons.accessibility_new, color: Color(0xFFC2C1FF))),
               const SizedBox(width: 16),
               Expanded(
                 child: Column(
@@ -1080,7 +1207,7 @@ class _MeasuresSubTab extends StatelessWidget {
               ),
               SizedBox(
                 width: 100, height: 40,
-                child: CustomPaint(painter: _SparklinePainter(points: points, color: const Color(0xFF5856D6))),
+                child: CustomPaint(painter: _SparklinePainter(points: points, color: const Color(0xFFC2C1FF))),
               ),
             ],
           ),
@@ -1103,7 +1230,6 @@ class _SparklinePainter extends CustomPainter {
     final stepX = size.width / (points.length - 1);
     for (int i = 0; i < points.length; i++) {
       final x = i * stepX;
-      // Invert Y because canvas 0,0 is top left
       final y = size.height * (1 - points[i]);
       if (i == 0) path.moveTo(x, y); else path.lineTo(x, y);
     }
@@ -1113,7 +1239,238 @@ class _SparklinePainter extends CustomPainter {
   bool shouldRepaint(covariant CustomPainter oldDelegate) => true;
 }
 
-// ─── Active Workout Modal Sheet (Screenshot 3 Parity - Finish Pill & Box) ──────
+// ─── BOTTOM NAVIGATION BAR (Gym Space Specific) ────────────────────────────────
+
+class _GymBottomNav extends StatefulWidget {
+  final VoidCallback onStartWorkout;
+  final Function(int) onNavigateTab;
+
+  const _GymBottomNav({required this.onStartWorkout, required this.onNavigateTab});
+
+  @override
+  State<_GymBottomNav> createState() => _GymBottomNavState();
+}
+
+class _GymBottomNavState extends State<_GymBottomNav> {
+  int _selectedIndex = 0;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      height: 65,
+      decoration: const BoxDecoration(
+        color: Color(0xFF131313),
+        border: Border(top: BorderSide(color: Color(0xFF222222), width: 0.5)),
+      ),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceAround,
+        children: [
+          _NavItem(
+            icon: Icons.home_filled,
+            label: 'HOME',
+            isSelected: _selectedIndex == 0,
+            onTap: () {
+              setState(() => _selectedIndex = 0);
+              widget.onNavigateTab(0);
+            },
+          ),
+          _NavItem(
+            icon: Icons.calendar_today,
+            label: 'PLAN',
+            isSelected: _selectedIndex == 1,
+            onTap: () {
+              setState(() => _selectedIndex = 1);
+              widget.onNavigateTab(1);
+            },
+          ),
+          GestureDetector(
+            onTap: widget.onStartWorkout,
+            child: Container(
+              width: 45, height: 45,
+              decoration: BoxDecoration(
+                color: const Color(0xFFC2C1FF),
+                shape: BoxShape.circle,
+                boxShadow: [
+                  BoxShadow(color: const Color(0xFFC2C1FF).withValues(alpha: 0.3), blurRadius: 12, spreadRadius: 2),
+                ],
+              ),
+              child: const Icon(Icons.add, color: Color(0xFF131313), size: 28),
+            ),
+          ),
+          _NavItem(
+            icon: Icons.grid_view,
+            label: 'EXPLORE',
+            isSelected: _selectedIndex == 3,
+            onTap: () {
+              setState(() => _selectedIndex = 3);
+              widget.onNavigateTab(3);
+            },
+          ),
+          _NavItem(
+            icon: Icons.settings_outlined,
+            label: 'SETTINGS',
+            isSelected: _selectedIndex == 4,
+            onTap: () {
+              setState(() => _selectedIndex = 4);
+              _showSettingsModal(context);
+            },
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showSettingsModal(BuildContext context) {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: const Color(0xFF131313),
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.zero),
+      builder: (ctx) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Padding(
+              padding: const EdgeInsets.all(16),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text('Gym Settings', style: GoogleFonts.spaceGrotesk(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold)),
+                  IconButton(icon: const Icon(Icons.close, color: Colors.grey), onPressed: () => Navigator.pop(ctx)),
+                ],
+              ),
+            ),
+            const Divider(color: Color(0xFF222222), height: 1),
+            ListTile(
+              leading: const Icon(Icons.sync, color: Color(0xFFC2C1FF)),
+              title: Text('Sync with Apple Health / Google Fit', style: GoogleFonts.manrope(color: Colors.white)),
+              trailing: Switch(value: true, activeThumbColor: const Color(0xFFC2C1FF), onChanged: (_) {}),
+            ),
+            ListTile(
+              leading: const Icon(Icons.notifications_outlined, color: Color(0xFFC2C1FF)),
+              title: Text('Workout Reminders', style: GoogleFonts.manrope(color: Colors.white)),
+              trailing: Switch(value: true, activeThumbColor: const Color(0xFFC2C1FF), onChanged: (_) {}),
+            ),
+            ListTile(
+              leading: const Icon(Icons.straighten, color: Color(0xFFC2C1FF)),
+              title: Text('Units', style: GoogleFonts.manrope(color: Colors.white)),
+              trailing: Text('Metric (kg/cm)', style: GoogleFonts.inter(color: Colors.grey)),
+            ),
+            const SizedBox(height: 16),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _NavItem extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final bool isSelected;
+  final VoidCallback onTap;
+
+  const _NavItem({required this.icon, required this.label, required this.isSelected, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      behavior: HitTestBehavior.opaque,
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+            decoration: BoxDecoration(
+              color: isSelected ? const Color(0xFFC2C1FF).withValues(alpha: 0.15) : Colors.transparent,
+              borderRadius: BorderRadius.circular(16),
+            ),
+            child: Icon(icon, color: isSelected ? const Color(0xFFC2C1FF) : Colors.grey, size: 22),
+          ),
+          const SizedBox(height: 4),
+          Text(label, style: GoogleFonts.spaceGrotesk(color: isSelected ? const Color(0xFFC2C1FF) : Colors.grey, fontSize: 10, fontWeight: FontWeight.bold)),
+        ],
+      ),
+    );
+  }
+}
+
+// ─── ACTIVE WORKOUT MODALS & HELPERS ───────────────────────────────────────────
+
+void _showQuickStartSheet(BuildContext context) {
+  final sports = context.read<SportsProvider>();
+  if (sports.currentWorkout != null) {
+    _showActiveWorkoutSheet(context);
+    return;
+  }
+
+  showModalBottomSheet(
+    context: context,
+    backgroundColor: const Color(0xFF131313),
+    shape: const RoundedRectangleBorder(borderRadius: BorderRadius.zero),
+    builder: (ctx) {
+      final plans = sports.workoutPlans;
+      return SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Padding(
+              padding: const EdgeInsets.all(16),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text('Workout auswählen', style: GoogleFonts.manrope(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold)),
+                  IconButton(icon: const Icon(Icons.close, color: Colors.grey), onPressed: () => Navigator.pop(ctx)),
+                ],
+              ),
+            ),
+            const Divider(color: Color(0xFF222222), height: 1),
+            ListTile(
+              contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+              leading: Container(
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(color: const Color(0xFFC2C1FF).withValues(alpha: 0.2), shape: BoxShape.circle),
+                child: const Icon(Icons.add, color: Color(0xFFC2C1FF)),
+              ),
+              title: Text('Leeres Workout starten', style: GoogleFonts.manrope(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16)),
+              subtitle: Text('Freies Training ohne Vorlage', style: GoogleFonts.inter(color: Colors.grey, fontSize: 12)),
+              onTap: () {
+                Navigator.pop(ctx);
+                final planId = plans.isNotEmpty ? plans.first['id'] : 1;
+                sports.startWorkout(planId).then((ok) {
+                  if (ok && context.mounted) _showActiveWorkoutSheet(context);
+                });
+              },
+            ),
+            const Divider(color: Color(0xFF222222), height: 1),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 16, 20, 8),
+              child: Text('MEINE ROUTINEN', style: GoogleFonts.manrope(color: Colors.grey, fontSize: 12, fontWeight: FontWeight.bold, letterSpacing: 1)),
+            ),
+            if (plans.isEmpty)
+              Padding(padding: const EdgeInsets.all(20), child: Text('Keine Routinen verfügbar', style: GoogleFonts.inter(color: Colors.grey)))
+            else
+              ...plans.map((p) => ListTile(
+                contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 6),
+                leading: const CircleAvatar(backgroundColor: Color(0xFF1E1E1E), child: Icon(Icons.fitness_center, color: Color(0xFFC2C1FF), size: 18)),
+                title: Text(p['name'] as String? ?? '', style: GoogleFonts.manrope(color: Colors.white, fontWeight: FontWeight.bold)),
+                subtitle: Text('${p['day']} · ${p['estimatedDuration']} Min.', style: GoogleFonts.inter(color: Colors.grey, fontSize: 12)),
+                trailing: const Icon(Icons.play_arrow, color: Color(0xFFC2C1FF)),
+                onTap: () {
+                  Navigator.pop(ctx);
+                  sports.startWorkout(p['id'] as int).then((ok) {
+                    if (ok && context.mounted) _showActiveWorkoutSheet(context);
+                  });
+                },
+              )),
+            const SizedBox(height: 16),
+          ],
+        ),
+      );
+    },
+  );
+}
 
 void _showActiveWorkoutSheet(BuildContext context, {bool openFinish = false}) {
   showModalBottomSheet(
@@ -1192,7 +1549,7 @@ class _ActiveWorkoutSheetState extends State<_ActiveWorkoutSheet> {
         leading: IconButton(icon: const Icon(Icons.keyboard_arrow_down, size: 28), tooltip: 'Minimieren', onPressed: () => Navigator.pop(context)),
         title: Row(
           children: [
-            const Icon(Icons.timer_outlined, color: Color(0xFF5856D6), size: 20), const SizedBox(width: 6),
+            const Icon(Icons.timer_outlined, color: Color(0xFFC2C1FF), size: 20), const SizedBox(width: 6),
             Text(_elapsed, style: GoogleFonts.spaceGrotesk(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold)),
           ],
         ),
@@ -1200,7 +1557,7 @@ class _ActiveWorkoutSheetState extends State<_ActiveWorkoutSheet> {
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
             child: FilledButton(
-              style: FilledButton.styleFrom(backgroundColor: const Color(0xFF5856D6), foregroundColor: Colors.white, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20))),
+              style: FilledButton.styleFrom(backgroundColor: const Color(0xFFC2C1FF), foregroundColor: const Color(0xFF131313), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20))),
               onPressed: () => _showFinishDialog(context),
               child: Text('Finish', style: GoogleFonts.manrope(fontWeight: FontWeight.bold)),
             ),
@@ -1209,7 +1566,6 @@ class _ActiveWorkoutSheetState extends State<_ActiveWorkoutSheet> {
       ),
       body: Column(
         children: [
-          // Top Summary Box (Screenshot 3 Parity)
           Padding(
             padding: const EdgeInsets.all(16),
             child: Container(
@@ -1235,7 +1591,7 @@ class _ActiveWorkoutSheetState extends State<_ActiveWorkoutSheet> {
                       final exMap = exercises[exIdx]; final loggedSets = exMap['loggedSets'] as List<Map<String, dynamic>>? ?? [];
                       int exCompleted = loggedSets.where((s) => s['done'] == true).length;
 
-                      return _ActiveExerciseCard(exMap: exMap, loggedSets: loggedSets, exCompleted: exCompleted, onAddSet: () { setState(() { final lastSet = loggedSets.isNotEmpty ? loggedSets.last : null; loggedSets.add({'set': loggedSets.length + int.parse('1'), 'weight': lastSet?['weight'] ?? 0, 'reps': lastSet?['reps'] ?? 10, 'done': false}); }); }, onSetChange: () => setState(() {}));
+                      return _ActiveExerciseCard(exMap: exMap, loggedSets: loggedSets, exCompleted: exCompleted, onAddSet: () { setState(() { final lastSet = loggedSets.isNotEmpty ? loggedSets.last : null; loggedSets.add({'set': loggedSets.length + 1, 'weight': lastSet?['weight'] ?? 0, 'reps': lastSet?['reps'] ?? 10, 'done': false}); }); }, onSetChange: () => setState(() {}));
                     },
                   ),
           ),
@@ -1243,7 +1599,7 @@ class _ActiveWorkoutSheetState extends State<_ActiveWorkoutSheet> {
             padding: const EdgeInsets.all(16), decoration: const BoxDecoration(color: Color(0xFF131313), border: Border(top: BorderSide(color: Color(0xFF222222)))),
             child: Column(
               children: [
-                Row(children: [Expanded(child: OutlinedButton.icon(icon: const Icon(Icons.add), label: Text('Übung hinzufügen', style: GoogleFonts.manrope(fontWeight: FontWeight.bold)), style: OutlinedButton.styleFrom(foregroundColor: const Color(0xFF5856D6), side: const BorderSide(color: Color(0xFF5856D6)), shape: const RoundedRectangleBorder(borderRadius: BorderRadius.zero), padding: const EdgeInsets.symmetric(vertical: 12)), onPressed: () => _showAddExerciseModal(context)))]),
+                Row(children: [Expanded(child: OutlinedButton.icon(icon: const Icon(Icons.add), label: Text('Übung hinzufügen', style: GoogleFonts.manrope(fontWeight: FontWeight.bold)), style: OutlinedButton.styleFrom(foregroundColor: const Color(0xFFC2C1FF), side: const BorderSide(color: Color(0xFFC2C1FF)), shape: const RoundedRectangleBorder(borderRadius: BorderRadius.zero), padding: const EdgeInsets.symmetric(vertical: 12)), onPressed: () => _showAddExerciseModal(context)))]),
                 const SizedBox(height: 8), TextButton(style: TextButton.styleFrom(foregroundColor: Colors.redAccent), onPressed: () => _showCancelDialog(context), child: Text('Workout abbrechen', style: GoogleFonts.manrope())),
               ],
             ),
@@ -1266,7 +1622,7 @@ class _ActiveWorkoutSheetState extends State<_ActiveWorkoutSheet> {
             Expanded(child: ListView.builder(itemCount: exercises.length, itemBuilder: (_, i) {
               final ex = exercises[i];
               return ListTile(
-                leading: const CircleAvatar(backgroundColor: Color(0xFF1E1E1E), child: Icon(Icons.fitness_center, color: Color(0xFF5856D6), size: 18)),
+                leading: const CircleAvatar(backgroundColor: Color(0xFF1E1E1E), child: Icon(Icons.fitness_center, color: Color(0xFFC2C1FF), size: 18)),
                 title: Text(ex['name'] as String? ?? '', style: GoogleFonts.manrope(color: Colors.white, fontWeight: FontWeight.bold)), subtitle: Text('${ex['category']} · ${ex['equipment']}', style: GoogleFonts.inter(color: Colors.grey)),
                 onTap: () { setState(() { final workout = sports.currentWorkout; if (workout != null) { final currentExercises = workout['exercises'] as List<Map<String, dynamic>>? ?? []; currentExercises.add({'name': ex['name'], 'sets': 3, 'reps': 10, 'weight': 0, 'loggedSets': List.generate(3, (index) => {'set': index + 1, 'weight': 0, 'reps': 10, 'done': false})}); } }); Navigator.pop(ctx); },
               );
@@ -1316,7 +1672,7 @@ class _ActiveExerciseCardState extends State<_ActiveExerciseCard> {
                 children: [
                   Container(width: 48, height: 48, decoration: BoxDecoration(color: const Color(0xFF252525), borderRadius: BorderRadius.circular(8)), child: const Icon(Icons.fitness_center, color: Colors.white70)), const SizedBox(width: 16),
                   Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text(exMap['name'] as String? ?? 'Übung', style: GoogleFonts.manrope(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold)), const SizedBox(height: 4), Text('$exCompleted/${loggedSets.length} done', style: GoogleFonts.inter(color: Colors.grey, fontSize: 13))])),
-                  IconButton(icon: const Icon(Icons.add, color: Color(0xFF5856D6)), tooltip: 'Set hinzufügen', onPressed: widget.onAddSet),
+                  IconButton(icon: const Icon(Icons.add, color: Color(0xFFC2C1FF)), tooltip: 'Set hinzufügen', onPressed: widget.onAddSet),
                   Icon(_expanded ? Icons.expand_less : Icons.expand_more, color: Colors.grey),
                 ],
               ),
@@ -1328,16 +1684,16 @@ class _ActiveExerciseCardState extends State<_ActiveExerciseCard> {
             ...loggedSets.asMap().entries.map((entry) {
               final setMap = entry.value; final isDone = setMap['done'] as bool? ?? false;
               return AnimatedContainer(
-                duration: const Duration(milliseconds: 200), color: isDone ? const Color(0xFF5856D6).withValues(alpha: 0.15) : Colors.transparent, padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                duration: const Duration(milliseconds: 200), color: isDone ? const Color(0xFFC2C1FF).withValues(alpha: 0.15) : Colors.transparent, padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                 child: Row(
                   children: [
-                    SizedBox(width: 40, child: Text('${setMap['set']}', style: GoogleFonts.manrope(color: isDone ? const Color(0xFF5856D6) : Colors.white, fontWeight: FontWeight.bold, fontSize: 15))),
+                    SizedBox(width: 40, child: Text('${setMap['set']}', style: GoogleFonts.manrope(color: isDone ? const Color(0xFFC2C1FF) : Colors.white, fontWeight: FontWeight.bold, fontSize: 15))),
                     Expanded(child: Text('${setMap['weight']} kg × ${setMap['reps']}', style: GoogleFonts.inter(color: Colors.white38, fontSize: 13))),
                     SizedBox(width: 70, child: TextFormField(initialValue: '${setMap['weight']}', keyboardType: const TextInputType.numberWithOptions(decimal: true), textAlign: TextAlign.center, style: GoogleFonts.spaceGrotesk(color: Colors.white, fontSize: 15, fontWeight: FontWeight.bold), decoration: const InputDecoration(filled: true, fillColor: Color(0xFF1E1E1E), contentPadding: EdgeInsets.symmetric(vertical: 8, horizontal: 4), border: OutlineInputBorder(borderRadius: BorderRadius.zero, borderSide: BorderSide.none)), onChanged: (val) { final numVal = num.tryParse(val.replaceAll(',', '.')); if (numVal != null) { setMap['weight'] = numVal; widget.onSetChange(); } })),
                     const SizedBox(width: 12),
                     SizedBox(width: 70, child: TextFormField(initialValue: '${setMap['reps']}', keyboardType: TextInputType.number, textAlign: TextAlign.center, style: GoogleFonts.spaceGrotesk(color: Colors.white, fontSize: 15, fontWeight: FontWeight.bold), decoration: const InputDecoration(filled: true, fillColor: Color(0xFF1E1E1E), contentPadding: EdgeInsets.symmetric(vertical: 8, horizontal: 4), border: OutlineInputBorder(borderRadius: BorderRadius.zero, borderSide: BorderSide.none)), onChanged: (val) { final intVal = int.tryParse(val); if (intVal != null) { setMap['reps'] = intVal; widget.onSetChange(); } })),
                     const SizedBox(width: 16),
-                    GestureDetector(onTap: () { setState(() { final nowDone = !isDone; setMap['done'] = nowDone; if (nowDone) sports.completeSet(); widget.onSetChange(); }); }, child: Container(width: 34, height: 34, decoration: BoxDecoration(color: isDone ? const Color(0xFF5856D6) : const Color(0xFF1E1E1E), border: Border.all(color: isDone ? const Color(0xFF5856D6) : const Color(0xFF222222)), borderRadius: BorderRadius.circular(4)), child: isDone ? const Icon(Icons.check, color: Colors.white, size: 20) : const SizedBox.shrink())),
+                    GestureDetector(onTap: () { setState(() { final nowDone = !isDone; setMap['done'] = nowDone; if (nowDone) sports.completeSet(); widget.onSetChange(); }); }, child: Container(width: 34, height: 34, decoration: BoxDecoration(color: isDone ? const Color(0xFFC2C1FF) : const Color(0xFF1E1E1E), border: Border.all(color: isDone ? const Color(0xFFC2C1FF) : const Color(0xFF222222)), borderRadius: BorderRadius.circular(4)), child: isDone ? const Icon(Icons.check, color: Color(0xFF131313), size: 20) : const SizedBox.shrink())),
                   ],
                 ),
               );
@@ -1345,33 +1701,6 @@ class _ActiveExerciseCardState extends State<_ActiveExerciseCard> {
             const SizedBox(height: 8),
           ],
         ],
-      ),
-    );
-  }
-}
-
-class _LyftaBarChart extends StatelessWidget {
-  @override
-  Widget build(BuildContext context) {
-    final data = [3, 4, 2, 5, 6, 8, 7];
-    final maxVal = data.reduce((a, b) => a > b ? a : b);
-
-    return Container(
-      height: 140, padding: const EdgeInsets.only(top: 16),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.end, mainAxisAlignment: MainAxisAlignment.spaceAround,
-        children: ['Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa', 'So'].asMap().map((i, label) {
-          return MapEntry(
-            i,
-            Column(
-              mainAxisAlignment: MainAxisAlignment.end,
-              children: [
-                Container(width: 28, height: (data[i] / maxVal) * 100, decoration: BoxDecoration(color: const Color(0xFF5856D6), borderRadius: BorderRadius.circular(2), boxShadow: [BoxShadow(color: const Color(0xFF5856D6).withValues(alpha: 0.2), blurRadius: 6, spreadRadius: 1)])),
-                const SizedBox(height: 8), Text(label, style: GoogleFonts.inter(color: Colors.grey, fontSize: 12)),
-              ],
-            ),
-          );
-        }).values.toList(),
       ),
     );
   }
@@ -1402,42 +1731,13 @@ class _ActiveWorkoutBannerState extends State<_ActiveWorkoutBanner> {
     final completedSets = workout['completedSets'] as int? ?? 0;
 
     return Container(
-      padding: const EdgeInsets.all(20), decoration: BoxDecoration(color: const Color(0xFF131313), border: Border.all(color: const Color(0xFF5856D6).withValues(alpha: 0.5), width: 1.5), borderRadius: BorderRadius.circular(4), boxShadow: [BoxShadow(color: const Color(0xFF5856D6).withValues(alpha: 0.15), blurRadius: 12, spreadRadius: 2)]),
+      padding: const EdgeInsets.all(20), decoration: BoxDecoration(color: const Color(0xFF131313), border: Border.all(color: const Color(0xFFC2C1FF).withValues(alpha: 0.5), width: 1.5), borderRadius: BorderRadius.circular(4), boxShadow: [BoxShadow(color: const Color(0xFFC2C1FF).withValues(alpha: 0.15), blurRadius: 12, spreadRadius: 2)]),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(children: [Container(width: 10, height: 10, decoration: const BoxDecoration(color: Color(0xFF5856D6), shape: BoxShape.circle)), const SizedBox(width: 8), Text('AKTIVES WORKOUT', style: GoogleFonts.manrope(color: const Color(0xFF5856D6), fontSize: 12, fontWeight: FontWeight.bold, letterSpacing: 1)), const Spacer(), Text(_elapsed, style: GoogleFonts.spaceGrotesk(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold))]),
+          Row(children: [Container(width: 10, height: 10, decoration: const BoxDecoration(color: Color(0xFFC2C1FF), shape: BoxShape.circle)), const SizedBox(width: 8), Text('AKTIVES WORKOUT', style: GoogleFonts.manrope(color: const Color(0xFFC2C1FF), fontSize: 12, fontWeight: FontWeight.bold, letterSpacing: 1)), const Spacer(), Text(_elapsed, style: GoogleFonts.spaceGrotesk(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold))]),
           const SizedBox(height: 12), Text(workout['name'] as String? ?? 'Training', style: GoogleFonts.manrope(color: Colors.white, fontSize: 22, fontWeight: FontWeight.bold)), const SizedBox(height: 6), Text('$completedSets Sätze absolviert', style: GoogleFonts.inter(color: Colors.white70, fontSize: 14)), const SizedBox(height: 16),
-          Row(children: [Expanded(child: FilledButton.icon(icon: const Icon(Icons.play_arrow), label: Text('Fortsetzen', style: GoogleFonts.manrope(fontWeight: FontWeight.bold)), style: FilledButton.styleFrom(backgroundColor: const Color(0xFF5856D6), foregroundColor: Colors.white, shape: const RoundedRectangleBorder(borderRadius: BorderRadius.zero), padding: const EdgeInsets.symmetric(vertical: 12)), onPressed: () => _showActiveWorkoutSheet(context))), const SizedBox(width: 12), OutlinedButton(style: OutlinedButton.styleFrom(foregroundColor: Colors.white, side: const BorderSide(color: Color(0xFF222222)), shape: const RoundedRectangleBorder(borderRadius: BorderRadius.zero), padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16)), onPressed: () => _showActiveWorkoutSheet(context, openFinish: true), child: Text('Beenden', style: GoogleFonts.manrope()))]),
-        ],
-      ),
-    );
-  }
-}
-
-class _RoutineCard extends StatelessWidget {
-  final Map<String, dynamic> plan;
-  const _RoutineCard({required this.plan});
-  @override
-  Widget build(BuildContext context) {
-    final exercises = plan['exercises'] as List? ?? []; final duration = plan['estimatedDuration'] as int? ?? 60;
-    return Container(
-      margin: const EdgeInsets.only(bottom: 16), decoration: BoxDecoration(color: const Color(0xFF131313), border: Border.all(color: const Color(0xFF222222), width: 0.5), borderRadius: BorderRadius.circular(4)),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Padding(
-            padding: const EdgeInsets.all(16),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [Text(plan['name'] as String? ?? '', style: GoogleFonts.manrope(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold)), Container(padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4), decoration: BoxDecoration(color: const Color(0xFFC2C1FF).withValues(alpha: 0.06), borderRadius: BorderRadius.circular(2)), child: Text(plan['day'] as String? ?? '', style: GoogleFonts.inter(color: const Color(0xFFC2C1FF), fontSize: 11, fontWeight: FontWeight.bold)))]),
-                const SizedBox(height: 8), Row(children: [const Icon(Icons.timer_outlined, size: 14, color: Colors.grey), const SizedBox(width: 4), Text('$duration Min.', style: GoogleFonts.inter(color: Colors.grey, fontSize: 13)), const SizedBox(width: 16), const Icon(Icons.fitness_center, size: 14, color: Colors.grey), const SizedBox(width: 4), Text('${exercises.length} Übungen', style: GoogleFonts.inter(color: Colors.grey, fontSize: 13))]),
-                const SizedBox(height: 16), Wrap(spacing: 6, runSpacing: 6, children: exercises.map((ex) { final name = ex['name'] as String? ?? ''; final sets = ex['sets'] as int? ?? 3; return Container(padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6), decoration: BoxDecoration(color: const Color(0xFF1E1E1E), border: Border.all(color: Colors.white10), borderRadius: BorderRadius.circular(2)), child: Text('$sets× $name', style: GoogleFonts.inter(color: Colors.white70, fontSize: 12))); }).toList()),
-              ],
-            ),
-          ),
-          Container(width: double.infinity, padding: const EdgeInsets.fromLTRB(16, 0, 16, 16), child: FilledButton(style: FilledButton.styleFrom(backgroundColor: const Color(0xFF5856D6), foregroundColor: Colors.white, shape: const RoundedRectangleBorder(borderRadius: BorderRadius.zero), padding: const EdgeInsets.symmetric(vertical: 14)), onPressed: () { final sports = context.read<SportsProvider>(); if (sports.currentWorkout != null) { _showActiveWorkoutSheet(context); } else { sports.startWorkout(plan['id'] as int).then((ok) { if (ok && context.mounted) _showActiveWorkoutSheet(context); }); } }, child: Text('Workout starten', style: GoogleFonts.manrope(fontWeight: FontWeight.bold, fontSize: 15)))),
+          Row(children: [Expanded(child: FilledButton.icon(icon: const Icon(Icons.play_arrow, color: Color(0xFF131313)), label: Text('Fortsetzen', style: GoogleFonts.manrope(fontWeight: FontWeight.bold, color: const Color(0xFF131313))), style: FilledButton.styleFrom(backgroundColor: const Color(0xFFC2C1FF), shape: const RoundedRectangleBorder(borderRadius: BorderRadius.zero), padding: const EdgeInsets.symmetric(vertical: 12)), onPressed: () => _showActiveWorkoutSheet(context))), const SizedBox(width: 12), OutlinedButton(style: OutlinedButton.styleFrom(foregroundColor: Colors.white, side: const BorderSide(color: Color(0xFF222222)), shape: const RoundedRectangleBorder(borderRadius: BorderRadius.zero), padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16)), onPressed: () => _showActiveWorkoutSheet(context, openFinish: true), child: Text('Beenden', style: GoogleFonts.manrope()))]),
         ],
       ),
     );
@@ -1447,6 +1747,6 @@ class _RoutineCard extends StatelessWidget {
 void _showFinishDialog(BuildContext context) {
   final notesCtrl = TextEditingController();
   showDialog(
-    context: context, builder: (ctx) => AlertDialog(backgroundColor: const Color(0xFF1F2020), shape: const RoundedRectangleBorder(borderRadius: BorderRadius.zero), title: Text('Workout beenden', style: GoogleFonts.manrope(color: Colors.white, fontWeight: FontWeight.bold)), content: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [Text('Wie war das Training? Füge optionale Notizen hinzu:', style: GoogleFonts.inter(color: Colors.white70, fontSize: 14)), const SizedBox(height: 16), TextField(controller: notesCtrl, style: GoogleFonts.inter(color: Colors.white), maxLines: 3, decoration: InputDecoration(hintText: 'Z.B. Gutes Training...', hintStyle: GoogleFonts.inter(color: Colors.grey), filled: true, fillColor: const Color(0xFF0E0E0E), border: const OutlineInputBorder(borderRadius: BorderRadius.zero, borderSide: BorderSide.none)))]), actions: [TextButton(child: Text('Abbrechen', style: GoogleFonts.manrope(color: Colors.grey)), onPressed: () => Navigator.pop(ctx)), FilledButton(style: FilledButton.styleFrom(backgroundColor: const Color(0xFF5856D6), foregroundColor: Colors.white, shape: const RoundedRectangleBorder(borderRadius: BorderRadius.zero)), onPressed: () { context.read<SportsProvider>().finishWorkout(notes: notesCtrl.text.trim()).then((ok) { if (ctx.mounted) Navigator.pop(ctx); if (context.mounted) Navigator.pop(context); }); }, child: Text('Speichern', style: GoogleFonts.manrope(fontWeight: FontWeight.bold)))]),
+    context: context, builder: (ctx) => AlertDialog(backgroundColor: const Color(0xFF1F2020), shape: const RoundedRectangleBorder(borderRadius: BorderRadius.zero), title: Text('Workout beenden', style: GoogleFonts.manrope(color: Colors.white, fontWeight: FontWeight.bold)), content: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [Text('Wie war das Training? Füge optionale Notizen hinzu:', style: GoogleFonts.inter(color: Colors.white70, fontSize: 14)), const SizedBox(height: 16), TextField(controller: notesCtrl, style: GoogleFonts.inter(color: Colors.white), maxLines: 3, decoration: InputDecoration(hintText: 'Z.B. Gutes Training...', hintStyle: GoogleFonts.inter(color: Colors.grey), filled: true, fillColor: const Color(0xFF0E0E0E), border: const OutlineInputBorder(borderRadius: BorderRadius.zero, borderSide: BorderSide.none)))]), actions: [TextButton(child: Text('Abbrechen', style: GoogleFonts.manrope(color: Colors.grey)), onPressed: () => Navigator.pop(ctx)), FilledButton(style: FilledButton.styleFrom(backgroundColor: const Color(0xFFC2C1FF), foregroundColor: const Color(0xFF131313), shape: const RoundedRectangleBorder(borderRadius: BorderRadius.zero)), onPressed: () { context.read<SportsProvider>().finishWorkout(notes: notesCtrl.text.trim()).then((ok) { if (ctx.mounted) Navigator.pop(ctx); if (context.mounted) Navigator.pop(context); }); }, child: Text('Speichern', style: GoogleFonts.manrope(fontWeight: FontWeight.bold)))]),
   );
 }
