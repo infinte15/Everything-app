@@ -42,20 +42,6 @@ class _SportsScreenState extends State<SportsScreen>
           style: GoogleFonts.spaceGrotesk(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 18, letterSpacing: 2),
         ),
         centerTitle: true,
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.search, color: Colors.grey),
-            onPressed: () {},
-          ),
-          Padding(
-            padding: const EdgeInsets.only(right: 16),
-            child: CircleAvatar(
-              radius: 16,
-              backgroundColor: const Color(0xFF1E1E1E),
-              child: const Icon(Icons.person, color: Color(0xFFC2C1FF), size: 18),
-            ),
-          ),
-        ],
         backgroundColor: const Color(0xFF131313),
         elevation: 0,
         bottom: TabBar(

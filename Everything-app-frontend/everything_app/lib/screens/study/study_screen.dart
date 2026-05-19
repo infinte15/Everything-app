@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:go_router/go_router.dart';
 import '../../providers/study_provider.dart';
 import 'study_dashboard_page.dart';
 import 'study_subjects_page.dart';
@@ -117,10 +116,8 @@ class _StudyScreenState extends State<StudyScreen> {
                       Row(
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
-                          IconButton(
-                            icon: const Icon(Icons.grid_view, color: Color(0xFFC2C1FF)),
-                            onPressed: () => context.pop(),
-                            tooltip: 'Menü verlassen',
+                          const BackButton(
+                            color: Color(0xFFC2C1FF),
                           ),
                           Text(
                             'STUDIUM SPACE',
@@ -141,47 +138,97 @@ class _StudyScreenState extends State<StudyScreen> {
                       ),
                       const SizedBox(height: 16),
                       // Custom Tab Navigation Row
-                      SingleChildScrollView(
-                        scrollDirection: Axis.horizontal,
-                        physics: const BouncingScrollPhysics(),
-                        child: Row(
-                          children: List.generate(tabs.length, (index) {
-                            final isSelected = index == selectedIndex;
-                            return Padding(
-                              padding: const EdgeInsets.only(right: 24, left: 4),
-                              child: InkWell(
-                                onTap: () {
-                                  provider.setActiveTab(index);
-                                },
-                                child: Container(
-                                  padding: const EdgeInsets.only(bottom: 6),
-                                  decoration: isSelected
-                                      ? const BoxDecoration(
-                                          border: Border(
-                                            bottom: BorderSide(
-                                              color: Color(0xFF5856D6),
-                                              width: 2,
-                                            ),
+                      LayoutBuilder(
+                        builder: (context, constraints) {
+                          // Stretch tabs evenly across the full width of the screen on wide windows (> 720px).
+                          // Otherwise, fall back to a horizontally scrollable row for narrow layouts.
+                          final useStretched = constraints.maxWidth > 720;
+
+                          if (useStretched) {
+                            return Row(
+                              children: List.generate(tabs.length, (index) {
+                                final isSelected = index == selectedIndex;
+                                return Expanded(
+                                  child: InkWell(
+                                    onTap: () {
+                                      provider.setActiveTab(index);
+                                    },
+                                    child: Center(
+                                      child: Container(
+                                        padding: const EdgeInsets.only(bottom: 6),
+                                        decoration: isSelected
+                                            ? const BoxDecoration(
+                                                border: Border(
+                                                  bottom: BorderSide(
+                                                    color: Color(0xFF5856D6),
+                                                    width: 2,
+                                                  ),
+                                                ),
+                                              )
+                                            : null,
+                                        child: Text(
+                                          tabs[index],
+                                          style: TextStyle(
+                                            fontFamily: 'Manrope',
+                                            fontWeight: FontWeight.bold,
+                                            fontSize: 15,
+                                            letterSpacing: -0.5,
+                                            color: isSelected
+                                                ? const Color(0xFFC2C1FF)
+                                                : const Color(0xFFACABAA),
                                           ),
-                                        )
-                                      : null,
-                                  child: Text(
-                                    tabs[index],
-                                    style: TextStyle(
-                                      fontFamily: 'Manrope',
-                                      fontWeight: FontWeight.bold,
-                                      fontSize: 15,
-                                      letterSpacing: -0.5,
-                                      color: isSelected
-                                          ? const Color(0xFFC2C1FF)
-                                          : const Color(0xFFACABAA),
+                                        ),
+                                      ),
                                     ),
                                   ),
-                                ),
+                                );
+                              }),
+                            );
+                          } else {
+                            return SingleChildScrollView(
+                              scrollDirection: Axis.horizontal,
+                              physics: const BouncingScrollPhysics(),
+                              child: Row(
+                                children: List.generate(tabs.length, (index) {
+                                  final isSelected = index == selectedIndex;
+                                  return Padding(
+                                    padding: const EdgeInsets.only(right: 24, left: 4),
+                                    child: InkWell(
+                                      onTap: () {
+                                        provider.setActiveTab(index);
+                                      },
+                                      child: Container(
+                                        padding: const EdgeInsets.only(bottom: 6),
+                                        decoration: isSelected
+                                            ? const BoxDecoration(
+                                                border: Border(
+                                                  bottom: BorderSide(
+                                                    color: Color(0xFF5856D6),
+                                                    width: 2,
+                                                  ),
+                                                ),
+                                              )
+                                            : null,
+                                        child: Text(
+                                          tabs[index],
+                                          style: TextStyle(
+                                            fontFamily: 'Manrope',
+                                            fontWeight: FontWeight.bold,
+                                            fontSize: 15,
+                                            letterSpacing: -0.5,
+                                            color: isSelected
+                                                ? const Color(0xFFC2C1FF)
+                                                : const Color(0xFFACABAA),
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+                                  );
+                                }),
                               ),
                             );
-                          }),
-                        ),
+                          }
+                        },
                       ),
                     ],
                   ),
