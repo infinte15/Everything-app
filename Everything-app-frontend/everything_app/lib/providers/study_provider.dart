@@ -26,6 +26,8 @@ class StudyProvider with ChangeNotifier {
   String? _selectedNoteId;
   bool _isLoading = false;
   String? _error;
+  int _activeTab = 0;
+  String? _selectedSubjectId;
 
   // ── Getters ──────────────────────────────────────────────────────────────────
   bool get isLoading => _isLoading;
@@ -41,6 +43,18 @@ class StudyProvider with ChangeNotifier {
 
   String? get selectedFolderId => _selectedFolderId;
   String? get selectedNoteId => _selectedNoteId;
+  int get activeTab => _activeTab;
+  String? get selectedSubjectId => _selectedSubjectId;
+
+  void setActiveTab(int index) {
+    _activeTab = index;
+    notifyListeners();
+  }
+
+  void selectSubject(String? id) {
+    _selectedSubjectId = id;
+    notifyListeners();
+  }
 
   StudyNote? get selectedNote =>
       _selectedNoteId == null ? null : _notes.firstWhere(
@@ -463,6 +477,45 @@ class StudyProvider with ChangeNotifier {
         final subject = _subjects.firstWhere((sub) => sub.id == g.subjectId, orElse: () => StudySubject(id: '', name: ''));
         return s + subject.creditPoints;
       });
+
+  void addGrade(StudyGrade grade) {
+    _grades.add(grade);
+    notifyListeners();
+  }
+
+  void deleteGrade(String gradeId) {
+    _grades.removeWhere((g) => g.id == gradeId);
+    notifyListeners();
+  }
+
+  void addFlashcardDeck(FlashcardDeck deck) {
+    _flashcardDecks.add(deck);
+    notifyListeners();
+  }
+
+  void addSubject({
+    required String name,
+    required String professor,
+    required int creditPoints,
+    required String semester,
+    required String colorHex,
+  }) {
+    final sub = StudySubject(
+      id: 'sub${DateTime.now().millisecondsSinceEpoch}',
+      name: name,
+      professor: professor,
+      creditPoints: creditPoints,
+      semester: semester,
+      colorHex: colorHex,
+    );
+    _subjects.add(sub);
+    notifyListeners();
+  }
+
+  void deleteSubject(String id) {
+    _subjects.removeWhere((s) => s.id == id);
+    notifyListeners();
+  }
 
   // ── Helpers ──────────────────────────────────────────────────────────────────
   DateTime _currentWeekStart() {

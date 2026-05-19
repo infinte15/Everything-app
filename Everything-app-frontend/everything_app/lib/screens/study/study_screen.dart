@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:go_router/go_router.dart';
 import '../../providers/study_provider.dart';
-import '../../config/app_theme.dart';
 import 'study_dashboard_page.dart';
 import 'study_subjects_page.dart';
 import 'study_timetable_page.dart';
@@ -18,17 +17,6 @@ class StudyScreen extends StatefulWidget {
 }
 
 class _StudyScreenState extends State<StudyScreen> {
-  int _selectedIndex = 0;
-
-  static const _navItems = [
-    _NavItem(Icons.dashboard_outlined, Icons.dashboard, 'Dashboard'),
-    _NavItem(Icons.book_outlined, Icons.book, 'Fächer'),
-    _NavItem(Icons.calendar_view_week_outlined, Icons.calendar_view_week, 'Stundenplan'),
-    _NavItem(Icons.track_changes_outlined, Icons.track_changes, 'Lernplan'),
-    _NavItem(Icons.calculate_outlined, Icons.calculate, 'Notenrechner'),
-    _NavItem(Icons.flash_on_outlined, Icons.flash_on, 'Lern-Zone'),
-  ];
-
   @override
   void initState() {
     super.initState();
@@ -40,223 +28,184 @@ class _StudyScreenState extends State<StudyScreen> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final isWide = MediaQuery.of(context).size.width > 600;
+    final provider = context.watch<StudyProvider>();
+    final selectedIndex = provider.activeTab;
+
+    // Matches the order and casing of the Stitch top navigation:
+    // Übersicht, Stundenplan, Fächer, Lernplan, Flashcards, Notenrechner
+    final tabs = [
+      'ÜBERSICHT',
+      'STUNDENPLAN',
+      'FÄCHER',
+      'LERNPLAN',
+      'FLASHCARDS',
+      'NOTENRECHNER',
+    ];
 
     final pages = [
       const StudyDashboardPage(),
-      const StudySubjectsPage(),
       const StudyTimetablePage(),
+      const StudySubjectsPage(),
       const StudyPlanPage(),
-      const StudyGradesPage(),
       const StudyDecksPage(),
+      const StudyGradesPage(),
     ];
 
-    if (isWide) {
-      // Desktop-style: sidebar + main
-      return Scaffold(
-        backgroundColor: theme.colorScheme.surface,
-        body: Row(
-          children: [
-            _StudySidebar(
-              selectedIndex: _selectedIndex,
-              navItems: _navItems,
-              onSelect: (i) => setState(() => _selectedIndex = i),
-              onBack: () => context.pop(),
-            ),
-            Expanded(
-              child: AnimatedSwitcher(
-                duration: const Duration(milliseconds: 250),
-                child: KeyedSubtree(
-                  key: ValueKey(_selectedIndex),
-                  child: pages[_selectedIndex],
-                ),
-              ),
-            ),
-          ],
-        ),
-      );
-    }
-
-    // Mobile: bottom nav
     return Scaffold(
-      backgroundColor: theme.colorScheme.surface,
-      appBar: AppBar(
-        title: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const Text('🎓', style: TextStyle(fontSize: 20)),
-            const SizedBox(width: 8),
-            Text(_navItems[_selectedIndex].label,
-                style: const TextStyle(fontWeight: FontWeight.bold)),
-          ],
-        ),
-        backgroundColor: AppTheme.studyColor,
-        foregroundColor: Colors.white,
-      ),
-      body: AnimatedSwitcher(
-        duration: const Duration(milliseconds: 220),
-        child: KeyedSubtree(
-          key: ValueKey(_selectedIndex),
-          child: pages[_selectedIndex],
-        ),
-      ),
-      bottomNavigationBar: NavigationBar(
-        selectedIndex: _selectedIndex,
-        onDestinationSelected: (i) => setState(() => _selectedIndex = i),
-        destinations: _navItems.map((item) {
-          return NavigationDestination(
-            icon: Icon(item.icon),
-            selectedIcon: Icon(item.selectedIcon),
-            label: item.label,
-          );
-        }).toList(),
-      ),
-    );
-  }
-}
-
-// ── Sidebar ───────────────────────────────────────────────────────────────────
-
-class _StudySidebar extends StatelessWidget {
-  final int selectedIndex;
-  final List<_NavItem> navItems;
-  final void Function(int) onSelect;
-  final VoidCallback onBack;
-
-  const _StudySidebar({
-    required this.selectedIndex,
-    required this.navItems,
-    required this.onSelect,
-    required this.onBack,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final isDark = theme.brightness == Brightness.dark;
-
-    return Container(
-      width: 220,
-      height: double.infinity,
-      decoration: BoxDecoration(
-        color: isDark ? const Color(0xFF1A1A1A) : const Color(0xFFF7F7F5),
-        border: Border(
-          right: BorderSide(
-            color: theme.colorScheme.outline.withValues(alpha: 0.12),
-          ),
-        ),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+      backgroundColor: const Color(0xFF0E0E0E),
+      body: Stack(
         children: [
-          // Top bar with back
-          SafeArea(
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(12, 16, 12, 0),
-              child: Row(
+          // Background Glows (adopted from Stitch templates)
+          Positioned.fill(
+            child: IgnorePointer(
+              child: Stack(
                 children: [
-                  IconButton(
-                    icon: const Icon(Icons.arrow_back_ios_new, size: 16),
-                    onPressed: onBack,
-                    tooltip: 'Zurück',
+                  Positioned(
+                    top: -100,
+                    right: -100,
+                    width: 300,
+                    height: 300,
+                    child: Container(
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        boxShadow: [
+                          BoxShadow(
+                            color: theme.colorScheme.primary.withValues(alpha: 0.15),
+                            blurRadius: 140,
+                            spreadRadius: 100,
+                          ),
+                        ],
+                      ),
+                    ),
                   ),
-                  const SizedBox(width: 4),
-                  const Text('🎓', style: TextStyle(fontSize: 20)),
-                  const SizedBox(width: 8),
-                  Text('Studium',
-                      style: theme.textTheme.titleMedium?.copyWith(
-                          fontWeight: FontWeight.bold)),
+                  Positioned(
+                    bottom: -100,
+                    left: -100,
+                    width: 300,
+                    height: 300,
+                    child: Container(
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        boxShadow: [
+                          BoxShadow(
+                            color: theme.colorScheme.primaryContainer.withValues(alpha: 0.12),
+                            blurRadius: 140,
+                            spreadRadius: 100,
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
                 ],
               ),
             ),
           ),
-          const SizedBox(height: 8),
-          const Padding(
-            padding: EdgeInsets.symmetric(horizontal: 16),
-            child: Divider(height: 1),
-          ),
-          const SizedBox(height: 8),
-          // Nav items
-          Expanded(
-            child: ListView(
-              padding: const EdgeInsets.symmetric(horizontal: 8),
-              children: [
-                for (int i = 0; i < navItems.length; i++)
-                  _SidebarItem(
-                    item: navItems[i],
-                    selected: i == selectedIndex,
-                    onTap: () => onSelect(i),
+
+          // Main Header & Content Navigation Layout
+          Column(
+            children: [
+              // Top Header with Title and Scrollable Tab Bar
+              Container(
+                color: const Color(0xFF0E0E0E),
+                padding: const EdgeInsets.only(top: 16, left: 16, right: 16, bottom: 8),
+                child: SafeArea(
+                  bottom: false,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      // Header Row
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          IconButton(
+                            icon: const Icon(Icons.grid_view, color: Color(0xFFC2C1FF)),
+                            onPressed: () => context.pop(),
+                            tooltip: 'Menü verlassen',
+                          ),
+                          Text(
+                            'STUDIUM SPACE',
+                            style: theme.textTheme.titleMedium?.copyWith(
+                              fontFamily: 'Manrope',
+                              fontWeight: FontWeight.w900,
+                              letterSpacing: -1.0,
+                              fontSize: 22,
+                              color: const Color(0xFFC2C1FF),
+                            ),
+                          ),
+                          IconButton(
+                            icon: const Icon(Icons.settings, color: Color(0xFFC2C1FF)),
+                            onPressed: () {},
+                            tooltip: 'Einstellungen',
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 16),
+                      // Custom Tab Navigation Row
+                      SingleChildScrollView(
+                        scrollDirection: Axis.horizontal,
+                        physics: const BouncingScrollPhysics(),
+                        child: Row(
+                          children: List.generate(tabs.length, (index) {
+                            final isSelected = index == selectedIndex;
+                            return Padding(
+                              padding: const EdgeInsets.only(right: 24, left: 4),
+                              child: InkWell(
+                                onTap: () {
+                                  provider.setActiveTab(index);
+                                },
+                                child: Container(
+                                  padding: const EdgeInsets.only(bottom: 6),
+                                  decoration: isSelected
+                                      ? const BoxDecoration(
+                                          border: Border(
+                                            bottom: BorderSide(
+                                              color: Color(0xFF5856D6),
+                                              width: 2,
+                                            ),
+                                          ),
+                                        )
+                                      : null,
+                                  child: Text(
+                                    tabs[index],
+                                    style: TextStyle(
+                                      fontFamily: 'Manrope',
+                                      fontWeight: FontWeight.bold,
+                                      fontSize: 15,
+                                      letterSpacing: -0.5,
+                                      color: isSelected
+                                          ? const Color(0xFFC2C1FF)
+                                          : const Color(0xFFACABAA),
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            );
+                          }),
+                        ),
+                      ),
+                    ],
                   ),
-              ],
-            ),
-          ),
-          // Footer
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 8, 16, 20),
-            child: Text(
-              'Second Brain',
-              style: theme.textTheme.bodySmall?.copyWith(color: Colors.grey),
-            ),
+                ),
+              ),
+              // Divider
+              Container(
+                height: 1,
+                color: theme.colorScheme.outlineVariant.withValues(alpha: 0.15),
+              ),
+              // Active Page Content
+              Expanded(
+                child: AnimatedSwitcher(
+                  duration: const Duration(milliseconds: 200),
+                  child: KeyedSubtree(
+                    key: ValueKey(selectedIndex),
+                    child: pages[selectedIndex],
+                  ),
+                ),
+              ),
+            ],
           ),
         ],
       ),
     );
   }
 }
-
-class _SidebarItem extends StatelessWidget {
-  final _NavItem item;
-  final bool selected;
-  final VoidCallback onTap;
-
-  const _SidebarItem({
-    required this.item,
-    required this.selected,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(8),
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 180),
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-        decoration: BoxDecoration(
-          color: selected ? AppTheme.studyColor.withValues(alpha: 0.12) : Colors.transparent,
-          borderRadius: BorderRadius.circular(8),
-        ),
-        child: Row(
-          children: [
-            Icon(
-              selected ? item.selectedIcon : item.icon,
-              size: 20,
-              color: selected ? AppTheme.studyColor : theme.colorScheme.onSurface.withValues(alpha: 0.7),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Text(
-                item.label,
-                style: theme.textTheme.bodyMedium?.copyWith(
-                  fontWeight: selected ? FontWeight.w600 : FontWeight.normal,
-                  color: selected ? AppTheme.studyColor : null,
-                ),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _NavItem {
-  final IconData icon;
-  final IconData selectedIcon;
-  final String label;
-  const _NavItem(this.icon, this.selectedIcon, this.label);
-}
-
-// removed _NotesListPage
