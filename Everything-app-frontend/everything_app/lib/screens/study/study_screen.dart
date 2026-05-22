@@ -120,7 +120,7 @@ class _StudyScreenState extends State<StudyScreen> {
                             color: Color(0xFFC2C1FF),
                           ),
                           Text(
-                            'STUDIUM SPACE',
+                            'STUDIUM',
                             style: theme.textTheme.titleMedium?.copyWith(
                               fontFamily: 'Manrope',
                               fontWeight: FontWeight.w900,
