@@ -69,7 +69,7 @@ class GymSessionCard extends StatelessWidget {
             mainAxisAlignment: MainAxisAlignment.spaceAround,
             children: [
               _metric('Volume', '${volume.round()} kg'),
-              _metric('Time', '${duration} min'),
+              _metric('Time', '$duration min'),
               _metric('Sets', '$sets'),
             ],
           ),

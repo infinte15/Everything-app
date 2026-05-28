@@ -481,13 +481,11 @@ class _StudySubjectsPageState extends State<StudySubjectsPage> {
       String? lookupId = _currentFolderId;
 
       while (lookupId != null && !lookupId.contains('_')) {
-        final folder = allFolders.firstWhere((f) => f.id == lookupId, orElse: () => null as dynamic);
-        if (folder != null) {
-          pathChain.insert(0, folder);
-          lookupId = folder.parentId;
-        } else {
-          break;
-        }
+        final matches = allFolders.where((f) => f.id == lookupId);
+        if (matches.isEmpty) break;
+        final folder = matches.first;
+        pathChain.insert(0, folder);
+        lookupId = folder.parentId;
       }
 
       for (var folder in pathChain) {
@@ -926,7 +924,11 @@ class _StudySubjectsPageState extends State<StudySubjectsPage> {
       builder: (ctx) => AlertDialog(
         shape: const RoundedRectangleBorder(borderRadius: BorderRadius.zero),
         title: Text(note.title),
-        content: SingleChildScrollView(child: Text(note.content ?? 'Kein Inhalt vorhanden.')),
+        content: SingleChildScrollView(
+          child: Text(
+            note.content.isEmpty ? 'Kein Inhalt vorhanden.' : note.content,
+          ),
+        ),
         actions: [
           TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('SCHLIESSEN')),
         ],

@@ -220,7 +220,7 @@ class _HabitsScreenState extends State<HabitsScreen>
                           ),
                           belowBarData: BarAreaData(
                             show: true,
-                            color: const Color(0xFF5856D6).withOpacity(0.15),
+                            color: const Color(0xFF5856D6).withValues(alpha: 0.15),
                           ),
                         ),
                       ],
@@ -270,7 +270,7 @@ class _HabitsScreenState extends State<HabitsScreen>
                           child: Container(
                             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                             decoration: BoxDecoration(
-                              color: isCompletedToday ? const Color(0xFF5856D6).withOpacity(0.2) : Colors.transparent,
+                              color: isCompletedToday ? const Color(0xFF5856D6).withValues(alpha: 0.2) : Colors.transparent,
                               borderRadius: BorderRadius.circular(8),
                               border: Border.all(
                                 color: isCompletedToday ? const Color(0xFF5856D6) : const Color(0xFF333333),
@@ -410,8 +410,8 @@ class _HabitTile extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final String habitName = habit.name;
-    final int priority = habit.priority ?? 3;
-    final String category = habit.category ?? 'Personal';
+    final int priority = habit.priority;
+    final String category = habit.category;
     final int streak = habit.currentStreak;
 
     // 2. Farbauflösung aus Hex-String (z.B. "#5856D6")
@@ -463,7 +463,7 @@ class _HabitTile extends StatelessWidget {
                           Container(
                             padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                             decoration: BoxDecoration(
-                              color: Colors.white.withOpacity(0.05),
+                              color: Colors.white.withValues(alpha: 0.05),
                               borderRadius: BorderRadius.circular(4),
                             ),
                             child: Text(
@@ -475,7 +475,7 @@ class _HabitTile extends StatelessWidget {
                           Container(
                             padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
                             decoration: BoxDecoration(
-                              color: habitColor.withOpacity(0.1),
+                              color: habitColor.withValues(alpha: 0.1),
                               borderRadius: BorderRadius.circular(4),
                             ),
                             child: Text(

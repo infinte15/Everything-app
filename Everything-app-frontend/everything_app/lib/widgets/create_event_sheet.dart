@@ -4,7 +4,6 @@ import 'package:intl/intl.dart';
 import '../providers/calendar_provider.dart';
 import '../providers/task_provider.dart';
 import '../models/calendar_event.dart';
-import '../config/app_theme.dart';
 
 class CreateEventSheet extends StatefulWidget {
   final DateTime selectedDay;

@@ -3,7 +3,6 @@ import 'package:provider/provider.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../../providers/study_provider.dart';
 import '../../models/study_note.dart';
-import '../../config/app_theme.dart';
 import '../../widgets/create_note_sheet.dart';
 
 class NotesScreen extends StatefulWidget {

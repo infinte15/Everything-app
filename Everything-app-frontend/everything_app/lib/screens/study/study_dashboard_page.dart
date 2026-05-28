@@ -690,15 +690,16 @@ SliverToBoxAdapter(
                                     noteCount == 0 ? 'Neuigkeiten' : '$noteCount Dokumente',
                                     style: theme.textTheme.labelSmall?.copyWith(
                                       color: theme.colorScheme.onSurfaceVariant,
-                                ),
+                                    ),
+                                  ),
+                                ],
                               ),
                             ],
                           ),
-                        ],
-                      ),
-                    );
-                  }
-                },
+                        );
+                      }
+                      return const SizedBox.shrink();
+                    },
                 childCount: provider.subjects.length,
               ),
             );

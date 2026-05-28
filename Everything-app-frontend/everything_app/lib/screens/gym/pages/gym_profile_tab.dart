@@ -34,7 +34,7 @@ class _GymProfileTabState extends State<GymProfileTab> with SingleTickerProvider
     final maxVol = chartPoints.isEmpty ? 1.0 : chartPoints.reduce((a, b) => a > b ? a : b);
 
     return NestedScrollView(
-      headerSliverBuilder: (_, __) => [
+      headerSliverBuilder: (_, _) => [
         SliverAppBar(
           floating: true,
           backgroundColor: LyftaTheme.background,

@@ -60,8 +60,8 @@ class _CreateHabitSheetState extends State<CreateHabitSheet> {
       _minDurationController.text = (h.durationMinutes ?? 30).toString();
       _maxDurationController.text = (h.durationMinutes ?? 30).toString();
       
-      _priority = h.priority ?? 3;
-      _category = h.category ?? 'Personal';
+      _priority = h.priority;
+      _category = h.category;
       
       if (h.color != null && h.color!.isNotEmpty) {
         try {
@@ -124,7 +124,11 @@ class _CreateHabitSheetState extends State<CreateHabitSheet> {
     );
     if (date != null) {
       setState(() {
-        if (isStart) _startDate = date; else _endDate = date;
+        if (isStart) {
+          _startDate = date;
+        } else {
+          _endDate = date;
+        }
       });
     }
   }
@@ -460,7 +464,7 @@ class _CreateHabitSheetState extends State<CreateHabitSheet> {
                     endDate: _endDate,
                     priority: _priority,
                     category: _category,
-                    color: '#${_selectedColor.value.toRadixString(16).substring(2, 8).toUpperCase()}',
+                    color: '#${_selectedColor.toARGB32().toRadixString(16).substring(2, 8).toUpperCase()}',
                     currentStreak: widget.habitToEdit?.currentStreak ?? 0,
                     longestStreak: widget.habitToEdit?.longestStreak ?? 0,
                   );
@@ -509,7 +513,6 @@ class _BuildDurationInput extends StatelessWidget {
   final Function(int) onDelta;
   const _BuildDurationInput({required this.label, required this.controller, required this.onDelta});
   @override Widget build(BuildContext context) {
-    final borderColor = Theme.of(context).brightness == Brightness.dark ? const Color(0xFF333333) : const Color(0xFFE8EAF0);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [

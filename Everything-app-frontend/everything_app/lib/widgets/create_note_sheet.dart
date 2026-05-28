@@ -3,11 +3,9 @@ import 'package:provider/provider.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../providers/study_provider.dart';
 
-import '../config/app_theme.dart';
 
 // Stitch Design System: Kinetic Mono
 const _primary = Color(0xFF5856D6);
-const _outlineVariant = Color(0xFF333333);
 
 class CreateNoteSheet extends StatefulWidget {
   const CreateNoteSheet({super.key});

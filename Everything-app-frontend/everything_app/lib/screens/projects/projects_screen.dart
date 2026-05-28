@@ -115,7 +115,7 @@ class _ProjectsScreenState extends State<ProjectsScreen> {
               margin: const EdgeInsets.only(right: 8),
               padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
               decoration: BoxDecoration(
-                color: isSelected ? col.color.withOpacity(0.15) : Colors.transparent,
+                color: isSelected ? col.color.withValues(alpha: 0.15) : Colors.transparent,
                 borderRadius: BorderRadius.circular(20),
                 border: Border.all(
                   color: isSelected ? col.color : const Color(0xFF333336),
@@ -248,9 +248,9 @@ class _KanbanColumnState extends State<_KanbanColumn> {
           width: double.infinity,
           margin: const EdgeInsets.only(right: 8, bottom: 8),
           decoration: BoxDecoration(
-            color: _isHovered ? col.color.withOpacity(0.07) : const Color(0xFF0F0F11),
+            color: _isHovered ? col.color.withValues(alpha: 0.07) : const Color(0xFF0F0F11),
             borderRadius: BorderRadius.circular(10),
-            border: Border.all(color: _isHovered ? col.color.withOpacity(0.5) : Colors.transparent, width: 1.5),
+            border: Border.all(color: _isHovered ? col.color.withValues(alpha: 0.5) : Colors.transparent, width: 1.5),
           ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -453,17 +453,6 @@ class _ProjectDetailScreen extends StatelessWidget {
   }
 }
 
-class _Chip extends StatelessWidget {
-  final String label;
-  const _Chip(this.label);
-  @override
-  Widget build(BuildContext context) => Container(
-    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-    decoration: BoxDecoration(color: const Color(0xFF1A1A1C), borderRadius: BorderRadius.circular(8), border: Border.all(color: const Color(0xFF2A2A2D))),
-    child: Text(label, style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold)),
-  );
-}
-
 class _InfoRow extends StatelessWidget {
   final String label;
   final String value;
@@ -520,7 +509,13 @@ class _CreateProjectSheetState extends State<_CreateProjectSheet> {
       initialDate: (isStart ? _startDate : _targetEnd) ?? DateTime.now(),
       firstDate: DateTime(2020), lastDate: DateTime(2035),
     );
-    if (picked != null) setState(() { if (isStart) _startDate = picked; else _targetEnd = picked; });
+    if (picked != null) {
+      setState(() { if (isStart) {
+      _startDate = picked;
+    } else {
+      _targetEnd = picked;
+    } });
+    }
   }
 
   Future<void> _save() async {
@@ -575,7 +570,7 @@ class _CreateProjectSheetState extends State<_CreateProjectSheet> {
                   child: ChoiceChip(
                     label: Text(col.label),
                     selected: _status == col.status,
-                    selectedColor: col.color.withOpacity(0.3),
+                    selectedColor: col.color.withValues(alpha: 0.3),
                     backgroundColor: const Color(0xFF1A1A1C),
                     side: BorderSide(color: _status == col.status ? col.color : const Color(0xFF333336)),
                     labelStyle: TextStyle(color: _status == col.status ? Colors.white : Colors.grey, fontWeight: FontWeight.w600, fontSize: 12),
@@ -606,13 +601,13 @@ class _CreateProjectSheetState extends State<_CreateProjectSheet> {
               ])),
               const SizedBox(width: 12),
               Expanded(child: Column(children: [
-                Text('${_sessionMins} Min / Session', style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14)),
+                Text('$_sessionMins Min / Session', style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14)),
                 Slider(value: _sessionMins.toDouble(), min: 15, max: 240, divisions: 15, activeColor: const Color(0xFF5856D6), label: '$_sessionMins Min', onChanged: (v) => setState(() => _sessionMins = v.round())),
               ])),
             ]),
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-              decoration: BoxDecoration(color: const Color(0xFF5856D6).withOpacity(0.1), borderRadius: BorderRadius.circular(8)),
+              decoration: BoxDecoration(color: const Color(0xFF5856D6).withValues(alpha: 0.1), borderRadius: BorderRadius.circular(8)),
               child: Row(children: [
                 const Icon(Icons.timer_outlined, color: Color(0xFFC2C1FF), size: 16),
                 const SizedBox(width: 8),

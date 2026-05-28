@@ -6,7 +6,6 @@ import 'package:google_fonts/google_fonts.dart';
 const _backgroundColor    = Color(0xFF0E0E0E);
 const _cardColor          = Color(0xFF252626);
 const _onSurface          = Color(0xFFE7E5E5);
-const _onSurfaceVariant   = Color(0xFFACABAA);
 const _primaryColor       = Color(0xFFC2C1FF);
 const _appBarColor        = Color(0xFF131313);
 
@@ -90,8 +89,9 @@ class SpacesScreen extends StatelessWidget {
         builder: (context, constraints) {
           // 1 col on narrow, 2 on medium, 3 on wide — matching the HTML breakpoints
           int columns = 1;
-          if (constraints.maxWidth >= 900) columns = 3;
-          else if (constraints.maxWidth >= 600) columns = 2;
+          if (constraints.maxWidth >= 900) {
+            columns = 3;
+          } else if (constraints.maxWidth >= 600) columns = 2;
 
           return GridView.builder(
             padding: const EdgeInsets.fromLTRB(24, 24, 24, 100),
