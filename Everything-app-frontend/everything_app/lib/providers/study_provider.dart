@@ -216,9 +216,42 @@ class StudyProvider with ChangeNotifier {
   Future<void> _loadGrades() async {
     await Future.delayed(const Duration(milliseconds: 100));
     _grades = [
-      StudyGrade(id: 'g1', subjectId: '1', examName: 'Klausur', grade: 2.0, weight: 1.0, date: DateTime.now().subtract(const Duration(days: 30))),
-      StudyGrade(id: 'g2', subjectId: '2', examName: 'Projekt', grade: 1.3, weight: 1.0, date: DateTime.now().subtract(const Duration(days: 20))),
-      StudyGrade(id: 'g3', subjectId: '3', examName: 'Klausur', grade: 2.7, weight: 1.0, date: DateTime.now().subtract(const Duration(days: 10))),
+      StudyGrade(
+        id: 'g1',
+        subjectId: '1',
+        examName: 'Klausur',
+        examType: 'Klausur',
+        grade: 2.0,
+        weightPercent: 70,
+        date: DateTime.now().subtract(const Duration(days: 30)),
+      ),
+      StudyGrade(
+        id: 'g1b',
+        subjectId: '1',
+        examName: 'Übungspaket',
+        examType: 'Übung',
+        grade: 1.7,
+        weightPercent: 30,
+        date: DateTime.now().subtract(const Duration(days: 25)),
+      ),
+      StudyGrade(
+        id: 'g2',
+        subjectId: '2',
+        examName: 'Projektarbeit',
+        examType: 'Projekt',
+        grade: 1.3,
+        weightPercent: 100,
+        date: DateTime.now().subtract(const Duration(days: 20)),
+      ),
+      StudyGrade(
+        id: 'g3',
+        subjectId: '3',
+        examName: 'Klausur',
+        examType: 'Klausur',
+        grade: 2.7,
+        weightPercent: 100,
+        date: DateTime.now().subtract(const Duration(days: 10)),
+      ),
     ];
   }
 
@@ -460,27 +493,20 @@ class StudyProvider with ChangeNotifier {
   }
 
   // ── Grades ───────────────────────────────────────────────────────────────────
-  double get gpa {
-    if (_grades.isEmpty) return 0.0;
-    double weighted = 0;
-    int credits = 0;
-    for (final g in _grades) {
-      final subject = _subjects.firstWhere((s) => s.id == g.subjectId, orElse: () => StudySubject(id: '', name: ''));
-      weighted += g.grade * subject.creditPoints * g.weight;
-      credits += (subject.creditPoints * g.weight).round();
-    }
-    return credits > 0 ? weighted / credits : 0.0;
-  }
-
-  int get totalCredits =>
-      _grades.fold<int>(0, (s, g) {
-        final subject = _subjects.firstWhere((sub) => sub.id == g.subjectId, orElse: () => StudySubject(id: '', name: ''));
-        return s + subject.creditPoints;
-      });
+  List<StudyGrade> gradesForSubject(String subjectId) =>
+      _grades.where((g) => g.subjectId == subjectId).toList();
 
   void addGrade(StudyGrade grade) {
     _grades.add(grade);
     notifyListeners();
+  }
+
+  void updateGrade(StudyGrade grade) {
+    final idx = _grades.indexWhere((g) => g.id == grade.id);
+    if (idx != -1) {
+      _grades[idx] = grade;
+      notifyListeners();
+    }
   }
 
   void deleteGrade(String gradeId) {

@@ -1,0 +1,36 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "Maven: Spring Boot Run",
+      "type": "shell",
+      "command": "mvn",
+      "args": ["-pl", "Everything-app-backend/everything-app", "spring-boot:run"],
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "group": {
+        "kind": "build",
+        "isDefault": true
+      },
+      "problemMatcher": []
+    },
+    {
+      "label": "Maven: Download Dependencies",
+      "type": "shell",
+      "command": "mvn",
+      "args": [
+        "-pl",
+        "Everything-app-backend/everything-app",
+        "-am",
+        "dependency:resolve",
+        "package",
+        "-DskipTests"
+      ],
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "problemMatcher": []
+    }
+  ]
+}
