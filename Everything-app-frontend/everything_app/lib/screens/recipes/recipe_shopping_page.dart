@@ -141,7 +141,7 @@ class RecipeShoppingPage extends StatelessWidget {
               ),
               const SizedBox(height: 16),
               DropdownButtonFormField<String>(
-                value: category,
+                initialValue: category,
                 decoration: const InputDecoration(labelText: 'Kategorie'),
                 items: categories
                     .map((c) => DropdownMenuItem(value: c, child: Text(c)))

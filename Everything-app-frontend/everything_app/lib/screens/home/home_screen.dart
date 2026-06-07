@@ -187,7 +187,7 @@ class _SectionTitle extends StatelessWidget {
               ),
             ),
           ),
-        if (rightAction != null) rightAction!,
+        ?rightAction,
       ],
     );
   }
@@ -237,7 +237,7 @@ class _HorizontalDateSelectorState extends State<_HorizontalDateSelector> {
                 color: isSelected
                     ? _primary
                     : isHovered
-                        ? _primary.withOpacity(0.15)
+                        ? _primary.withValues(alpha: 0.15)
                         : Colors.transparent,
                 child: Opacity(
                   opacity: isSelected ? 1.0 : isHovered ? 0.7 : 0.4,
@@ -463,7 +463,7 @@ class _SpaceCardState extends State<_SpaceCard> {
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 150),
           margin: EdgeInsets.only(right: widget.isLast ? 0 : 16),
-          color: _hovered ? _primary.withOpacity(0.15) : _surfaceColor,
+          color: _hovered ? _primary.withValues(alpha: 0.15) : _surfaceColor,
           padding: const EdgeInsets.all(20),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,

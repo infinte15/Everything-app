@@ -1,10 +1,14 @@
 import 'dart:async';
-
 import 'package:flutter/material.dart';
-
 import '../models/gym/gym_models.dart';
+import '../services/sports_service.dart';
+import '../services/habit_service.dart';
+import '../models/habit.dart';
 
 class SportsProvider with ChangeNotifier {
+  final SportsService _service = SportsService();
+  final HabitService _habitService = HabitService();
+
   List<Map<String, dynamic>> _workoutPlans = [];
   List<Map<String, dynamic>> _workoutSessions = [];
   List<Map<String, dynamic>> _exercises = [];
@@ -41,7 +45,7 @@ class SportsProvider with ChangeNotifier {
     final now = DateTime.now();
     final weekStart = now.subtract(Duration(days: now.weekday - 1));
     return _workoutSessions.where((w) {
-      final d = w['date'] as DateTime? ?? DateTime.now();
+      final d = w['date'] != null ? DateTime.parse(w['date'].toString()) : DateTime.now();
       return !d.isBefore(weekStart);
     }).fold<double>(0, (s, w) => s + ((w['totalVolumeKg'] as num?)?.toDouble() ?? _sessionVolume(w)));
   }
@@ -118,139 +122,86 @@ class SportsProvider with ChangeNotifier {
   }
 
   Future<void> _loadWorkoutPlans() async {
-    await Future.delayed(const Duration(milliseconds: 200));
-    _workoutPlans = [
-      {
-        'id': 1,
-        'name': 'Push Day',
-        'day': 'Mon',
-        'exercises': [
-          {'name': 'Bench Press', 'sets': 4, 'reps': 8, 'weight': 80, 'exerciseId': 1},
-          {'name': 'Incline Dumbbell Press', 'sets': 3, 'reps': 10, 'weight': 28, 'exerciseId': 6},
-          {'name': 'Cable Fly', 'sets': 3, 'reps': 12, 'weight': 15, 'exerciseId': 7},
-          {'name': 'Lateral Raise', 'sets': 3, 'reps': 15, 'weight': 10, 'exerciseId': 8},
-        ],
-        'estimatedDuration': 60,
-      },
-      {
-        'id': 2,
-        'name': 'Pull Day',
-        'day': 'Wed',
-        'exercises': [
-          {'name': 'Deadlift', 'sets': 4, 'reps': 5, 'weight': 120, 'exerciseId': 3},
-          {'name': 'Barbell Row', 'sets': 4, 'reps': 8, 'weight': 70, 'exerciseId': 9},
-          {'name': 'Lat Pulldown', 'sets': 3, 'reps': 10, 'weight': 55, 'exerciseId': 10},
-          {'name': 'Barbell Curl', 'sets': 3, 'reps': 12, 'weight': 25, 'exerciseId': 11},
-        ],
-        'estimatedDuration': 65,
-      },
-      {
-        'id': 3,
-        'name': 'Leg Day',
-        'day': 'Fri',
-        'exercises': [
-          {'name': 'Squat', 'sets': 4, 'reps': 6, 'weight': 100, 'exerciseId': 2},
-          {'name': 'Leg Press', 'sets': 3, 'reps': 10, 'weight': 150, 'exerciseId': 12},
-          {'name': 'Leg Curl', 'sets': 3, 'reps': 12, 'weight': 40, 'exerciseId': 13},
-          {'name': 'Calf Raise', 'sets': 4, 'reps': 15, 'weight': 60, 'exerciseId': 14},
-        ],
-        'estimatedDuration': 70,
-      },
-    ];
+    _workoutPlans = await _service.getAllPlans();
+    // Falls keine Backend-Workouts existieren, kann man Optional die Templates importieren.
+    // Aber wir belassen es bei leeren Listen, wenn das Backend leer ist.
   }
 
   Future<void> _loadWorkoutSessions() async {
-    await Future.delayed(const Duration(milliseconds: 200));
-    final now = DateTime.now();
-    _workoutSessions = [
-      {
-        'id': 1,
-        'name': 'Push Day',
-        'date': now.subtract(const Duration(days: 1)),
-        'durationMinutes': 72,
-        'exercises': [
-          {'name': 'Bench Press', 'sets': 4, 'reps': 8, 'weight': 80},
-          {'name': 'Incline Dumbbell Press', 'sets': 3, 'reps': 10, 'weight': 28},
-        ],
-        'totalSets': 16,
-        'totalVolumeKg': 4548.0,
-        'notes': 'Felt strong on bench',
-      },
-      {
-        'id': 2,
-        'name': 'Pull Day',
-        'date': now.subtract(const Duration(days: 3)),
-        'durationMinutes': 68,
-        'exercises': [
-          {'name': 'Deadlift', 'sets': 4, 'reps': 5, 'weight': 120},
-          {'name': 'Barbell Row', 'sets': 4, 'reps': 8, 'weight': 70},
-        ],
-        'totalSets': 14,
-        'totalVolumeKg': 3820.0,
-        'notes': '',
-      },
-      {
-        'id': 3,
-        'name': 'Leg Day',
-        'date': now.subtract(const Duration(days: 5)),
-        'durationMinutes': 75,
-        'exercises': [
-          {'name': 'Squat', 'sets': 4, 'reps': 6, 'weight': 100},
-        ],
-        'totalSets': 12,
-        'totalVolumeKg': 5200.0,
-        'notes': 'PR on squat',
-      },
-    ];
+    final sessions = await _service.getAllSessions();
+    
+    // Wir müssen die Sets für jede Session laden oder das Backend gibt sie mit. 
+    // Hier formatieren wir die Datum-Strings zu echten DateTimes für das Frontend
+    _workoutSessions = sessions.map((s) {
+      if (s['startTime'] != null && s['date'] == null) {
+         s['date'] = s['startTime']; // Fallback
+      }
+      return s;
+    }).toList();
   }
 
   Future<void> _loadExercises() async {
-    await Future.delayed(const Duration(milliseconds: 150));
-    _exercises = [
-      {'id': 1, 'name': 'Bench Press', 'category': 'Chest', 'equipment': 'Barbell', 'difficulty': 'intermediate', 'muscleGroups': ['Chest', 'Triceps', 'Shoulders']},
-      {'id': 2, 'name': 'Squat', 'category': 'Legs', 'equipment': 'Barbell', 'difficulty': 'intermediate', 'muscleGroups': ['Quads', 'Glutes']},
-      {'id': 3, 'name': 'Deadlift', 'category': 'Back', 'equipment': 'Barbell', 'difficulty': 'advanced', 'muscleGroups': ['Back', 'Glutes', 'Hamstrings']},
-      {'id': 4, 'name': 'Overhead Press', 'category': 'Shoulders', 'equipment': 'Barbell', 'difficulty': 'intermediate', 'muscleGroups': ['Shoulders', 'Triceps']},
-      {'id': 5, 'name': 'Dumbbell Bench Press', 'category': 'Chest', 'equipment': 'Dumbbell', 'difficulty': 'beginner', 'muscleGroups': ['Chest', 'Triceps']},
-      {'id': 6, 'name': 'Incline Dumbbell Press', 'category': 'Chest', 'equipment': 'Dumbbell', 'difficulty': 'intermediate', 'muscleGroups': ['Chest']},
-      {'id': 7, 'name': 'Cable Fly', 'category': 'Chest', 'equipment': 'Cable', 'difficulty': 'beginner', 'muscleGroups': ['Chest']},
-      {'id': 8, 'name': 'Lateral Raise', 'category': 'Shoulders', 'equipment': 'Dumbbell', 'difficulty': 'beginner', 'muscleGroups': ['Shoulders']},
-      {'id': 9, 'name': 'Barbell Row', 'category': 'Back', 'equipment': 'Barbell', 'difficulty': 'intermediate', 'muscleGroups': ['Back', 'Biceps']},
-      {'id': 10, 'name': 'Lat Pulldown', 'category': 'Back', 'equipment': 'Cable', 'difficulty': 'beginner', 'muscleGroups': ['Back', 'Biceps']},
-      {'id': 11, 'name': 'Barbell Curl', 'category': 'Arms', 'equipment': 'Barbell', 'difficulty': 'beginner', 'muscleGroups': ['Biceps']},
-      {'id': 12, 'name': 'Leg Press', 'category': 'Legs', 'equipment': 'Machine', 'difficulty': 'beginner', 'muscleGroups': ['Quads', 'Glutes']},
-      {'id': 13, 'name': 'Leg Curl', 'category': 'Legs', 'equipment': 'Machine', 'difficulty': 'beginner', 'muscleGroups': ['Hamstrings']},
-      {'id': 14, 'name': 'Calf Raise', 'category': 'Legs', 'equipment': 'Machine', 'difficulty': 'beginner', 'muscleGroups': ['Calves']},
-      {'id': 15, 'name': 'Triceps Pushdown', 'category': 'Arms', 'equipment': 'Cable', 'difficulty': 'beginner', 'muscleGroups': ['Triceps']},
-      {'id': 16, 'name': 'Face Pull', 'category': 'Shoulders', 'equipment': 'Cable', 'difficulty': 'beginner', 'muscleGroups': ['Shoulders', 'Back']},
-      {'id': 17, 'name': 'Romanian Deadlift', 'category': 'Legs', 'equipment': 'Barbell', 'difficulty': 'intermediate', 'muscleGroups': ['Hamstrings', 'Glutes']},
-      {'id': 18, 'name': 'Pull-up', 'category': 'Back', 'equipment': 'Bodyweight', 'difficulty': 'intermediate', 'muscleGroups': ['Back', 'Biceps']},
-    ];
+    _exercises = await _service.getAllExercises();
   }
 
-  void addRoutine({
+  Future<void> addRoutine({
     required String name,
     String? day,
     required List<Map<String, dynamic>> exercises,
     int estimatedMinutes = 60,
-  }) {
-    _workoutPlans.add({
-      'id': _workoutPlans.length + 1,
+  }) async {
+    final planData = {
       'name': name,
-      'day': day,
-      'exercises': exercises,
-      'estimatedDuration': estimatedMinutes,
-    });
-    notifyListeners();
+      'goal': 'Hypertrophy',
+      'difficulty': 'Intermediate',
+      'durationWeeks': 12,
+      'workoutsPerWeek': 3,
+      // Das Backend hat keine direkten "Exercises" im Plan-DTO verknüpft,
+      // man müsste hier ggf. Sessions/Routinen zum Plan erstellen.
+    };
+    
+    final created = await _service.createPlan(planData);
+    if (created != null) {
+       _workoutPlans.add(created);
+       
+       // Also create a Habit in the backend so the SmartScheduler picks it up
+       try {
+         final habit = Habit(
+           name: 'Workout: $name',
+           description: 'Gym Routine: $name',
+           frequency: 'WEEKLY',
+           monday: day == 'Montag' || day == null, 
+           tuesday: day == 'Dienstag' || day == null, 
+           wednesday: day == 'Mittwoch' || day == null, 
+           thursday: day == 'Donnerstag' || day == null,
+           friday: day == 'Freitag' || day == null, 
+           saturday: day == 'Samstag', 
+           sunday: day == 'Sonntag',
+           durationMinutes: estimatedMinutes,
+           category: 'SPORTS',
+           color: '#9C27B0',
+         );
+         await _habitService.createHabit(habit);
+       } catch (e) {
+         debugPrint('Error syncing Routine to Habit: $e');
+       }
+
+       notifyListeners();
+    }
   }
 
   Future<bool> startWorkout(int workoutPlanId) async {
     try {
       final plan = _workoutPlans.firstWhere((p) => p['id'] == workoutPlanId);
+      // Fallback auf leere Übungsliste, wenn keine "exercises" am Plan hängen
+      final templateExercises = plan.containsKey('exercises') 
+          ? List<Map<String, dynamic>>.from(plan['exercises'] as List)
+          : <Map<String, dynamic>>[];
+          
       _initWorkout(
         name: plan['name'] as String? ?? 'Workout',
         planId: workoutPlanId,
-        templateExercises: List<Map<String, dynamic>>.from(plan['exercises'] as List),
+        templateExercises: templateExercises,
       );
       return true;
     } catch (e) {
@@ -305,7 +256,7 @@ class SportsProvider with ChangeNotifier {
     for (final e in _exercises) {
       if (e['name'] == name) return e['id'] as int? ?? 0;
     }
-    return 0;
+    return 0; // 0 ist ungültig, Backend erwartet valide ID
   }
 
   void addExerciseToWorkout(Map<String, dynamic> exercise, {int sets = 3}) {
@@ -489,20 +440,51 @@ class SportsProvider with ChangeNotifier {
       final durationMinutes = DateTime.now().difference(startTime).inMinutes;
       final stats = getActiveWorkoutStats();
 
-      final session = {
-        'id': _workoutSessions.length + 1,
+      // Create Session via API
+      final sessionData = {
         'workoutPlanId': _currentWorkout!['workoutPlanId'],
         'name': _currentWorkout!['name'],
-        'date': DateTime.now(),
+        'startTime': startTime.toIso8601String(),
+        'endTime': DateTime.now().toIso8601String(),
         'durationMinutes': durationMinutes < 1 ? 1 : durationMinutes,
-        'exercises': _currentWorkout!['exercises'],
-        'totalSets': stats['completedSets'],
-        'totalVolumeKg': stats['volume'],
+        'caloriesBurned': durationMinutes * 8, // dummy calc
+        'intensity': 7, // dummy
         'notes': notes ?? '',
+        'isCompleted': true,
+        'workoutType': 'WEIGHTLIFTING'
       };
 
-      await Future.delayed(const Duration(milliseconds: 200));
-      _workoutSessions.insert(0, session);
+      final createdSession = await _service.createSession(sessionData);
+      
+      if (createdSession != null) {
+        final sessionId = createdSession['id'];
+        
+        // Also log sets
+        for (final ex in _currentWorkout!['exercises'] as List) {
+          final exerciseId = ex['exerciseId'] as int;
+          for (final s in (ex as Map)['loggedSets'] as List) {
+            if (s['done'] == true) {
+              await _service.createSet({
+                'exerciseId': exerciseId,
+                'workoutSessionId': sessionId,
+                'setNumber': s['set'],
+                'reps': s['reps'],
+                'weight': s['weight'],
+                'isCompleted': true
+              });
+            }
+          }
+        }
+        
+        // Optimistic UI Update
+        createdSession['date'] = createdSession['startTime']; 
+        createdSession['exercises'] = _currentWorkout!['exercises'];
+        createdSession['totalSets'] = stats['completedSets'];
+        createdSession['totalVolumeKg'] = stats['volume'];
+        
+        _workoutSessions.insert(0, createdSession);
+      }
+
       _currentWorkout = null;
       skipRest();
       notifyListeners();
@@ -523,7 +505,7 @@ class SportsProvider with ChangeNotifier {
   List<Map<String, dynamic>> getWorkoutsForWeek(DateTime weekStart) {
     final weekEnd = weekStart.add(const Duration(days: 7));
     return _workoutSessions.where((w) {
-      final date = w['date'] as DateTime;
+      final date = w['date'] != null ? DateTime.parse(w['date'].toString()) : DateTime.now();
       return !date.isBefore(weekStart) && date.isBefore(weekEnd);
     }).toList();
   }
@@ -539,7 +521,7 @@ class SportsProvider with ChangeNotifier {
       'goal': 5,
       'totalMinutes': weekWorkouts.fold<int>(
         0,
-        (sum, w) => sum + (w['durationMinutes'] as int),
+        (sum, w) => sum + (w['durationMinutes'] as int? ?? 0),
       ),
       'totalVolume': weekWorkouts.fold<double>(
         0,
@@ -555,7 +537,7 @@ class SportsProvider with ChangeNotifier {
       final start = now.subtract(Duration(days: (weeks - i) * 7));
       final end = start.add(const Duration(days: 7));
       return _workoutSessions.where((w) {
-        final d = w['date'] as DateTime;
+        final d = w['date'] != null ? DateTime.parse(w['date'].toString()) : DateTime.now();
         return !d.isBefore(start) && d.isBefore(end);
       }).fold<double>(
         0,
@@ -567,13 +549,17 @@ class SportsProvider with ChangeNotifier {
   int _calculateStreak() {
     if (_workoutSessions.isEmpty) return 0;
     final sorted = List<Map<String, dynamic>>.from(_workoutSessions)
-      ..sort((a, b) => (b['date'] as DateTime).compareTo(a['date'] as DateTime));
+      ..sort((a, b) {
+        final dateA = a['date'] != null ? DateTime.parse(a['date'].toString()) : DateTime.now();
+        final dateB = b['date'] != null ? DateTime.parse(b['date'].toString()) : DateTime.now();
+        return dateB.compareTo(dateA);
+      });
 
     int streak = 0;
     DateTime? lastDate;
 
     for (final session in sorted) {
-      final date = session['date'] as DateTime;
+      final date = session['date'] != null ? DateTime.parse(session['date'].toString()) : DateTime.now();
       if (lastDate == null) {
         final daysDiff = DateTime.now().difference(date).inDays;
         if (daysDiff > 7) return 0;

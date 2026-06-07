@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import '../models/calendar_event.dart';
 import '../services/calendar_service.dart';
@@ -10,6 +11,40 @@ class CalendarProvider with ChangeNotifier {
   String? _error;
   DateTime _focusedDay = DateTime.now();
   DateTime? _selectedDay;
+  Timer? _pollingTimer;
+
+  CalendarProvider() {
+    _startPolling();
+  }
+
+  void _startPolling() {
+    _pollingTimer?.cancel();
+    // Poll every 30 seconds to catch background SmartScheduler updates
+    _pollingTimer = Timer.periodic(const Duration(seconds: 30), (_) {
+      _pollEventsSilent();
+    });
+  }
+
+  Future<void> _pollEventsSilent() async {
+    // Only poll if we have a focused day
+    try {
+      final month = _focusedDay;
+      final firstDay = DateTime(month.year, month.month, 1);
+      final lastDay = DateTime(month.year, month.month + 1, 0, 23, 59, 59);
+      final newEvents = await _calendarService.getEventsInRange(firstDay, lastDay);
+      // We could check if events changed before notifying, but for now just update
+      _events = newEvents;
+      notifyListeners();
+    } catch (e) {
+      // ignore silently
+    }
+  }
+
+  @override
+  void dispose() {
+    _pollingTimer?.cancel();
+    super.dispose();
+  }
 
   // Getters
   List<CalendarEvent> get events => _events;

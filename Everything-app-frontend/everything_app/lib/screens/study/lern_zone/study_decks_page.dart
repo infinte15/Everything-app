@@ -1,10 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import '../../../providers/study_provider.dart';
-import '../../../models/flashcard_deck.dart';
-import '../widgets/study_kinetic_card.dart';
-import 'study_question_page.dart';
 
+import '../../../providers/study_provider.dart';
+import '../flashcards/flashcard_deck_page.dart';
+import '../flashcards/flashcard_study_page.dart';
+import '../flashcards/widgets/add_deck_sheet.dart';
+import '../widgets/study_kinetic_card.dart';
+
+/// Anki-style flashcard hub: decks, stats, study sessions.
 class StudyDecksPage extends StatelessWidget {
   const StudyDecksPage({super.key});
 
@@ -13,356 +16,189 @@ class StudyDecksPage extends StatelessWidget {
     final theme = Theme.of(context);
     final provider = context.watch<StudyProvider>();
     final decks = provider.flashcardDecks;
-
-    final isWide = MediaQuery.of(context).size.width > 700;
+    final totalDue = provider.dueFlashcards.length;
 
     return Scaffold(
       backgroundColor: const Color(0xFF0E0E0E),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // Header Section
-            Text(
-              'DECK OVERVIEW',
-              style: theme.textTheme.headlineMedium?.copyWith(
-                fontWeight: FontWeight.w900,
-                color: theme.colorScheme.onSurface,
-                letterSpacing: -1.0,
-              ),
-            ),
-            const SizedBox(height: 6),
-            Container(
-              width: 96,
-              height: 4,
-              color: theme.colorScheme.primary,
-            ),
-            const SizedBox(height: 24),
-            Text(
-              'Willkommen zurück. Lerne deine Decks täglich, um dein Langzeitgedächtnis zu trainieren.',
-              style: theme.textTheme.bodyMedium?.copyWith(
-                color: theme.colorScheme.onSurfaceVariant,
-              ),
-            ),
-            const SizedBox(height: 40),
-
-            // Bento Grid for Decks
-            if (decks.isEmpty)
-              Padding(
-                padding: const EdgeInsets.only(bottom: 24),
-                child: StudyKineticCard(
-                  backgroundColor: theme.colorScheme.surfaceContainerLow,
-                  child: const Center(child: Text('Keine Flashcard Decks vorhanden.')),
-                ),
-              )
-            else if (!isWide)
-              Column(
-                children: List.generate(decks.length, (index) {
-                  final deck = decks[index];
-                  final isMainFocus = index == 0;
-                  return Padding(
-                    padding: const EdgeInsets.only(bottom: 16),
-                    child: StudyKineticCard(
-                      backgroundColor: isMainFocus
-                          ? theme.colorScheme.surfaceContainerHighest
-                          : theme.colorScheme.surfaceContainerLow,
-                      padding: const EdgeInsets.all(24),
-                      onTap: () => _startReviewSession(context, deck),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Row(
-                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                            children: [
-                              Text(
-                                isMainFocus ? 'ACTIVE DECK' : 'DECK',
-                                style: theme.textTheme.labelSmall?.copyWith(
-                                  color: theme.colorScheme.primary,
-                                  fontWeight: FontWeight.bold,
-                                  letterSpacing: 1.5,
-                                ),
-                              ),
-                              Icon(
-                                  Icons.play_circle_outline,
-                                  color: theme.colorScheme.primary,
-                                ),
-                            ],
-                          ),
-                          const SizedBox(height: 16),
-                          Text(
-                            deck.title,
-                            style: theme.textTheme.titleLarge?.copyWith(
-                              fontWeight: FontWeight.bold,
-                              color: theme.colorScheme.onSurface,
-                            ),
-                          ),
-                          const SizedBox(height: 4),
-                          Text(
-                            '${deck.totalCards} Karten insgesamt',
-                            style: theme.textTheme.bodySmall?.copyWith(
-                              color: theme.colorScheme.onSurfaceVariant,
-                            ),
-                          ),
-                          const SizedBox(height: 20),
-                          Row(
-                            children: [
-                              _buildStatItem(context, 'FÄLLIG', '${deck.toReviewCount}'),
-                              const SizedBox(width: 24),
-                              _buildStatItem(context, 'FORTSCHRITT', '${deck.masteryPercentage}%'),
-                            ],
-                          ),
-                        ],
+      body: RefreshIndicator(
+        onRefresh: () => provider.loadData(),
+        color: theme.colorScheme.primary,
+        child: CustomScrollView(
+          slivers: [
+            SliverToBoxAdapter(
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(20, 24, 20, 8),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'FLASHCARDS',
+                      style: theme.textTheme.headlineMedium?.copyWith(
+                        fontWeight: FontWeight.w900,
+                        letterSpacing: -0.5,
                       ),
                     ),
-                  );
-                }),
-              )
-            else
-              GridView.builder(
-                shrinkWrap: true,
-                physics: const NeverScrollableScrollPhysics(),
-                gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                  crossAxisCount: isWide ? 2 : 1,
-                  crossAxisSpacing: 16,
-                  mainAxisSpacing: 16,
-                  childAspectRatio: isWide ? 1.5 : 1.8,
-                ),
-                itemCount: decks.length,
-                itemBuilder: (context, index) {
-                  final deck = decks[index];
-                  final isMainFocus = index == 0;
-
-                  return StudyKineticCard(
-                    backgroundColor: isMainFocus
-                        ? theme.colorScheme.surfaceContainerHighest
-                        : theme.colorScheme.surfaceContainerLow,
-                    padding: const EdgeInsets.all(24),
-                    onTap: () => _startReviewSession(context, deck),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Row(
-                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                              children: [
-                                Text(
-                                  isMainFocus ? 'ACTIVE DECK' : 'DECK',
-                                  style: theme.textTheme.labelSmall?.copyWith(
-                                    color: theme.colorScheme.primary,
-                                    fontWeight: FontWeight.bold,
-                                    letterSpacing: 1.5,
-                                  ),
-                                ),
-                                Icon(
-                                  Icons.play_circle_outline,
-                                  color: theme.colorScheme.primary,
-                                ),
-                              ],
-                            ),
-                            const SizedBox(height: 12),
-                            Text(
-                              deck.title,
-                              style: theme.textTheme.titleLarge?.copyWith(
-                                fontWeight: FontWeight.bold,
-                                color: theme.colorScheme.onSurface,
-                              ),
-                            ),
-                            const SizedBox(height: 4),
-                            Text(
-                              '${deck.totalCards} Karten insgesamt',
-                              style: theme.textTheme.bodySmall?.copyWith(
-                                color: theme.colorScheme.onSurfaceVariant,
-                              ),
-                            ),
-                          ],
-                        ),
-                        Row(
-                          children: [
-                            _buildStatItem(context, 'FÄLLIG', '${deck.toReviewCount}'),
-                            const SizedBox(width: 24),
-                            _buildStatItem(context, 'FORTSCHRITT', '${deck.masteryPercentage}%'),
-                          ],
-                        ),
-                      ],
-                    ),
-                  );
-                },
-              ),
-
-            const SizedBox(height: 16),
-
-            // Streak & Stats Card
-            StudyKineticCard(
-              backgroundColor: theme.colorScheme.primaryContainer,
-              padding: const EdgeInsets.all(24),
-              child: Row(
-                children: [
-                  const Icon(Icons.bolt, size: 36, color: Colors.white),
-                  const SizedBox(width: 16),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          'DEIN STREAK: 14 TAGE',
-                          style: theme.textTheme.titleMedium?.copyWith(
-                            fontWeight: FontWeight.w900,
-                            color: Colors.white,
-                          ),
-                        ),
-                        const SizedBox(height: 4),
-                        const Text(
-                          'Dranbleiben lohnt sich. 85% Genauigkeit diese Woche.',
-                          style: TextStyle(color: Colors.white70, fontSize: 12),
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-            ),
-
-            const SizedBox(height: 16),
-
-            // Add New Deck Dotted Card
-            InkWell(
-              onTap: () => _showAddDeckDialog(context),
-              child: Container(
-                width: double.infinity,
-                padding: const EdgeInsets.symmetric(vertical: 36),
-                decoration: BoxDecoration(
-                  border: Border.all(
-                    color: theme.colorScheme.outlineVariant.withValues(alpha: 0.3),
-                    style: BorderStyle.solid,
-                  ),
-                ),
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Icon(Icons.add_circle_outline, size: 32, color: theme.colorScheme.onSurfaceVariant),
-                    const SizedBox(height: 12),
+                    const SizedBox(height: 6),
+                    Container(width: 96, height: 4, color: theme.colorScheme.primary),
+                    const SizedBox(height: 16),
                     Text(
-                      'NEUES DECK ERSTELLEN',
-                      style: theme.textTheme.labelSmall?.copyWith(
-                        fontWeight: FontWeight.bold,
+                      'Lerne wie mit Anki: Karten aufdecken, Schwierigkeit wählen, Wiederholungen planen sich automatisch.',
+                      style: theme.textTheme.bodyMedium?.copyWith(
                         color: theme.colorScheme.onSurfaceVariant,
-                        letterSpacing: 1.5,
                       ),
                     ),
                   ],
                 ),
               ),
             ),
+            if (totalDue > 0)
+              SliverToBoxAdapter(
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(20, 8, 20, 16),
+                  child: StudyKineticCard(
+                    backgroundColor: theme.colorScheme.primaryContainer,
+                    padding: const EdgeInsets.all(20),
+                    child: Row(
+                      children: [
+                        const Icon(Icons.school, color: Colors.white, size: 32),
+                        const SizedBox(width: 16),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                '$totalDue Karten fällig',
+                                style: theme.textTheme.titleMedium?.copyWith(
+                                  color: Colors.white,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                              const Text(
+                                'Starte eine Lerneinheit in einem Deck',
+                                style: TextStyle(color: Colors.white70, fontSize: 12),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            if (decks.isEmpty)
+              SliverToBoxAdapter(
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 20),
+                  child: StudyKineticCard(
+                    backgroundColor: theme.colorScheme.surfaceContainerLow,
+                    child: const Text('Erstelle dein erstes Deck, um zu lernen.'),
+                  ),
+                ),
+              )
+            else
+              SliverPadding(
+                padding: const EdgeInsets.symmetric(horizontal: 20),
+                sliver: SliverList(
+                  delegate: SliverChildBuilderDelegate(
+                    (context, index) {
+                      final deck = decks[index];
+                      final stats = provider.deckStats(deck.id);
+                      final studyCount = stats.due + stats.newCards;
 
-            const SizedBox(height: 100),
+                      return Padding(
+                        padding: const EdgeInsets.only(bottom: 12),
+                        child: StudyKineticCard(
+                          backgroundColor: theme.colorScheme.surfaceContainerLow,
+                          padding: const EdgeInsets.all(18),
+                          onTap: () => Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) => FlashcardDeckPage(deckId: deck.id),
+                            ),
+                          ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Row(
+                                children: [
+                                  Expanded(
+                                    child: Text(
+                                      deck.title,
+                                      style: theme.textTheme.titleMedium?.copyWith(
+                                        fontWeight: FontWeight.bold,
+                                      ),
+                                    ),
+                                  ),
+                                  if (studyCount > 0)
+                                    IconButton(
+                                      icon: Icon(Icons.play_circle_fill,
+                                          color: theme.colorScheme.primary, size: 32),
+                                      onPressed: () => Navigator.push(
+                                        context,
+                                        MaterialPageRoute(
+                                          builder: (_) => FlashcardStudyPage(
+                                            deckId: deck.id,
+                                            deckTitle: deck.title,
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+                                ],
+                              ),
+                              const SizedBox(height: 12),
+                              Row(
+                                children: [
+                                  _pill(context, 'Neu', '${stats.newCards}', const Color(0xFF64D2FF)),
+                                  const SizedBox(width: 8),
+                                  _pill(context, 'Fällig', '${stats.due}', const Color(0xFFFF9F0A)),
+                                  const SizedBox(width: 8),
+                                  _pill(context, 'Gesamt', '${stats.total}', theme.colorScheme.primary),
+                                  const Spacer(),
+                                  Text(
+                                    '${stats.masteryPercent} % gereift',
+                                    style: theme.textTheme.labelSmall?.copyWith(
+                                      color: theme.colorScheme.onSurfaceVariant,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ],
+                          ),
+                        ),
+                      );
+                    },
+                    childCount: decks.length,
+                  ),
+                ),
+              ),
+            SliverToBoxAdapter(
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(20, 8, 20, 100),
+                child: OutlinedButton.icon(
+                  onPressed: () => AddDeckSheet.show(context),
+                  icon: const Icon(Icons.add),
+                  label: const Text('NEUES DECK'),
+                  style: OutlinedButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(vertical: 18),
+                    side: BorderSide(color: theme.colorScheme.primary),
+                    foregroundColor: theme.colorScheme.primary,
+                  ),
+                ),
+              ),
+            ),
           ],
         ),
       ),
     );
   }
 
-  Widget _buildStatItem(BuildContext context, String label, String value) {
-    final theme = Theme.of(context);
+  Widget _pill(BuildContext context, String label, String value, Color color) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(
-          label,
-          style: theme.textTheme.labelSmall?.copyWith(
-            fontSize: 9,
-            color: theme.colorScheme.onSurfaceVariant,
-            letterSpacing: 1.0,
-          ),
-        ),
-        const SizedBox(height: 2),
-        Text(
-          value,
-          style: theme.textTheme.titleMedium?.copyWith(
-            fontWeight: FontWeight.bold,
-            color: theme.colorScheme.onSurface,
-          ),
-        ),
+        Text(label, style: Theme.of(context).textTheme.labelSmall?.copyWith(fontSize: 9)),
+        Text(value, style: TextStyle(color: color, fontWeight: FontWeight.bold, fontSize: 16)),
       ],
-    );
-  }
-
-  void _startReviewSession(BuildContext context, FlashcardDeck deck) {
-    final provider = context.read<StudyProvider>();
-    final dueCards = provider.flashcards.where((f) => f.deckId == deck.id).toList();
-
-    if (dueCards.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Keine fälligen Karten in diesem Deck.')),
-      );
-      return;
-    }
-
-    Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (_) => StudyQuestionPage(
-          card: dueCards.first,
-          deckCards: dueCards,
-          currentIndex: 0,
-        ),
-      ),
-    );
-  }
-
-  void _showAddDeckDialog(BuildContext context) {
-    final titleCtrl = TextEditingController();
-    final provider = context.read<StudyProvider>();
-    String? selectedSubId = provider.subjects.isNotEmpty ? provider.subjects.first.id : null;
-
-    showDialog(
-      context: context,
-      builder: (ctx) => StatefulBuilder(
-        builder: (ctx, setSt) {
-          return AlertDialog(
-            title: const Text('Neues Lern-Deck'),
-            content: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                TextField(controller: titleCtrl, decoration: const InputDecoration(labelText: 'Titel')),
-                if (provider.subjects.isNotEmpty) ...[
-                  const SizedBox(height: 12),
-                  DropdownButtonFormField<String>(
-                    value: selectedSubId,
-                    decoration: const InputDecoration(labelText: 'Fach'),
-                    items: provider.subjects.map((s) {
-                      return DropdownMenuItem(value: s.id, child: Text(s.name));
-                    }).toList(),
-                    onChanged: (val) => setSt(() => selectedSubId = val),
-                  ),
-                ],
-              ],
-            ),
-            actions: [
-              TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Abbrechen')),
-              FilledButton(
-                onPressed: () {
-                  if (titleCtrl.text.trim().isNotEmpty) {
-                    provider.addFlashcardDeck(FlashcardDeck(
-                      id: 'd${DateTime.now().millisecondsSinceEpoch}',
-                      title: titleCtrl.text.trim(),
-                      subjectId: selectedSubId ?? '',
-                      totalCards: 0,
-                      toReviewCount: 0,
-                      masteryPercentage: 0,
-                    ));
-                    Navigator.pop(ctx);
-                  }
-                },
-                child: const Text('Erstellen'),
-              ),
-            ],
-          );
-        },
-      ),
     );
   }
 }

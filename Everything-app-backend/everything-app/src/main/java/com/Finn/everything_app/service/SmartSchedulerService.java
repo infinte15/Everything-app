@@ -74,11 +74,11 @@ public class SmartSchedulerService {
 
         // ---- Core: CP-SAT task scheduling ----
         List<ScheduledItem> scheduledTasks =
-                solveWithCpSat(input.getTasks(), input.getFixedEvents(), startDate, endDate, prefs);
+                solveWithCpSat(input.getTasks(), input.getFixedEvents(), input.getCourseSchedules(), startDate, endDate, prefs);
 
         // ---- Habits / workouts: greedy into remaining free slots ----
         List<TimeSlot> freeSlots =
-                buildFreeSlots(scheduledTasks, input.getFixedEvents(), startDate, endDate, prefs);
+                buildFreeSlots(scheduledTasks, input.getFixedEvents(), input.getCourseSchedules(), startDate, endDate, prefs);
         List<ScheduledItem> scheduledHabits =
                 scheduleRecurringActivities(input.getHabits(), input.getWorkouts(), freeSlots, prefs);
 
@@ -103,6 +103,7 @@ public class SmartSchedulerService {
     private List<ScheduledItem> solveWithCpSat(
             List<Task> tasks,
             List<CalendarEvent> fixedEvents,
+            List<CourseSchedule> courseSchedules,
             LocalDate startDate,
             LocalDate endDate,
             UserPreferences prefs) {
@@ -144,6 +145,22 @@ public class SmartSchedulerService {
             long evE = ChronoUnit.MINUTES.between(horizonStart, ev.getEndTime());
             if (evE > evS && evS >= 0 && evE <= horizon)
                 allIntervals.add(fixedBlock(model, (int) evS, (int)(evE - evS), "ev_" + ev.getId()));
+        }
+
+        // --- 2b. Block CourseSchedules ---
+        if (courseSchedules != null) {
+            for (CourseSchedule cs : courseSchedules) {
+                for (LocalDate d = startDate; !d.isAfter(endDate); d = d.plusDays(1)) {
+                    if (d.getDayOfWeek() == cs.getDayOfWeek()) {
+                        LocalDateTime csStart = d.atTime(cs.getStartTime());
+                        LocalDateTime csEnd = d.atTime(cs.getEndTime());
+                        long evS = ChronoUnit.MINUTES.between(horizonStart, csStart);
+                        long evE = ChronoUnit.MINUTES.between(horizonStart, csEnd);
+                        if (evE > evS && evS >= 0 && evE <= horizon)
+                            allIntervals.add(fixedBlock(model, (int) evS, (int)(evE - evS), "cs_" + cs.getId() + "_" + d.toEpochDay()));
+                    }
+                }
+            }
         }
 
         // --- 3. Task interval variables ---
@@ -253,6 +270,7 @@ public class SmartSchedulerService {
     private List<TimeSlot> buildFreeSlots(
             List<ScheduledItem> scheduled,
             List<CalendarEvent> fixedEvents,
+            List<CourseSchedule> courseSchedules,
             LocalDate startDate, LocalDate endDate,
             UserPreferences prefs) {
 
@@ -263,6 +281,19 @@ public class SmartSchedulerService {
             pseudo.setStartTime(item.getStartTime());
             pseudo.setEndTime(item.getEndTime());
             occupied.add(pseudo);
+        }
+        
+        if (courseSchedules != null) {
+            for (CourseSchedule cs : courseSchedules) {
+                for (LocalDate d = startDate; !d.isAfter(endDate); d = d.plusDays(1)) {
+                    if (d.getDayOfWeek() == cs.getDayOfWeek()) {
+                        CalendarEvent pseudo = new CalendarEvent();
+                        pseudo.setStartTime(d.atTime(cs.getStartTime()));
+                        pseudo.setEndTime(d.atTime(cs.getEndTime()));
+                        occupied.add(pseudo);
+                    }
+                }
+            }
         }
 
         List<TimeSlot> slots = new ArrayList<>();

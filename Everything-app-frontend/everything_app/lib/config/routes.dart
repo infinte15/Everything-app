@@ -42,7 +42,7 @@ final router = GoRouter(
 
     // Main App Routes (mit Bottom Nav via ShellRoute)
     ShellRoute(
-      builder: (_, __, child) => MainScaffold(child: child),
+      builder: (_, _, child) => MainScaffold(child: child),
       routes: [
         GoRoute(
           path: '/home',

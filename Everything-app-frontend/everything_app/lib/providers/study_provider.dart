@@ -6,10 +6,16 @@ import '../models/lesson_plan_entry.dart';
 import '../models/study_subject.dart';
 import '../models/study_grade.dart';
 import '../models/flashcard_deck.dart';
+import '../utils/anki_scheduler.dart';
 import '../services/api_service.dart';
+import '../services/study_service.dart';
+import '../services/habit_service.dart';
+import '../models/habit.dart';
 
 class StudyProvider with ChangeNotifier {
   final ApiService _apiService = ApiService();
+  final StudyService _studyService = StudyService();
+  final HabitService _habitService = HabitService();
 
   // ── Core data ───────────────────────────────────────────────────────────────
   List<StudyNote> _notes = [];
@@ -88,13 +94,13 @@ class StudyProvider with ChangeNotifier {
     notifyListeners();
     try {
       await Future.wait([
-        _loadFolders(),
-        _loadNotes(),
-        _loadStudyPlan(),
-        _loadLessonPlan(),
-        _loadSubjects(),
-        _loadFlashcards(),
-        _loadGrades(),
+        _loadFolders(),      // Local only
+        _loadNotes(),        // Backend
+        _loadStudyPlan(),    // Local only
+        _loadLessonPlan(),   // Local only
+        _loadSubjects(),     // Backend
+        _loadFlashcards(),   // Backend
+        _loadGrades(),       // Backend
       ]);
     } catch (e) {
       _error = 'Fehler beim Laden: $e';
@@ -103,39 +109,10 @@ class StudyProvider with ChangeNotifier {
     notifyListeners();
   }
 
+  // Folders are strictly local in current design
   Future<void> _loadFolders() async {
     await Future.delayed(const Duration(milliseconds: 100));
-    _folders = [
-      StudyFolder(
-        id: 'f1',
-        name: 'Mathematik',
-        emoji: '📐',
-        color: '#3B82F6',
-        noteIds: ['1'],
-      ),
-      StudyFolder(
-        id: 'f2',
-        name: 'Programmierung',
-        emoji: '💻',
-        color: '#10B981',
-        noteIds: ['2'],
-      ),
-      StudyFolder(
-        id: 'f3',
-        name: 'Physik',
-        emoji: '⚛️',
-        color: '#F59E0B',
-        noteIds: [],
-      ),
-      StudyFolder(
-        id: 'f2-1',
-        name: 'Algorithmen',
-        emoji: '🔢',
-        color: '#8B5CF6',
-        parentId: 'f2',
-        noteIds: [],
-      ),
-    ];
+    _folders = []; // Clear mock data. User must create their own folders.
   }
 
   Future<void> _loadNotes() async {
@@ -145,114 +122,73 @@ class StudyProvider with ChangeNotifier {
         final List<dynamic> data = _apiService.parseResponse(response) ?? [];
         _notes = data.map((n) => StudyNote.fromJson(n)).toList();
         _notes.sort((a, b) => (b.id ?? 0).compareTo(a.id ?? 0));
-      } else {
-        debugPrint('Failed to load notes: ${response.statusCode}');
       }
     } catch (e) {
       debugPrint('Error loading notes: $e');
     }
   }
 
+  // Study Plan is strictly local in current design
   Future<void> _loadStudyPlan() async {
     await Future.delayed(const Duration(milliseconds: 100));
-    final weekStart = _currentWeekStart();
-    _studyPlan = [
-      StudyPlanGoal(id: 'sp1', subject: 'Mathematik', emoji: '📐',
-          colorValue: 0xFF3B82F6, weeklyGoalHours: 8, loggedHours: 3.5, weekStart: weekStart),
-      StudyPlanGoal(id: 'sp2', subject: 'Programmierung', emoji: '💻',
-          colorValue: 0xFF10B981, weeklyGoalHours: 6, loggedHours: 6.0, weekStart: weekStart),
-      StudyPlanGoal(id: 'sp3', subject: 'Physik', emoji: '⚛️',
-          colorValue: 0xFFF59E0B, weeklyGoalHours: 4, loggedHours: 1.0, weekStart: weekStart),
-      StudyPlanGoal(id: 'sp4', subject: 'Datenbanken', emoji: '🗄️',
-          colorValue: 0xFF8B5CF6, weeklyGoalHours: 3, loggedHours: 0.5, weekStart: weekStart),
-    ];
+    _studyPlan = []; 
   }
 
+  // Lesson Plan is strictly local in current design
   Future<void> _loadLessonPlan() async {
     await Future.delayed(const Duration(milliseconds: 100));
-    _lessonPlan = [
-      LessonPlanEntry(id: 'lp1', subject: 'Mathematik', room: 'H1.01',
-          professor: 'Prof. Dr. Schmidt', dayIndex: 0, startHour: 8,
-          durationMinutes: 90, colorValue: 0xFF3B82F6),
-      LessonPlanEntry(id: 'lp2', subject: 'Programmierung', room: 'PC-Pool',
-          professor: 'Prof. Dr. Müller', dayIndex: 0, startHour: 10,
-          durationMinutes: 90, colorValue: 0xFF10B981, type: 'Praktikum'),
-      LessonPlanEntry(id: 'lp3', subject: 'Physik', room: 'H2.12',
-          professor: 'Prof. Dr. Weber', dayIndex: 1, startHour: 9,
-          durationMinutes: 90, colorValue: 0xFFF59E0B),
-      LessonPlanEntry(id: 'lp4', subject: 'Datenbanken', room: 'H1.03',
-          professor: 'Prof. Dr. Klein', dayIndex: 2, startHour: 14,
-          durationMinutes: 90, colorValue: 0xFF8B5CF6),
-      LessonPlanEntry(id: 'lp5', subject: 'Algorithmen', room: 'H2.01',
-          professor: 'Prof. Dr. Meyer', dayIndex: 3, startHour: 8,
-          durationMinutes: 90, colorValue: 0xFFEF4444),
-      LessonPlanEntry(id: 'lp6', subject: 'Seminar', room: 'S0.01',
-          professor: 'Prof. Dr. Schmidt', dayIndex: 4, startHour: 11,
-          durationMinutes: 90, colorValue: 0xFFEC4899, type: 'Seminar'),
-    ];
+    _lessonPlan = [];
   }
 
   Future<void> _loadSubjects() async {
-    await Future.delayed(const Duration(milliseconds: 100));
-    _subjects = [
-      StudySubject(id: '1', name: 'Mathematik II', professor: 'Prof. Dr. Schmidt', creditPoints: 6, semester: 'WiSe 2024/25', colorHex: '#3B82F6'),
-      StudySubject(id: '2', name: 'Programmierung', professor: 'Prof. Dr. Müller', creditPoints: 8, semester: 'WiSe 2024/25', colorHex: '#10B981'),
-      StudySubject(id: '3', name: 'Physik', professor: 'Prof. Dr. Weber', creditPoints: 4, semester: 'WiSe 2024/25', colorHex: '#F59E0B'),
-    ];
+    final courses = await _studyService.getAllCourses();
+    _subjects = courses.map((c) => StudySubject(
+      id: c['id'].toString(),
+      name: c['name'] ?? '',
+      professor: c['professor'] ?? '',
+      creditPoints: c['creditPoints'] ?? 0,
+      semester: c['semester'] ?? '',
+      colorHex: c['colorHex'] ?? '#3B82F6',
+    )).toList();
   }
 
   Future<void> _loadFlashcards() async {
-    await Future.delayed(const Duration(milliseconds: 100));
-    _flashcardDecks = [
-      FlashcardDeck(id: 'd1', title: 'Programmierung Grundlagen', subjectId: '2', totalCards: 25, toReviewCount: 12, masteryPercentage: 40),
-      FlashcardDeck(id: 'd2', title: 'Analysis', subjectId: '1', totalCards: 40, toReviewCount: 5, masteryPercentage: 80),
-    ];
-    _flashcards = [
-      Flashcard(id: 'fc1', deckId: 'd1', question: 'Was ist eine abstrakte Klasse?', answer: 'Eine Klasse, die nicht instanziiert werden kann.', srsLevel: 2, nextReview: DateTime.now().add(const Duration(days: 5))),
-      Flashcard(id: 'fc2', deckId: 'd1', question: 'Was ist Polymorphismus?', answer: 'Die Fähigkeit eines Objekts, sich als ein Objekt eines anderen Typs zu verhalten.', srsLevel: 3, nextReview: DateTime.now().add(const Duration(days: 3))),
-    ];
+    final decks = await _studyService.getAllDecks();
+    _flashcardDecks = decks.map((d) => FlashcardDeck(
+      id: d['id'].toString(),
+      title: d['title'] ?? '',
+      subjectId: d['courseId']?.toString() ?? '',
+      description: d['description'] ?? '',
+    )).toList();
+
+    _flashcards = [];
+    for (final deck in _flashcardDecks) {
+      final cards = await _studyService.getCardsByDeck(int.parse(deck.id));
+      _flashcards.addAll(cards.map((c) => Flashcard(
+        id: c['id'].toString(),
+        deckId: c['deckId'].toString(),
+        question: c['front'] ?? '',
+        answer: c['back'] ?? '',
+        repetitions: c['repetitions'] ?? 0,
+        intervalDays: c['intervalDays'] ?? 0,
+        learningStep: c['learningStep'] ?? 0,
+        ease: (c['easeFactor'] as num?)?.toDouble() ?? 2.5,
+        nextReview: c['nextReview'] != null ? DateTime.parse(c['nextReview']) : DateTime.now(),
+      )));
+    }
   }
 
   Future<void> _loadGrades() async {
-    await Future.delayed(const Duration(milliseconds: 100));
-    _grades = [
-      StudyGrade(
-        id: 'g1',
-        subjectId: '1',
-        examName: 'Klausur',
-        examType: 'Klausur',
-        grade: 2.0,
-        weightPercent: 70,
-        date: DateTime.now().subtract(const Duration(days: 30)),
-      ),
-      StudyGrade(
-        id: 'g1b',
-        subjectId: '1',
-        examName: 'Übungspaket',
-        examType: 'Übung',
-        grade: 1.7,
-        weightPercent: 30,
-        date: DateTime.now().subtract(const Duration(days: 25)),
-      ),
-      StudyGrade(
-        id: 'g2',
-        subjectId: '2',
-        examName: 'Projektarbeit',
-        examType: 'Projekt',
-        grade: 1.3,
-        weightPercent: 100,
-        date: DateTime.now().subtract(const Duration(days: 20)),
-      ),
-      StudyGrade(
-        id: 'g3',
-        subjectId: '3',
-        examName: 'Klausur',
-        examType: 'Klausur',
-        grade: 2.7,
-        weightPercent: 100,
-        date: DateTime.now().subtract(const Duration(days: 10)),
-      ),
-    ];
+    final gradesData = await _studyService.getAllGrades();
+    _grades = gradesData.map((g) => StudyGrade(
+      id: g['id'].toString(),
+      subjectId: g['courseId']?.toString() ?? '',
+      examName: g['examName'] ?? '',
+      examType: g['examType'] ?? 'Klausur',
+      grade: (g['gradeValue'] as num?)?.toDouble() ?? 0.0,
+      weightPercent: (g['weighting'] as num?)?.toInt() ?? 100,
+      date: g['date'] != null ? DateTime.parse(g['date']) : DateTime.now(),
+    )).toList();
   }
 
   // ── Navigation ───────────────────────────────────────────────────────────────
@@ -267,7 +203,7 @@ class StudyProvider with ChangeNotifier {
     notifyListeners();
   }
 
-  // ── Folder CRUD ──────────────────────────────────────────────────────────────
+  // ── Folder CRUD (Local) ──────────────────────────────────────────────────────
   Future<StudyFolder> addFolder({required String name, String? parentId,
       String emoji = '📁', String? color}) async {
     final folder = StudyFolder(
@@ -310,7 +246,7 @@ class StudyProvider with ChangeNotifier {
     notifyListeners();
   }
 
-  // ── Note CRUD ────────────────────────────────────────────────────────────────
+  // ── Note CRUD (API) ──────────────────────────────────────────────────────────
   Future<StudyNote> addNote({required String title, String content = '',
       String? folderId, String? courseName}) async {
     
@@ -344,7 +280,6 @@ class StudyProvider with ChangeNotifier {
       debugPrint('Error adding note: $e');
     }
 
-    // Fallback if API fails
     final fallbackNote = StudyNote(
       id: DateTime.now().millisecondsSinceEpoch,
       title: title,
@@ -360,10 +295,20 @@ class StudyProvider with ChangeNotifier {
   }
 
   Future<void> updateNote(StudyNote note) async {
-    final idx = _notes.indexWhere((n) => n.id == note.id);
-    if (idx != -1) {
-      _notes[idx] = note.copyWith(updatedAt: DateTime.now());
-      notifyListeners();
+    try {
+      final response = await _apiService.put(
+        '/study/notes/${note.id}', 
+        note.toJson()
+      );
+      if (_apiService.isSuccess(response)) {
+        final idx = _notes.indexWhere((n) => n.id == note.id);
+        if (idx != -1) {
+          _notes[idx] = StudyNote.fromJson(_apiService.parseResponse(response));
+          notifyListeners();
+        }
+      }
+    } catch (e) {
+       debugPrint('Error updating note: $e');
     }
   }
 
@@ -376,17 +321,28 @@ class StudyProvider with ChangeNotifier {
       }
     } catch (e) {
       debugPrint('Error deleting note: $e');
-      // Even if API fails, remove locally for better UX, or handle as needed
-      _notes.removeWhere((n) => n.id == id);
-      notifyListeners();
     }
   }
 
   Future<void> toggleFavorite(int noteId) async {
     final idx = _notes.indexWhere((n) => n.id == noteId);
     if (idx != -1) {
-      _notes[idx] = _notes[idx].copyWith(isFavorite: !_notes[idx].isFavorite);
+      final current = _notes[idx];
+      _notes[idx] = current.copyWith(isFavorite: !current.isFavorite);
       notifyListeners();
+      
+      // Update backend
+      try {
+        await _apiService.put(
+          '/study/notes/${current.id}', 
+          _notes[idx].toJson()
+        );
+      } catch (e) {
+        debugPrint('Error updating favorite: $e');
+        // Revert
+        _notes[idx] = current;
+        notifyListeners();
+      }
     }
   }
 
@@ -398,12 +354,22 @@ class StudyProvider with ChangeNotifier {
           .where((t) => !t.startsWith('status:'))
           .toList();
       currentTags.add('status:$status');
+      
       _notes[idx] = note.copyWith(tags: currentTags.join(','));
       notifyListeners();
+      
+      try {
+        await _apiService.put(
+          '/study/notes/${note.id}', 
+          _notes[idx].toJson()
+        );
+      } catch (e) {
+        debugPrint('Error updating note status: $e');
+      }
     }
   }
 
-  // ── Study Plan CRUD ──────────────────────────────────────────────────────────
+  // ── Study Plan CRUD (Local) ──────────────────────────────────────────────────
   Future<void> addStudyGoal({required String subject, required double goalHours,
       String emoji = '📚', int colorValue = 0xFF6366F1}) async {
     _studyPlan.add(StudyPlanGoal(
@@ -414,6 +380,28 @@ class StudyProvider with ChangeNotifier {
       weeklyGoalHours: goalHours,
       weekStart: _currentWeekStart(),
     ));
+
+    // Also create a Habit in the backend so the SmartScheduler picks it up
+    try {
+      int durationPerSession = 60; // default 1 hour sessions
+      int sessions = goalHours.ceil();
+      if (sessions > 0) {
+        final habit = Habit(
+          name: 'Lernen: $subject',
+          description: 'Study Goal for $subject',
+          frequency: 'DAILY', // Let the scheduler find days
+          monday: true, tuesday: true, wednesday: true, thursday: true,
+          friday: true, saturday: true, sunday: true,
+          durationMinutes: durationPerSession,
+          category: 'STUDY',
+          color: '#${colorValue.toRadixString(16).padLeft(8, '0').substring(2)}',
+        );
+        await _habitService.createHabit(habit);
+      }
+    } catch (e) {
+      debugPrint('Error syncing Study Goal to Habit: $e');
+    }
+
     notifyListeners();
   }
 
@@ -432,7 +420,7 @@ class StudyProvider with ChangeNotifier {
     notifyListeners();
   }
 
-  // ── Lesson Plan CRUD ─────────────────────────────────────────────────────────
+  // ── Lesson Plan CRUD (Local) ─────────────────────────────────────────────────
   Future<void> addLesson(LessonPlanEntry entry) async {
     _lessonPlan.add(entry);
     notifyListeners();
@@ -456,91 +444,278 @@ class StudyProvider with ChangeNotifier {
         ..sort((a, b) => (a.startHour * 60 + a.startMinute)
             .compareTo(b.startHour * 60 + b.startMinute));
 
-  // ── Flashcards ───────────────────────────────────────────────────────────────
-  List<Flashcard> get dueFlashcards {
-    final now = DateTime.now();
-    return _flashcards.where((f) {
-      return f.nextReview.isBefore(now);
-    }).toList();
+  // ── Flashcards (API + Anki-style SRS) ────────────────────────────────────────
+  List<Flashcard> cardsForDeck(String deckId) =>
+      _flashcards.where((f) => f.deckId == deckId).toList();
+
+  FlashcardDeckStats deckStats(String deckId) {
+    final cards = cardsForDeck(deckId);
+    int due = 0, newCount = 0, learning = 0, mature = 0;
+    for (final c in cards) {
+      if (AnkiScheduler.isNew(c)) {
+        newCount++;
+      } else if (AnkiScheduler.isLearning(c)) {
+        learning++;
+        if (AnkiScheduler.isDue(c)) due++;
+      } else {
+        mature++;
+        if (AnkiScheduler.isDue(c)) due++;
+      }
+    }
+    return FlashcardDeckStats(
+      total: cards.length,
+      due: due,
+      newCards: newCount,
+      learning: learning,
+      mature: mature,
+    );
   }
 
-  Future<void> reviewFlashcard(String id, bool correct) async {
-    final idx = _flashcards.indexWhere((f) => f.id == id);
-    if (idx != -1) {
-      final card = _flashcards[idx];
-      final newSrsLevel = correct ? card.srsLevel + 1 : 0;
-      final days = correct ? (newSrsLevel * 2).clamp(1, 30) : 1;
+  List<Flashcard> get dueFlashcards =>
+      _flashcards.where(AnkiScheduler.isDue).toList();
+
+  List<Flashcard> studyQueueForDeck(String deckId) {
+    final deck = _flashcardDecks.firstWhere((d) => d.id == deckId);
+    final cards = cardsForDeck(deckId);
+    final due = cards.where(AnkiScheduler.isDue).toList()
+      ..sort((a, b) => a.nextReview.compareTo(b.nextReview));
+
+    final newCards = cards.where(AnkiScheduler.isNew).take(deck.newCardsPerDay).toList();
+    final seen = <String>{};
+    final queue = <Flashcard>[];
+    for (final c in [...due, ...newCards]) {
+      if (seen.add(c.id)) queue.add(c);
+    }
+    return queue;
+  }
+
+  void reviewFlashcardWithRating(String cardId, ReviewRating rating) async {
+    final idx = _flashcards.indexWhere((f) => f.id == cardId);
+    if (idx == -1) return;
+    
+    // API Call (The API manages SRS state automatically based on 'quality')
+    String qualityStr = 'GOOD';
+    switch (rating) {
+      case ReviewRating.again: qualityStr = 'AGAIN'; break;
+      case ReviewRating.hard: qualityStr = 'HARD'; break;
+      case ReviewRating.good: qualityStr = 'GOOD'; break;
+      case ReviewRating.easy: qualityStr = 'EASY'; break;
+    }
+    
+    final updatedData = await _studyService.reviewFlashcard(int.parse(cardId), qualityStr);
+    
+    if (updatedData != null) {
       _flashcards[idx] = Flashcard(
-        id: card.id,
-        deckId: card.deckId,
-        question: card.question,
-        answer: card.answer,
-        srsLevel: newSrsLevel,
-        nextReview: DateTime.now().add(Duration(days: days)),
+        id: updatedData['id'].toString(),
+        deckId: updatedData['deckId'].toString(),
+        question: updatedData['front'] ?? '',
+        answer: updatedData['back'] ?? '',
+        repetitions: updatedData['repetitions'] ?? 0,
+        intervalDays: updatedData['intervalDays'] ?? 0,
+        learningStep: updatedData['learningStep'] ?? 0,
+        ease: (updatedData['easeFactor'] as num?)?.toDouble() ?? 2.5,
+        nextReview: updatedData['nextReview'] != null 
+            ? DateTime.parse(updatedData['nextReview']) 
+            : DateTime.now(),
       );
       notifyListeners();
     }
   }
 
+  @Deprecated('Use reviewFlashcardWithRating')
+  Future<void> reviewFlashcard(String id, bool correct) async {
+    reviewFlashcardWithRating(
+      id,
+      correct ? ReviewRating.good : ReviewRating.again,
+    );
+  }
+
   Future<bool> addFlashcard(Flashcard flashcard) async {
-    try {
-      _flashcards.add(flashcard);
+    final created = await _studyService.createFlashcard({
+      'deckId': int.parse(flashcard.deckId),
+      'front': flashcard.question,
+      'back': flashcard.answer,
+    });
+    
+    if (created != null) {
+      _flashcards.add(Flashcard(
+        id: created['id'].toString(),
+        deckId: created['deckId'].toString(),
+        question: created['front'] ?? '',
+        answer: created['back'] ?? '',
+        repetitions: created['repetitions'] ?? 0,
+        intervalDays: created['intervalDays'] ?? 0,
+        learningStep: created['learningStep'] ?? 0,
+        ease: (created['easeFactor'] as num?)?.toDouble() ?? 2.5,
+        nextReview: created['nextReview'] != null ? DateTime.parse(created['nextReview']) : DateTime.now(),
+      ));
       notifyListeners();
       return true;
-    } catch (_) {
-      return false;
+    }
+    return false;
+  }
+
+  void addFlashcardToDeck({
+    required String deckId,
+    required String question,
+    required String answer,
+  }) {
+    addFlashcard(Flashcard(
+      id: '', // Will be assigned by backend
+      deckId: deckId,
+      question: question.trim(),
+      answer: answer.trim(),
+      nextReview: DateTime.now(),
+    ));
+  }
+
+  void updateFlashcard(Flashcard card) async {
+    final idx = _flashcards.indexWhere((f) => f.id == card.id);
+    if (idx != -1) {
+      final updated = await _studyService.updateFlashcard(int.parse(card.id), {
+        'front': card.question,
+        'back': card.answer,
+      });
+      if (updated != null) {
+        _flashcards[idx] = card; // or use updated data
+        notifyListeners();
+      }
     }
   }
 
-  // ── Grades ───────────────────────────────────────────────────────────────────
+  void deleteFlashcard(String cardId) async {
+    final success = await _studyService.deleteFlashcard(int.parse(cardId));
+    if (success) {
+      _flashcards.removeWhere((f) => f.id == cardId);
+      notifyListeners();
+    }
+  }
+
+  // ── Grades (API) ─────────────────────────────────────────────────────────────
   List<StudyGrade> gradesForSubject(String subjectId) =>
       _grades.where((g) => g.subjectId == subjectId).toList();
 
-  void addGrade(StudyGrade grade) {
-    _grades.add(grade);
-    notifyListeners();
-  }
-
-  void updateGrade(StudyGrade grade) {
-    final idx = _grades.indexWhere((g) => g.id == grade.id);
-    if (idx != -1) {
-      _grades[idx] = grade;
+  Future<void> addGrade(StudyGrade grade) async {
+    final created = await _studyService.createGrade({
+      'courseId': int.parse(grade.subjectId),
+      'examName': grade.examName,
+      'examType': grade.examType,
+      'gradeValue': grade.grade,
+      'weighting': grade.weightPercent,
+      'date': grade.date.toIso8601String().split('T')[0],
+    });
+    
+    if (created != null) {
+      _grades.add(StudyGrade(
+        id: created['id'].toString(),
+        subjectId: created['courseId'].toString(),
+        examName: created['examName'],
+        examType: created['examType'] ?? 'Klausur',
+        grade: (created['gradeValue'] as num).toDouble(),
+        weightPercent: (created['weighting'] as num).toInt(),
+        date: DateTime.parse(created['date']),
+      ));
       notifyListeners();
     }
   }
 
-  void deleteGrade(String gradeId) {
-    _grades.removeWhere((g) => g.id == gradeId);
-    notifyListeners();
+  Future<void> updateGrade(StudyGrade grade) async {
+    final idx = _grades.indexWhere((g) => g.id == grade.id);
+    if (idx != -1) {
+      final updated = await _studyService.updateGrade(int.parse(grade.id), {
+        'courseId': int.parse(grade.subjectId),
+        'examName': grade.examName,
+        'examType': grade.examType,
+        'gradeValue': grade.grade,
+        'weighting': grade.weightPercent,
+        'date': grade.date.toIso8601String().split('T')[0],
+      });
+      if (updated != null) {
+        _grades[idx] = grade;
+        notifyListeners();
+      }
+    }
   }
 
-  void addFlashcardDeck(FlashcardDeck deck) {
-    _flashcardDecks.add(deck);
-    notifyListeners();
+  Future<void> deleteGrade(String gradeId) async {
+    final success = await _studyService.deleteGrade(int.parse(gradeId));
+    if (success) {
+      _grades.removeWhere((g) => g.id == gradeId);
+      notifyListeners();
+    }
   }
 
-  void addSubject({
+  // ── Subjects (API) ───────────────────────────────────────────────────────────
+  Future<void> addSubject({
     required String name,
     required String professor,
     required int creditPoints,
     required String semester,
     required String colorHex,
-  }) {
-    final sub = StudySubject(
-      id: 'sub${DateTime.now().millisecondsSinceEpoch}',
-      name: name,
-      professor: professor,
-      creditPoints: creditPoints,
-      semester: semester,
-      colorHex: colorHex,
-    );
-    _subjects.add(sub);
-    notifyListeners();
+  }) async {
+    final created = await _studyService.createCourse({
+      'name': name,
+      'professor': professor,
+      'creditPoints': creditPoints,
+      'semester': semester,
+      'colorHex': colorHex,
+    });
+    
+    if (created != null) {
+      _subjects.add(StudySubject(
+        id: created['id'].toString(),
+        name: created['name'],
+        professor: created['professor'] ?? '',
+        creditPoints: created['creditPoints'] ?? 0,
+        semester: created['semester'] ?? '',
+        colorHex: created['colorHex'] ?? colorHex,
+      ));
+      notifyListeners();
+    }
   }
 
-  void deleteSubject(String id) {
-    _subjects.removeWhere((s) => s.id == id);
-    notifyListeners();
+  Future<void> deleteSubject(String id) async {
+    final success = await _studyService.deleteCourse(int.parse(id));
+    if (success) {
+      _subjects.removeWhere((s) => s.id == id);
+      notifyListeners();
+    }
+  }
+
+  // ── Flashcard Decks (API) ────────────────────────────────────────────────────
+  Future<void> addFlashcardDeck(FlashcardDeck deck) async {
+    final created = await _studyService.createDeck({
+      'courseId': int.tryParse(deck.subjectId) ?? 0, // Should be valid ID
+      'title': deck.title,
+      'description': deck.description,
+    });
+    
+    if (created != null) {
+      _flashcardDecks.add(FlashcardDeck(
+        id: created['id'].toString(),
+        title: created['title'],
+        subjectId: created['courseId']?.toString() ?? '',
+        description: created['description'] ?? '',
+      ));
+      notifyListeners();
+    }
+  }
+
+  Future<void> deleteFlashcardDeck(String deckId) async {
+    final success = await _studyService.deleteDeck(int.parse(deckId));
+    if (success) {
+      _flashcardDecks.removeWhere((d) => d.id == deckId);
+      _flashcards.removeWhere((f) => f.deckId == deckId);
+      notifyListeners();
+    }
+  }
+
+  FlashcardDeck? deckById(String id) {
+    try {
+      return _flashcardDecks.firstWhere((d) => d.id == id);
+    } catch (_) {
+      return null;
+    }
   }
 
   // ── Helpers ──────────────────────────────────────────────────────────────────

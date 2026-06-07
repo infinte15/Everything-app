@@ -1178,7 +1178,7 @@ class _SectionTitle extends StatelessWidget {
                 color: Colors.white,
                 fontWeight: FontWeight.bold,
                 fontSize: 16)),
-        if (trailing != null) trailing!,
+        ?trailing,
       ],
     );
   }

@@ -264,7 +264,7 @@ class _CreateEventSheetState extends State<CreateEventSheet> {
                   Switch(
                     value: _isFixed,
                     onChanged: (v) => setState(() => _isFixed = v),
-                    activeColor: accentColor,
+                    activeThumbColor: accentColor,
                   ),
                 ],
               ),

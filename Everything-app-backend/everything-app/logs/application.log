@@ -1,877 +1,54 @@
-2026-05-28 15:48:03 [restartedMain] INFO  c.F.e.EverythingAppApplication - Starting EverythingAppApplication using Java 17.0.18 with PID 16079 (/home/finn/Dokumente/Projekte/Everything-app/Everything-app-backend/everything-app/target/classes started by finn in /home/finn/Dokumente/Projekte/Everything-app/Everything-app-backend/everything-app)
-2026-05-28 15:48:03 [restartedMain] DEBUG c.F.e.EverythingAppApplication - Running with Spring Boot v3.2.0, Spring v6.1.1
-2026-05-28 15:48:03 [restartedMain] INFO  c.F.e.EverythingAppApplication - The following 1 profile is active: "development"
-2026-05-28 15:48:03 [restartedMain] INFO  o.s.b.d.e.DevToolsPropertyDefaultsPostProcessor - Devtools property defaults active! Set 'spring.devtools.add-properties' to 'false' to disable
-2026-05-28 15:48:03 [restartedMain] INFO  o.s.b.d.e.DevToolsPropertyDefaultsPostProcessor - For additional web related logging consider setting the 'logging.level.web' property to 'DEBUG'
-2026-05-28 15:48:03 [restartedMain] INFO  o.s.d.r.c.RepositoryConfigurationDelegate - Bootstrapping Spring Data JPA repositories in DEFAULT mode.
-2026-05-28 15:48:03 [restartedMain] INFO  o.s.d.r.c.RepositoryConfigurationDelegate - Finished Spring Data repository scanning in 50 ms. Found 21 JPA repository interfaces.
-2026-05-28 15:48:03 [restartedMain] INFO  o.s.b.w.e.tomcat.TomcatWebServer - Tomcat initialized with port 8080 (http)
-2026-05-28 15:48:03 [restartedMain] INFO  o.a.catalina.core.StandardService - Starting service [Tomcat]
-2026-05-28 15:48:03 [restartedMain] INFO  o.a.catalina.core.StandardEngine - Starting Servlet engine: [Apache Tomcat/10.1.16]
-2026-05-28 15:48:03 [restartedMain] INFO  o.a.c.c.C.[Tomcat].[localhost].[/] - Initializing Spring embedded WebApplicationContext
-2026-05-28 15:48:03 [restartedMain] INFO  o.s.b.w.s.c.ServletWebServerApplicationContext - Root WebApplicationContext: initialization completed in 833 ms
-2026-05-28 15:48:04 [restartedMain] INFO  o.h.jpa.internal.util.LogHelper - HHH000204: Processing PersistenceUnitInfo [name: default]
-2026-05-28 15:48:04 [restartedMain] INFO  org.hibernate.Version - HHH000412: Hibernate ORM core version 6.3.1.Final
-2026-05-28 15:48:04 [restartedMain] INFO  o.h.c.i.RegionFactoryInitiator - HHH000026: Second-level cache disabled
-2026-05-28 15:48:04 [restartedMain] INFO  o.s.o.j.p.SpringPersistenceUnitInfo - No LoadTimeWeaver setup: ignoring JPA class transformer
-2026-05-28 15:48:04 [restartedMain] INFO  com.zaxxer.hikari.HikariDataSource - HikariPool-1 - Starting...
-2026-05-28 15:48:04 [restartedMain] INFO  com.zaxxer.hikari.pool.HikariPool - HikariPool-1 - Added connection org.postgresql.jdbc.PgConnection@4e5acdb8
-2026-05-28 15:48:04 [restartedMain] INFO  com.zaxxer.hikari.HikariDataSource - HikariPool-1 - Start completed.
-2026-05-28 15:48:04 [restartedMain] WARN  org.hibernate.orm.deprecation - HHH90000025: PostgreSQLDialect does not need to be specified explicitly using 'hibernate.dialect' (remove the property setting and it will be selected by default)
-2026-05-28 15:48:05 [restartedMain] INFO  o.h.e.t.j.p.i.JtaPlatformInitiator - HHH000489: No JTA platform available (set 'hibernate.transaction.jta.platform' to enable JTA platform integration)
-2026-05-28 15:48:05 [restartedMain] INFO  o.s.o.j.LocalContainerEntityManagerFactoryBean - Initialized JPA EntityManagerFactory for persistence unit 'default'
-2026-05-28 15:48:05 [restartedMain] DEBUG c.F.e.s.JwtAuthenticationFilter - Filter 'jwtAuthenticationFilter' configured for use
-2026-05-28 15:48:05 [restartedMain] INFO  o.s.d.j.r.query.QueryEnhancerFactory - Hibernate is in classpath; If applicable, HQL parser will be used.
-2026-05-28 15:48:06 [restartedMain] WARN  o.s.b.a.o.j.JpaBaseConfiguration$JpaWebConfiguration - spring.jpa.open-in-view is enabled by default. Therefore, database queries may be performed during view rendering. Explicitly configure spring.jpa.open-in-view to disable this warning
-2026-05-28 15:48:06 [restartedMain] INFO  o.s.s.web.DefaultSecurityFilterChain - Will secure any request with [org.springframework.security.web.session.DisableEncodeUrlFilter@31215b8f, org.springframework.security.web.context.request.async.WebAsyncManagerIntegrationFilter@5d631643, org.springframework.security.web.context.SecurityContextHolderFilter@4c12fc0d, org.springframework.security.web.header.HeaderWriterFilter@2fc2944a, org.springframework.web.filter.CorsFilter@7f95c619, org.springframework.security.web.authentication.logout.LogoutFilter@77951570, com.Finn.everything_app.security.JwtAuthenticationFilter@dc3603b, org.springframework.security.web.savedrequest.RequestCacheAwareFilter@604c3a0e, org.springframework.security.web.servletapi.SecurityContextHolderAwareRequestFilter@41d90191, org.springframework.security.web.authentication.AnonymousAuthenticationFilter@17a58f42, org.springframework.security.web.session.SessionManagementFilter@6a7700e6, org.springframework.security.web.access.ExceptionTranslationFilter@634899, org.springframework.security.web.access.intercept.AuthorizationFilter@78c29d9d]
-2026-05-28 15:48:07 [restartedMain] INFO  o.s.b.d.a.OptionalLiveReloadServer - LiveReload server is running on port 35729
-2026-05-28 15:48:07 [restartedMain] INFO  o.s.b.w.e.tomcat.TomcatWebServer - Tomcat started on port 8080 (http) with context path ''
-2026-05-28 15:48:07 [restartedMain] INFO  c.F.e.EverythingAppApplication - Started EverythingAppApplication in 4.187 seconds (process running for 4.406)
-2026-05-28 15:48:16 [http-nio-8080-exec-1] INFO  o.a.c.c.C.[Tomcat].[localhost].[/] - Initializing Spring DispatcherServlet 'dispatcherServlet'
-2026-05-28 15:48:16 [http-nio-8080-exec-1] INFO  o.s.web.servlet.DispatcherServlet - Initializing Servlet 'dispatcherServlet'
-2026-05-28 15:48:16 [http-nio-8080-exec-1] INFO  o.s.web.servlet.DispatcherServlet - Completed initialization in 1 ms
-2026-05-28 15:48:16 [http-nio-8080-exec-1] DEBUG o.s.security.web.FilterChainProxy - Securing POST /api/auth/dev-login
-2026-05-28 15:48:16 [http-nio-8080-exec-1] DEBUG org.hibernate.SQL - 
-    select
-        u1_0.id,
-        u1_0.created_at,
-        u1_0.email,
-        u1_0.last_login,
-        u1_0.password_hash,
-        u1_0.username 
-    from
-        users u1_0 
-    where
-        u1_0.username=?
-2026-05-28 15:48:16 [http-nio-8080-exec-1] DEBUG org.hibernate.SQL - 
-    select
-        up1_0.id,
-        up1_0.break_duration_minutes,
-        up1_0.dark_mode,
-        up1_0.group_similar_tasks,
-        up1_0.hours_before_break,
-        up1_0.max_tasks_per_day,
-        up1_0.notifications_enabled,
-        up1_0.peak_productivity_time,
-        up1_0.reminder_minutes_before,
-        up1_0.theme_color,
-        up1_0.user_id,
-        u1_0.id,
-        u1_0.created_at,
-        u1_0.email,
-        u1_0.last_login,
-        u1_0.password_hash,
-        u1_0.username,
-        up1_0.workday_end,
-        up1_0.workday_start 
-    from
-        user_preferences up1_0 
-    join
-        users u1_0 
-            on u1_0.id=up1_0.user_id 
-    where
-        up1_0.user_id=?
-2026-05-28 15:48:16 [http-nio-8080-exec-1] WARN  o.s.w.s.h.HandlerMappingIntrospector - Cache miss for REQUEST dispatch to '/api/auth/dev-login' (previous null). Performing MatchableHandlerMapping lookup. This is logged once only at WARN level, and every time at TRACE.
-2026-05-28 15:48:16 [http-nio-8080-exec-1] DEBUG o.s.security.web.FilterChainProxy - Secured POST /api/auth/dev-login
-2026-05-28 15:48:16 [http-nio-8080-exec-1] DEBUG org.hibernate.SQL - 
-    select
-        u1_0.id,
-        u1_0.created_at,
-        u1_0.email,
-        u1_0.last_login,
-        u1_0.password_hash,
-        u1_0.username 
-    from
-        users u1_0 
-    where
-        u1_0.username=?
-2026-05-28 15:48:16 [http-nio-8080-exec-1] DEBUG org.hibernate.SQL - 
-    select
-        up1_0.id,
-        up1_0.break_duration_minutes,
-        up1_0.dark_mode,
-        up1_0.group_similar_tasks,
-        up1_0.hours_before_break,
-        up1_0.max_tasks_per_day,
-        up1_0.notifications_enabled,
-        up1_0.peak_productivity_time,
-        up1_0.reminder_minutes_before,
-        up1_0.theme_color,
-        up1_0.user_id,
-        u1_0.id,
-        u1_0.created_at,
-        u1_0.email,
-        u1_0.last_login,
-        u1_0.password_hash,
-        u1_0.username,
-        up1_0.workday_end,
-        up1_0.workday_start 
-    from
-        user_preferences up1_0 
-    join
-        users u1_0 
-            on u1_0.id=up1_0.user_id 
-    where
-        up1_0.user_id=?
-2026-05-28 15:48:16 [http-nio-8080-exec-1] DEBUG org.hibernate.SQL - 
-    update
-        users 
-    set
-        created_at=?,
-        email=?,
-        last_login=?,
-        password_hash=?,
-        username=? 
-    where
-        id=?
-2026-05-28 15:48:17 [http-nio-8080-exec-2] DEBUG o.s.security.web.FilterChainProxy - Securing GET /api/tasks
-2026-05-28 15:48:17 [http-nio-8080-exec-2] DEBUG org.hibernate.SQL - 
-    select
-        u1_0.id,
-        u1_0.created_at,
-        u1_0.email,
-        u1_0.last_login,
-        u1_0.password_hash,
-        u1_0.username 
-    from
-        users u1_0 
-    where
-        u1_0.username=?
-2026-05-28 15:48:17 [http-nio-8080-exec-2] DEBUG org.hibernate.SQL - 
-    select
-        up1_0.id,
-        up1_0.break_duration_minutes,
-        up1_0.dark_mode,
-        up1_0.group_similar_tasks,
-        up1_0.hours_before_break,
-        up1_0.max_tasks_per_day,
-        up1_0.notifications_enabled,
-        up1_0.peak_productivity_time,
-        up1_0.reminder_minutes_before,
-        up1_0.theme_color,
-        up1_0.user_id,
-        u1_0.id,
-        u1_0.created_at,
-        u1_0.email,
-        u1_0.last_login,
-        u1_0.password_hash,
-        u1_0.username,
-        up1_0.workday_end,
-        up1_0.workday_start 
-    from
-        user_preferences up1_0 
-    join
-        users u1_0 
-            on u1_0.id=up1_0.user_id 
-    where
-        up1_0.user_id=?
-2026-05-28 15:48:17 [http-nio-8080-exec-2] DEBUG o.s.security.web.FilterChainProxy - Secured GET /api/tasks
-2026-05-28 15:48:17 [http-nio-8080-exec-2] DEBUG org.hibernate.SQL - 
-    select
-        t1_0.id,
-        t1_0.category,
-        t1_0.completed_at,
-        t1_0.created_at,
-        t1_0.deadline,
-        t1_0.description,
-        t1_0.estimated_duration_minutes,
-        t1_0.priority,
-        t1_0.project_id,
-        t1_0.scheduled_end_time,
-        t1_0.scheduled_start_time,
-        t1_0.space_type,
-        t1_0.status,
-        t1_0.title,
-        t1_0.updated_at,
-        t1_0.user_id 
-    from
-        tasks t1_0 
-    where
-        t1_0.user_id=?
-2026-05-28 15:48:17 [http-nio-8080-exec-3] DEBUG o.s.security.web.FilterChainProxy - Securing GET /api/calendar/events?startDate=2026-05-01T00:00:00.000&endDate=2026-05-31T23:59:59.000
-2026-05-28 15:48:17 [http-nio-8080-exec-3] DEBUG org.hibernate.SQL - 
-    select
-        u1_0.id,
-        u1_0.created_at,
-        u1_0.email,
-        u1_0.last_login,
-        u1_0.password_hash,
-        u1_0.username 
-    from
-        users u1_0 
-    where
-        u1_0.username=?
-2026-05-28 15:48:17 [http-nio-8080-exec-3] DEBUG org.hibernate.SQL - 
-    select
-        up1_0.id,
-        up1_0.break_duration_minutes,
-        up1_0.dark_mode,
-        up1_0.group_similar_tasks,
-        up1_0.hours_before_break,
-        up1_0.max_tasks_per_day,
-        up1_0.notifications_enabled,
-        up1_0.peak_productivity_time,
-        up1_0.reminder_minutes_before,
-        up1_0.theme_color,
-        up1_0.user_id,
-        u1_0.id,
-        u1_0.created_at,
-        u1_0.email,
-        u1_0.last_login,
-        u1_0.password_hash,
-        u1_0.username,
-        up1_0.workday_end,
-        up1_0.workday_start 
-    from
-        user_preferences up1_0 
-    join
-        users u1_0 
-            on u1_0.id=up1_0.user_id 
-    where
-        up1_0.user_id=?
-2026-05-28 15:48:17 [http-nio-8080-exec-3] DEBUG o.s.security.web.FilterChainProxy - Secured GET /api/calendar/events?startDate=2026-05-01T00:00:00.000&endDate=2026-05-31T23:59:59.000
-2026-05-28 15:48:17 [http-nio-8080-exec-3] DEBUG org.hibernate.SQL - 
-    select
-        ce1_0.id,
-        ce1_0.color,
-        ce1_0.created_at,
-        ce1_0.description,
-        ce1_0.end_time,
-        ce1_0.event_type,
-        ce1_0.is_fixed,
-        ce1_0.location,
-        ce1_0.notes,
-        ce1_0.related_habit_id,
-        ce1_0.related_task_id,
-        ce1_0.related_workout_id,
-        ce1_0.start_time,
-        ce1_0.title,
-        ce1_0.updated_at,
-        ce1_0.user_id 
-    from
-        calendar_events ce1_0 
-    where
-        ce1_0.user_id=? 
-        and ce1_0.start_time between ? and ?
-2026-05-28 15:48:19 [http-nio-8080-exec-4] DEBUG o.s.security.web.FilterChainProxy - Securing GET /api/study/notes
-2026-05-28 15:48:19 [http-nio-8080-exec-4] DEBUG org.hibernate.SQL - 
-    select
-        u1_0.id,
-        u1_0.created_at,
-        u1_0.email,
-        u1_0.last_login,
-        u1_0.password_hash,
-        u1_0.username 
-    from
-        users u1_0 
-    where
-        u1_0.username=?
-2026-05-28 15:48:19 [http-nio-8080-exec-4] DEBUG org.hibernate.SQL - 
-    select
-        up1_0.id,
-        up1_0.break_duration_minutes,
-        up1_0.dark_mode,
-        up1_0.group_similar_tasks,
-        up1_0.hours_before_break,
-        up1_0.max_tasks_per_day,
-        up1_0.notifications_enabled,
-        up1_0.peak_productivity_time,
-        up1_0.reminder_minutes_before,
-        up1_0.theme_color,
-        up1_0.user_id,
-        u1_0.id,
-        u1_0.created_at,
-        u1_0.email,
-        u1_0.last_login,
-        u1_0.password_hash,
-        u1_0.username,
-        up1_0.workday_end,
-        up1_0.workday_start 
-    from
-        user_preferences up1_0 
-    join
-        users u1_0 
-            on u1_0.id=up1_0.user_id 
-    where
-        up1_0.user_id=?
-2026-05-28 15:48:19 [http-nio-8080-exec-4] DEBUG o.s.security.web.FilterChainProxy - Secured GET /api/study/notes
-2026-05-28 15:48:19 [http-nio-8080-exec-4] DEBUG org.hibernate.SQL - 
-    select
-        sn1_0.id,
-        sn1_0.category,
-        sn1_0.content,
-        sn1_0.course_id,
-        sn1_0.created_at,
-        sn1_0.file_path,
-        sn1_0.file_type,
-        sn1_0.is_favorite,
-        sn1_0.last_reviewed_at,
-        sn1_0.tags,
-        sn1_0.title,
-        sn1_0.updated_at,
-        sn1_0.user_id 
-    from
-        study_notes sn1_0 
-    where
-        sn1_0.user_id=?
-2026-05-28 16:01:28 [http-nio-8080-exec-9] DEBUG o.s.security.web.FilterChainProxy - Securing GET /
-2026-05-28 16:01:28 [http-nio-8080-exec-9] DEBUG o.s.s.w.a.AnonymousAuthenticationFilter - Set SecurityContextHolder to anonymous SecurityContext
-2026-05-28 16:01:28 [http-nio-8080-exec-9] DEBUG o.s.s.w.a.Http403ForbiddenEntryPoint - Pre-authenticated entry point called. Rejecting access
-2026-05-28 16:01:28 [http-nio-8080-exec-9] DEBUG o.s.security.web.FilterChainProxy - Securing GET /error
-2026-05-28 16:01:28 [http-nio-8080-exec-9] DEBUG o.s.security.web.FilterChainProxy - Secured GET /error
-2026-05-28 16:01:28 [http-nio-8080-exec-9] DEBUG o.s.s.w.a.AnonymousAuthenticationFilter - Set SecurityContextHolder to anonymous SecurityContext
-2026-05-28 16:01:28 [http-nio-8080-exec-10] DEBUG o.s.security.web.FilterChainProxy - Securing GET /favicon.ico
-2026-05-28 16:01:28 [http-nio-8080-exec-10] DEBUG o.s.s.w.a.AnonymousAuthenticationFilter - Set SecurityContextHolder to anonymous SecurityContext
-2026-05-28 16:01:28 [http-nio-8080-exec-10] DEBUG o.s.s.w.a.Http403ForbiddenEntryPoint - Pre-authenticated entry point called. Rejecting access
-2026-05-28 16:01:28 [http-nio-8080-exec-10] DEBUG o.s.security.web.FilterChainProxy - Securing GET /error
-2026-05-28 16:01:28 [http-nio-8080-exec-10] DEBUG o.s.security.web.FilterChainProxy - Secured GET /error
-2026-05-28 16:01:28 [http-nio-8080-exec-10] DEBUG o.s.s.w.a.AnonymousAuthenticationFilter - Set SecurityContextHolder to anonymous SecurityContext
-2026-05-28 16:01:54 [http-nio-8080-exec-1] DEBUG o.s.security.web.FilterChainProxy - Securing GET /login
-2026-05-28 16:01:54 [http-nio-8080-exec-1] DEBUG o.s.s.w.a.AnonymousAuthenticationFilter - Set SecurityContextHolder to anonymous SecurityContext
-2026-05-28 16:01:54 [http-nio-8080-exec-1] DEBUG o.s.s.w.a.Http403ForbiddenEntryPoint - Pre-authenticated entry point called. Rejecting access
-2026-05-28 16:01:54 [http-nio-8080-exec-1] DEBUG o.s.security.web.FilterChainProxy - Securing GET /error
-2026-05-28 16:01:54 [http-nio-8080-exec-1] DEBUG o.s.security.web.FilterChainProxy - Secured GET /error
-2026-05-28 16:01:54 [http-nio-8080-exec-1] DEBUG o.s.s.w.a.AnonymousAuthenticationFilter - Set SecurityContextHolder to anonymous SecurityContext
-2026-05-28 16:01:54 [http-nio-8080-exec-2] DEBUG o.s.security.web.FilterChainProxy - Securing GET /favicon.ico
-2026-05-28 16:01:54 [http-nio-8080-exec-2] DEBUG o.s.s.w.a.AnonymousAuthenticationFilter - Set SecurityContextHolder to anonymous SecurityContext
-2026-05-28 16:01:54 [http-nio-8080-exec-2] DEBUG o.s.s.w.a.Http403ForbiddenEntryPoint - Pre-authenticated entry point called. Rejecting access
-2026-05-28 16:01:54 [http-nio-8080-exec-2] DEBUG o.s.security.web.FilterChainProxy - Securing GET /error
-2026-05-28 16:01:54 [http-nio-8080-exec-2] DEBUG o.s.security.web.FilterChainProxy - Secured GET /error
-2026-05-28 16:01:54 [http-nio-8080-exec-2] DEBUG o.s.s.w.a.AnonymousAuthenticationFilter - Set SecurityContextHolder to anonymous SecurityContext
-2026-05-28 16:02:41 [http-nio-8080-exec-4] DEBUG o.s.security.web.FilterChainProxy - Securing GET /study/
-2026-05-28 16:02:41 [http-nio-8080-exec-4] DEBUG o.s.s.w.a.AnonymousAuthenticationFilter - Set SecurityContextHolder to anonymous SecurityContext
-2026-05-28 16:02:41 [http-nio-8080-exec-4] DEBUG o.s.s.w.a.Http403ForbiddenEntryPoint - Pre-authenticated entry point called. Rejecting access
-2026-05-28 16:02:41 [http-nio-8080-exec-4] DEBUG o.s.security.web.FilterChainProxy - Securing GET /error
-2026-05-28 16:02:41 [http-nio-8080-exec-4] DEBUG o.s.security.web.FilterChainProxy - Secured GET /error
-2026-05-28 16:02:41 [http-nio-8080-exec-4] DEBUG o.s.s.w.a.AnonymousAuthenticationFilter - Set SecurityContextHolder to anonymous SecurityContext
-2026-05-28 16:02:41 [http-nio-8080-exec-5] DEBUG o.s.security.web.FilterChainProxy - Securing GET /favicon.ico
-2026-05-28 16:02:41 [http-nio-8080-exec-5] DEBUG o.s.s.w.a.AnonymousAuthenticationFilter - Set SecurityContextHolder to anonymous SecurityContext
-2026-05-28 16:02:41 [http-nio-8080-exec-5] DEBUG o.s.s.w.a.Http403ForbiddenEntryPoint - Pre-authenticated entry point called. Rejecting access
-2026-05-28 16:02:41 [http-nio-8080-exec-5] DEBUG o.s.security.web.FilterChainProxy - Securing GET /error
-2026-05-28 16:02:41 [http-nio-8080-exec-5] DEBUG o.s.security.web.FilterChainProxy - Secured GET /error
-2026-05-28 16:02:41 [http-nio-8080-exec-5] DEBUG o.s.s.w.a.AnonymousAuthenticationFilter - Set SecurityContextHolder to anonymous SecurityContext
-2026-05-28 16:03:15 [http-nio-8080-exec-6] DEBUG o.s.security.web.FilterChainProxy - Securing GET /study
-2026-05-28 16:03:15 [http-nio-8080-exec-6] DEBUG o.s.s.w.a.AnonymousAuthenticationFilter - Set SecurityContextHolder to anonymous SecurityContext
-2026-05-28 16:03:15 [http-nio-8080-exec-6] DEBUG o.s.s.w.a.Http403ForbiddenEntryPoint - Pre-authenticated entry point called. Rejecting access
-2026-05-28 16:03:15 [http-nio-8080-exec-6] DEBUG o.s.security.web.FilterChainProxy - Securing GET /error
-2026-05-28 16:03:15 [http-nio-8080-exec-6] DEBUG o.s.security.web.FilterChainProxy - Secured GET /error
-2026-05-28 16:03:15 [http-nio-8080-exec-6] DEBUG o.s.s.w.a.AnonymousAuthenticationFilter - Set SecurityContextHolder to anonymous SecurityContext
-2026-05-28 16:03:15 [http-nio-8080-exec-7] DEBUG o.s.security.web.FilterChainProxy - Securing GET /favicon.ico
-2026-05-28 16:03:15 [http-nio-8080-exec-7] DEBUG o.s.s.w.a.AnonymousAuthenticationFilter - Set SecurityContextHolder to anonymous SecurityContext
-2026-05-28 16:03:15 [http-nio-8080-exec-7] DEBUG o.s.s.w.a.Http403ForbiddenEntryPoint - Pre-authenticated entry point called. Rejecting access
-2026-05-28 16:03:15 [http-nio-8080-exec-7] DEBUG o.s.security.web.FilterChainProxy - Securing GET /error
-2026-05-28 16:03:15 [http-nio-8080-exec-7] DEBUG o.s.security.web.FilterChainProxy - Secured GET /error
-2026-05-28 16:03:15 [http-nio-8080-exec-7] DEBUG o.s.s.w.a.AnonymousAuthenticationFilter - Set SecurityContextHolder to anonymous SecurityContext
-2026-05-28 16:03:29 [http-nio-8080-exec-8] DEBUG o.s.security.web.FilterChainProxy - Securing GET /
-2026-05-28 16:03:29 [http-nio-8080-exec-8] DEBUG o.s.s.w.a.AnonymousAuthenticationFilter - Set SecurityContextHolder to anonymous SecurityContext
-2026-05-28 16:03:29 [http-nio-8080-exec-8] DEBUG o.s.s.w.a.Http403ForbiddenEntryPoint - Pre-authenticated entry point called. Rejecting access
-2026-05-28 16:03:29 [http-nio-8080-exec-8] DEBUG o.s.security.web.FilterChainProxy - Securing GET /error
-2026-05-28 16:03:29 [http-nio-8080-exec-8] DEBUG o.s.security.web.FilterChainProxy - Secured GET /error
-2026-05-28 16:03:29 [http-nio-8080-exec-8] DEBUG o.s.s.w.a.AnonymousAuthenticationFilter - Set SecurityContextHolder to anonymous SecurityContext
-2026-05-28 16:03:29 [http-nio-8080-exec-9] DEBUG o.s.security.web.FilterChainProxy - Securing GET /favicon.ico
-2026-05-28 16:03:29 [http-nio-8080-exec-9] DEBUG o.s.s.w.a.AnonymousAuthenticationFilter - Set SecurityContextHolder to anonymous SecurityContext
-2026-05-28 16:03:29 [http-nio-8080-exec-9] DEBUG o.s.s.w.a.Http403ForbiddenEntryPoint - Pre-authenticated entry point called. Rejecting access
-2026-05-28 16:03:29 [http-nio-8080-exec-9] DEBUG o.s.security.web.FilterChainProxy - Securing GET /error
-2026-05-28 16:03:29 [http-nio-8080-exec-9] DEBUG o.s.security.web.FilterChainProxy - Secured GET /error
-2026-05-28 16:03:29 [http-nio-8080-exec-9] DEBUG o.s.s.w.a.AnonymousAuthenticationFilter - Set SecurityContextHolder to anonymous SecurityContext
-2026-05-28 16:03:34 [http-nio-8080-exec-10] DEBUG o.s.security.web.FilterChainProxy - Securing GET /favicon.ico
-2026-05-28 16:03:34 [http-nio-8080-exec-10] DEBUG o.s.s.w.a.AnonymousAuthenticationFilter - Set SecurityContextHolder to anonymous SecurityContext
-2026-05-28 16:03:34 [http-nio-8080-exec-10] DEBUG o.s.s.w.a.Http403ForbiddenEntryPoint - Pre-authenticated entry point called. Rejecting access
-2026-05-28 16:03:34 [http-nio-8080-exec-10] DEBUG o.s.security.web.FilterChainProxy - Securing GET /error
-2026-05-28 16:03:34 [http-nio-8080-exec-10] DEBUG o.s.security.web.FilterChainProxy - Secured GET /error
-2026-05-28 16:03:34 [http-nio-8080-exec-10] DEBUG o.s.s.w.a.AnonymousAuthenticationFilter - Set SecurityContextHolder to anonymous SecurityContext
-2026-05-28 16:03:34 [http-nio-8080-exec-1] DEBUG o.s.security.web.FilterChainProxy - Securing GET /favicon.ico
-2026-05-28 16:03:34 [http-nio-8080-exec-1] DEBUG o.s.s.w.a.AnonymousAuthenticationFilter - Set SecurityContextHolder to anonymous SecurityContext
-2026-05-28 16:03:34 [http-nio-8080-exec-1] DEBUG o.s.s.w.a.Http403ForbiddenEntryPoint - Pre-authenticated entry point called. Rejecting access
-2026-05-28 16:03:34 [http-nio-8080-exec-1] DEBUG o.s.security.web.FilterChainProxy - Securing GET /error
-2026-05-28 16:03:34 [http-nio-8080-exec-1] DEBUG o.s.security.web.FilterChainProxy - Secured GET /error
-2026-05-28 16:03:34 [http-nio-8080-exec-1] DEBUG o.s.s.w.a.AnonymousAuthenticationFilter - Set SecurityContextHolder to anonymous SecurityContext
-2026-05-28 16:03:46 [http-nio-8080-exec-2] DEBUG o.s.security.web.FilterChainProxy - Securing GET /index.html
-2026-05-28 16:03:46 [http-nio-8080-exec-2] DEBUG o.s.s.w.a.AnonymousAuthenticationFilter - Set SecurityContextHolder to anonymous SecurityContext
-2026-05-28 16:03:46 [http-nio-8080-exec-2] DEBUG o.s.s.w.a.Http403ForbiddenEntryPoint - Pre-authenticated entry point called. Rejecting access
-2026-05-28 16:03:46 [http-nio-8080-exec-2] DEBUG o.s.security.web.FilterChainProxy - Securing GET /error
-2026-05-28 16:03:46 [http-nio-8080-exec-2] DEBUG o.s.security.web.FilterChainProxy - Secured GET /error
-2026-05-28 16:03:46 [http-nio-8080-exec-2] DEBUG o.s.s.w.a.AnonymousAuthenticationFilter - Set SecurityContextHolder to anonymous SecurityContext
-2026-05-28 16:03:46 [http-nio-8080-exec-3] DEBUG o.s.security.web.FilterChainProxy - Securing GET /favicon.ico
-2026-05-28 16:03:46 [http-nio-8080-exec-3] DEBUG o.s.s.w.a.AnonymousAuthenticationFilter - Set SecurityContextHolder to anonymous SecurityContext
-2026-05-28 16:03:46 [http-nio-8080-exec-3] DEBUG o.s.s.w.a.Http403ForbiddenEntryPoint - Pre-authenticated entry point called. Rejecting access
-2026-05-28 16:03:46 [http-nio-8080-exec-3] DEBUG o.s.security.web.FilterChainProxy - Securing GET /error
-2026-05-28 16:03:46 [http-nio-8080-exec-3] DEBUG o.s.security.web.FilterChainProxy - Secured GET /error
-2026-05-28 16:03:46 [http-nio-8080-exec-3] DEBUG o.s.s.w.a.AnonymousAuthenticationFilter - Set SecurityContextHolder to anonymous SecurityContext
-2026-05-28 16:03:59 [http-nio-8080-exec-4] DEBUG o.s.security.web.FilterChainProxy - Securing GET /index.html
-2026-05-28 16:03:59 [http-nio-8080-exec-4] DEBUG o.s.s.w.a.AnonymousAuthenticationFilter - Set SecurityContextHolder to anonymous SecurityContext
-2026-05-28 16:03:59 [http-nio-8080-exec-4] DEBUG o.s.s.w.a.Http403ForbiddenEntryPoint - Pre-authenticated entry point called. Rejecting access
-2026-05-28 16:03:59 [http-nio-8080-exec-4] DEBUG o.s.security.web.FilterChainProxy - Securing GET /error
-2026-05-28 16:03:59 [http-nio-8080-exec-4] DEBUG o.s.security.web.FilterChainProxy - Secured GET /error
-2026-05-28 16:03:59 [http-nio-8080-exec-4] DEBUG o.s.s.w.a.AnonymousAuthenticationFilter - Set SecurityContextHolder to anonymous SecurityContext
-2026-05-28 16:03:59 [http-nio-8080-exec-5] DEBUG o.s.security.web.FilterChainProxy - Securing GET /favicon.ico
-2026-05-28 16:03:59 [http-nio-8080-exec-5] DEBUG o.s.s.w.a.AnonymousAuthenticationFilter - Set SecurityContextHolder to anonymous SecurityContext
-2026-05-28 16:03:59 [http-nio-8080-exec-5] DEBUG o.s.s.w.a.Http403ForbiddenEntryPoint - Pre-authenticated entry point called. Rejecting access
-2026-05-28 16:03:59 [http-nio-8080-exec-5] DEBUG o.s.security.web.FilterChainProxy - Securing GET /error
-2026-05-28 16:03:59 [http-nio-8080-exec-5] DEBUG o.s.security.web.FilterChainProxy - Secured GET /error
-2026-05-28 16:03:59 [http-nio-8080-exec-5] DEBUG o.s.s.w.a.AnonymousAuthenticationFilter - Set SecurityContextHolder to anonymous SecurityContext
-2026-05-28 16:04:45 [http-nio-8080-exec-7] DEBUG o.s.security.web.FilterChainProxy - Securing GET /swagger-ui.html
-2026-05-28 16:04:45 [http-nio-8080-exec-7] DEBUG o.s.s.w.a.AnonymousAuthenticationFilter - Set SecurityContextHolder to anonymous SecurityContext
-2026-05-28 16:04:45 [http-nio-8080-exec-7] DEBUG o.s.s.w.a.Http403ForbiddenEntryPoint - Pre-authenticated entry point called. Rejecting access
-2026-05-28 16:04:45 [http-nio-8080-exec-7] DEBUG o.s.security.web.FilterChainProxy - Securing GET /error
-2026-05-28 16:04:45 [http-nio-8080-exec-7] DEBUG o.s.security.web.FilterChainProxy - Secured GET /error
-2026-05-28 16:04:45 [http-nio-8080-exec-7] DEBUG o.s.s.w.a.AnonymousAuthenticationFilter - Set SecurityContextHolder to anonymous SecurityContext
-2026-05-28 16:04:45 [http-nio-8080-exec-8] DEBUG o.s.security.web.FilterChainProxy - Securing GET /favicon.ico
-2026-05-28 16:04:45 [http-nio-8080-exec-8] DEBUG o.s.s.w.a.AnonymousAuthenticationFilter - Set SecurityContextHolder to anonymous SecurityContext
-2026-05-28 16:04:45 [http-nio-8080-exec-8] DEBUG o.s.s.w.a.Http403ForbiddenEntryPoint - Pre-authenticated entry point called. Rejecting access
-2026-05-28 16:04:45 [http-nio-8080-exec-8] DEBUG o.s.security.web.FilterChainProxy - Securing GET /error
-2026-05-28 16:04:45 [http-nio-8080-exec-8] DEBUG o.s.security.web.FilterChainProxy - Secured GET /error
-2026-05-28 16:04:45 [http-nio-8080-exec-8] DEBUG o.s.s.w.a.AnonymousAuthenticationFilter - Set SecurityContextHolder to anonymous SecurityContext
-2026-05-28 16:04:50 [http-nio-8080-exec-9] DEBUG o.s.security.web.FilterChainProxy - Securing GET /actuator
-2026-05-28 16:04:50 [http-nio-8080-exec-9] DEBUG o.s.s.w.a.AnonymousAuthenticationFilter - Set SecurityContextHolder to anonymous SecurityContext
-2026-05-28 16:04:50 [http-nio-8080-exec-9] DEBUG o.s.s.w.a.Http403ForbiddenEntryPoint - Pre-authenticated entry point called. Rejecting access
-2026-05-28 16:04:50 [http-nio-8080-exec-9] DEBUG o.s.security.web.FilterChainProxy - Securing GET /error
-2026-05-28 16:04:50 [http-nio-8080-exec-9] DEBUG o.s.security.web.FilterChainProxy - Secured GET /error
-2026-05-28 16:04:50 [http-nio-8080-exec-9] DEBUG o.s.s.w.a.AnonymousAuthenticationFilter - Set SecurityContextHolder to anonymous SecurityContext
-2026-05-28 16:04:50 [http-nio-8080-exec-10] DEBUG o.s.security.web.FilterChainProxy - Securing GET /favicon.ico
-2026-05-28 16:04:50 [http-nio-8080-exec-10] DEBUG o.s.s.w.a.AnonymousAuthenticationFilter - Set SecurityContextHolder to anonymous SecurityContext
-2026-05-28 16:04:50 [http-nio-8080-exec-10] DEBUG o.s.s.w.a.Http403ForbiddenEntryPoint - Pre-authenticated entry point called. Rejecting access
-2026-05-28 16:04:50 [http-nio-8080-exec-10] DEBUG o.s.security.web.FilterChainProxy - Securing GET /error
-2026-05-28 16:04:50 [http-nio-8080-exec-10] DEBUG o.s.security.web.FilterChainProxy - Secured GET /error
-2026-05-28 16:04:50 [http-nio-8080-exec-10] DEBUG o.s.s.w.a.AnonymousAuthenticationFilter - Set SecurityContextHolder to anonymous SecurityContext
-2026-05-28 16:06:21 [SpringApplicationShutdownHook] INFO  o.s.o.j.LocalContainerEntityManagerFactoryBean - Closing JPA EntityManagerFactory for persistence unit 'default'
-2026-05-28 16:06:21 [SpringApplicationShutdownHook] INFO  com.zaxxer.hikari.HikariDataSource - HikariPool-1 - Shutdown initiated...
-2026-05-28 16:06:21 [SpringApplicationShutdownHook] INFO  com.zaxxer.hikari.HikariDataSource - HikariPool-1 - Shutdown completed.
-2026-05-28 16:16:22 [restartedMain] INFO  c.F.e.EverythingAppApplication - Starting EverythingAppApplication using Java 17.0.18 with PID 22421 (/home/finn/Dokumente/Projekte/Everything-app/Everything-app-backend/everything-app/target/classes started by finn in /home/finn/Dokumente/Projekte/Everything-app/Everything-app-backend/everything-app)
-2026-05-28 16:16:22 [restartedMain] DEBUG c.F.e.EverythingAppApplication - Running with Spring Boot v3.2.0, Spring v6.1.1
-2026-05-28 16:16:22 [restartedMain] INFO  c.F.e.EverythingAppApplication - The following 1 profile is active: "development"
-2026-05-28 16:16:22 [restartedMain] INFO  o.s.b.d.e.DevToolsPropertyDefaultsPostProcessor - Devtools property defaults active! Set 'spring.devtools.add-properties' to 'false' to disable
-2026-05-28 16:16:22 [restartedMain] INFO  o.s.b.d.e.DevToolsPropertyDefaultsPostProcessor - For additional web related logging consider setting the 'logging.level.web' property to 'DEBUG'
-2026-05-28 16:16:22 [restartedMain] INFO  o.s.d.r.c.RepositoryConfigurationDelegate - Bootstrapping Spring Data JPA repositories in DEFAULT mode.
-2026-05-28 16:16:22 [restartedMain] INFO  o.s.d.r.c.RepositoryConfigurationDelegate - Finished Spring Data repository scanning in 53 ms. Found 21 JPA repository interfaces.
-2026-05-28 16:16:23 [restartedMain] INFO  o.s.b.w.e.tomcat.TomcatWebServer - Tomcat initialized with port 8080 (http)
-2026-05-28 16:16:23 [restartedMain] INFO  o.a.catalina.core.StandardService - Starting service [Tomcat]
-2026-05-28 16:16:23 [restartedMain] INFO  o.a.catalina.core.StandardEngine - Starting Servlet engine: [Apache Tomcat/10.1.16]
-2026-05-28 16:16:23 [restartedMain] INFO  o.a.c.c.C.[Tomcat].[localhost].[/] - Initializing Spring embedded WebApplicationContext
-2026-05-28 16:16:23 [restartedMain] INFO  o.s.b.w.s.c.ServletWebServerApplicationContext - Root WebApplicationContext: initialization completed in 854 ms
-2026-05-28 16:16:23 [restartedMain] INFO  o.h.jpa.internal.util.LogHelper - HHH000204: Processing PersistenceUnitInfo [name: default]
-2026-05-28 16:16:23 [restartedMain] INFO  org.hibernate.Version - HHH000412: Hibernate ORM core version 6.3.1.Final
-2026-05-28 16:16:23 [restartedMain] INFO  o.h.c.i.RegionFactoryInitiator - HHH000026: Second-level cache disabled
-2026-05-28 16:16:23 [restartedMain] INFO  o.s.o.j.p.SpringPersistenceUnitInfo - No LoadTimeWeaver setup: ignoring JPA class transformer
-2026-05-28 16:16:23 [restartedMain] INFO  com.zaxxer.hikari.HikariDataSource - HikariPool-1 - Starting...
-2026-05-28 16:16:23 [restartedMain] INFO  com.zaxxer.hikari.pool.HikariPool - HikariPool-1 - Added connection org.postgresql.jdbc.PgConnection@152fb80c
-2026-05-28 16:16:23 [restartedMain] INFO  com.zaxxer.hikari.HikariDataSource - HikariPool-1 - Start completed.
-2026-05-28 16:16:23 [restartedMain] WARN  org.hibernate.orm.deprecation - HHH90000025: PostgreSQLDialect does not need to be specified explicitly using 'hibernate.dialect' (remove the property setting and it will be selected by default)
-2026-05-28 16:16:24 [restartedMain] INFO  o.h.e.t.j.p.i.JtaPlatformInitiator - HHH000489: No JTA platform available (set 'hibernate.transaction.jta.platform' to enable JTA platform integration)
-2026-05-28 16:16:24 [restartedMain] INFO  o.s.o.j.LocalContainerEntityManagerFactoryBean - Initialized JPA EntityManagerFactory for persistence unit 'default'
-2026-05-28 16:16:24 [restartedMain] DEBUG c.F.e.s.JwtAuthenticationFilter - Filter 'jwtAuthenticationFilter' configured for use
-2026-05-28 16:16:24 [restartedMain] INFO  o.s.d.j.r.query.QueryEnhancerFactory - Hibernate is in classpath; If applicable, HQL parser will be used.
-2026-05-28 16:16:26 [restartedMain] WARN  o.s.b.a.o.j.JpaBaseConfiguration$JpaWebConfiguration - spring.jpa.open-in-view is enabled by default. Therefore, database queries may be performed during view rendering. Explicitly configure spring.jpa.open-in-view to disable this warning
-2026-05-28 16:16:26 [restartedMain] INFO  o.s.s.web.DefaultSecurityFilterChain - Will secure any request with [org.springframework.security.web.session.DisableEncodeUrlFilter@31215b8f, org.springframework.security.web.context.request.async.WebAsyncManagerIntegrationFilter@5d631643, org.springframework.security.web.context.SecurityContextHolderFilter@4c12fc0d, org.springframework.security.web.header.HeaderWriterFilter@2fc2944a, org.springframework.web.filter.CorsFilter@7f95c619, org.springframework.security.web.authentication.logout.LogoutFilter@77951570, com.Finn.everything_app.security.JwtAuthenticationFilter@dc3603b, org.springframework.security.web.savedrequest.RequestCacheAwareFilter@604c3a0e, org.springframework.security.web.servletapi.SecurityContextHolderAwareRequestFilter@41d90191, org.springframework.security.web.authentication.AnonymousAuthenticationFilter@17a58f42, org.springframework.security.web.session.SessionManagementFilter@6a7700e6, org.springframework.security.web.access.ExceptionTranslationFilter@634899, org.springframework.security.web.access.intercept.AuthorizationFilter@78c29d9d]
-2026-05-28 16:16:26 [restartedMain] INFO  o.s.b.d.a.OptionalLiveReloadServer - LiveReload server is running on port 35729
-2026-05-28 16:16:26 [restartedMain] INFO  o.s.b.w.e.tomcat.TomcatWebServer - Tomcat started on port 8080 (http) with context path ''
-2026-05-28 16:16:26 [restartedMain] INFO  c.F.e.EverythingAppApplication - Started EverythingAppApplication in 4.603 seconds (process running for 4.829)
-2026-05-28 16:18:08 [http-nio-8080-exec-1] INFO  o.a.c.c.C.[Tomcat].[localhost].[/] - Initializing Spring DispatcherServlet 'dispatcherServlet'
-2026-05-28 16:18:08 [http-nio-8080-exec-1] INFO  o.s.web.servlet.DispatcherServlet - Initializing Servlet 'dispatcherServlet'
-2026-05-28 16:18:08 [http-nio-8080-exec-1] INFO  o.s.web.servlet.DispatcherServlet - Completed initialization in 2 ms
-2026-05-28 16:18:08 [http-nio-8080-exec-1] DEBUG o.s.security.web.FilterChainProxy - Securing POST /api/auth/dev-login
-2026-05-28 16:18:09 [http-nio-8080-exec-1] DEBUG org.hibernate.SQL - 
-    select
-        u1_0.id,
-        u1_0.created_at,
-        u1_0.email,
-        u1_0.last_login,
-        u1_0.password_hash,
-        u1_0.username 
-    from
-        users u1_0 
-    where
-        u1_0.username=?
-2026-05-28 16:18:09 [http-nio-8080-exec-1] DEBUG org.hibernate.SQL - 
-    select
-        up1_0.id,
-        up1_0.break_duration_minutes,
-        up1_0.dark_mode,
-        up1_0.group_similar_tasks,
-        up1_0.hours_before_break,
-        up1_0.max_tasks_per_day,
-        up1_0.notifications_enabled,
-        up1_0.peak_productivity_time,
-        up1_0.reminder_minutes_before,
-        up1_0.theme_color,
-        up1_0.user_id,
-        u1_0.id,
-        u1_0.created_at,
-        u1_0.email,
-        u1_0.last_login,
-        u1_0.password_hash,
-        u1_0.username,
-        up1_0.workday_end,
-        up1_0.workday_start 
-    from
-        user_preferences up1_0 
-    join
-        users u1_0 
-            on u1_0.id=up1_0.user_id 
-    where
-        up1_0.user_id=?
-2026-05-28 16:18:09 [http-nio-8080-exec-1] WARN  o.s.w.s.h.HandlerMappingIntrospector - Cache miss for REQUEST dispatch to '/api/auth/dev-login' (previous null). Performing MatchableHandlerMapping lookup. This is logged once only at WARN level, and every time at TRACE.
-2026-05-28 16:18:09 [http-nio-8080-exec-1] DEBUG o.s.security.web.FilterChainProxy - Secured POST /api/auth/dev-login
-2026-05-28 16:18:09 [http-nio-8080-exec-1] DEBUG org.hibernate.SQL - 
-    select
-        u1_0.id,
-        u1_0.created_at,
-        u1_0.email,
-        u1_0.last_login,
-        u1_0.password_hash,
-        u1_0.username 
-    from
-        users u1_0 
-    where
-        u1_0.username=?
-2026-05-28 16:18:09 [http-nio-8080-exec-1] DEBUG org.hibernate.SQL - 
-    select
-        up1_0.id,
-        up1_0.break_duration_minutes,
-        up1_0.dark_mode,
-        up1_0.group_similar_tasks,
-        up1_0.hours_before_break,
-        up1_0.max_tasks_per_day,
-        up1_0.notifications_enabled,
-        up1_0.peak_productivity_time,
-        up1_0.reminder_minutes_before,
-        up1_0.theme_color,
-        up1_0.user_id,
-        u1_0.id,
-        u1_0.created_at,
-        u1_0.email,
-        u1_0.last_login,
-        u1_0.password_hash,
-        u1_0.username,
-        up1_0.workday_end,
-        up1_0.workday_start 
-    from
-        user_preferences up1_0 
-    join
-        users u1_0 
-            on u1_0.id=up1_0.user_id 
-    where
-        up1_0.user_id=?
-2026-05-28 16:18:09 [http-nio-8080-exec-1] DEBUG org.hibernate.SQL - 
-    update
-        users 
-    set
-        created_at=?,
-        email=?,
-        last_login=?,
-        password_hash=?,
-        username=? 
-    where
-        id=?
-2026-05-28 16:18:09 [http-nio-8080-exec-2] DEBUG o.s.security.web.FilterChainProxy - Securing GET /api/tasks
-2026-05-28 16:18:09 [http-nio-8080-exec-2] DEBUG org.hibernate.SQL - 
-    select
-        u1_0.id,
-        u1_0.created_at,
-        u1_0.email,
-        u1_0.last_login,
-        u1_0.password_hash,
-        u1_0.username 
-    from
-        users u1_0 
-    where
-        u1_0.username=?
-2026-05-28 16:18:09 [http-nio-8080-exec-2] DEBUG org.hibernate.SQL - 
-    select
-        up1_0.id,
-        up1_0.break_duration_minutes,
-        up1_0.dark_mode,
-        up1_0.group_similar_tasks,
-        up1_0.hours_before_break,
-        up1_0.max_tasks_per_day,
-        up1_0.notifications_enabled,
-        up1_0.peak_productivity_time,
-        up1_0.reminder_minutes_before,
-        up1_0.theme_color,
-        up1_0.user_id,
-        u1_0.id,
-        u1_0.created_at,
-        u1_0.email,
-        u1_0.last_login,
-        u1_0.password_hash,
-        u1_0.username,
-        up1_0.workday_end,
-        up1_0.workday_start 
-    from
-        user_preferences up1_0 
-    join
-        users u1_0 
-            on u1_0.id=up1_0.user_id 
-    where
-        up1_0.user_id=?
-2026-05-28 16:18:09 [http-nio-8080-exec-2] DEBUG o.s.security.web.FilterChainProxy - Secured GET /api/tasks
-2026-05-28 16:18:09 [http-nio-8080-exec-2] DEBUG org.hibernate.SQL - 
-    select
-        t1_0.id,
-        t1_0.category,
-        t1_0.completed_at,
-        t1_0.created_at,
-        t1_0.deadline,
-        t1_0.description,
-        t1_0.estimated_duration_minutes,
-        t1_0.priority,
-        t1_0.project_id,
-        t1_0.scheduled_end_time,
-        t1_0.scheduled_start_time,
-        t1_0.space_type,
-        t1_0.status,
-        t1_0.title,
-        t1_0.updated_at,
-        t1_0.user_id 
-    from
-        tasks t1_0 
-    where
-        t1_0.user_id=?
-2026-05-28 16:18:09 [http-nio-8080-exec-3] DEBUG o.s.security.web.FilterChainProxy - Securing GET /api/calendar/events?startDate=2026-05-01T00:00:00.000&endDate=2026-05-31T23:59:59.000
-2026-05-28 16:18:09 [http-nio-8080-exec-3] DEBUG org.hibernate.SQL - 
-    select
-        u1_0.id,
-        u1_0.created_at,
-        u1_0.email,
-        u1_0.last_login,
-        u1_0.password_hash,
-        u1_0.username 
-    from
-        users u1_0 
-    where
-        u1_0.username=?
-2026-05-28 16:18:09 [http-nio-8080-exec-3] DEBUG org.hibernate.SQL - 
-    select
-        up1_0.id,
-        up1_0.break_duration_minutes,
-        up1_0.dark_mode,
-        up1_0.group_similar_tasks,
-        up1_0.hours_before_break,
-        up1_0.max_tasks_per_day,
-        up1_0.notifications_enabled,
-        up1_0.peak_productivity_time,
-        up1_0.reminder_minutes_before,
-        up1_0.theme_color,
-        up1_0.user_id,
-        u1_0.id,
-        u1_0.created_at,
-        u1_0.email,
-        u1_0.last_login,
-        u1_0.password_hash,
-        u1_0.username,
-        up1_0.workday_end,
-        up1_0.workday_start 
-    from
-        user_preferences up1_0 
-    join
-        users u1_0 
-            on u1_0.id=up1_0.user_id 
-    where
-        up1_0.user_id=?
-2026-05-28 16:18:09 [http-nio-8080-exec-3] DEBUG o.s.security.web.FilterChainProxy - Secured GET /api/calendar/events?startDate=2026-05-01T00:00:00.000&endDate=2026-05-31T23:59:59.000
-2026-05-28 16:18:09 [http-nio-8080-exec-3] DEBUG org.hibernate.SQL - 
-    select
-        ce1_0.id,
-        ce1_0.color,
-        ce1_0.created_at,
-        ce1_0.description,
-        ce1_0.end_time,
-        ce1_0.event_type,
-        ce1_0.is_fixed,
-        ce1_0.location,
-        ce1_0.notes,
-        ce1_0.related_habit_id,
-        ce1_0.related_task_id,
-        ce1_0.related_workout_id,
-        ce1_0.start_time,
-        ce1_0.title,
-        ce1_0.updated_at,
-        ce1_0.user_id 
-    from
-        calendar_events ce1_0 
-    where
-        ce1_0.user_id=? 
-        and ce1_0.start_time between ? and ?
-2026-05-28 16:18:11 [http-nio-8080-exec-4] DEBUG o.s.security.web.FilterChainProxy - Securing GET /api/study/notes
-2026-05-28 16:18:11 [http-nio-8080-exec-4] DEBUG org.hibernate.SQL - 
-    select
-        u1_0.id,
-        u1_0.created_at,
-        u1_0.email,
-        u1_0.last_login,
-        u1_0.password_hash,
-        u1_0.username 
-    from
-        users u1_0 
-    where
-        u1_0.username=?
-2026-05-28 16:18:11 [http-nio-8080-exec-4] DEBUG org.hibernate.SQL - 
-    select
-        up1_0.id,
-        up1_0.break_duration_minutes,
-        up1_0.dark_mode,
-        up1_0.group_similar_tasks,
-        up1_0.hours_before_break,
-        up1_0.max_tasks_per_day,
-        up1_0.notifications_enabled,
-        up1_0.peak_productivity_time,
-        up1_0.reminder_minutes_before,
-        up1_0.theme_color,
-        up1_0.user_id,
-        u1_0.id,
-        u1_0.created_at,
-        u1_0.email,
-        u1_0.last_login,
-        u1_0.password_hash,
-        u1_0.username,
-        up1_0.workday_end,
-        up1_0.workday_start 
-    from
-        user_preferences up1_0 
-    join
-        users u1_0 
-            on u1_0.id=up1_0.user_id 
-    where
-        up1_0.user_id=?
-2026-05-28 16:18:11 [http-nio-8080-exec-4] DEBUG o.s.security.web.FilterChainProxy - Secured GET /api/study/notes
-2026-05-28 16:18:11 [http-nio-8080-exec-4] DEBUG org.hibernate.SQL - 
-    select
-        sn1_0.id,
-        sn1_0.category,
-        sn1_0.content,
-        sn1_0.course_id,
-        sn1_0.created_at,
-        sn1_0.file_path,
-        sn1_0.file_type,
-        sn1_0.is_favorite,
-        sn1_0.last_reviewed_at,
-        sn1_0.tags,
-        sn1_0.title,
-        sn1_0.updated_at,
-        sn1_0.user_id 
-    from
-        study_notes sn1_0 
-    where
-        sn1_0.user_id=?
-2026-05-28 16:19:53 [SpringApplicationShutdownHook] INFO  o.s.o.j.LocalContainerEntityManagerFactoryBean - Closing JPA EntityManagerFactory for persistence unit 'default'
-2026-05-28 16:19:53 [SpringApplicationShutdownHook] INFO  com.zaxxer.hikari.HikariDataSource - HikariPool-1 - Shutdown initiated...
-2026-05-28 16:19:53 [SpringApplicationShutdownHook] INFO  com.zaxxer.hikari.HikariDataSource - HikariPool-1 - Shutdown completed.
-2026-05-28 17:26:47 [restartedMain] INFO  c.F.e.EverythingAppApplication - Starting EverythingAppApplication using Java 17.0.18 with PID 41267 (/home/finn/Dokumente/Projekte/Everything-app/Everything-app-backend/everything-app/target/classes started by finn in /home/finn/Dokumente/Projekte/Everything-app/Everything-app-backend/everything-app)
-2026-05-28 17:26:47 [restartedMain] DEBUG c.F.e.EverythingAppApplication - Running with Spring Boot v3.2.0, Spring v6.1.1
-2026-05-28 17:26:47 [restartedMain] INFO  c.F.e.EverythingAppApplication - The following 1 profile is active: "development"
-2026-05-28 17:26:47 [restartedMain] INFO  o.s.b.d.e.DevToolsPropertyDefaultsPostProcessor - Devtools property defaults active! Set 'spring.devtools.add-properties' to 'false' to disable
-2026-05-28 17:26:47 [restartedMain] INFO  o.s.b.d.e.DevToolsPropertyDefaultsPostProcessor - For additional web related logging consider setting the 'logging.level.web' property to 'DEBUG'
-2026-05-28 17:26:47 [restartedMain] INFO  o.s.d.r.c.RepositoryConfigurationDelegate - Bootstrapping Spring Data JPA repositories in DEFAULT mode.
-2026-05-28 17:26:48 [restartedMain] INFO  o.s.d.r.c.RepositoryConfigurationDelegate - Finished Spring Data repository scanning in 60 ms. Found 21 JPA repository interfaces.
-2026-05-28 17:26:48 [restartedMain] INFO  o.s.b.w.e.tomcat.TomcatWebServer - Tomcat initialized with port 8080 (http)
-2026-05-28 17:26:48 [restartedMain] INFO  o.a.catalina.core.StandardService - Starting service [Tomcat]
-2026-05-28 17:26:48 [restartedMain] INFO  o.a.catalina.core.StandardEngine - Starting Servlet engine: [Apache Tomcat/10.1.16]
-2026-05-28 17:26:48 [restartedMain] INFO  o.a.c.c.C.[Tomcat].[localhost].[/] - Initializing Spring embedded WebApplicationContext
-2026-05-28 17:26:48 [restartedMain] INFO  o.s.b.w.s.c.ServletWebServerApplicationContext - Root WebApplicationContext: initialization completed in 1008 ms
-2026-05-28 17:26:48 [restartedMain] INFO  o.h.jpa.internal.util.LogHelper - HHH000204: Processing PersistenceUnitInfo [name: default]
-2026-05-28 17:26:48 [restartedMain] INFO  org.hibernate.Version - HHH000412: Hibernate ORM core version 6.3.1.Final
-2026-05-28 17:26:48 [restartedMain] INFO  o.h.c.i.RegionFactoryInitiator - HHH000026: Second-level cache disabled
-2026-05-28 17:26:48 [restartedMain] INFO  o.s.o.j.p.SpringPersistenceUnitInfo - No LoadTimeWeaver setup: ignoring JPA class transformer
-2026-05-28 17:26:48 [restartedMain] INFO  com.zaxxer.hikari.HikariDataSource - HikariPool-1 - Starting...
-2026-05-28 17:26:48 [restartedMain] INFO  com.zaxxer.hikari.pool.HikariPool - HikariPool-1 - Added connection org.postgresql.jdbc.PgConnection@42bbcc85
-2026-05-28 17:26:48 [restartedMain] INFO  com.zaxxer.hikari.HikariDataSource - HikariPool-1 - Start completed.
-2026-05-28 17:26:48 [restartedMain] WARN  org.hibernate.orm.deprecation - HHH90000025: PostgreSQLDialect does not need to be specified explicitly using 'hibernate.dialect' (remove the property setting and it will be selected by default)
-2026-05-28 17:26:49 [restartedMain] INFO  o.h.e.t.j.p.i.JtaPlatformInitiator - HHH000489: No JTA platform available (set 'hibernate.transaction.jta.platform' to enable JTA platform integration)
-2026-05-28 17:26:49 [restartedMain] INFO  o.s.o.j.LocalContainerEntityManagerFactoryBean - Initialized JPA EntityManagerFactory for persistence unit 'default'
-2026-05-28 17:26:50 [restartedMain] DEBUG c.F.e.s.JwtAuthenticationFilter - Filter 'jwtAuthenticationFilter' configured for use
-2026-05-28 17:26:50 [restartedMain] INFO  o.s.d.j.r.query.QueryEnhancerFactory - Hibernate is in classpath; If applicable, HQL parser will be used.
-2026-05-28 17:26:51 [restartedMain] WARN  o.s.b.a.o.j.JpaBaseConfiguration$JpaWebConfiguration - spring.jpa.open-in-view is enabled by default. Therefore, database queries may be performed during view rendering. Explicitly configure spring.jpa.open-in-view to disable this warning
-2026-05-28 17:26:51 [restartedMain] INFO  o.s.s.web.DefaultSecurityFilterChain - Will secure any request with [org.springframework.security.web.session.DisableEncodeUrlFilter@10a9985a, org.springframework.security.web.context.request.async.WebAsyncManagerIntegrationFilter@dfdd4b5, org.springframework.security.web.context.SecurityContextHolderFilter@4ba4ef8f, org.springframework.security.web.header.HeaderWriterFilter@56beeabb, org.springframework.web.filter.CorsFilter@2a3fe8f2, org.springframework.security.web.authentication.logout.LogoutFilter@758ad4f3, com.Finn.everything_app.security.JwtAuthenticationFilter@11143c35, org.springframework.security.web.savedrequest.RequestCacheAwareFilter@12428896, org.springframework.security.web.servletapi.SecurityContextHolderAwareRequestFilter@6dd9ce80, org.springframework.security.web.authentication.AnonymousAuthenticationFilter@21b65553, org.springframework.security.web.session.SessionManagementFilter@2be1ee7b, org.springframework.security.web.access.ExceptionTranslationFilter@35953efa, org.springframework.security.web.access.intercept.AuthorizationFilter@eb26f7d]
-2026-05-28 17:26:52 [restartedMain] INFO  o.s.b.d.a.OptionalLiveReloadServer - LiveReload server is running on port 35729
-2026-05-28 17:26:52 [restartedMain] INFO  o.s.b.w.e.tomcat.TomcatWebServer - Tomcat started on port 8080 (http) with context path ''
-2026-05-28 17:26:52 [restartedMain] INFO  c.F.e.EverythingAppApplication - Started EverythingAppApplication in 4.915 seconds (process running for 5.17)
-2026-05-28 17:29:23 [restartedMain] INFO  c.F.e.EverythingAppApplication - Starting EverythingAppApplication using Java 17.0.18 with PID 47930 (/home/finn/Dokumente/Projekte/Everything-app/Everything-app-backend/everything-app/target/classes started by finn in /home/finn/Dokumente/Projekte/Everything-app/Everything-app-backend/everything-app)
-2026-05-28 17:29:23 [restartedMain] DEBUG c.F.e.EverythingAppApplication - Running with Spring Boot v3.2.0, Spring v6.1.1
-2026-05-28 17:29:23 [restartedMain] INFO  c.F.e.EverythingAppApplication - The following 1 profile is active: "development"
-2026-05-28 17:29:23 [restartedMain] INFO  o.s.b.d.e.DevToolsPropertyDefaultsPostProcessor - Devtools property defaults active! Set 'spring.devtools.add-properties' to 'false' to disable
-2026-05-28 17:29:23 [restartedMain] INFO  o.s.b.d.e.DevToolsPropertyDefaultsPostProcessor - For additional web related logging consider setting the 'logging.level.web' property to 'DEBUG'
-2026-05-28 17:29:23 [restartedMain] INFO  o.s.d.r.c.RepositoryConfigurationDelegate - Bootstrapping Spring Data JPA repositories in DEFAULT mode.
-2026-05-28 17:29:23 [restartedMain] INFO  o.s.d.r.c.RepositoryConfigurationDelegate - Finished Spring Data repository scanning in 48 ms. Found 21 JPA repository interfaces.
-2026-05-28 17:29:24 [restartedMain] INFO  o.s.b.w.e.tomcat.TomcatWebServer - Tomcat initialized with port 8080 (http)
-2026-05-28 17:29:24 [restartedMain] INFO  o.a.catalina.core.StandardService - Starting service [Tomcat]
-2026-05-28 17:29:24 [restartedMain] INFO  o.a.catalina.core.StandardEngine - Starting Servlet engine: [Apache Tomcat/10.1.16]
-2026-05-28 17:29:24 [restartedMain] INFO  o.a.c.c.C.[Tomcat].[localhost].[/] - Initializing Spring embedded WebApplicationContext
-2026-05-28 17:29:24 [restartedMain] INFO  o.s.b.w.s.c.ServletWebServerApplicationContext - Root WebApplicationContext: initialization completed in 885 ms
-2026-05-28 17:29:24 [restartedMain] INFO  o.h.jpa.internal.util.LogHelper - HHH000204: Processing PersistenceUnitInfo [name: default]
-2026-05-28 17:29:24 [restartedMain] INFO  org.hibernate.Version - HHH000412: Hibernate ORM core version 6.3.1.Final
-2026-05-28 17:29:24 [restartedMain] INFO  o.h.c.i.RegionFactoryInitiator - HHH000026: Second-level cache disabled
-2026-05-28 17:29:24 [restartedMain] INFO  o.s.o.j.p.SpringPersistenceUnitInfo - No LoadTimeWeaver setup: ignoring JPA class transformer
-2026-05-28 17:29:24 [restartedMain] INFO  com.zaxxer.hikari.HikariDataSource - HikariPool-1 - Starting...
-2026-05-28 17:29:24 [restartedMain] INFO  com.zaxxer.hikari.pool.HikariPool - HikariPool-1 - Added connection org.postgresql.jdbc.PgConnection@4a2c6abd
-2026-05-28 17:29:24 [restartedMain] INFO  com.zaxxer.hikari.HikariDataSource - HikariPool-1 - Start completed.
-2026-05-28 17:29:24 [restartedMain] WARN  org.hibernate.orm.deprecation - HHH90000025: PostgreSQLDialect does not need to be specified explicitly using 'hibernate.dialect' (remove the property setting and it will be selected by default)
-2026-05-28 17:29:25 [restartedMain] INFO  o.h.e.t.j.p.i.JtaPlatformInitiator - HHH000489: No JTA platform available (set 'hibernate.transaction.jta.platform' to enable JTA platform integration)
-2026-05-28 17:29:25 [restartedMain] INFO  o.s.o.j.LocalContainerEntityManagerFactoryBean - Initialized JPA EntityManagerFactory for persistence unit 'default'
-2026-05-28 17:29:25 [restartedMain] DEBUG c.F.e.s.JwtAuthenticationFilter - Filter 'jwtAuthenticationFilter' configured for use
-2026-05-28 17:29:26 [restartedMain] INFO  o.s.d.j.r.query.QueryEnhancerFactory - Hibernate is in classpath; If applicable, HQL parser will be used.
-2026-05-28 17:29:27 [restartedMain] WARN  o.s.b.a.o.j.JpaBaseConfiguration$JpaWebConfiguration - spring.jpa.open-in-view is enabled by default. Therefore, database queries may be performed during view rendering. Explicitly configure spring.jpa.open-in-view to disable this warning
-2026-05-28 17:29:27 [restartedMain] INFO  o.s.s.web.DefaultSecurityFilterChain - Will secure any request with [org.springframework.security.web.session.DisableEncodeUrlFilter@1aaf239a, org.springframework.security.web.context.request.async.WebAsyncManagerIntegrationFilter@5438e645, org.springframework.security.web.context.SecurityContextHolderFilter@137357bf, org.springframework.security.web.header.HeaderWriterFilter@d1afa8e, org.springframework.web.filter.CorsFilter@bd95727, org.springframework.security.web.authentication.logout.LogoutFilter@f3f6729, com.Finn.everything_app.security.JwtAuthenticationFilter@842493d, org.springframework.security.web.savedrequest.RequestCacheAwareFilter@741b2462, org.springframework.security.web.servletapi.SecurityContextHolderAwareRequestFilter@51680283, org.springframework.security.web.authentication.AnonymousAuthenticationFilter@2819296a, org.springframework.security.web.session.SessionManagementFilter@27d16f15, org.springframework.security.web.access.ExceptionTranslationFilter@40912bcb, org.springframework.security.web.access.intercept.AuthorizationFilter@47e13715]
-2026-05-28 17:29:27 [restartedMain] WARN  o.s.b.d.a.OptionalLiveReloadServer - Unable to start LiveReload server
-2026-05-28 17:29:27 [restartedMain] WARN  o.s.b.w.s.c.AnnotationConfigServletWebServerApplicationContext - Exception encountered during context initialization - cancelling refresh attempt: org.springframework.context.ApplicationContextException: Failed to start bean 'webServerStartStop'
-2026-05-28 17:29:27 [restartedMain] INFO  o.s.o.j.LocalContainerEntityManagerFactoryBean - Closing JPA EntityManagerFactory for persistence unit 'default'
-2026-05-28 17:29:27 [restartedMain] INFO  com.zaxxer.hikari.HikariDataSource - HikariPool-1 - Shutdown initiated...
-2026-05-28 17:29:27 [restartedMain] INFO  com.zaxxer.hikari.HikariDataSource - HikariPool-1 - Shutdown completed.
-2026-05-28 17:29:27 [restartedMain] INFO  o.s.b.a.l.ConditionEvaluationReportLogger - 
 
-Error starting ApplicationContext. To display the condition evaluation report re-run your application with 'debug' enabled.
-2026-05-28 17:29:27 [restartedMain] ERROR o.s.boot.SpringApplication - Application run failed
-org.springframework.context.ApplicationContextException: Failed to start bean 'webServerStartStop'
-	at org.springframework.context.support.DefaultLifecycleProcessor.doStart(DefaultLifecycleProcessor.java:287)
-	at org.springframework.context.support.DefaultLifecycleProcessor$LifecycleGroup.start(DefaultLifecycleProcessor.java:467)
-	at java.base/java.lang.Iterable.forEach(Iterable.java:75)
-	at org.springframework.context.support.DefaultLifecycleProcessor.startBeans(DefaultLifecycleProcessor.java:256)
-	at org.springframework.context.support.DefaultLifecycleProcessor.onRefresh(DefaultLifecycleProcessor.java:201)
-	at org.springframework.context.support.AbstractApplicationContext.finishRefresh(AbstractApplicationContext.java:965)
-	at org.springframework.context.support.AbstractApplicationContext.refresh(AbstractApplicationContext.java:619)
-	at org.springframework.boot.web.servlet.context.ServletWebServerApplicationContext.refresh(ServletWebServerApplicationContext.java:146)
-	at org.springframework.boot.SpringApplication.refresh(SpringApplication.java:753)
-	at org.springframework.boot.SpringApplication.refreshContext(SpringApplication.java:455)
-	at org.springframework.boot.SpringApplication.run(SpringApplication.java:323)
-	at org.springframework.boot.SpringApplication.run(SpringApplication.java:1342)
-	at org.springframework.boot.SpringApplication.run(SpringApplication.java:1331)
-	at com.Finn.everything_app.EverythingAppApplication.main(EverythingAppApplication.java:14)
-	at java.base/jdk.internal.reflect.NativeMethodAccessorImpl.invoke0(Native Method)
-	at java.base/jdk.internal.reflect.NativeMethodAccessorImpl.invoke(NativeMethodAccessorImpl.java:77)
-	at java.base/jdk.internal.reflect.DelegatingMethodAccessorImpl.invoke(DelegatingMethodAccessorImpl.java:43)
-	at java.base/java.lang.reflect.Method.invoke(Method.java:569)
-	at org.springframework.boot.devtools.restart.RestartLauncher.run(RestartLauncher.java:50)
-Caused by: org.springframework.boot.web.server.WebServerException: Unable to start embedded Tomcat server
-	at org.springframework.boot.web.embedded.tomcat.TomcatWebServer.start(TomcatWebServer.java:229)
-	at org.springframework.boot.web.servlet.context.WebServerStartStopLifecycle.start(WebServerStartStopLifecycle.java:44)
-	at org.springframework.context.support.DefaultLifecycleProcessor.doStart(DefaultLifecycleProcessor.java:284)
-	... 18 common frames omitted
-Caused by: java.lang.IllegalArgumentException: standardService.connector.startFailed
-	at org.apache.catalina.core.StandardService.addConnector(StandardService.java:235)
-	at org.springframework.boot.web.embedded.tomcat.TomcatWebServer.addPreviouslyRemovedConnectors(TomcatWebServer.java:286)
-	at org.springframework.boot.web.embedded.tomcat.TomcatWebServer.start(TomcatWebServer.java:214)
-	... 20 common frames omitted
-Caused by: org.apache.catalina.LifecycleException: Protocol handler start failed
-	at org.apache.catalina.connector.Connector.startInternal(Connector.java:1046)
-	at org.apache.catalina.util.LifecycleBase.start(LifecycleBase.java:171)
-	at org.apache.catalina.core.StandardService.addConnector(StandardService.java:232)
-	... 22 common frames omitted
-Caused by: java.net.BindException: Die Adresse wird bereits verwendet
-	at java.base/sun.nio.ch.Net.bind0(Native Method)
-	at java.base/sun.nio.ch.Net.bind(Net.java:567)
-	at java.base/sun.nio.ch.ServerSocketChannelImpl.netBind(ServerSocketChannelImpl.java:337)
-	at java.base/sun.nio.ch.ServerSocketChannelImpl.bind(ServerSocketChannelImpl.java:294)
-	at org.apache.tomcat.util.net.NioEndpoint.initServerSocket(NioEndpoint.java:247)
-	at org.apache.tomcat.util.net.NioEndpoint.bind(NioEndpoint.java:202)
-	at org.apache.tomcat.util.net.AbstractEndpoint.bindWithCleanup(AbstractEndpoint.java:1280)
-	at org.apache.tomcat.util.net.AbstractEndpoint.start(AbstractEndpoint.java:1366)
-	at org.apache.coyote.AbstractProtocol.start(AbstractProtocol.java:635)
-	at org.apache.catalina.connector.Connector.startInternal(Connector.java:1043)
-	... 24 common frames omitted
-2026-05-28 17:29:50 [http-nio-8080-exec-1] INFO  o.a.c.c.C.[Tomcat].[localhost].[/] - Initializing Spring DispatcherServlet 'dispatcherServlet'
-2026-05-28 17:29:50 [http-nio-8080-exec-1] INFO  o.s.web.servlet.DispatcherServlet - Initializing Servlet 'dispatcherServlet'
-2026-05-28 17:29:50 [http-nio-8080-exec-1] INFO  o.s.web.servlet.DispatcherServlet - Completed initialization in 1 ms
-2026-05-28 17:29:50 [http-nio-8080-exec-1] DEBUG o.s.security.web.FilterChainProxy - Securing POST /api/auth/dev-login
-2026-05-28 17:29:50 [http-nio-8080-exec-1] DEBUG org.hibernate.SQL - 
+  .   ____          _            __ _ _
+ /\\ / ___'_ __ _ _(_)_ __  __ _ \ \ \ \
+( ( )\___ | '_ | '_| | '_ \/ _` | \ \ \ \
+ \\/  ___)| |_)| | | | | || (_| |  ) ) ) )
+  '  |____| .__|_| |_|_| |_\__, | / / / /
+ =========|_|==============|___/=/_/_/_/
+ :: Spring Boot ::                (v3.2.0)
+
+2026-06-07 11:04:09 - Starting EverythingAppApplication v1.0.0 using Java 17.0.19 with PID 43588 (/home/finn/Dokumente/Projekte/Everything-app/Everything-app-backend/everything-app/target/everything-app-1.0.0.jar started by finn in /home/finn/Dokumente/Projekte/Everything-app/Everything-app-backend/everything-app)
+2026-06-07 11:04:09 - Running with Spring Boot v3.2.0, Spring v6.1.1
+2026-06-07 11:04:09 - The following 1 profile is active: "development"
+2026-06-07 11:04:09 - Bootstrapping Spring Data JPA repositories in DEFAULT mode.
+2026-06-07 11:04:10 - Finished Spring Data repository scanning in 57 ms. Found 21 JPA repository interfaces.
+2026-06-07 11:04:10 - Tomcat initialized with port 8080 (http)
+2026-06-07 11:04:10 - Starting service [Tomcat]
+2026-06-07 11:04:10 - Starting Servlet engine: [Apache Tomcat/10.1.16]
+2026-06-07 11:04:10 - Initializing Spring embedded WebApplicationContext
+2026-06-07 11:04:10 - Root WebApplicationContext: initialization completed in 1073 ms
+2026-06-07 11:04:10 - HHH000204: Processing PersistenceUnitInfo [name: default]
+2026-06-07 11:04:10 - HHH000412: Hibernate ORM core version 6.3.1.Final
+2026-06-07 11:04:10 - HHH000026: Second-level cache disabled
+2026-06-07 11:04:10 - No LoadTimeWeaver setup: ignoring JPA class transformer
+2026-06-07 11:04:10 - HikariPool-1 - Starting...
+2026-06-07 11:04:11 - HikariPool-1 - Added connection org.postgresql.jdbc.PgConnection@15f861ee
+2026-06-07 11:04:11 - HikariPool-1 - Start completed.
+2026-06-07 11:04:11 - HHH90000025: PostgreSQLDialect does not need to be specified explicitly using 'hibernate.dialect' (remove the property setting and it will be selected by default)
+2026-06-07 11:04:11 - HHH000489: No JTA platform available (set 'hibernate.transaction.jta.platform' to enable JTA platform integration)
+2026-06-07 11:04:12 - Initialized JPA EntityManagerFactory for persistence unit 'default'
+2026-06-07 11:04:12 - Filter 'jwtAuthenticationFilter' configured for use
+2026-06-07 11:04:12 - Hibernate is in classpath; If applicable, HQL parser will be used.
+2026-06-07 11:04:14 - spring.jpa.open-in-view is enabled by default. Therefore, database queries may be performed during view rendering. Explicitly configure spring.jpa.open-in-view to disable this warning
+2026-06-07 11:04:14 - Will secure any request with [org.springframework.security.web.session.DisableEncodeUrlFilter@4e839570, org.springframework.security.web.context.request.async.WebAsyncManagerIntegrationFilter@1d87e100, org.springframework.security.web.context.SecurityContextHolderFilter@77e0ea9f, org.springframework.security.web.header.HeaderWriterFilter@6e858079, org.springframework.web.filter.CorsFilter@4a641b4f, org.springframework.security.web.authentication.logout.LogoutFilter@bd4dfe2, com.Finn.everything_app.security.JwtAuthenticationFilter@1cd4082a, org.springframework.security.web.savedrequest.RequestCacheAwareFilter@2021b349, org.springframework.security.web.servletapi.SecurityContextHolderAwareRequestFilter@5c4d43ee, org.springframework.security.web.authentication.AnonymousAuthenticationFilter@7f154816, org.springframework.security.web.session.SessionManagementFilter@185f8899, org.springframework.security.web.access.ExceptionTranslationFilter@10ab8b0d, org.springframework.security.web.access.intercept.AuthorizationFilter@68876a1a]
+2026-06-07 11:04:14 - Tomcat started on port 8080 (http) with context path ''
+2026-06-07 11:04:14 - Started EverythingAppApplication in 5.438 seconds (process running for 5.751)
+==============================================
+🚀 Everything App successfully started!
+📍 API available at: http://localhost:8080/api
+==============================================
+2026-06-07 11:04:16 - Initializing Spring DispatcherServlet 'dispatcherServlet'
+2026-06-07 11:04:16 - Initializing Servlet 'dispatcherServlet'
+2026-06-07 11:04:16 - Completed initialization in 1 ms
+2026-06-07 11:04:16 - Securing HEAD /api/users/me
+2026-06-07 11:04:16 - Set SecurityContextHolder to anonymous SecurityContext
+2026-06-07 11:04:16 - Cache miss for REQUEST dispatch to '/api/users/me' (previous null). Performing MatchableHandlerMapping lookup. This is logged once only at WARN level, and every time at TRACE.
+2026-06-07 11:04:16 - Pre-authenticated entry point called. Rejecting access
+2026-06-07 11:04:16 - Securing HEAD /error
+2026-06-07 11:04:16 - Secured HEAD /error
+2026-06-07 11:04:16 - Set SecurityContextHolder to anonymous SecurityContext
+2026-06-07 11:08:20 - Securing POST /api/auth/dev-login
+2026-06-07 11:08:20 - 
     select
         u1_0.id,
         u1_0.created_at,
@@ -883,7 +60,19 @@ Caused by: java.net.BindException: Die Adresse wird bereits verwendet
         users u1_0 
     where
         u1_0.username=?
-2026-05-28 17:29:50 [http-nio-8080-exec-1] DEBUG org.hibernate.SQL - 
+Hibernate: 
+    select
+        u1_0.id,
+        u1_0.created_at,
+        u1_0.email,
+        u1_0.last_login,
+        u1_0.password_hash,
+        u1_0.username 
+    from
+        users u1_0 
+    where
+        u1_0.username=?
+2026-06-07 11:08:20 - 
     select
         up1_0.id,
         up1_0.break_duration_minutes,
@@ -911,21 +100,7 @@ Caused by: java.net.BindException: Die Adresse wird bereits verwendet
             on u1_0.id=up1_0.user_id 
     where
         up1_0.user_id=?
-2026-05-28 17:29:50 [http-nio-8080-exec-1] WARN  o.s.w.s.h.HandlerMappingIntrospector - Cache miss for REQUEST dispatch to '/api/auth/dev-login' (previous null). Performing MatchableHandlerMapping lookup. This is logged once only at WARN level, and every time at TRACE.
-2026-05-28 17:29:50 [http-nio-8080-exec-1] DEBUG o.s.security.web.FilterChainProxy - Secured POST /api/auth/dev-login
-2026-05-28 17:29:50 [http-nio-8080-exec-1] DEBUG org.hibernate.SQL - 
-    select
-        u1_0.id,
-        u1_0.created_at,
-        u1_0.email,
-        u1_0.last_login,
-        u1_0.password_hash,
-        u1_0.username 
-    from
-        users u1_0 
-    where
-        u1_0.username=?
-2026-05-28 17:29:50 [http-nio-8080-exec-1] DEBUG org.hibernate.SQL - 
+Hibernate: 
     select
         up1_0.id,
         up1_0.break_duration_minutes,
@@ -953,7 +128,88 @@ Caused by: java.net.BindException: Die Adresse wird bereits verwendet
             on u1_0.id=up1_0.user_id 
     where
         up1_0.user_id=?
-2026-05-28 17:29:50 [http-nio-8080-exec-1] DEBUG org.hibernate.SQL - 
+2026-06-07 11:08:20 - Secured POST /api/auth/dev-login
+2026-06-07 11:08:20 - 
+    select
+        u1_0.id,
+        u1_0.created_at,
+        u1_0.email,
+        u1_0.last_login,
+        u1_0.password_hash,
+        u1_0.username 
+    from
+        users u1_0 
+    where
+        u1_0.username=?
+Hibernate: 
+    select
+        u1_0.id,
+        u1_0.created_at,
+        u1_0.email,
+        u1_0.last_login,
+        u1_0.password_hash,
+        u1_0.username 
+    from
+        users u1_0 
+    where
+        u1_0.username=?
+2026-06-07 11:08:20 - 
+    select
+        up1_0.id,
+        up1_0.break_duration_minutes,
+        up1_0.dark_mode,
+        up1_0.group_similar_tasks,
+        up1_0.hours_before_break,
+        up1_0.max_tasks_per_day,
+        up1_0.notifications_enabled,
+        up1_0.peak_productivity_time,
+        up1_0.reminder_minutes_before,
+        up1_0.theme_color,
+        up1_0.user_id,
+        u1_0.id,
+        u1_0.created_at,
+        u1_0.email,
+        u1_0.last_login,
+        u1_0.password_hash,
+        u1_0.username,
+        up1_0.workday_end,
+        up1_0.workday_start 
+    from
+        user_preferences up1_0 
+    join
+        users u1_0 
+            on u1_0.id=up1_0.user_id 
+    where
+        up1_0.user_id=?
+Hibernate: 
+    select
+        up1_0.id,
+        up1_0.break_duration_minutes,
+        up1_0.dark_mode,
+        up1_0.group_similar_tasks,
+        up1_0.hours_before_break,
+        up1_0.max_tasks_per_day,
+        up1_0.notifications_enabled,
+        up1_0.peak_productivity_time,
+        up1_0.reminder_minutes_before,
+        up1_0.theme_color,
+        up1_0.user_id,
+        u1_0.id,
+        u1_0.created_at,
+        u1_0.email,
+        u1_0.last_login,
+        u1_0.password_hash,
+        u1_0.username,
+        up1_0.workday_end,
+        up1_0.workday_start 
+    from
+        user_preferences up1_0 
+    join
+        users u1_0 
+            on u1_0.id=up1_0.user_id 
+    where
+        up1_0.user_id=?
+2026-06-07 11:08:20 - 
     update
         users 
     set
@@ -964,8 +220,19 @@ Caused by: java.net.BindException: Die Adresse wird bereits verwendet
         username=? 
     where
         id=?
-2026-05-28 17:29:50 [http-nio-8080-exec-2] DEBUG o.s.security.web.FilterChainProxy - Securing GET /api/tasks
-2026-05-28 17:29:50 [http-nio-8080-exec-2] DEBUG org.hibernate.SQL - 
+Hibernate: 
+    update
+        users 
+    set
+        created_at=?,
+        email=?,
+        last_login=?,
+        password_hash=?,
+        username=? 
+    where
+        id=?
+2026-06-07 11:08:21 - Securing GET /api/tasks
+2026-06-07 11:08:21 - 
     select
         u1_0.id,
         u1_0.created_at,
@@ -977,7 +244,19 @@ Caused by: java.net.BindException: Die Adresse wird bereits verwendet
         users u1_0 
     where
         u1_0.username=?
-2026-05-28 17:29:50 [http-nio-8080-exec-2] DEBUG org.hibernate.SQL - 
+Hibernate: 
+    select
+        u1_0.id,
+        u1_0.created_at,
+        u1_0.email,
+        u1_0.last_login,
+        u1_0.password_hash,
+        u1_0.username 
+    from
+        users u1_0 
+    where
+        u1_0.username=?
+2026-06-07 11:08:21 - 
     select
         up1_0.id,
         up1_0.break_duration_minutes,
@@ -1005,8 +284,36 @@ Caused by: java.net.BindException: Die Adresse wird bereits verwendet
             on u1_0.id=up1_0.user_id 
     where
         up1_0.user_id=?
-2026-05-28 17:29:50 [http-nio-8080-exec-2] DEBUG o.s.security.web.FilterChainProxy - Secured GET /api/tasks
-2026-05-28 17:29:50 [http-nio-8080-exec-2] DEBUG org.hibernate.SQL - 
+Hibernate: 
+    select
+        up1_0.id,
+        up1_0.break_duration_minutes,
+        up1_0.dark_mode,
+        up1_0.group_similar_tasks,
+        up1_0.hours_before_break,
+        up1_0.max_tasks_per_day,
+        up1_0.notifications_enabled,
+        up1_0.peak_productivity_time,
+        up1_0.reminder_minutes_before,
+        up1_0.theme_color,
+        up1_0.user_id,
+        u1_0.id,
+        u1_0.created_at,
+        u1_0.email,
+        u1_0.last_login,
+        u1_0.password_hash,
+        u1_0.username,
+        up1_0.workday_end,
+        up1_0.workday_start 
+    from
+        user_preferences up1_0 
+    join
+        users u1_0 
+            on u1_0.id=up1_0.user_id 
+    where
+        up1_0.user_id=?
+2026-06-07 11:08:21 - Secured GET /api/tasks
+2026-06-07 11:08:21 - 
     select
         t1_0.id,
         t1_0.category,
@@ -1028,8 +335,30 @@ Caused by: java.net.BindException: Die Adresse wird bereits verwendet
         tasks t1_0 
     where
         t1_0.user_id=?
-2026-05-28 17:29:50 [http-nio-8080-exec-3] DEBUG o.s.security.web.FilterChainProxy - Securing GET /api/calendar/events?startDate=2026-05-01T00:00:00.000&endDate=2026-05-31T23:59:59.000
-2026-05-28 17:29:50 [http-nio-8080-exec-3] DEBUG org.hibernate.SQL - 
+Hibernate: 
+    select
+        t1_0.id,
+        t1_0.category,
+        t1_0.completed_at,
+        t1_0.created_at,
+        t1_0.deadline,
+        t1_0.description,
+        t1_0.estimated_duration_minutes,
+        t1_0.priority,
+        t1_0.project_id,
+        t1_0.scheduled_end_time,
+        t1_0.scheduled_start_time,
+        t1_0.space_type,
+        t1_0.status,
+        t1_0.title,
+        t1_0.updated_at,
+        t1_0.user_id 
+    from
+        tasks t1_0 
+    where
+        t1_0.user_id=?
+2026-06-07 11:08:21 - Securing GET /api/calendar/events?startDate=2026-06-01T00:00:00.000&endDate=2026-06-30T23:59:59.000
+2026-06-07 11:08:21 - 
     select
         u1_0.id,
         u1_0.created_at,
@@ -1041,7 +370,19 @@ Caused by: java.net.BindException: Die Adresse wird bereits verwendet
         users u1_0 
     where
         u1_0.username=?
-2026-05-28 17:29:50 [http-nio-8080-exec-3] DEBUG org.hibernate.SQL - 
+Hibernate: 
+    select
+        u1_0.id,
+        u1_0.created_at,
+        u1_0.email,
+        u1_0.last_login,
+        u1_0.password_hash,
+        u1_0.username 
+    from
+        users u1_0 
+    where
+        u1_0.username=?
+2026-06-07 11:08:21 - 
     select
         up1_0.id,
         up1_0.break_duration_minutes,
@@ -1069,8 +410,36 @@ Caused by: java.net.BindException: Die Adresse wird bereits verwendet
             on u1_0.id=up1_0.user_id 
     where
         up1_0.user_id=?
-2026-05-28 17:29:50 [http-nio-8080-exec-3] DEBUG o.s.security.web.FilterChainProxy - Secured GET /api/calendar/events?startDate=2026-05-01T00:00:00.000&endDate=2026-05-31T23:59:59.000
-2026-05-28 17:29:50 [http-nio-8080-exec-3] DEBUG org.hibernate.SQL - 
+Hibernate: 
+    select
+        up1_0.id,
+        up1_0.break_duration_minutes,
+        up1_0.dark_mode,
+        up1_0.group_similar_tasks,
+        up1_0.hours_before_break,
+        up1_0.max_tasks_per_day,
+        up1_0.notifications_enabled,
+        up1_0.peak_productivity_time,
+        up1_0.reminder_minutes_before,
+        up1_0.theme_color,
+        up1_0.user_id,
+        u1_0.id,
+        u1_0.created_at,
+        u1_0.email,
+        u1_0.last_login,
+        u1_0.password_hash,
+        u1_0.username,
+        up1_0.workday_end,
+        up1_0.workday_start 
+    from
+        user_preferences up1_0 
+    join
+        users u1_0 
+            on u1_0.id=up1_0.user_id 
+    where
+        up1_0.user_id=?
+2026-06-07 11:08:21 - Secured GET /api/calendar/events?startDate=2026-06-01T00:00:00.000&endDate=2026-06-30T23:59:59.000
+2026-06-07 11:08:21 - 
     select
         ce1_0.id,
         ce1_0.color,
@@ -1093,8 +462,31 @@ Caused by: java.net.BindException: Die Adresse wird bereits verwendet
     where
         ce1_0.user_id=? 
         and ce1_0.start_time between ? and ?
-2026-05-28 17:29:53 [http-nio-8080-exec-4] DEBUG o.s.security.web.FilterChainProxy - Securing GET /api/study/notes
-2026-05-28 17:29:53 [http-nio-8080-exec-4] DEBUG org.hibernate.SQL - 
+Hibernate: 
+    select
+        ce1_0.id,
+        ce1_0.color,
+        ce1_0.created_at,
+        ce1_0.description,
+        ce1_0.end_time,
+        ce1_0.event_type,
+        ce1_0.is_fixed,
+        ce1_0.location,
+        ce1_0.notes,
+        ce1_0.related_habit_id,
+        ce1_0.related_task_id,
+        ce1_0.related_workout_id,
+        ce1_0.start_time,
+        ce1_0.title,
+        ce1_0.updated_at,
+        ce1_0.user_id 
+    from
+        calendar_events ce1_0 
+    where
+        ce1_0.user_id=? 
+        and ce1_0.start_time between ? and ?
+2026-06-07 11:08:22 - Securing GET /api/calendar/events?startDate=2026-06-01T00:00:00.000&endDate=2026-06-30T23:59:59.000
+2026-06-07 11:08:22 - 
     select
         u1_0.id,
         u1_0.created_at,
@@ -1106,7 +498,19 @@ Caused by: java.net.BindException: Die Adresse wird bereits verwendet
         users u1_0 
     where
         u1_0.username=?
-2026-05-28 17:29:53 [http-nio-8080-exec-4] DEBUG org.hibernate.SQL - 
+Hibernate: 
+    select
+        u1_0.id,
+        u1_0.created_at,
+        u1_0.email,
+        u1_0.last_login,
+        u1_0.password_hash,
+        u1_0.username 
+    from
+        users u1_0 
+    where
+        u1_0.username=?
+2026-06-07 11:08:22 - 
     select
         up1_0.id,
         up1_0.break_duration_minutes,
@@ -1134,40 +538,7 @@ Caused by: java.net.BindException: Die Adresse wird bereits verwendet
             on u1_0.id=up1_0.user_id 
     where
         up1_0.user_id=?
-2026-05-28 17:29:53 [http-nio-8080-exec-4] DEBUG o.s.security.web.FilterChainProxy - Secured GET /api/study/notes
-2026-05-28 17:29:53 [http-nio-8080-exec-4] DEBUG org.hibernate.SQL - 
-    select
-        sn1_0.id,
-        sn1_0.category,
-        sn1_0.content,
-        sn1_0.course_id,
-        sn1_0.created_at,
-        sn1_0.file_path,
-        sn1_0.file_type,
-        sn1_0.is_favorite,
-        sn1_0.last_reviewed_at,
-        sn1_0.tags,
-        sn1_0.title,
-        sn1_0.updated_at,
-        sn1_0.user_id 
-    from
-        study_notes sn1_0 
-    where
-        sn1_0.user_id=?
-2026-05-28 17:30:17 [http-nio-8080-exec-9] DEBUG o.s.security.web.FilterChainProxy - Securing GET /api/study/notes
-2026-05-28 17:30:17 [http-nio-8080-exec-9] DEBUG org.hibernate.SQL - 
-    select
-        u1_0.id,
-        u1_0.created_at,
-        u1_0.email,
-        u1_0.last_login,
-        u1_0.password_hash,
-        u1_0.username 
-    from
-        users u1_0 
-    where
-        u1_0.username=?
-2026-05-28 17:30:17 [http-nio-8080-exec-9] DEBUG org.hibernate.SQL - 
+Hibernate: 
     select
         up1_0.id,
         up1_0.break_duration_minutes,
@@ -1195,40 +566,60 @@ Caused by: java.net.BindException: Die Adresse wird bereits verwendet
             on u1_0.id=up1_0.user_id 
     where
         up1_0.user_id=?
-2026-05-28 17:30:17 [http-nio-8080-exec-9] DEBUG o.s.security.web.FilterChainProxy - Secured GET /api/study/notes
-2026-05-28 17:30:17 [http-nio-8080-exec-9] DEBUG org.hibernate.SQL - 
+2026-06-07 11:08:22 - Secured GET /api/calendar/events?startDate=2026-06-01T00:00:00.000&endDate=2026-06-30T23:59:59.000
+2026-06-07 11:08:22 - 
     select
-        sn1_0.id,
-        sn1_0.category,
-        sn1_0.content,
-        sn1_0.course_id,
-        sn1_0.created_at,
-        sn1_0.file_path,
-        sn1_0.file_type,
-        sn1_0.is_favorite,
-        sn1_0.last_reviewed_at,
-        sn1_0.tags,
-        sn1_0.title,
-        sn1_0.updated_at,
-        sn1_0.user_id 
+        ce1_0.id,
+        ce1_0.color,
+        ce1_0.created_at,
+        ce1_0.description,
+        ce1_0.end_time,
+        ce1_0.event_type,
+        ce1_0.is_fixed,
+        ce1_0.location,
+        ce1_0.notes,
+        ce1_0.related_habit_id,
+        ce1_0.related_task_id,
+        ce1_0.related_workout_id,
+        ce1_0.start_time,
+        ce1_0.title,
+        ce1_0.updated_at,
+        ce1_0.user_id 
     from
-        study_notes sn1_0 
+        calendar_events ce1_0 
     where
-        sn1_0.user_id=?
-2026-05-28 17:30:21 [http-nio-8080-exec-10] DEBUG o.s.security.web.FilterChainProxy - Securing GET /api/study/notes
-2026-05-28 17:30:21 [http-nio-8080-exec-10] DEBUG org.hibernate.SQL - 
+        ce1_0.user_id=? 
+        and ce1_0.start_time between ? and ?
+Hibernate: 
     select
-        u1_0.id,
-        u1_0.created_at,
-        u1_0.email,
-        u1_0.last_login,
-        u1_0.password_hash,
+        ce1_0.id,
+        ce1_0.color,
+        ce1_0.created_at,
+        ce1_0.description,
+        ce1_0.end_time,
+        ce1_0.event_type,
+        ce1_0.is_fixed,
+        ce1_0.location,
+        ce1_0.notes,
+        ce1_0.related_habit_id,
+        ce1_0.related_task_id,
+        ce1_0.related_workout_id,
+        ce1_0.start_time,
+        ce1_0.title,
+        ce1_0.updated_at,
+        ce1_0.user_id 
+    from
+        calendar_events ce1_0 
+    where
+        ce1_0.user_id=? 
+        and ce1_0.start_time between ? and ?
+assword_hash,
         u1_0.username 
     from
         users u1_0 
     where
         u1_0.username=?
-2026-05-28 17:30:21 [http-nio-8080-exec-10] DEBUG org.hibernate.SQL - 
+2026-06-07 11:08:20 [http-nio-8080-exec-2] DEBUG org.hibernate.SQL - 
     select
         up1_0.id,
         up1_0.break_duration_minutes,
@@ -1256,28 +647,19 @@ Caused by: java.net.BindException: Die Adresse wird bereits verwendet
             on u1_0.id=up1_0.user_id 
     where
         up1_0.user_id=?
-2026-05-28 17:30:21 [http-nio-8080-exec-10] DEBUG o.s.security.web.FilterChainProxy - Secured GET /api/study/notes
-2026-05-28 17:30:21 [http-nio-8080-exec-10] DEBUG org.hibernate.SQL - 
-    select
-        sn1_0.id,
-        sn1_0.category,
-        sn1_0.content,
-        sn1_0.course_id,
-        sn1_0.created_at,
-        sn1_0.file_path,
-        sn1_0.file_type,
-        sn1_0.is_favorite,
-        sn1_0.last_reviewed_at,
-        sn1_0.tags,
-        sn1_0.title,
-        sn1_0.updated_at,
-        sn1_0.user_id 
-    from
-        study_notes sn1_0 
+2026-06-07 11:08:20 [http-nio-8080-exec-2] DEBUG org.hibernate.SQL - 
+    update
+        users 
+    set
+        created_at=?,
+        email=?,
+        last_login=?,
+        password_hash=?,
+        username=? 
     where
-        sn1_0.user_id=?
-2026-05-28 17:40:31 [http-nio-8080-exec-2] DEBUG o.s.security.web.FilterChainProxy - Securing GET /api/study/notes
-2026-05-28 17:40:31 [http-nio-8080-exec-2] DEBUG org.hibernate.SQL - 
+        id=?
+2026-06-07 11:08:21 [http-nio-8080-exec-3] DEBUG o.s.security.web.FilterChainProxy - Securing GET /api/tasks
+2026-06-07 11:08:21 [http-nio-8080-exec-3] DEBUG org.hibernate.SQL - 
     select
         u1_0.id,
         u1_0.created_at,
@@ -1289,7 +671,7 @@ Caused by: java.net.BindException: Die Adresse wird bereits verwendet
         users u1_0 
     where
         u1_0.username=?
-2026-05-28 17:40:31 [http-nio-8080-exec-2] DEBUG org.hibernate.SQL - 
+2026-06-07 11:08:21 [http-nio-8080-exec-3] DEBUG org.hibernate.SQL - 
     select
         up1_0.id,
         up1_0.break_duration_minutes,
@@ -1317,23 +699,156 @@ Caused by: java.net.BindException: Die Adresse wird bereits verwendet
             on u1_0.id=up1_0.user_id 
     where
         up1_0.user_id=?
-2026-05-28 17:40:31 [http-nio-8080-exec-2] DEBUG o.s.security.web.FilterChainProxy - Secured GET /api/study/notes
-2026-05-28 17:40:31 [http-nio-8080-exec-2] DEBUG org.hibernate.SQL - 
+2026-06-07 11:08:21 [http-nio-8080-exec-3] DEBUG o.s.security.web.FilterChainProxy - Secured GET /api/tasks
+2026-06-07 11:08:21 [http-nio-8080-exec-3] DEBUG org.hibernate.SQL - 
     select
-        sn1_0.id,
-        sn1_0.category,
-        sn1_0.content,
-        sn1_0.course_id,
-        sn1_0.created_at,
-        sn1_0.file_path,
-        sn1_0.file_type,
-        sn1_0.is_favorite,
-        sn1_0.last_reviewed_at,
-        sn1_0.tags,
-        sn1_0.title,
-        sn1_0.updated_at,
-        sn1_0.user_id 
+        t1_0.id,
+        t1_0.category,
+        t1_0.completed_at,
+        t1_0.created_at,
+        t1_0.deadline,
+        t1_0.description,
+        t1_0.estimated_duration_minutes,
+        t1_0.priority,
+        t1_0.project_id,
+        t1_0.scheduled_end_time,
+        t1_0.scheduled_start_time,
+        t1_0.space_type,
+        t1_0.status,
+        t1_0.title,
+        t1_0.updated_at,
+        t1_0.user_id 
     from
-        study_notes sn1_0 
+        tasks t1_0 
     where
-        sn1_0.user_id=?
+        t1_0.user_id=?
+2026-06-07 11:08:21 [http-nio-8080-exec-4] DEBUG o.s.security.web.FilterChainProxy - Securing GET /api/calendar/events?startDate=2026-06-01T00:00:00.000&endDate=2026-06-30T23:59:59.000
+2026-06-07 11:08:21 [http-nio-8080-exec-4] DEBUG org.hibernate.SQL - 
+    select
+        u1_0.id,
+        u1_0.created_at,
+        u1_0.email,
+        u1_0.last_login,
+        u1_0.password_hash,
+        u1_0.username 
+    from
+        users u1_0 
+    where
+        u1_0.username=?
+2026-06-07 11:08:21 [http-nio-8080-exec-4] DEBUG org.hibernate.SQL - 
+    select
+        up1_0.id,
+        up1_0.break_duration_minutes,
+        up1_0.dark_mode,
+        up1_0.group_similar_tasks,
+        up1_0.hours_before_break,
+        up1_0.max_tasks_per_day,
+        up1_0.notifications_enabled,
+        up1_0.peak_productivity_time,
+        up1_0.reminder_minutes_before,
+        up1_0.theme_color,
+        up1_0.user_id,
+        u1_0.id,
+        u1_0.created_at,
+        u1_0.email,
+        u1_0.last_login,
+        u1_0.password_hash,
+        u1_0.username,
+        up1_0.workday_end,
+        up1_0.workday_start 
+    from
+        user_preferences up1_0 
+    join
+        users u1_0 
+            on u1_0.id=up1_0.user_id 
+    where
+        up1_0.user_id=?
+2026-06-07 11:08:21 [http-nio-8080-exec-4] DEBUG o.s.security.web.FilterChainProxy - Secured GET /api/calendar/events?startDate=2026-06-01T00:00:00.000&endDate=2026-06-30T23:59:59.000
+2026-06-07 11:08:21 [http-nio-8080-exec-4] DEBUG org.hibernate.SQL - 
+    select
+        ce1_0.id,
+        ce1_0.color,
+        ce1_0.created_at,
+        ce1_0.description,
+        ce1_0.end_time,
+        ce1_0.event_type,
+        ce1_0.is_fixed,
+        ce1_0.location,
+        ce1_0.notes,
+        ce1_0.related_habit_id,
+        ce1_0.related_task_id,
+        ce1_0.related_workout_id,
+        ce1_0.start_time,
+        ce1_0.title,
+        ce1_0.updated_at,
+        ce1_0.user_id 
+    from
+        calendar_events ce1_0 
+    where
+        ce1_0.user_id=? 
+        and ce1_0.start_time between ? and ?
+2026-06-07 11:08:22 [http-nio-8080-exec-5] DEBUG o.s.security.web.FilterChainProxy - Securing GET /api/calendar/events?startDate=2026-06-01T00:00:00.000&endDate=2026-06-30T23:59:59.000
+2026-06-07 11:08:22 [http-nio-8080-exec-5] DEBUG org.hibernate.SQL - 
+    select
+        u1_0.id,
+        u1_0.created_at,
+        u1_0.email,
+        u1_0.last_login,
+        u1_0.password_hash,
+        u1_0.username 
+    from
+        users u1_0 
+    where
+        u1_0.username=?
+2026-06-07 11:08:22 [http-nio-8080-exec-5] DEBUG org.hibernate.SQL - 
+    select
+        up1_0.id,
+        up1_0.break_duration_minutes,
+        up1_0.dark_mode,
+        up1_0.group_similar_tasks,
+        up1_0.hours_before_break,
+        up1_0.max_tasks_per_day,
+        up1_0.notifications_enabled,
+        up1_0.peak_productivity_time,
+        up1_0.reminder_minutes_before,
+        up1_0.theme_color,
+        up1_0.user_id,
+        u1_0.id,
+        u1_0.created_at,
+        u1_0.email,
+        u1_0.last_login,
+        u1_0.password_hash,
+        u1_0.username,
+        up1_0.workday_end,
+        up1_0.workday_start 
+    from
+        user_preferences up1_0 
+    join
+        users u1_0 
+            on u1_0.id=up1_0.user_id 
+    where
+        up1_0.user_id=?
+2026-06-07 11:08:22 [http-nio-8080-exec-5] DEBUG o.s.security.web.FilterChainProxy - Secured GET /api/calendar/events?startDate=2026-06-01T00:00:00.000&endDate=2026-06-30T23:59:59.000
+2026-06-07 11:08:22 [http-nio-8080-exec-5] DEBUG org.hibernate.SQL - 
+    select
+        ce1_0.id,
+        ce1_0.color,
+        ce1_0.created_at,
+        ce1_0.description,
+        ce1_0.end_time,
+        ce1_0.event_type,
+        ce1_0.is_fixed,
+        ce1_0.location,
+        ce1_0.notes,
+        ce1_0.related_habit_id,
+        ce1_0.related_task_id,
+        ce1_0.related_workout_id,
+        ce1_0.start_time,
+        ce1_0.title,
+        ce1_0.updated_at,
+        ce1_0.user_id 
+    from
+        calendar_events ce1_0 
+    where
+        ce1_0.user_id=? 
+        and ce1_0.start_time between ? and ?

@@ -331,7 +331,7 @@ class _NoteCard extends StatelessWidget {
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1.5),
             decoration: BoxDecoration(
-              color: const Color(0xFFC2C1FF).withOpacity(0.06),
+              color: const Color(0xFFC2C1FF).withValues(alpha: 0.06),
               borderRadius: BorderRadius.circular(2),
             ),
             child: Text(

@@ -36,7 +36,9 @@ public class UserService {
         user.setPasswordHash(passwordEncoder.encode(password));
         user.setCreatedAt(LocalDateTime.now());
 
-        return userRepository.save(user);
+        User savedUser = userRepository.save(user);
+        createDefaultPreferences(savedUser);
+        return savedUser;
     }
 
     public void createDefaultPreferences(User user){

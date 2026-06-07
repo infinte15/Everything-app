@@ -4,6 +4,7 @@ import '../../../providers/study_provider.dart';
 import '../../../models/study_subject.dart';
 import '../../../models/study_note.dart';
 import '../../../models/study_folder.dart';
+import 'flashcards/flashcard_study_page.dart';
 import 'widgets/study_kinetic_card.dart';
 
 class StudySubjectsPage extends StatefulWidget {
@@ -685,12 +686,13 @@ class _StudySubjectsPageState extends State<StudySubjectsPage> {
   Widget _buildRightSidebar(BuildContext context, StudyProvider provider, StudySubject subject) {
     final theme = Theme.of(context);
 
-    final deck = provider.flashcardDecks.firstWhere(
-      (d) => d.subjectId == subject.id,
-      orElse: () => provider.flashcardDecks.isNotEmpty 
-          ? provider.flashcardDecks.first 
-          : throw Exception('Keine Decks verfügbar'),
-    );
+    final deck = provider.flashcardDecks.isEmpty
+        ? null
+        : provider.flashcardDecks.firstWhere(
+            (d) => d.subjectId == subject.id,
+            orElse: () => provider.flashcardDecks.first,
+          );
+    final deckStats = deck != null ? provider.deckStats(deck.id) : null;
 
     final grades = provider.grades.where((g) => g.subjectId == subject.id).toList();
     final avgGrade = grades.isEmpty ? 0.0 : grades.fold<double>(0, (s, g) => s + g.grade) / grades.length;
@@ -733,58 +735,79 @@ class _StudySubjectsPageState extends State<StudySubjectsPage> {
           Container(
             color: theme.colorScheme.surfaceContainer,
             padding: const EdgeInsets.all(20),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'FLASHCARD STATUS',
-                  style: theme.textTheme.labelSmall?.copyWith(
-                    fontWeight: FontWeight.w900,
-                    color: theme.colorScheme.onSurfaceVariant,
-                    letterSpacing: 1.5,
-                  ),
-                ),
-                const SizedBox(height: 16),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Text(
-                      '${deck.masteryPercentage}%',
-                      style: theme.textTheme.headlineMedium?.copyWith(fontWeight: FontWeight.bold),
+            child: deck == null || deckStats == null
+                ? Text(
+                    'Kein Flashcard-Deck für dieses Fach.',
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: theme.colorScheme.onSurfaceVariant,
                     ),
-                    Text(
-                      'Mastery',
-                      style: theme.textTheme.labelSmall?.copyWith(color: theme.colorScheme.onSurfaceVariant),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 8),
-                LinearProgressIndicator(
-                  value: deck.masteryPercentage / 100,
-                  backgroundColor: theme.colorScheme.outlineVariant,
-                  valueColor: AlwaysStoppedAnimation(theme.colorScheme.primary),
-                  minHeight: 2,
-                ),
-                const SizedBox(height: 16),
-                Text(
-                  '${deck.toReviewCount} Karten bereit für Review',
-                  style: theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.onSurfaceVariant),
-                ),
-                const SizedBox(height: 24),
-                ElevatedButton.icon(
-                  onPressed: () {},
-                  icon: const Icon(Icons.school, size: 16),
-                  label: const Text('LERNEN STARTEN'),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFF5856D6),
-                    foregroundColor: const Color(0xFFE2DFFF),
-                    shape: const RoundedRectangleBorder(borderRadius: BorderRadius.zero),
-                    padding: const EdgeInsets.symmetric(vertical: 16),
-                    minimumSize: const Size.fromHeight(50),
+                  )
+                : Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'FLASHCARD STATUS',
+                        style: theme.textTheme.labelSmall?.copyWith(
+                          fontWeight: FontWeight.w900,
+                          color: theme.colorScheme.onSurfaceVariant,
+                          letterSpacing: 1.5,
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Text(
+                            '${deckStats.masteryPercent}%',
+                            style: theme.textTheme.headlineMedium?.copyWith(fontWeight: FontWeight.bold),
+                          ),
+                          Text(
+                            'Mastery',
+                            style: theme.textTheme.labelSmall?.copyWith(
+                              color: theme.colorScheme.onSurfaceVariant,
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 8),
+                      LinearProgressIndicator(
+                        value: deckStats.masteryPercent / 100,
+                        backgroundColor: theme.colorScheme.outlineVariant,
+                        valueColor: AlwaysStoppedAnimation(theme.colorScheme.primary),
+                        minHeight: 2,
+                      ),
+                      const SizedBox(height: 16),
+                      Text(
+                        '${deckStats.due + deckStats.newCards} Karten zum Lernen',
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          color: theme.colorScheme.onSurfaceVariant,
+                        ),
+                      ),
+                      const SizedBox(height: 24),
+                      ElevatedButton.icon(
+                        onPressed: deckStats.due + deckStats.newCards == 0
+                            ? null
+                            : () => Navigator.push(
+                                  context,
+                                  MaterialPageRoute(
+                                    builder: (_) => FlashcardStudyPage(
+                                      deckId: deck.id,
+                                      deckTitle: deck.title,
+                                    ),
+                                  ),
+                                ),
+                        icon: const Icon(Icons.school, size: 16),
+                        label: const Text('LERNEN STARTEN'),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: const Color(0xFF5856D6),
+                          foregroundColor: const Color(0xFFE2DFFF),
+                          shape: const RoundedRectangleBorder(borderRadius: BorderRadius.zero),
+                          padding: const EdgeInsets.symmetric(vertical: 16),
+                          minimumSize: const Size.fromHeight(50),
+                        ),
+                      ),
+                    ],
                   ),
-                ),
-              ],
-            ),
           ),
         ],
       ),
