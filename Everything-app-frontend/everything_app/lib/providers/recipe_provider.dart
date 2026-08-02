@@ -9,8 +9,8 @@ class RecipeProvider with ChangeNotifier {
   final TaskService _taskService = TaskService();
   
   List<Recipe> _recipes = [];
-  Map<String, List<int>> _mealPlan = {}; 
-  List<Map<String, dynamic>> _shoppingList = [];
+  final Map<String, List<int>> _mealPlan = {}; 
+  final List<Map<String, dynamic>> _shoppingList = [];
   
   bool _isLoading = false;
   String? _error;

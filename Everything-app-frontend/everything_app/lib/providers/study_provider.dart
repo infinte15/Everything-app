@@ -6,16 +6,16 @@ import '../models/lesson_plan_entry.dart';
 import '../models/study_subject.dart';
 import '../models/study_grade.dart';
 import '../models/flashcard_deck.dart';
+import '../models/task.dart';
 import '../utils/anki_scheduler.dart';
 import '../services/api_service.dart';
 import '../services/study_service.dart';
-import '../services/habit_service.dart';
-import '../models/habit.dart';
+import '../services/task_service.dart';
 
 class StudyProvider with ChangeNotifier {
   final ApiService _apiService = ApiService();
   final StudyService _studyService = StudyService();
-  final HabitService _habitService = HabitService();
+  final TaskService _taskService = TaskService();
 
   // ── Core data ───────────────────────────────────────────────────────────────
   List<StudyNote> _notes = [];
@@ -372,37 +372,18 @@ class StudyProvider with ChangeNotifier {
   // ── Study Plan CRUD (Local) ──────────────────────────────────────────────────
   Future<void> addStudyGoal({required String subject, required double goalHours,
       String emoji = '📚', int colorValue = 0xFF6366F1}) async {
-    _studyPlan.add(StudyPlanGoal(
+    final goal = StudyPlanGoal(
       id: 'sp${DateTime.now().millisecondsSinceEpoch}',
       subject: subject,
       emoji: emoji,
       colorValue: colorValue,
       weeklyGoalHours: goalHours,
       weekStart: _currentWeekStart(),
-    ));
-
-    // Also create a Habit in the backend so the SmartScheduler picks it up
-    try {
-      int durationPerSession = 60; // default 1 hour sessions
-      int sessions = goalHours.ceil();
-      if (sessions > 0) {
-        final habit = Habit(
-          name: 'Lernen: $subject',
-          description: 'Study Goal for $subject',
-          frequency: 'DAILY', // Let the scheduler find days
-          monday: true, tuesday: true, wednesday: true, thursday: true,
-          friday: true, saturday: true, sunday: true,
-          durationMinutes: durationPerSession,
-          category: 'STUDY',
-          color: '#${colorValue.toRadixString(16).padLeft(8, '0').substring(2)}',
-        );
-        await _habitService.createHabit(habit);
-      }
-    } catch (e) {
-      debugPrint('Error syncing Study Goal to Habit: $e');
-    }
-
+    );
+    _studyPlan.add(goal);
     notifyListeners();
+
+    await _syncStudyGoalToTask(goal);
   }
 
   Future<void> logStudyHours(String goalId, double hours) async {
@@ -412,12 +393,66 @@ class StudyProvider with ChangeNotifier {
         loggedHours: _studyPlan[idx].loggedHours + hours,
       );
       notifyListeners();
+
+      await _syncStudyGoalToTask(_studyPlan[idx]);
     }
   }
 
   Future<void> deleteStudyGoal(String id) async {
     _studyPlan.removeWhere((g) => g.id == id);
     notifyListeners();
+  }
+
+  // Bridges a weekly study goal into the backend Task pipeline so the SmartScheduler
+  // (which only knows about Tasks/Habits/Workouts, not local StudyPlanGoal state) can
+  // place remaining study time on the calendar. Mirrors RecipeProvider.addToMealPlan.
+  //
+  // Dedup is query-based (tagged via Task.category), not local-state-based, because
+  // _loadStudyPlan() resets _studyPlan to [] on every app restart.
+  Future<void> _syncStudyGoalToTask(StudyPlanGoal goal) async {
+    try {
+      final weekTag = goal.weekStart.toIso8601String().split('T')[0];
+      final bridgeTag = 'study-goal:${goal.subject}:$weekTag';
+      final remainingHours = (goal.weeklyGoalHours - goal.loggedHours).clamp(0.0, goal.weeklyGoalHours);
+
+      final allTasks = await _taskService.getAllTasks();
+      Task? existingTask;
+      for (final t in allTasks) {
+        if (t.category == bridgeTag) {
+          existingTask = t;
+          break;
+        }
+      }
+
+      if (remainingHours <= 0) {
+        if (existingTask != null && existingTask.id != null && !existingTask.isCompleted) {
+          await _taskService.completeTask(existingTask.id!);
+        }
+        return;
+      }
+
+      final deadline = goal.weekStart.add(const Duration(days: 7));
+      final durationMinutes = (remainingHours * 60).round();
+
+      if (existingTask != null) {
+        await _taskService.updateTask(existingTask.copyWith(
+          estimatedDurationMinutes: durationMinutes,
+          deadline: deadline,
+        ));
+      } else {
+        await _taskService.createTask(Task(
+          title: 'Lernen: ${goal.subject}',
+          description: 'Study goal for ${goal.subject} this week',
+          estimatedDurationMinutes: durationMinutes,
+          deadline: deadline,
+          category: bridgeTag,
+          spaceType: 'STUDY',
+          priority: 3,
+        ));
+      }
+    } catch (e) {
+      debugPrint('Error syncing study goal to task: $e');
+    }
   }
 
   // ── Lesson Plan CRUD (Local) ─────────────────────────────────────────────────

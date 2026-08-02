@@ -90,7 +90,7 @@ public class TaskController {
     }
 
     //DELETE /api/tasks/{id}  --> task löschen
-    @DeleteMapping
+    @DeleteMapping("/{id}")
     public ResponseEntity<Void> deleteTask(@PathVariable Long id){
         taskService.deleteTask(id);
         return ResponseEntity.noContent().build();

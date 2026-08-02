@@ -58,6 +58,18 @@ public class CalendarController {
         );
     }
 
+    // PUT /api/calendar/events/{id} --> Event aktualisieren (z.B. Drag-and-Drop Reschedule)
+    @PutMapping("/events/{id}")
+    public ResponseEntity<CalendarEventDTO> updateEvent(
+            @PathVariable Long id,
+            @Valid @RequestBody CalendarEventDTO eventDTO) {
+
+        CalendarEvent updatedEvent = calendarEventMapper.toEntity(eventDTO);
+        CalendarEvent saved = calendarEventService.updateEvent(id, updatedEvent);
+
+        return ResponseEntity.ok(calendarEventMapper.toDTO(saved));
+    }
+
     // POST /api/calendar/generate-schedule --> Schedule
     @PostMapping("/generate-schedule")
     public ResponseEntity<ScheduleResultDTO> generateSchedule(

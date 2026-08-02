@@ -1,9 +1,11 @@
 package com.Finn.everything_app.service;
 
 import com.Finn.everything_app.dto.HabitCompletionDTO;
+import com.Finn.everything_app.event.ScheduleChangedEvent;
 import com.Finn.everything_app.model.*;
 import com.Finn.everything_app.repository.*;
 import lombok.RequiredArgsConstructor;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import java.time.LocalDate;
@@ -19,6 +21,8 @@ public class HabitService {
     private final HabitRepository habitRepository;
     private final HabitCompletionRepository completionRepository;
     private final UserRepository userRepository;
+    private final CalendarEventRepository calendarEventRepository;
+    private final ApplicationEventPublisher eventPublisher;
 
     @Transactional
     public Habit createHabit(Long userId, Habit habit) {
@@ -29,7 +33,9 @@ public class HabitService {
         habit.setCurrentStreak(0);
         habit.setLongestStreak(0);
 
-        return habitRepository.save(habit);
+        Habit saved = habitRepository.save(habit);
+        eventPublisher.publishEvent(new ScheduleChangedEvent(this, userId));
+        return saved;
     }
 
     public List<Habit> getUserHabits(Long userId) {
@@ -97,13 +103,20 @@ public class HabitService {
             habit.setCategory(updatedHabit.getCategory());
         }
 
-        return habitRepository.save(habit);
+        Habit saved = habitRepository.save(habit);
+        eventPublisher.publishEvent(new ScheduleChangedEvent(this, saved.getUser().getId()));
+        return saved;
     }
 
     @Transactional
     public void deleteHabit(Long id) {
         Habit habit = getHabitById(id);
+        Long userId = habit.getUser().getId();
+        // Scheduler-placed occurrences reference this habit via related_habit_id — clean
+        // them up first or the delete violates that foreign key and 500s.
+        calendarEventRepository.deleteAll(calendarEventRepository.findByRelatedHabitId(id));
         habitRepository.delete(habit);
+        eventPublisher.publishEvent(new ScheduleChangedEvent(this, userId));
     }
 
 

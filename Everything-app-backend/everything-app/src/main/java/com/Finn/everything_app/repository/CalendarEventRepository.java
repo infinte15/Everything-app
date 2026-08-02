@@ -42,4 +42,14 @@ public interface CalendarEventRepository extends JpaRepository<CalendarEvent, Lo
 
     // Events nach Typ und isFixed Status (für Auto-Scheduling)
     List<CalendarEvent> findByUserIdAndEventTypeAndIsFixed(Long userId, EventType eventType, Boolean isFixed);
+
+    // Scheduler-generierte Events (mehrere Typen) in einem Zeitraum, für sauberes Regenerieren
+    List<CalendarEvent> findByUserIdAndEventTypeInAndIsFixedAndStartTimeBetween(
+            Long userId, List<EventType> eventTypes, Boolean isFixed, LocalDateTime start, LocalDateTime end);
+
+    // Events, die von diesen Quell-Entitäten übrig bleiben würden, wenn sie gelöscht werden —
+    // ohne dieses Aufräumen verletzt das Löschen eine Foreign-Key-Constraint (500 statt 204).
+    List<CalendarEvent> findByRelatedTaskId(Long taskId);
+    List<CalendarEvent> findByRelatedHabitId(Long habitId);
+    List<CalendarEvent> findByRelatedWorkoutId(Long workoutSessionId);
 }

@@ -3,6 +3,7 @@ package com.Finn.everything_app.service;
 import com.Finn.everything_app.model.Task;
 import com.Finn.everything_app.model.TaskStatus;
 import com.Finn.everything_app.model.User;
+import com.Finn.everything_app.repository.CalendarEventRepository;
 import com.Finn.everything_app.repository.TaskRepository;
 import lombok.RequiredArgsConstructor;
 
@@ -18,6 +19,7 @@ import java.util.List;
 public class TaskService {
     private final TaskRepository taskRepository;
     private final UserService userService;
+    private final CalendarEventRepository calendarEventRepository;
     private final ApplicationEventPublisher eventPublisher;
 
     public List<Task> getAllUserTasks(Long userId) {
@@ -110,6 +112,10 @@ public class TaskService {
         Task task = taskRepository.findById(taskId)
                 .orElseThrow(() -> new RuntimeException("Task nicht gefunden"));
         Long userId = task.getUser().getId();
+        // Any CalendarEvent generated from this task (scheduler-placed or manually created)
+        // must go first — otherwise deleting the task violates the related_task_id foreign
+        // key and the whole delete 500s, leaving the task (and its calendar event) in place.
+        calendarEventRepository.deleteAll(calendarEventRepository.findByRelatedTaskId(taskId));
         taskRepository.deleteById(taskId);
         eventPublisher.publishEvent(new ScheduleChangedEvent(this, userId));
     }

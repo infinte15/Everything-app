@@ -1,18 +1,26 @@
 package com.Finn.everything_app.service;
 
+import com.Finn.everything_app.event.ScheduleChangedEvent;
 import com.Finn.everything_app.model.*;
 import com.Finn.everything_app.repository.*;
 import lombok.RequiredArgsConstructor;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.List;
 
 @Service
 @RequiredArgsConstructor
 public class WorkoutPlanService {
 
+    private static final int DEFAULT_SESSION_DURATION_MINUTES = 45;
+
     private final WorkoutPlanRepository workoutPlanRepository;
+    private final WorkoutSessionRepository workoutSessionRepository;
     private final UserRepository userRepository;
+    private final ApplicationEventPublisher eventPublisher;
 
     @Transactional
     public WorkoutPlan createPlan(Long userId, WorkoutPlan plan) {
@@ -24,7 +32,9 @@ public class WorkoutPlanService {
         plan.setTotalWorkouts(plan.getTotalWorkouts() != null ? plan.getTotalWorkouts() : 0);
         plan.setCompletedWorkouts(plan.getCompletedWorkouts() != null ? plan.getCompletedWorkouts() : 0);
 
-        return workoutPlanRepository.save(plan);
+        WorkoutPlan saved = workoutPlanRepository.save(plan);
+        eventPublisher.publishEvent(new ScheduleChangedEvent(this, userId));
+        return saved;
     }
 
     public List<WorkoutPlan> getUserPlans(Long userId) {
@@ -70,7 +80,9 @@ public class WorkoutPlanService {
             plan.setEndDate(updatedPlan.getEndDate());
         }
 
-        return workoutPlanRepository.save(plan);
+        WorkoutPlan saved = workoutPlanRepository.save(plan);
+        eventPublisher.publishEvent(new ScheduleChangedEvent(this, saved.getUser().getId()));
+        return saved;
     }
 
     @Transactional
@@ -88,13 +100,17 @@ public class WorkoutPlanService {
         WorkoutPlan plan = getPlanById(planId);
         plan.setIsActive(true);
 
-        return workoutPlanRepository.save(plan);
+        WorkoutPlan saved = workoutPlanRepository.save(plan);
+        eventPublisher.publishEvent(new ScheduleChangedEvent(this, userId));
+        return saved;
     }
 
     @Transactional
     public void deletePlan(Long id) {
         WorkoutPlan plan = getPlanById(id);
+        Long userId = plan.getUser().getId();
         workoutPlanRepository.delete(plan);
+        eventPublisher.publishEvent(new ScheduleChangedEvent(this, userId));
     }
 
     @Transactional
@@ -102,5 +118,42 @@ public class WorkoutPlanService {
         WorkoutPlan plan = getPlanById(planId);
         plan.setCompletedWorkouts(plan.getCompletedWorkouts() + 1);
         workoutPlanRepository.save(plan);
+    }
+
+    /**
+     * Tops up flexible WorkoutSession placeholders for a given ISO week (Monday start) so the
+     * plan's weekly target is met, without creating duplicates on repeated calls (checks existing
+     * placeholders + manually pinned sessions already counting toward that week first).
+     */
+    @Transactional
+    public void generateWeeklyPlaceholders(Long userId, WorkoutPlan plan, LocalDate weekStart) {
+        if (plan.getWorkoutsPerWeek() == null || plan.getWorkoutsPerWeek() <= 0) return;
+
+        LocalDateTime weekStartDt = weekStart.atStartOfDay();
+        LocalDateTime weekEndDt = weekStart.plusDays(7).atStartOfDay();
+
+        long placeholderCount = workoutSessionRepository
+                .countByWorkoutPlanIdAndTargetWeekStart(plan.getId(), weekStart);
+        long manualCount = workoutSessionRepository
+                .countByWorkoutPlanIdAndIsFlexibleAndStartTimeBetween(plan.getId(), false, weekStartDt, weekEndDt);
+
+        int shortfall = plan.getWorkoutsPerWeek() - (int) (placeholderCount + manualCount);
+        if (shortfall <= 0) return;
+
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new RuntimeException("User nicht gefunden"));
+
+        for (int i = 0; i < shortfall; i++) {
+            WorkoutSession placeholder = new WorkoutSession();
+            placeholder.setUser(user);
+            placeholder.setWorkoutPlan(plan);
+            placeholder.setName(plan.getName() + " Session");
+            placeholder.setDurationMinutes(DEFAULT_SESSION_DURATION_MINUTES);
+            placeholder.setIntensity(5);
+            placeholder.setIsCompleted(false);
+            placeholder.setIsFlexible(true);
+            placeholder.setTargetWeekStart(weekStart);
+            workoutSessionRepository.save(placeholder);
+        }
     }
 }

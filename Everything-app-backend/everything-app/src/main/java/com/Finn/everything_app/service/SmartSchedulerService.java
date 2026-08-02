@@ -13,10 +13,12 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.event.TransactionPhase;
 import org.springframework.transaction.event.TransactionalEventListener;
 
+import java.time.DayOfWeek;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.time.temporal.ChronoUnit;
+import java.time.temporal.TemporalAdjusters;
 import java.util.*;
 import java.util.stream.Collectors;
 
@@ -24,12 +26,15 @@ import java.util.stream.Collectors;
  * Smart Scheduler using Google OR-Tools CP-SAT solver.
  *
  * Mental model (Motion / Reclaim style):
- *  - Time axis  : integer line of minutes from startDate (minute 0) to endDate (minute horizon).
- *  - Fixed blocks: sleep windows + calendar events → unmovable IntervalVars.
- *  - Tasks       : IntervalVars with fixed duration but variable start.
- *  - Engine      : addNoOverlap() ensures nothing collides.
- *  - Objective   : minimize Σ weight_i × start_i so urgent / high-priority tasks
- *                  are pushed to the earliest available slot automatically.
+ *  - Time axis   : integer line of minutes from startDate (minute 0) to endDate (minute horizon).
+ *  - Fixed blocks: sleep windows + calendar events + course schedules + pinned workouts → unmovable IntervalVars.
+ *  - Tasks       : IntervalVars with fixed duration, variable start, bounded by [now, deadline].
+ *  - Habits      : one IntervalVar per required occurrence (day where the weekday flag is set),
+ *                  bounded to that single day only, softly pulled toward preferredTime.
+ *  - Workouts    : flexible placeholder sessions get one IntervalVar spanning their target week.
+ *  - Engine      : a single addNoOverlap() across all of the above ensures nothing collides.
+ *  - Objective   : minimize Σ weight_i × start_i (tasks/workouts: earlier is better) plus
+ *                  Σ weight_i × deviation_i (habits: closer to their own preferred time is better).
  */
 @Service
 @RequiredArgsConstructor
@@ -39,14 +44,17 @@ public class SmartSchedulerService {
 
     private final CalendarEventRepository    calendarEventRepository;
     private final HabitRepository            habitRepository;
+    private final HabitCompletionRepository  habitCompletionRepository;
     private final WorkoutSessionRepository   workoutSessionRepository;
     private final CourseScheduleRepository   courseScheduleRepository;
     private final UserService                userService;
     private final CalendarEventService       calendarEventService;
     private final TaskService                taskService;
+    private final WorkoutPlanService         workoutPlanService;
 
-    private static final double SOLVER_TIME_LIMIT_SECONDS = 10.0;
-    private static final int    MIN_SLOT_MINUTES          = 10;
+    private static final double SOLVER_TIME_LIMIT_SECONDS   = 10.0;
+    private static final int    DEFAULT_HABIT_DURATION_MIN  = 30;
+    private static final int    DEFAULT_WORKOUT_DURATION_MIN = 45;
 
     // Load OR-Tools JNI libraries once on class initialisation
     static {
@@ -64,54 +72,145 @@ public class SmartSchedulerService {
         generateOptimalSchedule(event.getUserId(), LocalDate.now(), LocalDate.now().plusDays(14));
     }
 
+    // Automatic regeneration now fires on every Task/Habit/CalendarEvent/WorkoutPlan/WorkoutSession
+    // change, so two triggers in quick succession (e.g. "create plan" immediately followed by
+    // "activate plan") are common. Without serialization, two overlapping runs can both read
+    // "0 existing placeholders" before either commits and each create their own set — duplicating
+    // every workout event. One lock per user keeps concurrent regenerations for different users
+    // independent while fully serializing a single user's runs.
+    private final java.util.concurrent.ConcurrentHashMap<Long, Object> schedulingLocks = new java.util.concurrent.ConcurrentHashMap<>();
+
     @Transactional
     public ScheduleResult generateOptimalSchedule(Long userId, LocalDate startDate, LocalDate endDate) {
+        Object lock = schedulingLocks.computeIfAbsent(userId, k -> new Object());
+        synchronized (lock) {
+            return doGenerateOptimalSchedule(userId, startDate, endDate);
+        }
+    }
+
+    private ScheduleResult doGenerateOptimalSchedule(Long userId, LocalDate startDate, LocalDate endDate) {
         log.info("Generiere CP-SAT Schedule für User {} | {} – {}", userId, startDate, endDate);
 
-        UserPreferences prefs = userService.getUserPreferences(userId);
-        calendarEventService.clearScheduledEvents(userId);
+        UserPreferences prefs = userService.getOrCreatePreferences(userId);
+        calendarEventService.clearScheduledEvents(userId, startDate.atStartOfDay(), endDate.atTime(23, 59, 59));
+
+        generateWorkoutPlaceholders(userId, startDate, endDate);
+
         ScheduleInput input = collectScheduleInput(userId, startDate, endDate);
+        List<HabitOccurrence> habitOccurrences = expandHabitOccurrences(input.getHabits(), startDate, endDate);
 
-        // ---- Core: CP-SAT task scheduling ----
-        List<ScheduledItem> scheduledTasks =
-                solveWithCpSat(input.getTasks(), input.getFixedEvents(), input.getCourseSchedules(), startDate, endDate, prefs);
+        List<ScheduledItem> scheduled = solveWithCpSat(
+                input.getTasks(),
+                habitOccurrences,
+                input.getFlexibleWorkouts(),
+                input.getFixedEvents(),
+                input.getCourseSchedules(),
+                input.getFixedWorkouts(),
+                startDate, endDate, prefs);
 
-        // ---- Habits / workouts: greedy into remaining free slots ----
-        List<TimeSlot> freeSlots =
-                buildFreeSlots(scheduledTasks, input.getFixedEvents(), input.getCourseSchedules(), startDate, endDate, prefs);
-        List<ScheduledItem> scheduledHabits =
-                scheduleRecurringActivities(input.getHabits(), input.getWorkouts(), freeSlots, prefs);
+        saveScheduleToDatabase(userId, scheduled);
 
-        saveScheduleToDatabase(userId, scheduledTasks, scheduledHabits);
+        List<ScheduledItem> scheduledTasks = scheduled.stream()
+                .filter(i -> i.getType() == ScheduledItemType.TASK)
+                .collect(Collectors.toList());
+        List<ScheduledItem> scheduledRest = scheduled.stream()
+                .filter(i -> i.getType() != ScheduledItemType.TASK)
+                .collect(Collectors.toList());
 
         ScheduleResult result = new ScheduleResult();
         result.setScheduledTasks(scheduledTasks);
-        result.setScheduledHabits(scheduledHabits);
+        result.setScheduledHabits(scheduledRest);
         result.setUnscheduledTasks(findUnscheduledTasks(input.getTasks(), scheduledTasks));
         result.setTotalTasksScheduled(scheduledTasks.size());
-        result.setTotalHoursScheduled(calculateTotalHours(scheduledTasks, scheduledHabits));
+        result.setTotalHoursScheduled(calculateTotalHours(scheduledTasks, scheduledRest));
 
-        log.info("Schedule fertig: {} Tasks, {} Habits, {} unscheduled",
-                scheduledTasks.size(), scheduledHabits.size(), result.getUnscheduledTasks().size());
+        log.info("Schedule fertig: {} Tasks, {} Habits/Workouts, {} unscheduled",
+                scheduledTasks.size(), scheduledRest.size(), result.getUnscheduledTasks().size());
         return result;
     }
 
+    /** Tops up flexible WorkoutSession placeholders for every ISO week overlapping the horizon. */
+    private void generateWorkoutPlaceholders(Long userId, LocalDate startDate, LocalDate endDate) {
+        WorkoutPlan activePlan = workoutPlanService.getActivePlan(userId);
+        if (activePlan == null) return;
+
+        LocalDate weekCursor = startDate.with(TemporalAdjusters.previousOrSame(DayOfWeek.MONDAY));
+        while (!weekCursor.isAfter(endDate)) {
+            workoutPlanService.generateWeeklyPlaceholders(userId, activePlan, weekCursor);
+            weekCursor = weekCursor.plusWeeks(1);
+        }
+    }
+
     // =========================================================================
-    // CP-SAT SOLVER
+    // HABIT OCCURRENCE EXPANSION
+    // =========================================================================
+
+    private List<HabitOccurrence> expandHabitOccurrences(List<Habit> habits, LocalDate startDate, LocalDate endDate) {
+        List<HabitOccurrence> occurrences = new ArrayList<>();
+
+        for (Habit habit : habits) {
+            LocalDate rangeStart = (habit.getStartDate() != null && habit.getStartDate().isAfter(startDate))
+                    ? habit.getStartDate() : startDate;
+            LocalDate rangeEnd = (habit.getEndDate() != null && habit.getEndDate().isBefore(endDate))
+                    ? habit.getEndDate() : endDate;
+            if (rangeStart.isAfter(rangeEnd)) continue;
+
+            Set<LocalDate> completedDates = habitCompletionRepository
+                    .findByHabitIdAndCompletionDateBetween(habit.getId(), rangeStart, rangeEnd)
+                    .stream()
+                    .map(HabitCompletion::getCompletionDate)
+                    .collect(Collectors.toSet());
+
+            for (LocalDate d = rangeStart; !d.isAfter(rangeEnd); d = d.plusDays(1)) {
+                if (!isHabitScheduledOn(habit, d)) continue;
+                if (completedDates.contains(d)) continue;
+
+                HabitOccurrence occ = new HabitOccurrence();
+                occ.setHabit(habit);
+                occ.setDate(d);
+                occ.setDurationMinutes(habit.getDurationMinutes() != null ? habit.getDurationMinutes() : DEFAULT_HABIT_DURATION_MIN);
+                occ.setPreferredTime(habit.getPreferredTime() != null ? habit.getPreferredTime() : LocalTime.of(9, 0));
+                occurrences.add(occ);
+            }
+        }
+        return occurrences;
+    }
+
+    /** Mirrors the frontend's Habit.isScheduledToday() weekday-flag check. */
+    private boolean isHabitScheduledOn(Habit habit, LocalDate date) {
+        return switch (date.getDayOfWeek()) {
+            case MONDAY    -> Boolean.TRUE.equals(habit.getMonday());
+            case TUESDAY   -> Boolean.TRUE.equals(habit.getTuesday());
+            case WEDNESDAY -> Boolean.TRUE.equals(habit.getWednesday());
+            case THURSDAY  -> Boolean.TRUE.equals(habit.getThursday());
+            case FRIDAY    -> Boolean.TRUE.equals(habit.getFriday());
+            case SATURDAY  -> Boolean.TRUE.equals(habit.getSaturday());
+            case SUNDAY    -> Boolean.TRUE.equals(habit.getSunday());
+        };
+    }
+
+    // =========================================================================
+    // CP-SAT SOLVER — joint model for Tasks + Habit occurrences + flexible Workouts
     // =========================================================================
 
     private List<ScheduledItem> solveWithCpSat(
             List<Task> tasks,
+            List<HabitOccurrence> habitOccurrences,
+            List<WorkoutSession> flexibleWorkouts,
             List<CalendarEvent> fixedEvents,
             List<CourseSchedule> courseSchedules,
+            List<WorkoutSession> fixedWorkouts,
             LocalDate startDate,
             LocalDate endDate,
             UserPreferences prefs) {
 
-        List<Task> valid = tasks.stream()
+        List<Task> validTasks = tasks.stream()
                 .filter(t -> t.getEstimatedDurationMinutes() != null && t.getEstimatedDurationMinutes() > 0)
                 .collect(Collectors.toList());
-        if (valid.isEmpty()) return Collections.emptyList();
+
+        if (validTasks.isEmpty() && habitOccurrences.isEmpty() && flexibleWorkouts.isEmpty()) {
+            return Collections.emptyList();
+        }
 
         CpModel model = new CpModel();
 
@@ -125,7 +224,7 @@ public class SmartSchedulerService {
         int workStartMin     = workStart.getHour() * 60 + workStart.getMinute();
         int workEndMin       = workEnd.getHour()   * 60 + workEnd.getMinute();
 
-        // Earliest start = right now (tasks cannot be placed in the past)
+        // Earliest start = right now (nothing can be placed in the past)
         int nowOffset = (int) Math.max(0, ChronoUnit.MINUTES.between(horizonStart, LocalDateTime.now()));
 
         List<IntervalVar> allIntervals = new ArrayList<>();
@@ -144,7 +243,7 @@ public class SmartSchedulerService {
             long evS = ChronoUnit.MINUTES.between(horizonStart, ev.getStartTime());
             long evE = ChronoUnit.MINUTES.between(horizonStart, ev.getEndTime());
             if (evE > evS && evS >= 0 && evE <= horizon)
-                allIntervals.add(fixedBlock(model, (int) evS, (int)(evE - evS), "ev_" + ev.getId()));
+                allIntervals.add(fixedBlock(model, (int) evS, (int) (evE - evS), "ev_" + ev.getId()));
         }
 
         // --- 2b. Block CourseSchedules ---
@@ -157,28 +256,38 @@ public class SmartSchedulerService {
                         long evS = ChronoUnit.MINUTES.between(horizonStart, csStart);
                         long evE = ChronoUnit.MINUTES.between(horizonStart, csEnd);
                         if (evE > evS && evS >= 0 && evE <= horizon)
-                            allIntervals.add(fixedBlock(model, (int) evS, (int)(evE - evS), "cs_" + cs.getId() + "_" + d.toEpochDay()));
+                            allIntervals.add(fixedBlock(model, (int) evS, (int) (evE - evS), "cs_" + cs.getId() + "_" + d.toEpochDay()));
                     }
                 }
             }
         }
 
-        // --- 3. Task interval variables ---
-        IntVar[]      startVars = new IntVar[valid.size()];
-        IntervalVar[] taskIvs   = new IntervalVar[valid.size()];
-        long[]        weights   = new long[valid.size()];
+        // --- 2c. Block already-pinned (non-flexible) workout sessions ---
+        for (WorkoutSession w : fixedWorkouts) {
+            if (w.getStartTime() == null) continue;
+            LocalDateTime wEnd = w.getEndTime() != null ? w.getEndTime()
+                    : w.getStartTime().plusMinutes(w.getDurationMinutes() != null ? w.getDurationMinutes() : DEFAULT_WORKOUT_DURATION_MIN);
+            long evS = ChronoUnit.MINUTES.between(horizonStart, w.getStartTime());
+            long evE = ChronoUnit.MINUTES.between(horizonStart, wEnd);
+            if (evE > evS && evS >= 0 && evE <= horizon)
+                allIntervals.add(fixedBlock(model, (int) evS, (int) (evE - evS), "wo_fixed_" + w.getId()));
+        }
 
-        for (int i = 0; i < valid.size(); i++) {
-            Task task     = valid.get(i);
+        // --- Objective accumulators (mixed: task/workout start-time terms + habit deviation terms) ---
+        List<IntVar> objVars = new ArrayList<>();
+        List<Long> objWeights = new ArrayList<>();
+
+        // --- 3a. Task interval variables ---
+        IntVar[] taskStartVars = new IntVar[validTasks.size()];
+        for (int i = 0; i < validTasks.size(); i++) {
+            Task task     = validTasks.get(i);
             int  duration = task.getEstimatedDurationMinutes();
 
-            // Upper bound: horizon or deadline, whichever comes first
             int latestStart = horizon - duration;
             if (task.getDeadline() != null) {
                 long deadlineMin = ChronoUnit.MINUTES.between(horizonStart, task.getDeadline());
                 latestStart = (int) Math.min(latestStart, deadlineMin - duration);
             }
-            // Guard: if deadline already passed, schedule best-effort at end of horizon
             if (latestStart < nowOffset) {
                 log.warn("Task '{}' hat überschrittene Deadline – Best-Effort-Placement.", task.getTitle());
                 latestStart = horizon - duration;
@@ -187,18 +296,79 @@ public class SmartSchedulerService {
             int lb = Math.max(0, nowOffset);
             int ub = Math.max(lb, latestStart);
 
-            startVars[i] = model.newIntVar(lb, ub, "s_" + task.getId());
-            taskIvs[i]   = model.newFixedSizeIntervalVar(startVars[i], duration, "iv_" + task.getId());
-            weights[i]   = calculateTaskWeight(task);
-            allIntervals.add(taskIvs[i]);
+            IntVar startVar = model.newIntVar(lb, ub, "s_task_" + task.getId());
+            IntervalVar iv  = model.newFixedSizeIntervalVar(startVar, duration, "iv_task_" + task.getId());
+            allIntervals.add(iv);
+            taskStartVars[i] = startVar;
+
+            objVars.add(startVar);
+            objWeights.add(calculateTaskWeight(task));
+        }
+
+        // --- 3b. Habit occurrence variables: bounded to their own day, soft pull toward preferredTime ---
+        IntVar[] habitStartVars = new IntVar[habitOccurrences.size()];
+        for (int i = 0; i < habitOccurrences.size(); i++) {
+            HabitOccurrence occ = habitOccurrences.get(i);
+            int dayOffset = (int) ChronoUnit.DAYS.between(startDate, occ.getDate()) * 1440;
+            int duration  = occ.getDurationMinutes();
+
+            int lb = dayOffset + workStartMin;
+            int ub = dayOffset + workEndMin - duration;
+            if (occ.getDate().equals(LocalDate.now())) lb = Math.max(lb, nowOffset);
+            if (ub < lb) continue; // no room left that day — occurrence can't be placed, skip it
+
+            IntVar startVar = model.newIntVar(lb, ub, "s_hab_" + occ.getHabit().getId() + "_" + occ.getDate());
+            IntervalVar iv  = model.newFixedSizeIntervalVar(startVar, duration, "iv_hab_" + occ.getHabit().getId() + "_" + occ.getDate());
+            allIntervals.add(iv);
+            habitStartVars[i] = startVar;
+
+            int preferredMin = dayOffset + occ.getPreferredTime().getHour() * 60 + occ.getPreferredTime().getMinute();
+            IntVar deviation = model.newIntVar(0, 1440, "dev_hab_" + occ.getHabit().getId() + "_" + occ.getDate());
+            // deviation >= start - preferred
+            model.addLessOrEqual(
+                    LinearExpr.newBuilder().addTerm(startVar, 1).addTerm(deviation, -1).build(),
+                    preferredMin);
+            // deviation >= preferred - start
+            model.addGreaterOrEqual(
+                    LinearExpr.newBuilder().addTerm(startVar, 1).addTerm(deviation, 1).build(),
+                    preferredMin);
+
+            objVars.add(deviation);
+            objWeights.add(calculateHabitWeight(occ.getHabit()));
+        }
+
+        // --- 3c. Flexible workout placeholders: domain spans their target week ---
+        IntVar[] workoutStartVars = new IntVar[flexibleWorkouts.size()];
+        for (int i = 0; i < flexibleWorkouts.size(); i++) {
+            WorkoutSession w = flexibleWorkouts.get(i);
+            int duration = w.getDurationMinutes() != null ? w.getDurationMinutes() : DEFAULT_WORKOUT_DURATION_MIN;
+
+            LocalDate weekStart = w.getTargetWeekStart() != null ? w.getTargetWeekStart() : startDate;
+            LocalDate weekEnd   = weekStart.plusDays(6);
+            LocalDate clampedStart = weekStart.isBefore(startDate) ? startDate : weekStart;
+            LocalDate clampedEnd   = weekEnd.isAfter(endDate) ? endDate : weekEnd;
+            if (clampedStart.isAfter(clampedEnd)) continue; // placeholder's week is outside this horizon
+
+            int lb = (int) ChronoUnit.DAYS.between(startDate, clampedStart) * 1440;
+            int ub = (int) ChronoUnit.DAYS.between(startDate, clampedEnd) * 1440 + 1440 - duration;
+            lb = Math.max(lb, nowOffset);
+            if (ub < lb) continue;
+
+            IntVar startVar = model.newIntVar(lb, ub, "s_wo_" + w.getId());
+            IntervalVar iv  = model.newFixedSizeIntervalVar(startVar, duration, "iv_wo_" + w.getId());
+            allIntervals.add(iv);
+            workoutStartVars[i] = startVar;
+
+            objVars.add(startVar);
+            objWeights.add(300L); // flat mid-priority weight — WorkoutSession has no priority field today
         }
 
         // --- 4. Core constraint: nothing overlaps ---
         model.addNoOverlap(allIntervals.toArray(new IntervalVar[0]));
 
-        // --- 5. Objective: minimize Σ weight_i × start_i ---
-        // High weight tasks (urgent / high priority) are pushed to early slots.
-        model.minimize(LinearExpr.weightedSum(startVars, weights));
+        // --- 5. Objective: minimize combined weighted sum (task/workout start-times + habit deviations) ---
+        long[] weightsArr = objWeights.stream().mapToLong(Long::longValue).toArray();
+        model.minimize(LinearExpr.weightedSum(objVars.toArray(new IntVar[0]), weightsArr));
 
         // --- 6. Solve ---
         CpSolver solver = new CpSolver();
@@ -207,7 +377,9 @@ public class SmartSchedulerService {
         solver.getParameters().setLogSearchProgress(false);
 
         CpSolverStatus status = solver.solve(model);
-        log.info("CP-SAT Status: {} | Objective: {}", status, solver.objectiveValue());
+        log.info("CP-SAT Status: {} | Objective: {} | Intervals: {} | Tasks: {} Habits: {} Workouts: {}",
+                status, solver.objectiveValue(), allIntervals.size(),
+                validTasks.size(), habitOccurrences.size(), flexibleWorkouts.size());
 
         if (status != CpSolverStatus.OPTIMAL && status != CpSolverStatus.FEASIBLE) {
             log.warn("CP-SAT: kein gültiger Schedule gefunden ({}). Schedule bleibt leer.", status);
@@ -216,20 +388,70 @@ public class SmartSchedulerService {
 
         // --- 7. Extract solution ---
         List<ScheduledItem> result = new ArrayList<>();
-        for (int i = 0; i < valid.size(); i++) {
-            long startMin          = solver.value(startVars[i]);
+
+        for (int i = 0; i < validTasks.size(); i++) {
+            Task task = validTasks.get(i);
+            long startMin = solver.value(taskStartVars[i]);
             LocalDateTime taskStart = horizonStart.plusMinutes(startMin);
-            LocalDateTime taskEnd   = taskStart.plusMinutes(valid.get(i).getEstimatedDurationMinutes());
+            LocalDateTime taskEnd   = taskStart.plusMinutes(task.getEstimatedDurationMinutes());
 
             ScheduledItem item = new ScheduledItem();
-            item.setTask(valid.get(i));
+            item.setTask(task);
             item.setStartTime(taskStart);
             item.setEndTime(taskEnd);
             item.setType(ScheduledItemType.TASK);
             result.add(item);
 
-            taskService.scheduleTask(valid.get(i).getId(), taskStart, taskEnd);
+            taskService.scheduleTask(task.getId(), taskStart, taskEnd);
         }
+
+        for (int i = 0; i < habitOccurrences.size(); i++) {
+            if (habitStartVars[i] == null) continue;
+            HabitOccurrence occ = habitOccurrences.get(i);
+            long startMin = solver.value(habitStartVars[i]);
+            LocalDateTime habStart = horizonStart.plusMinutes(startMin);
+            LocalDateTime habEnd   = habStart.plusMinutes(occ.getDurationMinutes());
+
+            ScheduledItem item = new ScheduledItem();
+            item.setHabit(occ.getHabit());
+            item.setStartTime(habStart);
+            item.setEndTime(habEnd);
+            item.setType(ScheduledItemType.HABIT);
+            result.add(item);
+        }
+
+        for (int i = 0; i < flexibleWorkouts.size(); i++) {
+            if (workoutStartVars[i] == null) continue;
+            WorkoutSession w = flexibleWorkouts.get(i);
+            long startMin = solver.value(workoutStartVars[i]);
+            LocalDateTime woStart = horizonStart.plusMinutes(startMin);
+            LocalDateTime woEnd   = woStart.plusMinutes(w.getDurationMinutes() != null ? w.getDurationMinutes() : DEFAULT_WORKOUT_DURATION_MIN);
+
+            w.setStartTime(woStart);
+            w.setEndTime(woEnd);
+            workoutSessionRepository.save(w);
+
+            ScheduledItem item = new ScheduledItem();
+            item.setWorkoutSession(w);
+            item.setStartTime(woStart);
+            item.setEndTime(woEnd);
+            item.setType(ScheduledItemType.WORKOUT);
+            result.add(item);
+        }
+
+        // Pinned workouts pass through unchanged so they also get a CalendarEvent row
+        for (WorkoutSession w : fixedWorkouts) {
+            if (w.getStartTime() == null) continue;
+            ScheduledItem item = new ScheduledItem();
+            item.setWorkoutSession(w);
+            item.setStartTime(w.getStartTime());
+            item.setEndTime(w.getEndTime() != null
+                    ? w.getEndTime()
+                    : w.getStartTime().plusMinutes(w.getDurationMinutes() != null ? w.getDurationMinutes() : DEFAULT_WORKOUT_DURATION_MIN));
+            item.setType(ScheduledItemType.WORKOUT);
+            result.add(item);
+        }
+
         return result;
     }
 
@@ -259,146 +481,10 @@ public class SmartSchedulerService {
         return w;
     }
 
-    // =========================================================================
-    // FREE-SLOT GENERATION  (used by habit / workout greedy scheduler)
-    // =========================================================================
-
-    /**
-     * Generates free TimeSlots within working hours, subtracting both fixed
-     * calendar events and the tasks already placed by the CP-SAT solver.
-     */
-    private List<TimeSlot> buildFreeSlots(
-            List<ScheduledItem> scheduled,
-            List<CalendarEvent> fixedEvents,
-            List<CourseSchedule> courseSchedules,
-            LocalDate startDate, LocalDate endDate,
-            UserPreferences prefs) {
-
-        // Combine all occupied windows
-        List<CalendarEvent> occupied = new ArrayList<>(fixedEvents);
-        for (ScheduledItem item : scheduled) {
-            CalendarEvent pseudo = new CalendarEvent();
-            pseudo.setStartTime(item.getStartTime());
-            pseudo.setEndTime(item.getEndTime());
-            occupied.add(pseudo);
-        }
-        
-        if (courseSchedules != null) {
-            for (CourseSchedule cs : courseSchedules) {
-                for (LocalDate d = startDate; !d.isAfter(endDate); d = d.plusDays(1)) {
-                    if (d.getDayOfWeek() == cs.getDayOfWeek()) {
-                        CalendarEvent pseudo = new CalendarEvent();
-                        pseudo.setStartTime(d.atTime(cs.getStartTime()));
-                        pseudo.setEndTime(d.atTime(cs.getEndTime()));
-                        occupied.add(pseudo);
-                    }
-                }
-            }
-        }
-
-        List<TimeSlot> slots = new ArrayList<>();
-        for (LocalDate d = startDate; !d.isAfter(endDate); d = d.plusDays(1))
-            slots.addAll(generateDaySlots(d, prefs, occupied));
-        return slots;
-    }
-
-    private List<TimeSlot> generateDaySlots(LocalDate date, UserPreferences prefs,
-                                             List<CalendarEvent> occupied) {
-        LocalTime workStart = prefs.getWorkdayStart() != null ? prefs.getWorkdayStart() : LocalTime.of(8, 0);
-        LocalTime workEnd   = prefs.getWorkdayEnd()   != null ? prefs.getWorkdayEnd()   : LocalTime.of(22, 0);
-
-        LocalDateTime cur      = date.atTime(workStart);
-        LocalDateTime endOfDay = date.atTime(workEnd);
-
-        List<CalendarEvent> dayOcc = occupied.stream()
-                .filter(e -> e.getStartTime() != null && e.getStartTime().toLocalDate().equals(date))
-                .sorted(Comparator.comparing(CalendarEvent::getStartTime))
-                .toList();
-
-        List<TimeSlot> slots = new ArrayList<>();
-        for (CalendarEvent ev : dayOcc) {
-            if (cur.isBefore(ev.getStartTime())) {
-                long dur = ChronoUnit.MINUTES.between(cur, ev.getStartTime());
-                if (dur >= MIN_SLOT_MINUTES) slots.add(makeSlot(cur, ev.getStartTime(), date, (int) dur));
-            }
-            if (ev.getEndTime() != null && ev.getEndTime().isAfter(cur)) cur = ev.getEndTime();
-        }
-        if (cur.isBefore(endOfDay)) {
-            long dur = ChronoUnit.MINUTES.between(cur, endOfDay);
-            if (dur >= MIN_SLOT_MINUTES) slots.add(makeSlot(cur, endOfDay, date, (int) dur));
-        }
-        return slots;
-    }
-
-    private TimeSlot makeSlot(LocalDateTime start, LocalDateTime end, LocalDate date, int dur) {
-        TimeSlot s = new TimeSlot();
-        s.setStart(start); s.setEnd(end); s.setDate(date); s.setDuration(dur);
-        return s;
-    }
-
-    // =========================================================================
-    // HABITS & WORKOUTS  (greedy – unchanged logic)
-    // =========================================================================
-
-    private List<ScheduledItem> scheduleRecurringActivities(
-            List<Habit> habits, List<WorkoutSession> workouts,
-            List<TimeSlot> slots, UserPreferences prefs) {
-
-        List<ScheduledItem> scheduled = new ArrayList<>();
-
-        for (Habit habit : habits) {
-            ScheduledItem item = scheduleHabit(habit, slots, prefs);
-            if (item != null) {
-                scheduled.add(item);
-                int dur = habit.getDurationMinutes() != null ? habit.getDurationMinutes() : 30;
-                TimeSlot used = findSlotForTime(item.getStartTime(), slots);
-                if (used != null) updateSlotAfterScheduling(used, dur, slots);
-            }
-        }
-
-        for (WorkoutSession wo : workouts) {
-            if (wo.getStartTime() != null) {
-                ScheduledItem item = new ScheduledItem();
-                item.setWorkoutSession(wo);
-                item.setStartTime(wo.getStartTime());
-                item.setEndTime(wo.getEndTime() != null
-                        ? wo.getEndTime()
-                        : wo.getStartTime().plusMinutes(wo.getDurationMinutes() != null ? wo.getDurationMinutes() : 60));
-                item.setType(ScheduledItemType.WORKOUT);
-                scheduled.add(item);
-            }
-        }
-        return scheduled;
-    }
-
-    private ScheduledItem scheduleHabit(Habit habit, List<TimeSlot> slots, UserPreferences prefs) {
-        LocalTime preferred = habit.getPreferredTime() != null ? habit.getPreferredTime() : LocalTime.of(9, 0);
-        int duration = habit.getDurationMinutes() != null ? habit.getDurationMinutes() : 30;
-
-        return slots.stream()
-                .filter(s -> s.getDuration() >= duration)
-                .min(Comparator.comparingLong(s ->
-                        Math.abs(ChronoUnit.MINUTES.between(s.getStart().toLocalTime(), preferred))))
-                .map(best -> {
-                    ScheduledItem item = new ScheduledItem();
-                    item.setHabit(habit);
-                    item.setStartTime(best.getStart());
-                    item.setEndTime(best.getStart().plusMinutes(duration));
-                    item.setType(ScheduledItemType.HABIT);
-                    return item;
-                }).orElse(null);
-    }
-
-    private void updateSlotAfterScheduling(TimeSlot slot, int usedMin, List<TimeSlot> remaining) {
-        int leftover = slot.getDuration() - usedMin;
-        if (leftover < MIN_SLOT_MINUTES) remaining.remove(slot);
-        else { slot.setStart(slot.getStart().plusMinutes(usedMin)); slot.setDuration(leftover); }
-    }
-
-    private TimeSlot findSlotForTime(LocalDateTime time, List<TimeSlot> slots) {
-        return slots.stream()
-                .filter(s -> !s.getStart().isAfter(time) && !s.getEnd().isBefore(time))
-                .findFirst().orElse(null);
+    /** Habits have no deadline, only a priority — scales how strongly the solver honors preferredTime. */
+    private long calculateHabitWeight(Habit habit) {
+        int priority = habit.getPriority() != null ? habit.getPriority() : 3;
+        return (long) priority * 100;
     }
 
     // =========================================================================
@@ -412,14 +498,36 @@ public class SmartSchedulerService {
 
         input.setTasks(taskService.getUnscheduledTasks(userId));
         input.setFixedEvents(calendarEventService.getFixedEvents(userId, start, end));
-        input.setHabits(habitRepository.findActiveHabits(userId, startDate));
-        input.setWorkouts(workoutSessionRepository.findByUserIdAndStartTimeBetween(userId, start, end));
+        input.setHabits(habitRepository.findHabitsActiveInRange(userId, startDate, endDate));
         input.setCourseSchedules(courseScheduleRepository.findByUserId(userId));
 
-        log.debug("Input: {} Tasks, {} fixe Events, {} Habits, {} Workouts",
-                input.getTasks().size(), input.getFixedEvents().size(),
-                input.getHabits().size(), input.getWorkouts().size());
+        List<WorkoutSession> inRange = workoutSessionRepository.findByUserIdAndStartTimeBetween(userId, start, end);
+        List<WorkoutSession> flexible = workoutSessionRepository.findByUserIdAndIsFlexibleTrue(userId).stream()
+                .filter(w -> isWorkoutRelevantToRange(w, startDate, endDate))
+                .collect(Collectors.toList());
+        Set<Long> flexibleIds = flexible.stream().map(WorkoutSession::getId).collect(Collectors.toSet());
+
+        input.setFixedWorkouts(inRange.stream()
+                .filter(w -> !flexibleIds.contains(w.getId()))
+                .collect(Collectors.toList()));
+        input.setFlexibleWorkouts(flexible);
+
+        log.debug("Input: {} Tasks, {} fixe Events, {} Habits, {} fixe Workouts, {} flexible Workouts",
+                input.getTasks().size(), input.getFixedEvents().size(), input.getHabits().size(),
+                input.getFixedWorkouts().size(), input.getFlexibleWorkouts().size());
         return input;
+    }
+
+    private boolean isWorkoutRelevantToRange(WorkoutSession w, LocalDate startDate, LocalDate endDate) {
+        if (w.getTargetWeekStart() != null) {
+            LocalDate weekEnd = w.getTargetWeekStart().plusDays(6);
+            return !w.getTargetWeekStart().isAfter(endDate) && !weekEnd.isBefore(startDate);
+        }
+        if (w.getStartTime() != null) {
+            LocalDate d = w.getStartTime().toLocalDate();
+            return !d.isBefore(startDate) && !d.isAfter(endDate);
+        }
+        return false;
     }
 
     // =========================================================================
@@ -427,49 +535,45 @@ public class SmartSchedulerService {
     // =========================================================================
 
     @Transactional
-    private void saveScheduleToDatabase(Long userId,
-                                         List<ScheduledItem> scheduledTasks,
-                                         List<ScheduledItem> scheduledHabits) {
+    private void saveScheduleToDatabase(Long userId, List<ScheduledItem> scheduled) {
         User user = userService.findById(userId);
 
-        for (ScheduledItem item : scheduledTasks) {
+        for (ScheduledItem item : scheduled) {
             CalendarEvent ev = new CalendarEvent();
             ev.setUser(user);
-            ev.setTitle(item.getTask().getTitle());
-            ev.setDescription(item.getTask().getDescription());
             ev.setStartTime(item.getStartTime());
             ev.setEndTime(item.getEndTime());
-            ev.setEventType(EventType.TASK);
-            ev.setRelatedTask(item.getTask());
             ev.setIsFixed(false);
-            ev.setColor(getColorForTask(item.getTask()));
-            calendarEventRepository.save(ev);
-        }
 
-        for (ScheduledItem item : scheduledHabits) {
-            CalendarEvent ev = new CalendarEvent();
-            ev.setUser(user);
-            ev.setStartTime(item.getStartTime());
-            ev.setEndTime(item.getEndTime());
-            ev.setIsFixed(false);
-            if (item.getType() == ScheduledItemType.HABIT && item.getHabit() != null) {
-                ev.setTitle(item.getHabit().getName());
-                ev.setDescription(item.getHabit().getDescription());
-                ev.setEventType(EventType.HABIT);
-                ev.setRelatedHabit(item.getHabit());
-                ev.setColor("#4CAF50");
-            } else if (item.getType() == ScheduledItemType.WORKOUT && item.getWorkoutSession() != null) {
-                ev.setTitle(item.getWorkoutSession().getName());
-                ev.setDescription(item.getWorkoutSession().getDescription());
-                ev.setEventType(EventType.WORKOUT);
-                ev.setRelatedWorkout(item.getWorkoutSession());
-                ev.setColor("#FF5722");
+            switch (item.getType()) {
+                case TASK -> {
+                    ev.setTitle(item.getTask().getTitle());
+                    ev.setDescription(item.getTask().getDescription());
+                    ev.setEventType(EventType.TASK);
+                    ev.setRelatedTask(item.getTask());
+                    ev.setColor(getColorForTask(item.getTask()));
+                }
+                case HABIT -> {
+                    ev.setTitle(item.getHabit().getName());
+                    ev.setDescription(item.getHabit().getDescription());
+                    ev.setEventType(EventType.HABIT);
+                    ev.setRelatedHabit(item.getHabit());
+                    ev.setColor("#4CAF50");
+                }
+                case WORKOUT -> {
+                    ev.setTitle(item.getWorkoutSession().getName());
+                    ev.setDescription(item.getWorkoutSession().getDescription());
+                    ev.setEventType(EventType.WORKOUT);
+                    ev.setRelatedWorkout(item.getWorkoutSession());
+                    ev.setColor("#FF5722");
+                }
+                default -> { continue; } // CLASS is never produced here
             }
+
             calendarEventRepository.save(ev);
         }
 
-        log.info("Gespeichert: {} Task-Events, {} Habit/Workout-Events",
-                scheduledTasks.size(), scheduledHabits.size());
+        log.info("Gespeichert: {} Events", scheduled.size());
     }
 
     // =========================================================================

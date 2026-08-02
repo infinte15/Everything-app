@@ -314,29 +314,42 @@ class _TaskTile extends StatelessWidget {
       confirmDismiss: (direction) async {
         if (direction == DismissDirection.startToEnd) {
           await context.read<TaskProvider>().completeTask(task.id!);
-          return false;
-        } else {
-          return await showDialog<bool>(
-            context: context,
-            builder: (_) => AlertDialog(
-              title: const Text('Aufgabe löschen?'),
-              content: Text('„${task.title}" wirklich löschen?'),
-              actions: [
-                TextButton(
-                    onPressed: () => Navigator.pop(context, false),
-                    child: const Text('Abbrechen')),
-                FilledButton(
-                    onPressed: () => Navigator.pop(context, true),
-                    child: const Text('Löschen')),
-              ],
-            ),
-          );
+          return false; // never actually removes the tile — completion just updates its state
         }
-      },
-      onDismissed: (direction) {
-        if (direction == DismissDirection.endToStart) {
-          context.read<TaskProvider>().deleteTask(task.id!);
+
+        final confirmed = await showDialog<bool>(
+          context: context,
+          builder: (_) => AlertDialog(
+            title: const Text('Aufgabe löschen?'),
+            content: Text('„${task.title}" wirklich löschen?'),
+            actions: [
+              TextButton(
+                  onPressed: () => Navigator.pop(context, false),
+                  child: const Text('Abbrechen')),
+              FilledButton(
+                  onPressed: () => Navigator.pop(context, true),
+                  child: const Text('Löschen')),
+            ],
+          ),
+        );
+        if (confirmed != true || !context.mounted) return false;
+
+        // Delete here — before Dismissible commits to removing the widget — instead of
+        // in onDismissed. Dismissible tears itself out of the tree as soon as this
+        // returns true; if that happens before the backend call resolves (or when it
+        // silently fails), the task stays in TaskProvider's list and the very next
+        // rebuild throws "A dismissed Dismissible widget is still part of the tree" —
+        // or worse, just leaves the task un-deleted until some later rebuild resurrects
+        // the tile, which is exactly the "delete does nothing, then deletes everything
+        // at once" symptom this fixes.
+        final deleted = await context.read<TaskProvider>().deleteTask(task.id!);
+        if (!deleted && context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+            content: Text('❌ Could not delete task — please try again'),
+            behavior: SnackBarBehavior.floating,
+          ));
         }
+        return deleted;
       },
       child: Card(
         margin: const EdgeInsets.only(bottom: 8),

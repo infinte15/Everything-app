@@ -186,11 +186,13 @@ public class CalendarEventService {
     }
 
     @Transactional
-    public void clearScheduledEvents(Long userId) {
-        List<CalendarEvent> events = calendarEventRepository.findByUserIdAndEventTypeAndIsFixed(
+    public void clearScheduledEvents(Long userId, LocalDateTime start, LocalDateTime end) {
+        List<CalendarEvent> events = calendarEventRepository.findByUserIdAndEventTypeInAndIsFixedAndStartTimeBetween(
                 userId,
-                EventType.TASK,
-                false);
+                List.of(EventType.TASK, EventType.HABIT, EventType.WORKOUT),
+                false,
+                start,
+                end);
         calendarEventRepository.deleteAll(events);
     }
 }

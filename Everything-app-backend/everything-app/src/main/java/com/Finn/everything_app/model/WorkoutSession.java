@@ -2,6 +2,7 @@ package com.Finn.everything_app.model;
 
 import jakarta.persistence.*;
 import lombok.Data;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
 
@@ -19,7 +20,7 @@ public class WorkoutSession {
     @Column(length = 2000)
     private String description;
 
-    @Column(name = "start_time", nullable = false)
+    @Column(name = "start_time")
     private LocalDateTime startTime;
 
     @Column(name = "end_time")
@@ -75,6 +76,14 @@ public class WorkoutSession {
 
     @Column(name = "distance_km")
     private Double distanceKm;
+
+    // true = scheduler may auto-place/move this session's time; false = user pinned an explicit time
+    @Column(name = "is_flexible")
+    private Boolean isFlexible = false;
+
+    // Which ISO week (Monday) this auto-generated placeholder counts toward, for weekly-target bookkeeping
+    @Column(name = "target_week_start")
+    private LocalDate targetWeekStart;
 
     @PrePersist
     protected void onCreate() {

@@ -3,5 +3,8 @@
     "java.compile.nullAnalysis.mode": "disabled",
     "java.import.maven.enabled": true,
     "maven.executable.preferMavenWrapper": false,
-    "java.project.importOnFirstTimeStartup": "automatic"
+    "java.project.importOnFirstTimeStartup": "automatic",
+    "java.import.gradle.wrapper.enabled": true,
+    "java.import.gradle.version": "",
+    "java.gradle.buildServer.enabled": "on"
 }

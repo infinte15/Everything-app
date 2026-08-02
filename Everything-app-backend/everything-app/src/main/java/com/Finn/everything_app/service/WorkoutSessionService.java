@@ -1,9 +1,11 @@
 package com.Finn.everything_app.service;
 
 import com.Finn.everything_app.dto.WorkoutProgressDTO;
+import com.Finn.everything_app.event.ScheduleChangedEvent;
 import com.Finn.everything_app.model.*;
 import com.Finn.everything_app.repository.*;
 import lombok.RequiredArgsConstructor;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import java.time.LocalDate;
@@ -19,6 +21,8 @@ public class WorkoutSessionService {
     private final UserRepository userRepository;
     private final WorkoutPlanRepository workoutPlanRepository;
     private final WorkoutPlanService workoutPlanService;
+    private final CalendarEventRepository calendarEventRepository;
+    private final ApplicationEventPublisher eventPublisher;
 
     @Transactional
     public WorkoutSession createSession(Long userId, WorkoutSession session, Long planId) {
@@ -35,7 +39,9 @@ public class WorkoutSessionService {
 
         session.setIsCompleted(session.getIsCompleted() != null ? session.getIsCompleted() : false);
 
-        return workoutSessionRepository.save(session);
+        WorkoutSession saved = workoutSessionRepository.save(session);
+        eventPublisher.publishEvent(new ScheduleChangedEvent(this, userId));
+        return saved;
     }
 
     public List<WorkoutSession> getUserSessions(Long userId) {
@@ -93,7 +99,9 @@ public class WorkoutSessionService {
             session.setLocation(updatedSession.getLocation());
         }
 
-        return workoutSessionRepository.save(session);
+        WorkoutSession saved = workoutSessionRepository.save(session);
+        eventPublisher.publishEvent(new ScheduleChangedEvent(this, saved.getUser().getId()));
+        return saved;
     }
 
     @Transactional
@@ -110,13 +118,20 @@ public class WorkoutSessionService {
             workoutPlanService.incrementCompletedWorkouts(session.getWorkoutPlan().getId());
         }
 
-        return workoutSessionRepository.save(session);
+        WorkoutSession saved = workoutSessionRepository.save(session);
+        eventPublisher.publishEvent(new ScheduleChangedEvent(this, saved.getUser().getId()));
+        return saved;
     }
 
     @Transactional
     public void deleteSession(Long id) {
         WorkoutSession session = getSessionById(id);
+        Long userId = session.getUser().getId();
+        // Calendar events reference this session via related_workout_id — clean them up
+        // first or the delete violates that foreign key and 500s.
+        calendarEventRepository.deleteAll(calendarEventRepository.findByRelatedWorkoutId(id));
         workoutSessionRepository.delete(session);
+        eventPublisher.publishEvent(new ScheduleChangedEvent(this, userId));
     }
 
     // STATISTICS

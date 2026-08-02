@@ -41,7 +41,7 @@ public class UserService {
         return savedUser;
     }
 
-    public void createDefaultPreferences(User user){
+    public UserPreferences createDefaultPreferences(User user){
         UserPreferences prefs = new UserPreferences();
         prefs.setUser(user);
         prefs.setWorkdayStart(LocalTime.of(8,0));
@@ -54,7 +54,7 @@ public class UserService {
         prefs.setReminderMinutesBefore(15);
         prefs.setDarkMode(true);
 
-        userPreferencesRepository.save(prefs);
+        return userPreferencesRepository.save(prefs);
     }
 
     public User findById(Long id){
@@ -77,6 +77,12 @@ public class UserService {
     public UserPreferences getUserPreferences(Long userId){
         return userPreferencesRepository.findByUserId(userId)
                 .orElseThrow(()-> new RuntimeException("Preferences nicht gefunden"));
+    }
+
+    @Transactional
+    public UserPreferences getOrCreatePreferences(Long userId){
+        return userPreferencesRepository.findByUserId(userId)
+                .orElseGet(() -> createDefaultPreferences(findById(userId)));
     }
 
     @Transactional

@@ -2,12 +2,9 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import '../models/gym/gym_models.dart';
 import '../services/sports_service.dart';
-import '../services/habit_service.dart';
-import '../models/habit.dart';
 
 class SportsProvider with ChangeNotifier {
   final SportsService _service = SportsService();
-  final HabitService _habitService = HabitService();
 
   List<Map<String, dynamic>> _workoutPlans = [];
   List<Map<String, dynamic>> _workoutSessions = [];
@@ -163,29 +160,6 @@ class SportsProvider with ChangeNotifier {
     final created = await _service.createPlan(planData);
     if (created != null) {
        _workoutPlans.add(created);
-       
-       // Also create a Habit in the backend so the SmartScheduler picks it up
-       try {
-         final habit = Habit(
-           name: 'Workout: $name',
-           description: 'Gym Routine: $name',
-           frequency: 'WEEKLY',
-           monday: day == 'Montag' || day == null, 
-           tuesday: day == 'Dienstag' || day == null, 
-           wednesday: day == 'Mittwoch' || day == null, 
-           thursday: day == 'Donnerstag' || day == null,
-           friday: day == 'Freitag' || day == null, 
-           saturday: day == 'Samstag', 
-           sunday: day == 'Sonntag',
-           durationMinutes: estimatedMinutes,
-           category: 'SPORTS',
-           color: '#9C27B0',
-         );
-         await _habitService.createHabit(habit);
-       } catch (e) {
-         debugPrint('Error syncing Routine to Habit: $e');
-       }
-
        notifyListeners();
     }
   }

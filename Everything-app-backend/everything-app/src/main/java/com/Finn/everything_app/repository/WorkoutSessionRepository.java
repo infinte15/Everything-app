@@ -5,6 +5,7 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
 
@@ -52,4 +53,14 @@ public interface WorkoutSessionRepository extends JpaRepository<WorkoutSession, 
 
     // Sessions nach Plan sortiert
     List<WorkoutSession> findByWorkoutPlanIdOrderByStartTimeAsc(Long planId);
+
+    // Flexible (auto-schedulable) Sessions eines Users, unabhängig vom aktuellen Zeitpunkt
+    List<WorkoutSession> findByUserIdAndIsFlexibleTrue(Long userId);
+
+    // Bereits als Platzhalter für diese Woche angelegte Sessions (geplant oder noch offen)
+    long countByWorkoutPlanIdAndTargetWeekStart(Long planId, LocalDate targetWeekStart);
+
+    // Manuell fest eingetragene Sessions, die in diese Woche fallen
+    long countByWorkoutPlanIdAndIsFlexibleAndStartTimeBetween(
+            Long planId, Boolean isFlexible, LocalDateTime start, LocalDateTime end);
 }

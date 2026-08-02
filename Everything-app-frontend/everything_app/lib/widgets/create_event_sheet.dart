@@ -2,12 +2,12 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
 import '../providers/calendar_provider.dart';
-import '../providers/task_provider.dart';
 import '../models/calendar_event.dart';
 
 class CreateEventSheet extends StatefulWidget {
   final DateTime selectedDay;
-  const CreateEventSheet({super.key, required this.selectedDay});
+  final CalendarEvent? existingEvent;
+  const CreateEventSheet({super.key, required this.selectedDay, this.existingEvent});
 
   @override
   State<CreateEventSheet> createState() => _CreateEventSheetState();
@@ -19,18 +19,33 @@ class _CreateEventSheetState extends State<CreateEventSheet> {
   
   late DateTime _startTime;
   late DateTime _endTime;
-  String _type = 'Personal';
+  String _typeLabel = 'Personal';
   bool _isFixed = false;
   bool _showTitleError = false;
 
-  static const _types = ['Personal', 'Studium'];
+  // Display label -> backend EventType (model/EventType.java only accepts these exact
+  // strings; sending the raw label ("Personal"/"Studium") 500s on Jackson enum deserialization.
+  static const Map<String, String> _typeOptions = {'Personal': 'OTHER', 'Studium': 'STUDY'};
+
+  String get _selectedEventType => _typeOptions[_typeLabel]!;
+
+  bool get _isEditing => widget.existingEvent != null;
 
   @override
   void initState() {
     super.initState();
-    final now = DateTime.now();
-    _startTime = DateTime(widget.selectedDay.year, widget.selectedDay.month, widget.selectedDay.day, now.hour, 0);
-    _endTime = _startTime.add(const Duration(hours: 1));
+    final existing = widget.existingEvent;
+    if (existing != null) {
+      _titleController.text = existing.title;
+      _descController.text = existing.description ?? '';
+      _startTime = existing.startTime;
+      _endTime = existing.endTime;
+      _isFixed = existing.isFixed;
+    } else {
+      final now = DateTime.now();
+      _startTime = DateTime(widget.selectedDay.year, widget.selectedDay.month, widget.selectedDay.day, now.hour, 0);
+      _endTime = _startTime.add(const Duration(hours: 1));
+    }
   }
 
   @override
@@ -73,29 +88,66 @@ class _CreateEventSheetState extends State<CreateEventSheet> {
     });
   }
 
-  Future<void> _createEvent() async {
+  Future<void> _submit() async {
     if (_titleController.text.trim().isEmpty) {
       setState(() => _showTitleError = true);
       return;
     }
 
-    final event = CalendarEvent(
-      title: _titleController.text.trim(),
-      description: _descController.text.trim().isEmpty ? null : _descController.text.trim(),
-      startTime: _startTime,
-      endTime: _endTime,
-      eventType: _type,
-      isFixed: _isFixed,
-    );
+    final title = _titleController.text.trim();
+    final description = _descController.text.trim().isEmpty ? null : _descController.text.trim();
+    final existing = widget.existingEvent;
 
-    final success = await context.read<CalendarProvider>().addEvent(event);
+    final CalendarEvent event;
+    final bool success;
+
+    if (existing != null) {
+      // Preserve fields the edit sheet doesn't expose (id, related task/habit/workout links,
+      // color, location, ...) — only the fields the user actually edited change.
+      event = CalendarEvent(
+        id: existing.id,
+        title: title,
+        description: description,
+        startTime: _startTime,
+        endTime: _endTime,
+        location: existing.location,
+        eventType: existing.eventType,
+        isFixed: _isFixed,
+        color: existing.color,
+        notes: existing.notes,
+        relatedTaskId: existing.relatedTaskId,
+        relatedHabitId: existing.relatedHabitId,
+        relatedWorkoutId: existing.relatedWorkoutId,
+      );
+      success = await context.read<CalendarProvider>().updateEvent(event);
+    } else {
+      event = CalendarEvent(
+        title: title,
+        description: description,
+        startTime: _startTime,
+        endTime: _endTime,
+        eventType: _selectedEventType,
+        isFixed: _isFixed,
+      );
+      success = await context.read<CalendarProvider>().addEvent(event);
+    }
+
     if (mounted && success) {
-      if (_type == 'TASK') context.read<TaskProvider>().loadTasks();
       Navigator.pop(context);
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-        content: Text('✅ ${_type == 'TASK' ? 'Task' : 'Event'} "${event.title}" created'),
+        content: Text(existing != null
+            ? '✅ Event "${event.title}" updated'
+            : '✅ Event "${event.title}" created'),
         behavior: SnackBarBehavior.floating,
         backgroundColor: const Color(0xFF1A1A24),
+      ));
+    } else if (mounted && !success) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text(existing != null
+            ? '❌ Could not update "$title" — please try again'
+            : '❌ Could not create "$title" — please try again'),
+        behavior: SnackBarBehavior.floating,
+        backgroundColor: const Color(0xFFB91C1C),
       ));
     }
   }
@@ -129,7 +181,7 @@ class _CreateEventSheetState extends State<CreateEventSheet> {
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                const Text('New Event', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700)),
+                Text(_isEditing ? 'Edit Event' : 'New Event', style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w700)),
                 IconButton(
                   onPressed: () => Navigator.pop(context),
                   icon: const Icon(Icons.close, size: 20),
@@ -173,46 +225,48 @@ class _CreateEventSheetState extends State<CreateEventSheet> {
               ),
             
             const SizedBox(height: 20),
-            
-            // Type Selection (Category style)
-            _BuildLabeledField(
-              label: 'Type',
-              child: Container(
-                height: 48,
-                decoration: BoxDecoration(
-                  border: Border.all(color: borderColor),
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: Row(
-                  children: _types.map((t) {
-                    final isSel = _type == t;
-                    return Expanded(
-                      child: GestureDetector(
-                        onTap: () => setState(() => _type = t),
-                        child: Container(
-                          decoration: BoxDecoration(
-                            color: isSel ? accentColor.withValues(alpha: 0.2) : null,
-                            borderRadius: BorderRadius.circular(7),
-                          ),
-                          child: Center(
-                            child: Text(
-                              t,
-                              style: TextStyle(
-                                fontWeight: isSel ? FontWeight.bold : FontWeight.normal,
-                                color: isSel ? accentColor : Colors.grey,
-                                fontSize: 14,
+
+            // Type Selection (Category style) — not shown when editing: the type is tied to
+            // the event's origin (task/habit/workout/manual) and shouldn't change after creation.
+            if (!_isEditing) ...[
+              _BuildLabeledField(
+                label: 'Type',
+                child: Container(
+                  height: 48,
+                  decoration: BoxDecoration(
+                    border: Border.all(color: borderColor),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Row(
+                    children: _typeOptions.keys.map((t) {
+                      final isSel = _typeLabel == t;
+                      return Expanded(
+                        child: GestureDetector(
+                          onTap: () => setState(() => _typeLabel = t),
+                          child: Container(
+                            decoration: BoxDecoration(
+                              color: isSel ? accentColor.withValues(alpha: 0.2) : null,
+                              borderRadius: BorderRadius.circular(7),
+                            ),
+                            child: Center(
+                              child: Text(
+                                t,
+                                style: TextStyle(
+                                  fontWeight: isSel ? FontWeight.bold : FontWeight.normal,
+                                  color: isSel ? accentColor : Colors.grey,
+                                  fontSize: 14,
+                                ),
                               ),
                             ),
                           ),
                         ),
-                      ),
-                    );
-                  }).toList(),
+                      );
+                    }).toList(),
+                  ),
                 ),
               ),
-            ),
-            
-            const SizedBox(height: 16),
+              const SizedBox(height: 16),
+            ],
             
             // Start Time / End Time
             Row(
@@ -305,13 +359,13 @@ class _CreateEventSheetState extends State<CreateEventSheet> {
                 SizedBox(
                   height: 40,
                   child: FilledButton(
-                    onPressed: _createEvent,
+                    onPressed: _submit,
                     style: FilledButton.styleFrom(
                       backgroundColor: accentColor,
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
                       padding: const EdgeInsets.symmetric(horizontal: 24),
                     ),
-                    child: const Text('Create', style: TextStyle(fontWeight: FontWeight.bold)),
+                    child: Text(_isEditing ? 'Save' : 'Create', style: const TextStyle(fontWeight: FontWeight.bold)),
                   ),
                 ),
               ],

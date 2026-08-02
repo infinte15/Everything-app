@@ -9,6 +9,7 @@ public class ScheduleInput {
     private List<Task> tasks;
     private List<CalendarEvent> fixedEvents;
     private List<Habit> habits;
-    private List<WorkoutSession> workouts;
+    private List<WorkoutSession> fixedWorkouts;
+    private List<WorkoutSession> flexibleWorkouts;
     private List<CourseSchedule> courseSchedules;
 }

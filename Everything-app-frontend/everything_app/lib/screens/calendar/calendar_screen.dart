@@ -5,6 +5,7 @@ import 'package:intl/intl.dart';
 import '../../providers/calendar_provider.dart';
 import '../../config/app_theme.dart';
 import '../../models/calendar_event.dart';
+import '../../widgets/create_event_sheet.dart';
 
 // ─── Constants ───────────────────────────────────────────────────────────────
 
@@ -77,6 +78,7 @@ class _CalendarScreenState extends State<CalendarScreen> {
       final cal = context.read<CalendarProvider>();
       cal.setSelectedDay(now);
       cal.loadEventsForMonth(now);
+      cal.ensureScheduleGenerated();
     });
   }
 
@@ -117,7 +119,6 @@ void _navigate(int delta) {
 
                 _pageController.jumpToPage(10000);
               },
-              onSchedule: () => _showScheduleDialog(context),
             ),
             if (_view == _CalView.week)
               _WeekStrip(
@@ -197,46 +198,6 @@ void _navigate(int delta) {
     );
   }
 
-  void _showScheduleDialog(BuildContext context) {
-    showDialog(
-      context: context,
-      builder: (_) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        title: const Row(children: [
-          Icon(Icons.auto_awesome_rounded, color: Color(0xFFF59E0B)),
-          SizedBox(width: 10),
-          Text('Smart Schedule'),
-        ]),
-        content: const Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text('Let AI automatically plan the optimal schedule for the next 7 days.'),
-            SizedBox(height: 10),
-            Text('It considers all your tasks, habits, workouts and study sessions.',
-                style: TextStyle(fontSize: 13, color: Colors.grey)),
-          ],
-        ),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
-          FilledButton(
-            onPressed: () async {
-              Navigator.pop(context);
-              final now = DateTime.now();
-              final result = await context.read<CalendarProvider>().generateSchedule(now, now.add(const Duration(days: 7)));
-              if (context.mounted) {
-                ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-                  content: Text(result['success'] == true ? '✅ Schedule created!' : '❌ Error: ${result['error']}'),
-                  behavior: SnackBarBehavior.floating,
-                ));
-              }
-            },
-            child: const Text('Schedule Now'),
-          ),
-        ],
-      ),
-    );
-  }
 }
 
 // ─── Calendar Header ─────────────────────────────────────────────────────────
@@ -247,7 +208,6 @@ class _CalendarHeader extends StatelessWidget {
   final ValueChanged<_CalView> onViewChanged;
   final ValueChanged<int> onNavigate;
   final VoidCallback onToday;
-  final VoidCallback onSchedule;
 
   const _CalendarHeader({
     required this.view,
@@ -255,7 +215,6 @@ class _CalendarHeader extends StatelessWidget {
     required this.onViewChanged,
     required this.onNavigate,
     required this.onToday,
-    required this.onSchedule,
   });
 
   int _getWeekNumber(DateTime date) {
@@ -933,42 +892,64 @@ class _EventBlock extends StatelessWidget {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final bg = isDark ? color.withValues(alpha: 0.20) : color.withValues(alpha: 0.15);
     final dmin = event.durationInMinutes;
+    // Below ~35 min the card is too short (< kHourHeight/60*35 ≈ 37px, minus padding)
+    // for the two-line type+title layout to fit without overflowing its own bounds —
+    // fall back to the compact single-line layout instead.
+    final useCompactLayout = dmin < 35;
     return Opacity(
       opacity: opacity,
-      child: Container(
-        decoration: BoxDecoration(
-          color: bg,
-          borderRadius: BorderRadius.zero,
-          border: Border(left: BorderSide(color: color, width: 4)),
-        ),
-        padding: const EdgeInsets.fromLTRB(6, 4, 4, 4),
-        child: dmin < 30
-            ? Row(children: [
-                Expanded(
-                  child: Text(
-                    event.title,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(fontSize: 11, fontWeight: FontWeight.w800, color: color),
+      child: Stack(
+        children: [
+          Container(
+            decoration: BoxDecoration(
+              color: bg,
+              borderRadius: BorderRadius.zero,
+              border: Border(left: BorderSide(color: color, width: 4)),
+            ),
+            padding: const EdgeInsets.fromLTRB(6, 4, 4, 4),
+            child: useCompactLayout
+                ? Row(children: [
+                    Expanded(
+                      child: Text(
+                        event.title,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(fontSize: 11, fontWeight: FontWeight.w800, color: color),
+                      ),
+                    ),
+                    if (event.isFixed) Icon(Icons.lock_rounded, size: 10, color: color.withValues(alpha: 0.7)),
+                  ])
+                // ClipRect guards against the ~24-30px band of short-duration events
+                // (e.g. exactly 30 min = 32px card minus padding = 24px budget), where
+                // the type label + title naturally need a hair more vertical room than
+                // is available and would otherwise trip Flutter's overflow assertion.
+                : ClipRect(
+                    child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Expanded(
+                            child: Text(
+                              event.eventType.toUpperCase(),
+                              style: TextStyle(fontSize: 8, fontWeight: FontWeight.w800, letterSpacing: 1.2, color: color.withValues(alpha: 0.8)),
+                            ),
+                          ),
+                          if (event.isFixed) Icon(Icons.lock_rounded, size: 10, color: color.withValues(alpha: 0.7)),
+                        ],
+                      ),
+                      const SizedBox(height: 1),
+                      Text(
+                        event.title,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(fontSize: 12, fontWeight: FontWeight.w800, color: color, height: 1.1),
+                      ),
+                    ],
+                    ),
                   ),
-                ),
-              ])
-            : Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    event.eventType.toUpperCase(),
-                    style: TextStyle(fontSize: 8, fontWeight: FontWeight.w800, letterSpacing: 1.2, color: color.withValues(alpha: 0.8)),
-                  ),
-                  const SizedBox(height: 2),
-                  Text(
-                    event.title,
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(fontSize: 12, fontWeight: FontWeight.w800, color: color, height: 1.1),
-                  ),
-                ],
-              ),
+          ),
+        ],
       ),
     );
   }
@@ -976,6 +957,20 @@ class _EventBlock extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final color = event.color != null ? event.colorObject : _typeColor(event.eventType);
+    final card = GestureDetector(
+      onTap: () => showModalBottomSheet(
+        context: context,
+        backgroundColor: Colors.transparent,
+        isScrollControlled: true,
+        builder: (_) => _EventDetailSheet(event: event),
+      ),
+      child: _buildCard(context),
+    );
+
+    // Fixed (pinned) events cannot be dragged — matches the backend, which
+    // never lets the scheduler move isFixed events either.
+    if (event.isFixed) return card;
+
     return LongPressDraggable<CalendarEvent>(
       data: event,
       delay: const Duration(milliseconds: 350),
@@ -1012,15 +1007,7 @@ class _EventBlock extends StatelessWidget {
       ),
       // What remains in place (ghosted)
       childWhenDragging: _buildCard(context, opacity: 0.3),
-      child: GestureDetector(
-        onTap: () => showModalBottomSheet(
-          context: context,
-          backgroundColor: Colors.transparent,
-          isScrollControlled: true,
-          builder: (_) => _EventDetailSheet(event: event),
-        ),
-        child: _buildCard(context),
-      ),
+      child: card,
     );
   }
 }
@@ -1260,7 +1247,19 @@ class _EventDetailSheet extends StatelessWidget {
                       child: OutlinedButton.icon(
                         icon: const Icon(Icons.edit_rounded, size: 16),
                         label: const Text('Edit'),
-                        onPressed: () => Navigator.pop(context),
+                        onPressed: () {
+                          Navigator.pop(context);
+                          if (!context.mounted) return;
+                          showModalBottomSheet(
+                            context: context,
+                            backgroundColor: Colors.transparent,
+                            isScrollControlled: true,
+                            builder: (_) => CreateEventSheet(
+                              selectedDay: event.startTime,
+                              existingEvent: event,
+                            ),
+                          );
+                        },
                         style: OutlinedButton.styleFrom(
                           shape: RoundedRectangleBorder(borderRadius: BorderRadius.zero),
                         ),
