@@ -27,6 +27,11 @@ public class TaskMapper {
         dto.setUpdatedAt(task.getUpdatedAt());
         dto.setCompletedAt(task.getCompletedAt());
         dto.setCategory(task.getCategory());
+        dto.setMinChunkMinutes(task.getMinChunkMinutes());
+        dto.setMaxChunkMinutes(task.getMaxChunkMinutes());
+        dto.setSplittable(task.getSplittable());
+        dto.setCompletedMinutes(task.getCompletedMinutes());
+        dto.setNotBefore(task.getNotBefore());
 
         return dto;
     }
@@ -45,6 +50,11 @@ public class TaskMapper {
         task.setStatus(dto.getStatus());
         task.setSpaceType(dto.getSpaceType());
         task.setCategory(dto.getCategory());
+        task.setMinChunkMinutes(dto.getMinChunkMinutes());
+        task.setMaxChunkMinutes(dto.getMaxChunkMinutes());
+        task.setSplittable(dto.getSplittable());
+        task.setCompletedMinutes(dto.getCompletedMinutes());
+        task.setNotBefore(dto.getNotBefore());
 
         return task;
     }

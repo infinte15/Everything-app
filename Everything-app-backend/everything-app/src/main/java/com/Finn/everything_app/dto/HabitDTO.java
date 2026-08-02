@@ -1,6 +1,7 @@
 package com.Finn.everything_app.dto;
 
 import com.Finn.everything_app.model.HabitFrequency;
+import com.Finn.everything_app.model.HabitWindow;
 import lombok.Data;
 import jakarta.validation.constraints.*;
 import java.time.LocalDate;
@@ -27,6 +28,15 @@ public class HabitDTO {
 
     private LocalTime preferredTime;
     private Integer durationMinutes;
+
+    // --- Flexible Planung ---
+    @Min(value = 1, message = "Häufigkeit muss mindestens 1 pro Woche sein")
+    @Max(value = 7, message = "Häufigkeit darf höchstens 7 pro Woche sein")
+    private Integer timesPerWeek;
+
+    private HabitWindow idealWindow;
+    private LocalTime idealWindowStart;
+    private LocalTime idealWindowEnd;
 
     private LocalDate startDate;
     private LocalDate endDate;

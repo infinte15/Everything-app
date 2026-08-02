@@ -34,6 +34,16 @@ public class TaskService {
         return taskRepository.findTasksForAutoScheduling(userId);
     }
 
+    /**
+     * Quelle für den Scheduler. Anders als {@link #getUnscheduledTasks} werden Tasks mit einem
+     * gepinnten Termin NICHT komplett ausgeschlossen: seit dem Chunking soll das Pinnen eines
+     * einzelnen Blocks die übrigen Blöcke weiterhin beweglich lassen. Die bereits gepinnte Zeit
+     * wird im Scheduler von der Restdauer abgezogen.
+     */
+    public List<Task> getSchedulableTasks(Long userId) {
+        return taskRepository.findSchedulableTasks(userId);
+    }
+
     public Task getTaskById(Long id) {
         return taskRepository.findById(id)
                 .orElseThrow(() -> new RuntimeException("Task nicht gefunden"));
@@ -89,6 +99,21 @@ public class TaskService {
         if (updatedTask.getCategory() != null) {
             existing.setCategory(updatedTask.getCategory());
         }
+        if (updatedTask.getMinChunkMinutes() != null) {
+            existing.setMinChunkMinutes(updatedTask.getMinChunkMinutes());
+        }
+        if (updatedTask.getMaxChunkMinutes() != null) {
+            existing.setMaxChunkMinutes(updatedTask.getMaxChunkMinutes());
+        }
+        if (updatedTask.getSplittable() != null) {
+            existing.setSplittable(updatedTask.getSplittable());
+        }
+        if (updatedTask.getCompletedMinutes() != null) {
+            existing.setCompletedMinutes(updatedTask.getCompletedMinutes());
+        }
+        if (updatedTask.getNotBefore() != null) {
+            existing.setNotBefore(updatedTask.getNotBefore());
+        }
 
         existing.setUpdatedAt(LocalDateTime.now());
 
@@ -125,6 +150,19 @@ public class TaskService {
         Task task = getTaskById(taskId);
         task.setScheduledStartTime(startTime);
         task.setScheduledEndTime(endTime);
+        taskRepository.save(task);
+    }
+
+    /**
+     * Löscht die geplanten Zeiten eines Tasks. Wird aufgerufen, wenn der Scheduler ihn in diesem
+     * Lauf nicht mehr unterbringen konnte — sonst bleiben Geisterwerte aus einem früheren Lauf
+     * stehen und die Task-Liste zeigt eine Zeit an, zu der nichts im Kalender steht.
+     */
+    @Transactional
+    public void clearSchedule(Long taskId) {
+        Task task = getTaskById(taskId);
+        task.setScheduledStartTime(null);
+        task.setScheduledEndTime(null);
         taskRepository.save(task);
     }
 

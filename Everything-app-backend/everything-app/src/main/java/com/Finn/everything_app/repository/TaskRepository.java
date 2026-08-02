@@ -31,6 +31,13 @@ public interface TaskRepository extends JpaRepository<Task, Long> {
     @Query("SELECT t FROM Task t WHERE t.user.id = :userId AND t.status = 'TODO' AND NOT EXISTS (SELECT e FROM CalendarEvent e WHERE e.relatedTask = t AND e.isFixed = true)")
     List<Task> findTasksForAutoScheduling(@Param("userId") Long userId);
 
+    // Quelle für den Scheduler. Bewusst OHNE den "kein gepinnter Termin"-Ausschluss von
+    // findTasksForAutoScheduling: seit dem Chunking soll das Pinnen eines einzelnen Blocks die
+    // übrigen Blöcke beweglich lassen. Die gepinnte Zeit zieht der Scheduler selbst ab.
+    // findTasksForAutoScheduling bleibt unverändert — /api/tasks/unscheduled hängt daran.
+    @Query("SELECT t FROM Task t WHERE t.user.id = :userId AND t.status = 'TODO'")
+    List<Task> findSchedulableTasks(@Param("userId") Long userId);
+
     // Custom JPQL Query
     @Query("SELECT t FROM Task t WHERE t.user.id = :userId " +
             "AND t.status = :status " +

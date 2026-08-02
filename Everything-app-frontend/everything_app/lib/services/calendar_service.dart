@@ -80,6 +80,26 @@ class CalendarService {
     }
   }
 
+  /// Pinnt ein Event fest oder gibt es frei. Eigener Endpunkt, weil updateEvent einen
+  /// verschobenen TASK serverseitig bewusst anpinnt und ein isFixed=false dort sofort
+  /// wieder überschrieben würde. PUT statt PATCH, weil ApiService kein patch kennt.
+  Future<CalendarEvent?> setPinned(int id, bool pinned) async {
+    try {
+      final response = await _apiService.put(
+        ApiConfig.calendarEventPin(id),
+        {'pinned': pinned},
+      );
+
+      if (_apiService.isSuccess(response)) {
+        return CalendarEvent.fromJson(_apiService.parseResponse(response));
+      }
+      throw Exception(_apiService.getErrorMessage(response));
+    } catch (e) {
+      debugPrint('Error pinning event: $e');
+      return null;
+    }
+  }
+
   Future<bool> deleteEvent(int id) async {
     try {
       final response = await _apiService.delete(

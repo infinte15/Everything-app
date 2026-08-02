@@ -16,6 +16,7 @@ import '../screens/notes/notes_screen.dart';
 import '../widgets/bottom_nav.dart';
 import '../screens/habits/habits_screen.dart';
 import '../screens/projects/projects_screen.dart';
+import '../screens/settings/settings_screen.dart';
 
 final router = GoRouter(
   initialLocation: '/login',
@@ -59,6 +60,12 @@ final router = GoRouter(
         GoRoute(
           path: '/create',
           builder: (_, _) => const CreateScreen(),
+        ),
+        // bottom_nav.dart zeigt schon länger auf /settings, die Route fehlte aber —
+        // der Tab lief bis hierher ins Leere.
+        GoRoute(
+          path: '/settings',
+          builder: (_, _) => const SettingsScreen(),
         ),
       ],
     ),

@@ -41,4 +41,18 @@ public class TaskDTO {
 
     @JsonProperty("category")
     private String category;
+
+    // --- Chunking ---
+    @Min(value = 5, message = "Mindestblock muss mindestens 5 Minuten sein")
+    private Integer minChunkMinutes;
+
+    @Min(value = 5, message = "Maximalblock muss mindestens 5 Minuten sein")
+    private Integer maxChunkMinutes;
+
+    private Boolean splittable;
+
+    @Min(value = 0, message = "Erledigte Minuten dürfen nicht negativ sein")
+    private Integer completedMinutes;
+
+    private LocalDateTime notBefore;
 }

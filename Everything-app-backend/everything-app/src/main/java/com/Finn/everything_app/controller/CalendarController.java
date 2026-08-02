@@ -61,12 +61,26 @@ public class CalendarController {
     // PUT /api/calendar/events/{id} --> Event aktualisieren (z.B. Drag-and-Drop Reschedule)
     @PutMapping("/events/{id}")
     public ResponseEntity<CalendarEventDTO> updateEvent(
+            @CurrentUser Long userId,
             @PathVariable Long id,
             @Valid @RequestBody CalendarEventDTO eventDTO) {
 
         CalendarEvent updatedEvent = calendarEventMapper.toEntity(eventDTO);
-        CalendarEvent saved = calendarEventService.updateEvent(id, updatedEvent);
+        CalendarEvent saved = calendarEventService.updateEvent(id, userId, updatedEvent);
 
+        return ResponseEntity.ok(calendarEventMapper.toDTO(saved));
+    }
+
+    // PUT /api/calendar/events/{id}/pin --> Event anpinnen bzw. wieder freigeben.
+    // Eigener Endpunkt, weil updateEvent einen verschobenen TASK bewusst anpinnt — ein
+    // isFixed=false im normalen Payload würde dort sofort wieder überschrieben.
+    @PutMapping("/events/{id}/pin")
+    public ResponseEntity<CalendarEventDTO> setPinned(
+            @CurrentUser Long userId,
+            @PathVariable Long id,
+            @Valid @RequestBody PinRequest request) {
+
+        CalendarEvent saved = calendarEventService.setPinned(id, userId, request.getPinned());
         return ResponseEntity.ok(calendarEventMapper.toDTO(saved));
     }
 
@@ -86,14 +100,20 @@ public class CalendarController {
         resultDTO.setTotalTasksScheduled(result.getTotalTasksScheduled());
         resultDTO.setTotalHoursScheduled(result.getTotalHoursScheduled());
         resultDTO.setUnscheduledTasksCount(result.getUnscheduledTasks().size());
+        resultDTO.setMessage(result.getMessage());
+        resultDTO.setSolverStatus(result.getSolverStatus());
+        resultDTO.setAtRisk(result.getAtRisk().stream()
+                .map(a -> new AtRiskItemDTO(a.getTaskId(), a.getHabitId(), a.getTitle(),
+                        a.getMinutes(), a.getReason() != null ? a.getReason().name() : null))
+                .collect(Collectors.toList()));
 
         return ResponseEntity.ok(resultDTO);
     }
 
     // DELETE /api/calendar/events/{id}  --> Lösche Event
     @DeleteMapping("/events/{id}")
-    public ResponseEntity<Void> deleteEvent(@PathVariable Long id) {
-        calendarEventService.deleteEvent(id);
+    public ResponseEntity<Void> deleteEvent(@CurrentUser Long userId, @PathVariable Long id) {
+        calendarEventService.deleteEvent(id, userId);
         return ResponseEntity.noContent().build();
     }
 }

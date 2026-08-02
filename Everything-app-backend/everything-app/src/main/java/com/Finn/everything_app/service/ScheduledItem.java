@@ -14,6 +14,11 @@ public class ScheduledItem {
     private LocalDateTime endTime;
 
     private ScheduledItemType type;
+
+    // Nur für Tasks, die in mehrere Blöcke aufgeteilt wurden: 1-basierte Nummer und Gesamtzahl,
+    // damit im Kalender "Report (2/3)" steht. Bei einem einzigen Block bleibt chunkCount 1.
+    private Integer chunkIndex;
+    private Integer chunkCount;
 }
 
 enum ScheduledItemType {

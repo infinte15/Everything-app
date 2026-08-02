@@ -14,9 +14,13 @@ class FakeCalendarService extends CalendarService {
   int updateCallCount = 0;
   int generateScheduleCallCount = 0;
   bool generateScheduleSucceeds = true;
+  int getEventsInRangeCallCount = 0;
+  int setPinnedCallCount = 0;
+  bool? lastPinned;
 
   @override
   Future<List<CalendarEvent>> getEventsInRange(DateTime startDate, DateTime endDate) async {
+    getEventsInRangeCallCount++;
     return events
         .where((e) => !e.startTime.isBefore(startDate) && !e.startTime.isAfter(endDate))
         .toList();
@@ -36,6 +40,18 @@ class FakeCalendarService extends CalendarService {
     final idx = events.indexWhere((e) => e.id == event.id);
     if (idx != -1) events[idx] = event;
     return event;
+  }
+
+  // Pflicht-Override: keine Methode hier ruft super auf, ein fehlendes Override würde also
+  // im Widget-Test die echte Netzwerk-Implementierung ausführen.
+  @override
+  Future<CalendarEvent?> setPinned(int id, bool pinned) async {
+    setPinnedCallCount++;
+    lastPinned = pinned;
+    final idx = events.indexWhere((e) => e.id == id);
+    if (idx == -1) return null;
+    events[idx] = events[idx].copyWith(isFixed: pinned);
+    return events[idx];
   }
 
   @override

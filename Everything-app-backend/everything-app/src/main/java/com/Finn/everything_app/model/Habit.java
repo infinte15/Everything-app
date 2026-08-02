@@ -38,6 +38,24 @@ public class Habit {
     @Column(name = "preferred_time")
     private LocalTime preferredTime;
 
+    // --- Flexible Planung (Reclaim-Stil) ---
+    // Alle nullable. Ist timesPerWeek null, gilt weiterhin exakt das alte Verhalten:
+    // eine Pflicht-Ausführung pro gesetztem Wochentag-Flag, nur an genau diesem Tag.
+
+    /** "N mal pro Woche" — der Solver sucht sich die Tage selbst aus. */
+    @Column(name = "times_per_week")
+    private Integer timesPerWeek;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "ideal_window")
+    private HabitWindow idealWindow;
+
+    @Column(name = "ideal_window_start")
+    private LocalTime idealWindowStart;
+
+    @Column(name = "ideal_window_end")
+    private LocalTime idealWindowEnd;
+
     @Column(name = "duration_minutes")
     private Integer durationMinutes;
 

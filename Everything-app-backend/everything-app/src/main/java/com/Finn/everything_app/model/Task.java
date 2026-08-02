@@ -53,6 +53,30 @@ public class Task {
     @Column(name = "completed_at")
     private LocalDateTime completedAt;
 
+    // --- Chunking (Reclaim-Stil: lange Tasks werden in mehrere Sessions aufgeteilt) ---
+    // Alle nullable: ddl-auto=update legt sie auf bestehenden Zeilen als NULL an. Im Scheduler
+    // wird deshalb nie direkt gelesen, sondern immer über Resolver mit Prefs-/Konstanten-Fallback.
+
+    /** Kleinster sinnvoller Einzelblock in Minuten. */
+    @Column(name = "min_chunk_minutes")
+    private Integer minChunkMinutes;
+
+    /** Größter Einzelblock in Minuten — darüber wird aufgeteilt. */
+    @Column(name = "max_chunk_minutes")
+    private Integer maxChunkMinutes;
+
+    /** false = muss am Stück geplant werden. */
+    @Column(name = "splittable")
+    private Boolean splittable;
+
+    /** Bereits erledigte Minuten; nur der Rest wird noch verplant. */
+    @Column(name = "completed_minutes")
+    private Integer completedMinutes;
+
+    /** Frühestens ab diesem Zeitpunkt planen (Reclaims "start after"). */
+    @Column(name = "not_before")
+    private LocalDateTime notBefore;
+
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "user_id", nullable = false)
     private User user;

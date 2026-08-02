@@ -26,7 +26,8 @@ CalendarEvent _event({
 }
 
 Future<CalendarProvider> _loadedProvider(FakeCalendarService fake) async {
-  final provider = CalendarProvider(calendarService: fake);
+  // reconcileDelay: zero, damit der Nachlade-Timer nicht als pending timer hängen bleibt.
+  final provider = CalendarProvider(calendarService: fake, reconcileDelay: Duration.zero);
   addTearDown(provider.dispose);
   await provider.loadEventsForMonth(DateTime.now());
   return provider;
@@ -94,6 +95,61 @@ void main() {
           reason: 'the automatic backfill must run once per app session, not on every call');
     });
   });
+
+  group('CalendarProvider.setPinned', () {
+    test('flips isFixed optimistically and syncs with the backend', () async {
+      final original = _event(isFixed: true);
+      final fake = FakeCalendarService([original]);
+      final provider = await _loadedProvider(fake);
+
+      final future = provider.setPinned(1, false);
+      // Optimistisch: schon vor dem await sichtbar.
+      expect(provider.events.first.isFixed, isFalse);
+
+      expect(await future, isTrue);
+      expect(fake.setPinnedCallCount, 1);
+      expect(fake.lastPinned, isFalse);
+      expect(provider.events.first.isFixed, isFalse);
+    });
+
+    test('reverts when the backend rejects the change', () async {
+      final original = _event(isFixed: true);
+      final fake = _PinFailingCalendarService([original]);
+      final provider = await _loadedProvider(fake);
+
+      expect(await provider.setPinned(1, false), isFalse);
+      expect(provider.events.first.isFixed, isTrue,
+          reason: 'a failed pin change must not leave the UI showing the wrong state');
+    });
+  });
+
+  group('CalendarProvider reconcile', () {
+    test('updateEvent schedules a refetch so backend reflows become visible', () async {
+      final original = _event();
+      final fake = FakeCalendarService([original]);
+      final provider = await _loadedProvider(fake);
+
+      final before = fake.getEventsInRangeCallCount;
+      await provider.updateEvent(original.copyWith(startTime: original.startTime));
+      // reconcileDelay ist zero — der Timer feuert im nächsten Event-Loop-Durchlauf.
+      await Future<void>.delayed(Duration.zero);
+      await Future<void>.delayed(Duration.zero);
+
+      expect(fake.getEventsInRangeCallCount, greaterThan(before),
+          reason: 'the provider must refetch after a mutation, not wait for the 30s poll');
+    });
+  });
+}
+
+class _PinFailingCalendarService extends FakeCalendarService {
+  _PinFailingCalendarService(super.initialEvents);
+
+  @override
+  Future<CalendarEvent?> setPinned(int id, bool pinned) async {
+    setPinnedCallCount++;
+    lastPinned = pinned;
+    return null;
+  }
 }
 
 class _ThrowingCalendarService extends FakeCalendarService {

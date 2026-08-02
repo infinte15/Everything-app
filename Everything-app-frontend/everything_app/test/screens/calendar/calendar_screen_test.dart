@@ -30,7 +30,9 @@ Future<CalendarProvider> _pumpCalendar(
   // Disposed explicitly by each test (not via addTearDown) so the 30s polling Timer
   // is guaranteed cancelled before flutter_test's end-of-test "no pending timers"
   // invariant check runs, rather than depending on addTearDown/invariant-check ordering.
-  final provider = CalendarProvider(calendarService: fake);
+  // reconcileDelay: zero, damit der Nachlade-Timer nach jeder Mutation nicht als
+  // "pending timer" am Testende hängen bleibt.
+  final provider = CalendarProvider(calendarService: fake, reconcileDelay: Duration.zero);
   // Pre-load synchronously so the first pump already has real data, instead of
   // racing CalendarScreen's own async initState load.
   await provider.loadEventsForMonth(DateTime.now());
@@ -148,6 +150,132 @@ void main() {
         matching: find.byType(LongPressDraggable<CalendarEvent>),
       );
       expect(draggableAncestor, findsOneWidget);
+
+      provider.dispose();
+    });
+
+    testWidgets('overlapping events are laid out side by side and each stay draggable',
+        (tester) async {
+      // Vorher lagen beide auf voller Spaltenbreite übereinander, sodass nur das
+      // zuletzt gezeichnete antippbar oder ziehbar war.
+      final first = CalendarEvent(
+        id: 10,
+        title: 'Overlap A',
+        startTime: _soon(30),
+        endTime: _soon(90),
+        eventType: 'TASK',
+        isFixed: false,
+      );
+      final second = CalendarEvent(
+        id: 11,
+        title: 'Overlap B',
+        startTime: _soon(45),
+        endTime: _soon(105),
+        eventType: 'TASK',
+        isFixed: false,
+      );
+      final fake = FakeCalendarService([first, second]);
+      final provider = await _pumpCalendar(tester, fake: fake);
+
+      final a = find.text('Overlap A');
+      final b = find.text('Overlap B');
+      expect(a, findsOneWidget);
+      expect(b, findsOneWidget);
+
+      // Unterschiedliche Spuren => unterschiedliche linke Kante.
+      expect(tester.getTopLeft(a).dx == tester.getTopLeft(b).dx, isFalse,
+          reason: 'overlapping events must be placed in separate lanes');
+
+      for (final finder in [a, b]) {
+        expect(
+          find.ancestor(of: finder, matching: find.byType(LongPressDraggable<CalendarEvent>)),
+          findsOneWidget,
+          reason: 'each overlapping event must remain independently draggable',
+        );
+      }
+
+      provider.dispose();
+    });
+
+    testWidgets('the week grid keeps its scroll position across a provider notification',
+        (tester) async {
+      // Regression: _WeekTimeline hat den ScrollController in build() gebaut, sodass jedes
+      // notifyListeners() (optimistisches Update, 30s-Poll) zurück auf "jetzt − 2h" sprang.
+      final event = CalendarEvent(
+        id: 12,
+        title: 'Anchor',
+        startTime: _soon(30),
+        endTime: _soon(90),
+        eventType: 'TASK',
+        isFixed: false,
+      );
+      final fake = FakeCalendarService([event]);
+      final provider = await _pumpCalendar(tester, fake: fake);
+
+      final scrollable = find.byType(Scrollable).first;
+      final position = tester.state<ScrollableState>(scrollable).position;
+      position.jumpTo(position.pixels + 200);
+      await tester.pumpAndSettle();
+      final afterScroll = tester.state<ScrollableState>(scrollable).position.pixels;
+
+      // Provider-Update erzwingen, wie es nach einem Drop passiert.
+      provider.setSelectedDay(DateTime.now());
+      await tester.pumpAndSettle();
+
+      expect(tester.state<ScrollableState>(find.byType(Scrollable).first).position.pixels,
+          afterScroll,
+          reason: 'a provider notification must not reset the timeline scroll offset');
+
+      provider.dispose();
+    });
+  });
+
+  group('CalendarScreen pinning', () {
+    testWidgets('unpinning a fixed event calls setPinned(false)', (tester) async {
+      final pinned = CalendarEvent(
+        id: 20,
+        title: 'Pinned Task',
+        startTime: _soon(30),
+        endTime: _soon(90),
+        eventType: 'TASK',
+        isFixed: true,
+      );
+      final fake = FakeCalendarService([pinned]);
+      final provider = await _pumpCalendar(tester, fake: fake);
+
+      await tester.tap(find.text('Pinned Task'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Unpin — let AI reschedule'), findsOneWidget);
+      await tester.tap(find.text('Unpin — let AI reschedule'));
+      await tester.pumpAndSettle();
+
+      expect(fake.setPinnedCallCount, 1);
+      expect(fake.lastPinned, isFalse);
+
+      provider.dispose();
+    });
+
+    testWidgets('a movable event offers to pin it instead', (tester) async {
+      final movable = CalendarEvent(
+        id: 21,
+        title: 'Movable Task',
+        startTime: _soon(30),
+        endTime: _soon(90),
+        eventType: 'TASK',
+        isFixed: false,
+      );
+      final fake = FakeCalendarService([movable]);
+      final provider = await _pumpCalendar(tester, fake: fake);
+
+      await tester.tap(find.text('Movable Task'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Pin to this time'), findsOneWidget);
+      await tester.tap(find.text('Pin to this time'));
+      await tester.pumpAndSettle();
+
+      expect(fake.lastPinned, isTrue);
 
       provider.dispose();
     });

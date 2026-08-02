@@ -13,6 +13,7 @@ import 'providers/recipe_provider.dart';
 import 'providers/finance_provider.dart';
 import 'providers/habit_provider.dart';
 import 'providers/project_provider.dart';
+import 'providers/preferences_provider.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -37,6 +38,7 @@ class MyApp extends StatelessWidget {
         ChangeNotifierProvider(create: (_) => FinanceProvider()),
         ChangeNotifierProvider(create: (_) => HabitProvider()),
         ChangeNotifierProvider(create: (_) => ProjectProvider()),
+        ChangeNotifierProvider(create: (_) => PreferencesProvider()),
       ],
       child: MaterialApp.router(
         title: 'Everything App',

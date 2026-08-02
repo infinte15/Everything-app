@@ -3,9 +3,11 @@ package com.Finn.everything_app.service;
 import com.Finn.everything_app.model.ProductivityPeakTime;
 import com.Finn.everything_app.model.User;
 import com.Finn.everything_app.model.UserPreferences;
+import com.Finn.everything_app.event.ScheduleChangedEvent;
 import com.Finn.everything_app.repository.UserRepository;
 import com.Finn.everything_app.repository.UserPreferencesRepository;
 import lombok.RequiredArgsConstructor;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -19,6 +21,7 @@ public class UserService {
     private final UserRepository userRepository;
     private final UserPreferencesRepository userPreferencesRepository;
     private final PasswordEncoder passwordEncoder;
+    private final ApplicationEventPublisher eventPublisher;
 
     @Transactional
     public User registerUser(String username, String email, String password){
@@ -53,6 +56,11 @@ public class UserService {
         prefs.setNotificationsEnabled(true);
         prefs.setReminderMinutesBefore(15);
         prefs.setDarkMode(true);
+        prefs.setBufferMinutes(0);
+        prefs.setMaxTaskMinutesPerDay(480);
+        prefs.setDefaultMinChunkMinutes(30);
+        prefs.setDefaultMaxChunkMinutes(120);
+        prefs.setAutoScheduleEnabled(true);
 
         return userPreferencesRepository.save(prefs);
     }
@@ -85,22 +93,35 @@ public class UserService {
                 .orElseGet(() -> createDefaultPreferences(findById(userId)));
     }
 
+    /**
+     * Patcht nur die gesetzten Felder. Vorher wurde jedes Feld bedingungslos überschrieben, womit
+     * ein Teil-Payload (z.B. nur die Arbeitszeiten) alle übrigen Einstellungen auf null gesetzt hat.
+     */
     @Transactional
     public UserPreferences updatePreferences(Long userId, UserPreferences newPrefs) {
-        UserPreferences existing = getUserPreferences(userId);
+        // getOrCreate statt get: Nutzer ohne Preferences-Zeile sollen speichern können.
+        UserPreferences existing = getOrCreatePreferences(userId);
 
-        existing.setWorkdayStart(newPrefs.getWorkdayStart());
-        existing.setWorkdayEnd(newPrefs.getWorkdayEnd());
-        existing.setPeakProductivityTime(newPrefs.getPeakProductivityTime());
-        existing.setBreakDurationMinutes(newPrefs.getBreakDurationMinutes());
-        existing.setHoursBeforeBreak(newPrefs.getHoursBeforeBreak());
-        existing.setGroupSimilarTasks(newPrefs.getGroupSimilarTasks());
-        existing.setMaxTasksPerDay(newPrefs.getMaxTasksPerDay());
-        existing.setNotificationsEnabled(newPrefs.getNotificationsEnabled());
-        existing.setReminderMinutesBefore(newPrefs.getReminderMinutesBefore());
-        existing.setThemeColor(newPrefs.getThemeColor());
-        existing.setDarkMode(newPrefs.getDarkMode());
+        if (newPrefs.getWorkdayStart() != null)         existing.setWorkdayStart(newPrefs.getWorkdayStart());
+        if (newPrefs.getWorkdayEnd() != null)           existing.setWorkdayEnd(newPrefs.getWorkdayEnd());
+        if (newPrefs.getPeakProductivityTime() != null) existing.setPeakProductivityTime(newPrefs.getPeakProductivityTime());
+        if (newPrefs.getBreakDurationMinutes() != null) existing.setBreakDurationMinutes(newPrefs.getBreakDurationMinutes());
+        if (newPrefs.getHoursBeforeBreak() != null)     existing.setHoursBeforeBreak(newPrefs.getHoursBeforeBreak());
+        if (newPrefs.getGroupSimilarTasks() != null)    existing.setGroupSimilarTasks(newPrefs.getGroupSimilarTasks());
+        if (newPrefs.getMaxTasksPerDay() != null)       existing.setMaxTasksPerDay(newPrefs.getMaxTasksPerDay());
+        if (newPrefs.getNotificationsEnabled() != null) existing.setNotificationsEnabled(newPrefs.getNotificationsEnabled());
+        if (newPrefs.getReminderMinutesBefore() != null) existing.setReminderMinutesBefore(newPrefs.getReminderMinutesBefore());
+        if (newPrefs.getThemeColor() != null)           existing.setThemeColor(newPrefs.getThemeColor());
+        if (newPrefs.getDarkMode() != null)             existing.setDarkMode(newPrefs.getDarkMode());
+        if (newPrefs.getBufferMinutes() != null)        existing.setBufferMinutes(newPrefs.getBufferMinutes());
+        if (newPrefs.getMaxTaskMinutesPerDay() != null) existing.setMaxTaskMinutesPerDay(newPrefs.getMaxTaskMinutesPerDay());
+        if (newPrefs.getDefaultMinChunkMinutes() != null) existing.setDefaultMinChunkMinutes(newPrefs.getDefaultMinChunkMinutes());
+        if (newPrefs.getDefaultMaxChunkMinutes() != null) existing.setDefaultMaxChunkMinutes(newPrefs.getDefaultMaxChunkMinutes());
+        if (newPrefs.getAutoScheduleEnabled() != null)  existing.setAutoScheduleEnabled(newPrefs.getAutoScheduleEnabled());
 
-        return userPreferencesRepository.save(existing);
+        UserPreferences saved = userPreferencesRepository.save(existing);
+        // Geänderte Arbeitszeiten oder Puffer müssen den Kalender neu fließen lassen.
+        eventPublisher.publishEvent(new ScheduleChangedEvent(this, userId));
+        return saved;
     }
 }

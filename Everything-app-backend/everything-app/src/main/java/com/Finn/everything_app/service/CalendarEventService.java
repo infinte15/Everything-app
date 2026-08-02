@@ -78,9 +78,22 @@ public class CalendarEventService {
                 .orElseThrow(() -> new RuntimeException("Event nicht gefunden"));
     }
 
+    /** Stellt sicher, dass ein Event dem anfragenden Nutzer gehört. */
+    private void requireOwner(CalendarEvent event, Long userId) {
+        if (userId == null || event.getUser() == null || !userId.equals(event.getUser().getId())) {
+            throw new RuntimeException("Kein Zugriff auf dieses Event");
+        }
+    }
+
     @Transactional
-    public CalendarEvent updateEvent(Long id, CalendarEvent updatedEvent) {
+    public CalendarEvent updateEvent(Long id, Long userId, CalendarEvent updatedEvent) {
         CalendarEvent event = getEventById(id);
+        requireOwner(event, userId);
+
+        // Vor dem Patchen merken, damit unten unterschieden werden kann zwischen
+        // "verschoben" (pinnen) und "nur umbenannt" (nicht pinnen).
+        LocalDateTime originalStart = event.getStartTime();
+        LocalDateTime originalEnd   = event.getEndTime();
 
         if (updatedEvent.getTitle() != null) {
             event.setTitle(updatedEvent.getTitle());
@@ -110,8 +123,11 @@ public class CalendarEventService {
             event.setNotes(updatedEvent.getNotes());
         }
 
-        // Wenn ein Task manuell aktualisiert (verschoben) wird, pinnen wir ihn
-        if (event.getEventType() == EventType.TASK) {
+        // Nur ein tatsächliches Verschieben pinnt den Task. Vorher hat auch ein reines Umbenennen
+        // aus dem Edit-Sheet den Task festgenagelt, sodass der Scheduler ihn nie wieder anfasste.
+        boolean timesChanged = !java.util.Objects.equals(originalStart, event.getStartTime())
+                || !java.util.Objects.equals(originalEnd, event.getEndTime());
+        if (event.getEventType() == EventType.TASK && timesChanged) {
             event.setIsFixed(true);
         }
 
@@ -120,10 +136,28 @@ public class CalendarEventService {
         return savedEvent;
     }
 
+    /**
+     * Pinnt ein Event fest oder gibt es wieder frei.
+     *
+     * Das Freigeben allein genügt: das Pin-Protokoll ist "es existiert kein fixes CalendarEvent
+     * für diesen Task", und clearScheduledEvents löscht beim nächsten Lauf genau die nicht-fixen
+     * Events und legt sie an der vom Solver gewählten Stelle neu an.
+     */
     @Transactional
-    public void deleteEvent(Long id) {
+    public CalendarEvent setPinned(Long id, Long userId, boolean pinned) {
         CalendarEvent event = getEventById(id);
-        Long userId = event.getUser().getId();
+        requireOwner(event, userId);
+
+        event.setIsFixed(pinned);
+        CalendarEvent saved = calendarEventRepository.save(event);
+        eventPublisher.publishEvent(new ScheduleChangedEvent(this, userId));
+        return saved;
+    }
+
+    @Transactional
+    public void deleteEvent(Long id, Long userId) {
+        CalendarEvent event = getEventById(id);
+        requireOwner(event, userId);
         calendarEventRepository.delete(event);
         eventPublisher.publishEvent(new ScheduleChangedEvent(this, userId));
     }

@@ -17,6 +17,16 @@ class Habit {
   
   final DateTime? preferredTime;
   final int? durationMinutes;
+
+  /// "N mal pro Woche" — ist das gesetzt, sucht sich der Scheduler die Tage selbst aus
+  /// und die Wochentag-Flags wirken nur noch als erlaubte Auswahl. Ist es null, gilt das
+  /// alte Verhalten: genau an den angehakten Tagen.
+  final int? timesPerWeek;
+
+  /// MORNING | AFTERNOON | EVENING | ANYTIME | CUSTOM
+  final String? idealWindow;
+  final DateTime? idealWindowStart;
+  final DateTime? idealWindowEnd;
   final DateTime? startDate;
   final DateTime? endDate;
   final int currentStreak;
@@ -40,6 +50,10 @@ class Habit {
     this.sunday = false,
     this.preferredTime,
     this.durationMinutes,
+    this.timesPerWeek,
+    this.idealWindow,
+    this.idealWindowStart,
+    this.idealWindowEnd,
     this.startDate,
     this.endDate,
     this.currentStreak = 0,
@@ -68,6 +82,14 @@ class Habit {
           ? DateTime.parse('2000-01-01 ${json['preferredTime']}')
           : null,
       durationMinutes: json['durationMinutes'],
+      timesPerWeek: json['timesPerWeek'],
+      idealWindow: json['idealWindow'],
+      idealWindowStart: json['idealWindowStart'] != null
+          ? DateTime.parse('2000-01-01 ${json['idealWindowStart']}')
+          : null,
+      idealWindowEnd: json['idealWindowEnd'] != null
+          ? DateTime.parse('2000-01-01 ${json['idealWindowEnd']}')
+          : null,
       startDate: json['startDate'] != null
           ? DateTime.parse(json['startDate'])
           : null,
@@ -103,6 +125,10 @@ class Habit {
           ? '${preferredTime!.hour.toString().padLeft(2, '0')}:${preferredTime!.minute.toString().padLeft(2, '0')}:00'
           : null,
       'durationMinutes': durationMinutes,
+      'timesPerWeek': timesPerWeek,
+      'idealWindow': idealWindow,
+      'idealWindowStart': _formatTime(idealWindowStart),
+      'idealWindowEnd': _formatTime(idealWindowEnd),
       'startDate': startDate != null ? DateFormat('yyyy-MM-dd').format(startDate!) : null,
       'endDate': endDate != null ? DateFormat('yyyy-MM-dd').format(endDate!) : null,
       'currentStreak': currentStreak,
@@ -112,6 +138,12 @@ class Habit {
       'category': category,
       'completedDates': completedDates,
     };
+  }
+
+  /// Jackson erwartet LocalTime als "HH:mm:ss" — gleiche Konvention wie preferredTime.
+  static String? _formatTime(DateTime? t) {
+    if (t == null) return null;
+    return '${t.hour.toString().padLeft(2, '0')}:${t.minute.toString().padLeft(2, '0')}:00';
   }
 
   bool isScheduledToday() {

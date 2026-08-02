@@ -12,4 +12,11 @@ public class ScheduleInput {
     private List<WorkoutSession> fixedWorkouts;
     private List<WorkoutSession> flexibleWorkouts;
     private List<CourseSchedule> courseSchedules;
+
+    /**
+     * Die vom letzten Lauf erzeugten (nicht gepinnten) Events, eingesammelt BEVOR sie gelöscht
+     * werden. Speist den Stabilitätsterm: ohne ihn springt bei jeder kleinen Änderung der
+     * komplette restliche Kalender.
+     */
+    private List<CalendarEvent> previousScheduledEvents;
 }

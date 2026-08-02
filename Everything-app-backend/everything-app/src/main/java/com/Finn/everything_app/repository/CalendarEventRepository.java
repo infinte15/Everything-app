@@ -15,10 +15,12 @@ public interface CalendarEventRepository extends JpaRepository<CalendarEvent, Lo
     // Events in Zeitraum
     List<CalendarEvent> findByUserIdAndStartTimeBetween(Long userId, LocalDateTime start, LocalDateTime end);
 
-    // Fixe Events
+    // Fixe Events. Bewusst eine Überlappungs-Prüfung statt "startTime BETWEEN": ein Termin, der
+    // vor dem Fenster beginnt und hineinragt (Nachtschicht, mehrtägiger Block), muss den Scheduler
+    // ebenfalls blockieren — sonst plant er mitten hinein.
     @Query("SELECT e FROM CalendarEvent e WHERE e.user.id = :userId " +
             "AND e.isFixed = true " +
-            "AND e.startTime BETWEEN :start AND :end " +
+            "AND e.startTime < :end AND e.endTime > :start " +
             "ORDER BY e.startTime ASC")
     List<CalendarEvent> findFixedEvents(
             @Param("userId") Long userId,

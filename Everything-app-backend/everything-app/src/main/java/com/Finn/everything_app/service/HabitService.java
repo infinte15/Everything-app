@@ -102,6 +102,18 @@ public class HabitService {
         if (updatedHabit.getCategory() != null) {
             habit.setCategory(updatedHabit.getCategory());
         }
+        if (updatedHabit.getTimesPerWeek() != null) {
+            habit.setTimesPerWeek(updatedHabit.getTimesPerWeek());
+        }
+        if (updatedHabit.getIdealWindow() != null) {
+            habit.setIdealWindow(updatedHabit.getIdealWindow());
+        }
+        if (updatedHabit.getIdealWindowStart() != null) {
+            habit.setIdealWindowStart(updatedHabit.getIdealWindowStart());
+        }
+        if (updatedHabit.getIdealWindowEnd() != null) {
+            habit.setIdealWindowEnd(updatedHabit.getIdealWindowEnd());
+        }
 
         Habit saved = habitRepository.save(habit);
         eventPublisher.publishEvent(new ScheduleChangedEvent(this, saved.getUser().getId()));

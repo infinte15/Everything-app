@@ -23,7 +23,11 @@ class ApiConfig {
   //CALENDAR ENDPOINTS
   static const String calendarEvents = '$baseUrl/calendar/events';
   static String calendarEventById(int id) => '$baseUrl/calendar/events/$id';
+  static String calendarEventPin(int id) => '$baseUrl/calendar/events/$id/pin';
   static const String generateSchedule = '$baseUrl/calendar/generate-schedule';
+
+  //USER / PREFERENCES ENDPOINTS
+  static const String userPreferences = '$baseUrl/user/preferences';
   
   //STUDY ENDPOINTS
   static const String studyNotes = '$baseUrl/study/notes';

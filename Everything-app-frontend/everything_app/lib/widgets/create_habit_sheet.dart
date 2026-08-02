@@ -28,6 +28,12 @@ class _CreateHabitSheetState extends State<CreateHabitSheet> {
   int _timesPerWeek = 1;
   Set<int> _idealDays = {1}; // 1 = Monday, etc.
   TimeOfDay _idealTime = const TimeOfDay(hour: 9, minute: 0);
+
+  // Wunschfenster statt fester Uhrzeit (Reclaim-Stil). ANYTIME fällt auf _idealTime als
+  // reinen Startwunsch zurück, damit das alte Verhalten weiter erreichbar bleibt.
+  String _idealWindow = 'MORNING';
+  TimeOfDay _windowStart = const TimeOfDay(hour: 9, minute: 0);
+  TimeOfDay _windowEnd = const TimeOfDay(hour: 12, minute: 0);
   
   // Monthly options
   String _monthlyType = 'On day'; // 'On day' or 'On the'
@@ -83,10 +89,19 @@ class _CreateHabitSheetState extends State<CreateHabitSheet> {
       if (h.sunday) _idealDays.add(7);
       if (_idealDays.isEmpty) _idealDays.add(1);
       
-      _timesPerWeek = _idealDays.length;
-      
+      // timesPerWeek des Habits gewinnt; nur als Fallback aus den angehakten Tagen ableiten.
+      _timesPerWeek = h.timesPerWeek ?? _idealDays.length;
+
       if (h.preferredTime != null) {
         _idealTime = TimeOfDay(hour: h.preferredTime!.hour, minute: h.preferredTime!.minute);
+      }
+      // Bestandsdaten haben kein Fenster — dann zählt weiter die feste Wunschzeit.
+      _idealWindow = h.idealWindow ?? (h.preferredTime != null ? 'ANYTIME' : 'MORNING');
+      if (h.idealWindowStart != null) {
+        _windowStart = TimeOfDay(hour: h.idealWindowStart!.hour, minute: h.idealWindowStart!.minute);
+      }
+      if (h.idealWindowEnd != null) {
+        _windowEnd = TimeOfDay(hour: h.idealWindowEnd!.hour, minute: h.idealWindowEnd!.minute);
       }
       
       if (h.startDate != null) {
@@ -405,11 +420,90 @@ class _CreateHabitSheetState extends State<CreateHabitSheet> {
 
             const SizedBox(height: 24),
             const Text('Ideal time', style: TextStyle(fontWeight: FontWeight.bold)),
-            const SizedBox(height: 8),
-            GestureDetector(
-              onTap: () async { final t = await showTimePicker(context: context, initialTime: _idealTime); if (t != null) setState(()=>_idealTime=t); },
-              child: Container(padding: const EdgeInsets.all(12), decoration: BoxDecoration(border: Border.all(color: borderColor), borderRadius: BorderRadius.circular(8)), child: Text(_idealTime.format(context))),
+            const SizedBox(height: 4),
+            const Text(
+              'The scheduler keeps this habit inside the window, and picks the exact slot.',
+              style: TextStyle(fontSize: 11, color: Colors.grey),
             ),
+            const SizedBox(height: 8),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                for (final entry in const [
+                  ['MORNING', 'Morning'],
+                  ['AFTERNOON', 'Afternoon'],
+                  ['EVENING', 'Evening'],
+                  ['ANYTIME', 'Anytime'],
+                  ['CUSTOM', 'Custom'],
+                ])
+                  GestureDetector(
+                    onTap: () => setState(() => _idealWindow = entry[0]),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                      decoration: BoxDecoration(
+                        color: _idealWindow == entry[0] ? accentColor : Colors.transparent,
+                        border: Border.all(
+                            color: _idealWindow == entry[0] ? accentColor : borderColor),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Text(
+                        entry[1],
+                        style: TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w700,
+                          color: _idealWindow == entry[0] ? Colors.black : null,
+                        ),
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+            if (_idealWindow == 'CUSTOM') ...[
+              const SizedBox(height: 12),
+              Row(
+                children: [
+                  Expanded(
+                    child: GestureDetector(
+                      onTap: () async {
+                        final t = await showTimePicker(context: context, initialTime: _windowStart);
+                        if (t != null) setState(() => _windowStart = t);
+                      },
+                      child: Container(
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                            border: Border.all(color: borderColor),
+                            borderRadius: BorderRadius.circular(8)),
+                        child: Text('From ${_windowStart.format(context)}'),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: GestureDetector(
+                      onTap: () async {
+                        final t = await showTimePicker(context: context, initialTime: _windowEnd);
+                        if (t != null) setState(() => _windowEnd = t);
+                      },
+                      child: Container(
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                            border: Border.all(color: borderColor),
+                            borderRadius: BorderRadius.circular(8)),
+                        child: Text('To ${_windowEnd.format(context)}'),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+            if (_idealWindow == 'ANYTIME') ...[
+              const SizedBox(height: 12),
+              GestureDetector(
+                onTap: () async { final t = await showTimePicker(context: context, initialTime: _idealTime); if (t != null) setState(()=>_idealTime=t); },
+                child: Container(padding: const EdgeInsets.all(12), decoration: BoxDecoration(border: Border.all(color: borderColor), borderRadius: BorderRadius.circular(8)), child: Text('Preferred start: ${_idealTime.format(context)}')),
+              ),
+            ],
 
             const SizedBox(height: 24),
             Row(
@@ -460,6 +554,16 @@ class _CreateHabitSheetState extends State<CreateHabitSheet> {
                     sunday: _idealDays.contains(7),
                     preferredTime: preferredTime,
                     durationMinutes: int.tryParse(_minDurationController.text) ?? 30,
+                    // Mit timesPerWeek sucht sich der Scheduler die Tage selbst aus; die
+                    // angehakten Wochentage wirken dann nur noch als erlaubte Auswahl.
+                    timesPerWeek: _timesPerWeek,
+                    idealWindow: _idealWindow,
+                    idealWindowStart: _idealWindow == 'CUSTOM'
+                        ? DateTime(now.year, now.month, now.day, _windowStart.hour, _windowStart.minute)
+                        : null,
+                    idealWindowEnd: _idealWindow == 'CUSTOM'
+                        ? DateTime(now.year, now.month, now.day, _windowEnd.hour, _windowEnd.minute)
+                        : null,
                     startDate: _startDate,
                     endDate: _endDate,
                     priority: _priority,

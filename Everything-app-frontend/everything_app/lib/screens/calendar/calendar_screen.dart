@@ -62,8 +62,14 @@ class CalendarScreen extends StatefulWidget {
 
 class _CalendarScreenState extends State<CalendarScreen> {
   _CalView _view = _CalView.week;
-  late ScrollController _timelineScrollController;
   late PageController _pageController;
+
+  // Nur der Offset-WERT lebt hier, kein ScrollController. Ein einzelner Controller kann nicht
+  // funktionieren: die PageView hält ~3 Seiten gleichzeitig am Leben, und ein Controller darf
+  // immer nur an genau eine ScrollView gebunden sein. Jede _TimelineGrid besitzt deshalb ihren
+  // eigenen Controller und meldet den Offset hierher zurück, damit er beim Blättern und beim
+  // Wechsel der Ansicht erhalten bleibt.
+  late double _timelineOffset;
 
   @override
   void initState() {
@@ -71,8 +77,7 @@ class _CalendarScreenState extends State<CalendarScreen> {
     _pageController = PageController(initialPage: 10000);
     final now = DateTime.now();
     // scroll to make current hour visible (~2 hours before now)
-    final offset = ((now.hour - 2).clamp(0, 22)) * kHourHeight;
-    _timelineScrollController = ScrollController(initialScrollOffset: offset);
+    _timelineOffset = ((now.hour - 2).clamp(0, 22)) * kHourHeight;
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
       final cal = context.read<CalendarProvider>();
@@ -84,7 +89,6 @@ class _CalendarScreenState extends State<CalendarScreen> {
 
   @override
   void dispose() {
-    _timelineScrollController.dispose();
     _pageController.dispose();
     super.dispose();
   }
@@ -146,9 +150,15 @@ void _navigate(int delta) {
         targetDate = DateTime(now.year, now.month + delta, now.day);
       }
       
+      // Vor setFocusedDay lesen — danach ist der alte Monat weg.
+      final previous = cal.focusedDay;
       cal.setSelectedDay(targetDate);
       cal.setFocusedDay(targetDate);
-      if (_view != _CalView.day) cal.loadEventsForMonth(targetDate);
+      // Auch die Tagesansicht muss nachladen, sonst ist die Seite jenseits des geladenen
+      // Monats leer. Aber nur beim echten Monatswechsel, nicht bei jedem Wisch.
+      if (targetDate.month != previous.month || targetDate.year != previous.year) {
+        cal.loadEventsForMonth(targetDate);
+      }
     },
     itemBuilder: (context, index) {
       final cal = context.watch<CalendarProvider>();
@@ -166,9 +176,19 @@ void _navigate(int delta) {
 
 
       return _view == _CalView.day
-          ? _DayTimeline(cal: cal, selected: pageDate, scrollController: _timelineScrollController)
+          ? _DayTimeline(
+              cal: cal,
+              selected: pageDate,
+              initialOffset: _timelineOffset,
+              onOffsetChanged: (o) => _timelineOffset = o,
+            )
           : _view == _CalView.week
-              ? _WeekTimeline(cal: cal, selected: pageDate)
+              ? _WeekTimeline(
+                  cal: cal,
+                  selected: pageDate,
+                  initialOffset: _timelineOffset,
+                  onOffsetChanged: (o) => _timelineOffset = o,
+                )
               : _MonthView(
                   cal: cal,
                   selected: pageDate,
@@ -486,9 +506,15 @@ bool isSameDay(DateTime a, DateTime b) =>
 class _DayTimeline extends StatelessWidget {
   final CalendarProvider cal;
   final DateTime selected;
-  final ScrollController scrollController;
+  final double initialOffset;
+  final ValueChanged<double> onOffsetChanged;
 
-  const _DayTimeline({required this.cal, required this.selected, required this.scrollController});
+  const _DayTimeline({
+    required this.cal,
+    required this.selected,
+    required this.initialOffset,
+    required this.onOffsetChanged,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -497,7 +523,8 @@ class _DayTimeline extends StatelessWidget {
       events: events,
       columns: 1,
       columnDates: [selected],
-      scrollController: scrollController,
+      initialOffset: initialOffset,
+      onOffsetChanged: onOffsetChanged,
     );
   }
 }
@@ -507,39 +534,59 @@ class _DayTimeline extends StatelessWidget {
 class _WeekTimeline extends StatelessWidget {
   final CalendarProvider cal;
   final DateTime selected;
+  final double initialOffset;
+  final ValueChanged<double> onOffsetChanged;
 
-  const _WeekTimeline({required this.cal, required this.selected});
+  const _WeekTimeline({
+    required this.cal,
+    required this.selected,
+    required this.initialOffset,
+    required this.onOffsetChanged,
+  });
 
   @override
   Widget build(BuildContext context) {
     final wd = selected.weekday;
     final monday = DateTime(selected.year, selected.month, selected.day - (wd - 1));
     final days = List.generate(7, (i) => monday.add(Duration(days: i)));
-    final now = DateTime.now();
-    final offset = ((now.hour - 2).clamp(0, 22)) * kHourHeight;
 
+    // Hier wird bewusst KEIN ScrollController mehr gebaut. Vorher entstand bei jedem
+    // notifyListeners() (optimistisches Update nach dem Drop, 30s-Poll) ein neuer Controller,
+    // der die Wochenansicht jedes Mal zurück auf "jetzt − 2h" gesprungen hat — und der alte
+    // wurde nie disposed.
     return _TimelineGrid(
       events: cal.events,
       columns: 7,
       columnDates: days,
-      scrollController: ScrollController(initialScrollOffset: offset),
+      initialOffset: initialOffset,
+      onOffsetChanged: onOffsetChanged,
     );
   }
 }
 
 // ─── Shared Timeline Grid ─────────────────────────────────────────────────────
 
+/// Ein Event mit seiner zugewiesenen Spur innerhalb einer Überlappungsgruppe.
+class _Placed {
+  final CalendarEvent event;
+  final int lane;
+  final int laneCount;
+  const _Placed(this.event, this.lane, this.laneCount);
+}
+
 class _TimelineGrid extends StatefulWidget {
   final List<CalendarEvent> events;
   final int columns;
   final List<DateTime> columnDates;
-  final ScrollController scrollController;
+  final double initialOffset;
+  final ValueChanged<double> onOffsetChanged;
 
   const _TimelineGrid({
     required this.events,
     required this.columns,
     required this.columnDates,
-    required this.scrollController,
+    required this.initialOffset,
+    required this.onOffsetChanged,
   });
 
   @override
@@ -553,6 +600,33 @@ class _TimelineGridState extends State<_TimelineGrid> {
   DateTime? _hoverTime;
   // GlobalKey lets us convert global coords → local column coords.
   final _columnKey = GlobalKey();
+  // Der Viewport (sichtbarer Ausschnitt), nicht die 1536px hohe Leinwand — für den Randscroll.
+  final _viewportKey = GlobalKey();
+
+  // Der Grid besitzt seinen ScrollController selbst; nach oben wandert nur der Offset-Wert.
+  late final ScrollController _scroll;
+
+  // ── Randscroll während des Ziehens ─────────────────────────────────────────
+  Timer? _edgeScrollTimer;
+  double _edgeScrollVelocity = 0;
+  Offset? _lastDragGlobal;
+
+  static const double _kEdgeBand = 72.0;  // Trigger-Zone oben/unten
+  static const double _kMaxStep = 14.0;   // px pro 16ms-Tick
+
+  @override
+  void initState() {
+    super.initState();
+    _scroll = ScrollController(initialScrollOffset: widget.initialOffset)
+      ..addListener(() => widget.onOffsetChanged(_scroll.offset));
+  }
+
+  @override
+  void dispose() {
+    _edgeScrollTimer?.cancel();
+    _scroll.dispose();
+    super.dispose();
+  }
 
   // ── Coord helpers ──────────────────────────────────────────────────────────
 
@@ -562,11 +636,11 @@ class _TimelineGridState extends State<_TimelineGrid> {
     if (ro == null) return null;
     final local = ro.globalToLocal(globalOffset);
     // Account for scroll offset in the SingleChildScrollView.
-    final scrollY = widget.scrollController.hasClients ? widget.scrollController.offset : 0.0;
+    final scrollY = _scroll.hasClients ? _scroll.offset : 0.0;
     final y = local.dy + scrollY;
     // Clamp y to valid range.
     final clampedY = y.clamp(0.0, kHourHeight * (kDayEnd - kDayStart) - 1);
-    final totalMinutes = (clampedY / kHourHeight * 60).round();
+    final totalMinutes = (clampedY / kHourHeight * 60).round() + kDayStart * 60;
     // Snap to 15-minute grid.
     final snapped = ((totalMinutes / 15).round() * 15).clamp(0, 23 * 60 + 45);
     // Determine which column date the x coord lands on.
@@ -574,6 +648,102 @@ class _TimelineGridState extends State<_TimelineGrid> {
     final colIdx = (local.dx / colW).floor().clamp(0, widget.columns - 1);
     final colDate = widget.columnDates[colIdx];
     return DateTime(colDate.year, colDate.month, colDate.day, snapped ~/ 60, snapped % 60);
+  }
+
+  /// Y-Position (in px auf der Leinwand) für eine Uhrzeit.
+  static double _topFor(int hour, int minute) =>
+      (((hour * 60 + minute) - kDayStart * 60) / 60) * kHourHeight;
+
+  // ── Randscroll ─────────────────────────────────────────────────────────────
+
+  /// Scrollt die Leinwand, wenn der Finger nahe an den oberen/unteren Rand kommt.
+  /// Ohne das lässt sich ein Event auf einem Handy nur wenige Stunden weit ziehen —
+  /// der Viewport zeigt ~500px von 1536px.
+  void _updateEdgeScroll(Offset globalTopLeft) {
+    _lastDragGlobal = globalTopLeft;
+    final box = _viewportKey.currentContext?.findRenderObject() as RenderBox?;
+    if (box == null) return;
+
+    final dy = box.globalToLocal(globalTopLeft).dy;
+    final h = box.size.height;
+
+    double v = 0;
+    if (dy < _kEdgeBand) {
+      v = -_kMaxStep * (1 - (dy / _kEdgeBand)).clamp(0.0, 1.0);
+    } else if (dy > h - _kEdgeBand) {
+      v = _kMaxStep * (1 - ((h - dy) / _kEdgeBand)).clamp(0.0, 1.0);
+    }
+    _edgeScrollVelocity = v;
+
+    if (v == 0) {
+      _edgeScrollTimer?.cancel();
+      _edgeScrollTimer = null;
+      return;
+    }
+    _edgeScrollTimer ??= Timer.periodic(const Duration(milliseconds: 16), (_) {
+      if (!_scroll.hasClients) return;
+      final next = (_scroll.offset + _edgeScrollVelocity)
+          .clamp(0.0, _scroll.position.maxScrollExtent);
+      if (next == _scroll.offset) return;
+      _scroll.jumpTo(next);
+      // Der Finger steht still, aber die Leinwand bewegt sich — ohne Neuberechnung
+      // würde der Geisterblock einfrieren.
+      if (_lastDragGlobal != null) {
+        final t = _globalToTime(_lastDragGlobal!);
+        if (t != _hoverTime) setState(() => _hoverTime = t);
+      }
+    });
+  }
+
+  void _stopEdgeScroll() {
+    _edgeScrollTimer?.cancel();
+    _edgeScrollTimer = null;
+    _edgeScrollVelocity = 0;
+    _lastDragGlobal = null;
+  }
+
+  // ── Spurenaufteilung überlappender Events ──────────────────────────────────
+
+  /// Weist überlappenden Events nebeneinanderliegende Spuren zu (Greedy über das
+  /// Intervallgraph-Clustering). Vorher lagen alle Events auf voller Spaltenbreite
+  /// übereinander, wodurch nur das zuletzt gezeichnete antippbar oder ziehbar war.
+  List<_Placed> _assignLanes(List<CalendarEvent> dayEvents) {
+    final evs = [...dayEvents]..sort((a, b) {
+      final c = a.startTime.compareTo(b.startTime);
+      return c != 0 ? c : b.durationInMinutes.compareTo(a.durationInMinutes);
+    });
+
+    final out = <_Placed>[];
+    var clusterStart = 0;
+    var laneEnds = <DateTime>[];
+    DateTime? clusterEnd;
+
+    void flush() {
+      for (var i = clusterStart; i < out.length; i++) {
+        out[i] = _Placed(out[i].event, out[i].lane, laneEnds.length);
+      }
+      clusterStart = out.length;
+      laneEnds = <DateTime>[];
+      clusterEnd = null;
+    }
+
+    for (final e in evs) {
+      // Neues Cluster, sobald ein Event nach dem bisherigen Cluster-Ende beginnt.
+      if (clusterEnd != null && !e.startTime.isBefore(clusterEnd!)) flush();
+
+      var lane = laneEnds.indexWhere((end) => !e.startTime.isBefore(end));
+      if (lane == -1) {
+        laneEnds.add(e.endTime);
+        lane = laneEnds.length - 1;
+      } else {
+        laneEnds[lane] = e.endTime;
+      }
+
+      out.add(_Placed(e, lane, 0)); // laneCount wird im flush() nachgetragen
+      clusterEnd = (clusterEnd == null || e.endTime.isAfter(clusterEnd!)) ? e.endTime : clusterEnd;
+    }
+    flush();
+    return out;
   }
 
   // ── Build ──────────────────────────────────────────────────────────────────
@@ -586,7 +756,8 @@ class _TimelineGridState extends State<_TimelineGrid> {
     final totalHeight = kHourHeight * (kDayEnd - kDayStart);
 
     return SingleChildScrollView(
-      controller: widget.scrollController,
+      key: _viewportKey,
+      controller: _scroll,
       child: SizedBox(
         height: totalHeight,
         child: Row(
@@ -622,9 +793,14 @@ class _TimelineGridState extends State<_TimelineGrid> {
                 onMove: (details) {
                   final t = _globalToTime(details.offset);
                   if (t != _hoverTime) setState(() => _hoverTime = t);
+                  _updateEdgeScroll(details.offset);
                 },
-                onLeave: (_) => setState(() => _hoverTime = null),
+                onLeave: (_) {
+                  _stopEdgeScroll();
+                  setState(() => _hoverTime = null);
+                },
                 onAcceptWithDetails: (details) async {
+                  _stopEdgeScroll();
                   final event = details.data;
                   final newStart = _globalToTime(details.offset);
                   setState(() {
@@ -696,37 +872,62 @@ class _TimelineGridState extends State<_TimelineGrid> {
                       // Events
                       LayoutBuilder(builder: (ctx2, constraints) {
                         final colW = constraints.maxWidth / widget.columns;
+
+                        // Events je Spalte gruppieren und pro Spalte Spuren vergeben.
+                        final byColumn = <int, List<CalendarEvent>>{};
+                        for (final event in widget.events) {
+                          final colIdx = widget.columns > 1
+                              ? widget.columnDates.indexWhere((d) => isSameDay(d, event.startTime))
+                              : 0;
+                          if (colIdx < 0) continue;
+                          byColumn.putIfAbsent(colIdx, () => []).add(event);
+                        }
+
                         return Stack(
                           children: [
-                            for (final event in widget.events) ...[  
-                              Builder(builder: (bctx) {
-                                int colIdx = 0;
-                                if (widget.columns > 1) {
-                                  colIdx = widget.columnDates.indexWhere((d) => isSameDay(d, event.startTime));
-                                  if (colIdx < 0) return const SizedBox.shrink();
-                                }
-                                final startMinutes = event.startTime.hour * 60 + event.startTime.minute;
-                                final durationMin = event.durationInMinutes.clamp(15, 1440);
-                                final top = (startMinutes / 60) * kHourHeight;
-                                final height = (durationMin / 60) * kHourHeight;
-                                final isDragging = _draggingEvent?.id == event.id;
-                                return Positioned(
-                                  left: colIdx * colW + 2,
-                                  top: top,
-                                  width: colW - 4,
-                                  height: height.clamp(24.0, double.infinity),
-                                  child: AnimatedOpacity(
-                                    duration: const Duration(milliseconds: 150),
-                                    opacity: isDragging ? 0.35 : 1.0,
-                                    child: _EventBlock(
-                                      event: event,
-                                      onDragStarted: () => setState(() => _draggingEvent = event),
-                                      onDragEnd: () => setState(() => _draggingEvent = null),
+                            for (final entry in byColumn.entries)
+                              for (final placed in _assignLanes(entry.value)) ...[
+                                Builder(builder: (bctx) {
+                                  final event = placed.event;
+                                  final startMinutes =
+                                      event.startTime.hour * 60 + event.startTime.minute;
+                                  final durationMin = event.durationInMinutes.clamp(15, 1440);
+                                  final top = _topFor(event.startTime.hour, event.startTime.minute);
+                                  final height = (durationMin / 60) * kHourHeight;
+                                  final isDragging = _draggingEvent?.id == event.id;
+
+                                  // Ab 3 Spuren wird eine echte Aufteilung in der Wochenansicht
+                                  // zu schmal zum Antippen — dann versetzte Überlappung wie im
+                                  // Google Kalender. Die Sortierung nach Startzeit sorgt dafür,
+                                  // dass später beginnende Events oben liegen und treffbar sind.
+                                  final laneW = (colW - 4) / placed.laneCount;
+                                  final narrow = laneW < 28;
+                                  final left = entry.key * colW +
+                                      2 +
+                                      (narrow ? placed.lane * 10.0 : placed.lane * laneW);
+                                  final width = narrow
+                                      ? (colW - 4 - (placed.laneCount - 1) * 10.0)
+                                      : laneW - 1;
+
+                                  if (startMinutes < kDayStart * 60) return const SizedBox.shrink();
+
+                                  return Positioned(
+                                    left: left,
+                                    top: top,
+                                    width: width.clamp(16.0, double.infinity),
+                                    height: height.clamp(24.0, double.infinity),
+                                    child: AnimatedOpacity(
+                                      duration: const Duration(milliseconds: 150),
+                                      opacity: isDragging ? 0.35 : 1.0,
+                                      child: _EventBlock(
+                                        event: event,
+                                        onDragStarted: () => setState(() => _draggingEvent = event),
+                                        onDragEnd: () => setState(() => _draggingEvent = null),
+                                      ),
                                     ),
-                                  ),
-                                );
-                              }),
-                            ],
+                                  );
+                                }),
+                              ],
                             // Drag drop-zone indicator
                             if (isOver && _hoverTime != null)
                               _DragIndicator(
@@ -782,7 +983,9 @@ class _CurrentTimeLineState extends State<_CurrentTimeLine> {
   @override
   Widget build(BuildContext context) {
     final minutes = _now.hour * 60 + _now.minute;
-    final top = (minutes / 60) * kHourHeight;
+    // kDayStart abziehen: heute 0, aber sobald jemand die Nachtstunden ausblendet,
+    // säße die Linie sonst um kDayStart Stunden zu tief.
+    final top = ((minutes - kDayStart * 60) / 60) * kHourHeight;
     return Positioned(
       top: top - 6,
       left: 0,
@@ -829,7 +1032,8 @@ class _DragIndicator extends StatelessWidget {
     final colIdx = columnDates.indexWhere((d) => isSameDay(d, hoverTime));
     final left = colIdx < 0 ? 0.0 : colIdx * colW;
     final w = colIdx < 0 ? colW : colW;
-    final top = ((hoverTime.hour * 60 + hoverTime.minute) / 60) * kHourHeight;
+    final top =
+        (((hoverTime.hour * 60 + hoverTime.minute) - kDayStart * 60) / 60) * kHourHeight;
     final durMin = draggingEvent?.durationInMinutes ?? 60;
     final height = (durMin / 60) * kHourHeight;
     final color = draggingEvent != null
@@ -1239,8 +1443,31 @@ class _EventDetailSheet extends StatelessWidget {
                 ),
                 if (event.location != null) _SheetRow(icon: Icons.location_on_rounded, text: event.location!),
                 if (event.description != null) _SheetRow(icon: Icons.notes_rounded, text: event.description!),
-                if (event.isFixed) _SheetRow(icon: Icons.lock_rounded, text: 'Fixed time — cannot be rescheduled'),
+                // Umformuliert, seit das Pinnen über den Button unten reversibel ist.
+                if (event.isFixed)
+                  _SheetRow(icon: Icons.lock_rounded, text: 'Pinned — the scheduler will not move this'),
                 const SizedBox(height: 12),
+                if (event.id != null) ...[
+                  SizedBox(
+                    width: double.infinity,
+                    child: OutlinedButton.icon(
+                      icon: Icon(
+                        event.isFixed ? Icons.lock_open_rounded : Icons.push_pin_rounded,
+                        size: 16,
+                      ),
+                      label: Text(event.isFixed ? 'Unpin — let AI reschedule' : 'Pin to this time'),
+                      style: OutlinedButton.styleFrom(
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.zero),
+                      ),
+                      onPressed: () async {
+                        final provider = context.read<CalendarProvider>();
+                        Navigator.pop(context);
+                        await provider.setPinned(event.id!, !event.isFixed);
+                      },
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                ],
                 Row(
                   children: [
                     Expanded(

@@ -28,6 +28,10 @@ public class HabitMapper {
 
         dto.setPreferredTime(habit.getPreferredTime());
         dto.setDurationMinutes(habit.getDurationMinutes());
+        dto.setTimesPerWeek(habit.getTimesPerWeek());
+        dto.setIdealWindow(habit.getIdealWindow());
+        dto.setIdealWindowStart(habit.getIdealWindowStart());
+        dto.setIdealWindowEnd(habit.getIdealWindowEnd());
         dto.setStartDate(habit.getStartDate());
         dto.setEndDate(habit.getEndDate());
         dto.setCurrentStreak(habit.getCurrentStreak());
@@ -65,6 +69,10 @@ public class HabitMapper {
 
         habit.setPreferredTime(dto.getPreferredTime());
         habit.setDurationMinutes(dto.getDurationMinutes());
+        habit.setTimesPerWeek(dto.getTimesPerWeek());
+        habit.setIdealWindow(dto.getIdealWindow());
+        habit.setIdealWindowStart(dto.getIdealWindowStart());
+        habit.setIdealWindowEnd(dto.getIdealWindowEnd());
         habit.setStartDate(dto.getStartDate());
         habit.setEndDate(dto.getEndDate());
         habit.setColor(dto.getColor());
