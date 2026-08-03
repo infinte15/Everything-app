@@ -51,16 +51,25 @@ public class SecurityConfig {
                         .anyRequest().authenticated())
                 .sessionManagement(session -> session
                         .sessionCreationPolicy(SessionCreationPolicy.STATELESS))
-                .authenticationProvider(authenticationProvider())
+                .authenticationProvider(daoAuthenticationProvider())
                 .addFilterBefore(jwtAuthFilter, UsernamePasswordAuthenticationFilter.class);
 
         return http.build();
     }
 
-    @Bean
-    public AuthenticationProvider authenticationProvider() {
-        DaoAuthenticationProvider authProvider = new DaoAuthenticationProvider();
-        authProvider.setUserDetailsService(userDetailsService);
+    /**
+     * Bewusst KEIN {@code @Bean}: sobald ein AuthenticationProvider als Bean im Kontext liegt,
+     * schaltet Spring Security die automatische Verdrahtung von UserDetailsService und
+     * PasswordEncoder für den globalen AuthenticationManager ab und warnt bei jedem Start
+     * davor. Als lokale Instanz hängt der Provider nur an dieser Filterkette; den
+     * AuthenticationManager für /api/auth/login baut Spring aus den beiden Beans selbst —
+     * mit demselben DaoAuthenticationProvider, nur ohne die Warnung.
+     *
+     * Der UserDetailsService kommt seit Spring Security 6.5 über den Konstruktor; der
+     * parameterlose Konstruktor und setUserDetailsService sind deprecated.
+     */
+    private AuthenticationProvider daoAuthenticationProvider() {
+        DaoAuthenticationProvider authProvider = new DaoAuthenticationProvider(userDetailsService);
         authProvider.setPasswordEncoder(passwordEncoder());
         return authProvider;
     }

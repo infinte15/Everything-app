@@ -4,12 +4,10 @@ import com.Finn.everything_app.model.CourseSchedule;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
-import org.springframework.stereotype.Repository;
 import java.time.DayOfWeek;
 import java.time.LocalTime;
 import java.util.List;
 
-@Repository
 public interface CourseScheduleRepository extends JpaRepository<CourseSchedule, Long> {
 
     // Alle Schedules

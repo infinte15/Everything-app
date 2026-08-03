@@ -67,7 +67,7 @@ class _StudyNoteEditorPageState extends State<StudyNoteEditorPage> {
           icon: const Icon(Icons.arrow_back),
           onPressed: () async {
             if (_dirty) await _save();
-            if (mounted) Navigator.pop(context);
+            if (context.mounted) Navigator.pop(context);
           },
         ),
         actions: [

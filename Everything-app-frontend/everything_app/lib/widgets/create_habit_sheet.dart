@@ -363,7 +363,12 @@ class _CreateHabitSheetState extends State<CreateHabitSheet> {
 
             if (_repeatType == 'Monthly' || (_repeatType == 'Custom' && _customUnit == 'month')) ...[
               const SizedBox(height: 20),
-              Column(
+              // Auswahl hängt jetzt am RadioGroup-Vorfahren; groupValue/onChanged direkt
+              // an den Tiles sind seit Flutter 3.32 deprecated.
+              RadioGroup<String>(
+                groupValue: _monthlyType,
+                onChanged: (v) => setState(() => _monthlyType = v!),
+                child: Column(
                 children: [
                   RadioListTile<String>(
                     title: Row(
@@ -376,7 +381,7 @@ class _CreateHabitSheetState extends State<CreateHabitSheet> {
                         )
                       ]
                     ),
-                    value: 'On day', groupValue: _monthlyType, onChanged: (v)=>setState(()=>_monthlyType=v!),
+                    value: 'On day',
                   ),
                   RadioListTile<String>(
                     title: Wrap(
@@ -396,9 +401,10 @@ class _CreateHabitSheetState extends State<CreateHabitSheet> {
                         ),
                       ]
                     ),
-                    value: 'On the', groupValue: _monthlyType, onChanged: (v)=>setState(()=>_monthlyType=v!),
+                    value: 'On the',
                   ),
                 ],
+                ),
               ),
             ],
 
@@ -573,16 +579,20 @@ class _CreateHabitSheetState extends State<CreateHabitSheet> {
                     longestStreak: widget.habitToEdit?.longestStreak ?? 0,
                   );
 
+                  // Vor dem await gegriffen: nach dem Pop hängt dieser context nicht mehr
+                  // im Baum, ScaffoldMessenger.of(context) fände dann nichts mehr.
+                  final messenger = ScaffoldMessenger.of(context);
+
                   bool success;
                   if (widget.habitToEdit != null) {
                     success = await context.read<HabitProvider>().updateHabit(habit);
                   } else {
                     success = await context.read<HabitProvider>().addHabit(habit);
                   }
-                  
-                  if (success && mounted) {
+
+                  if (success && context.mounted) {
                     Navigator.pop(context);
-                    ScaffoldMessenger.of(context).showSnackBar(
+                    messenger.showSnackBar(
                       const SnackBar(content: Text('Habit gespeichert')),
                     );
                   }

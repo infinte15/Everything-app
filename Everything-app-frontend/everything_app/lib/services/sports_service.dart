@@ -177,12 +177,11 @@ class SportsService {
   }) =>
       {
         'name': name,
-        if (description != null) 'description': description,
-        if (imageUrl != null) 'imageUrl': imageUrl,
-        if (dayLabel != null) 'dayLabel': dayLabel,
-        if (estimatedDurationMinutes != null)
-          'estimatedDurationMinutes': estimatedDurationMinutes,
-        if (workoutPlanId != null) 'workoutPlanId': workoutPlanId,
+        'description': ?description,
+        'imageUrl': ?imageUrl,
+        'dayLabel': ?dayLabel,
+        'estimatedDurationMinutes': ?estimatedDurationMinutes,
+        'workoutPlanId': ?workoutPlanId,
         'exercises': exercises.map((e) => e.toRequest()).toList(),
       };
 
@@ -191,9 +190,9 @@ class SportsService {
   /// Startet ein Training und liefert die geplanten Übungen samt letzter Leistung.
   Future<Map<String, dynamic>> startWorkout({int? routineId, int? sessionId, String? name}) async {
     final response = await _api.post(ApiConfig.startWorkout, {
-      if (routineId != null) 'routineId': routineId,
-      if (sessionId != null) 'sessionId': sessionId,
-      if (name != null) 'name': name,
+      'routineId': ?routineId,
+      'sessionId': ?sessionId,
+      'name': ?name,
     });
     return _decodeMap(response.body, response.statusCode, _api.isSuccess(response));
   }
@@ -206,8 +205,8 @@ class SportsService {
     int? durationMinutes,
   }) async {
     final body = <String, dynamic>{
-      if (notes != null) 'notes': notes,
-      if (durationMinutes != null) 'durationMinutes': durationMinutes,
+      'notes': ?notes,
+      'durationMinutes': ?durationMinutes,
       'exercises': [
         for (var i = 0; i < exercises.length; i++) exercises[i].toRequest(i),
       ],

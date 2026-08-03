@@ -91,7 +91,9 @@ class SpacesScreen extends StatelessWidget {
           int columns = 1;
           if (constraints.maxWidth >= 900) {
             columns = 3;
-          } else if (constraints.maxWidth >= 600) columns = 2;
+          } else if (constraints.maxWidth >= 600) {
+            columns = 2;
+          }
 
           return GridView.builder(
             padding: const EdgeInsets.fromLTRB(24, 24, 24, 100),

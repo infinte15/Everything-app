@@ -93,7 +93,7 @@ class WorkoutLoggingServiceTest {
 
         var order = inOrder(setRepository);
         order.verify(setRepository).deleteByWorkoutSessionId(5L);
-        ArgumentCaptor<List<ExerciseSet>> captor = ArgumentCaptor.forClass(List.class);
+        ArgumentCaptor<List<ExerciseSet>> captor = ArgumentCaptor.captor();
         order.verify(setRepository).saveAll(captor.capture());
         assertEquals(3, captor.getValue().size());
         assertEquals(0, captor.getValue().get(0).getExerciseOrder());

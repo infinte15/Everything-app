@@ -210,7 +210,7 @@ class _StudyFileSystemPageState extends State<StudyFileSystemPage> {
                       title: ctrl.text.trim(),
                       folderId: folderId,
                     );
-                Navigator.pop(ctx);
+                if (ctx.mounted) Navigator.pop(ctx);
                 if (context.mounted) _openNote(context, note);
               }
             },

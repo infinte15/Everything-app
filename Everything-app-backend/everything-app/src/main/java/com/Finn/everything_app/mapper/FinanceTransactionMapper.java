@@ -2,7 +2,6 @@ package com.Finn.everything_app.mapper;
 
 import com.Finn.everything_app.dto.FinanceTransactionDTO;
 import com.Finn.everything_app.model.FinanceTransaction;
-import jakarta.validation.Valid;
 import org.springframework.stereotype.Component;
 
 @Component
@@ -31,7 +30,7 @@ public class FinanceTransactionMapper {
         return dto;
     }
 
-    public FinanceTransaction toEntity(@Valid FinanceTransactionDTO dto) {
+    public FinanceTransaction toEntity(FinanceTransactionDTO dto) {
         if (dto == null) return null;
 
         FinanceTransaction transaction = new FinanceTransaction();
