@@ -4,6 +4,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
 import '../../providers/project_provider.dart';
 import '../../models/project.dart';
+import '../../widgets/pointer_aware_draggable.dart';
 
 // ─── Column definitions ───────────────────────────────────────────────────────
 const _columns = [
@@ -322,7 +323,11 @@ class _ProjectKanbanCard extends StatelessWidget {
     final pct = project.completionPercentage;
     final fmt = DateFormat('dd.MM.yy');
 
-    return Draggable<Project>(
+    // Mit einem nackten Draggable gewinnt auf dem Touchscreen die Karte den Gestenwettstreit
+    // gegen die ListView — die Spalte ließ sich dann nicht mehr scrollen, ohne versehentlich
+    // ein Projekt zu verschieben. PointerAwareDraggable verlangt am Finger einen Long-Press
+    // und zieht mit der Maus weiterhin sofort.
+    return PointerAwareDraggable<Project>(
       data: project,
       onDragStarted: () => onDragStart(project.id.toString()),
       onDragEnd: (_) => onDragEnd(),

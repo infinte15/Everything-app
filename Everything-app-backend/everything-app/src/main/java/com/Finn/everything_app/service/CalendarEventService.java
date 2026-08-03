@@ -17,6 +17,7 @@ public class CalendarEventService {
     private final CalendarEventRepository calendarEventRepository;
     private final UserRepository userRepository;
     private final TaskRepository taskRepository;
+    private final WorkoutSessionRepository workoutSessionRepository;
 
     private final ApplicationEventPublisher eventPublisher;
 
@@ -78,6 +79,15 @@ public class CalendarEventService {
                 .orElseThrow(() -> new RuntimeException("Event nicht gefunden"));
     }
 
+    /**
+     * Typen, die der Smart Scheduler selbst anlegt und bei jeder Neuplanung wieder wegräumt
+     * (siehe {@link #clearScheduledEvents}). Genau diese müssen beim manuellen Verschieben
+     * gepinnt werden, damit die Änderung den nächsten Solver-Lauf überlebt.
+     */
+    private boolean isSchedulerOwned(EventType type) {
+        return type == EventType.TASK || type == EventType.HABIT || type == EventType.WORKOUT;
+    }
+
     /** Stellt sicher, dass ein Event dem anfragenden Nutzer gehört. */
     private void requireOwner(CalendarEvent event, Long userId) {
         if (userId == null || event.getUser() == null || !userId.equals(event.getUser().getId())) {
@@ -123,12 +133,26 @@ public class CalendarEventService {
             event.setNotes(updatedEvent.getNotes());
         }
 
-        // Nur ein tatsächliches Verschieben pinnt den Task. Vorher hat auch ein reines Umbenennen
+        // Nur ein tatsächliches Verschieben pinnt den Termin. Vorher hat auch ein reines Umbenennen
         // aus dem Edit-Sheet den Task festgenagelt, sodass der Scheduler ihn nie wieder anfasste.
         boolean timesChanged = !java.util.Objects.equals(originalStart, event.getStartTime())
                 || !java.util.Objects.equals(originalEnd, event.getEndTime());
-        if (event.getEventType() == EventType.TASK && timesChanged) {
+        if (timesChanged && isSchedulerOwned(event.getEventType())) {
+            // Ohne dieses Pinnen war Drag-and-Drop für HABIT und WORKOUT wirkungslos: die
+            // entprellte Neuplanung löscht wenige Sekunden später alle nicht gepinnten
+            // Scheduler-Events und legt sie an der vom Solver gewählten Stelle wieder an —
+            // der Block sprang also vor den Augen des Nutzers an seinen alten Platz zurück.
             event.setIsFixed(true);
+        }
+
+        // Der Solver liest Workouts aus der WorkoutSession, nicht aus dem Kalender-Event.
+        // Ohne diesen Abgleich bliebe die Session an ihrer alten Zeit stehen und würde als
+        // blockierter Bereich an der falschen Stelle im Modell landen.
+        if (timesChanged && event.getRelatedWorkout() != null) {
+            WorkoutSession session = event.getRelatedWorkout();
+            session.setStartTime(event.getStartTime());
+            session.setEndTime(event.getEndTime());
+            workoutSessionRepository.save(session);
         }
 
         CalendarEvent savedEvent = calendarEventRepository.save(event);

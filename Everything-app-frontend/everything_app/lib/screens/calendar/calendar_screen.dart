@@ -6,6 +6,7 @@ import '../../providers/calendar_provider.dart';
 import '../../config/app_theme.dart';
 import '../../models/calendar_event.dart';
 import '../../widgets/create_event_sheet.dart';
+import '../../widgets/pointer_aware_draggable.dart';
 
 // ─── Constants ───────────────────────────────────────────────────────────────
 
@@ -603,6 +604,10 @@ class _TimelineGridState extends State<_TimelineGrid> {
   // Der Viewport (sichtbarer Ausschnitt), nicht die 1536px hohe Leinwand — für den Randscroll.
   final _viewportKey = GlobalKey();
 
+  // Zeigerposition des laufenden Drags. DragTargetDetails.offset ist die Ecke des Blocks,
+  // nicht der Finger; für die Randzone braucht es den Finger (siehe _updateEdgeScroll).
+  Offset? _dragPointer;
+
   // Der Grid besitzt seinen ScrollController selbst; nach oben wandert nur der Offset-Wert.
   late final ScrollController _scroll;
 
@@ -634,12 +639,14 @@ class _TimelineGridState extends State<_TimelineGrid> {
   DateTime? _globalToTime(Offset globalOffset) {
     final ro = _columnKey.currentContext?.findRenderObject() as RenderBox?;
     if (ro == null) return null;
+    // _columnKey hängt am Stack INNERHALB der SingleChildScrollView, also auf der vollen
+    // 1536px-Leinwand. Deren Paint-Transform enthält den Scroll-Offset bereits — globalToLocal
+    // liefert daher schon Leinwand-Koordinaten. Ein zusätzliches Aufaddieren von _scroll.offset
+    // zählte ihn doppelt: bei der üblichen Startposition (jetzt − 2h) landete damit fast jeder
+    // Drop jenseits des Tagesendes und wurde vom clamp unten auf 23:45 gezogen.
     final local = ro.globalToLocal(globalOffset);
-    // Account for scroll offset in the SingleChildScrollView.
-    final scrollY = _scroll.hasClients ? _scroll.offset : 0.0;
-    final y = local.dy + scrollY;
     // Clamp y to valid range.
-    final clampedY = y.clamp(0.0, kHourHeight * (kDayEnd - kDayStart) - 1);
+    final clampedY = local.dy.clamp(0.0, kHourHeight * (kDayEnd - kDayStart) - 1);
     final totalMinutes = (clampedY / kHourHeight * 60).round() + kDayStart * 60;
     // Snap to 15-minute grid.
     final snapped = ((totalMinutes / 15).round() * 15).clamp(0, 23 * 60 + 45);
@@ -659,12 +666,18 @@ class _TimelineGridState extends State<_TimelineGrid> {
   /// Scrollt die Leinwand, wenn der Finger nahe an den oberen/unteren Rand kommt.
   /// Ohne das lässt sich ein Event auf einem Handy nur wenige Stunden weit ziehen —
   /// der Viewport zeigt ~500px von 1536px.
-  void _updateEdgeScroll(Offset globalTopLeft) {
+  ///
+  /// [globalTopLeft] ist die künftige obere Kante des Blocks (daraus wird die Uhrzeit
+  /// berechnet), [pointer] die tatsächliche Zeigerposition. Die Randzone muss am Zeiger
+  /// hängen: bei einem drei Stunden langen Block liegt dessen Oberkante fast 200px über
+  /// dem Finger, und der Randscroll sprang dann an, obwohl der Finger mitten im Bild war —
+  /// die Leinwand wanderte unter dem Block weg und der Drop landete zu früh.
+  void _updateEdgeScroll(Offset globalTopLeft, Offset? pointer) {
     _lastDragGlobal = globalTopLeft;
     final box = _viewportKey.currentContext?.findRenderObject() as RenderBox?;
     if (box == null) return;
 
-    final dy = box.globalToLocal(globalTopLeft).dy;
+    final dy = box.globalToLocal(pointer ?? globalTopLeft).dy;
     final h = box.size.height;
 
     double v = 0;
@@ -793,7 +806,7 @@ class _TimelineGridState extends State<_TimelineGrid> {
                 onMove: (details) {
                   final t = _globalToTime(details.offset);
                   if (t != _hoverTime) setState(() => _hoverTime = t);
-                  _updateEdgeScroll(details.offset);
+                  _updateEdgeScroll(details.offset, _dragPointer);
                 },
                 onLeave: (_) {
                   _stopEdgeScroll();
@@ -922,7 +935,19 @@ class _TimelineGridState extends State<_TimelineGrid> {
                                       child: _EventBlock(
                                         event: event,
                                         onDragStarted: () => setState(() => _draggingEvent = event),
-                                        onDragEnd: () => setState(() => _draggingEvent = null),
+                                        onDragUpdate: (d) => _dragPointer = d.globalPosition,
+                                        // Auch der Randscroll muss hier enden: wird der Drag
+                                        // abgebrochen, während der Zeiger noch über dem Grid
+                                        // steht, feuert kein onLeave — der Timer würde die
+                                        // Leinwand danach endlos weiterscrollen.
+                                        onDragEnd: () {
+                                          _stopEdgeScroll();
+                                          _dragPointer = null;
+                                          setState(() {
+                                            _draggingEvent = null;
+                                            _hoverTime = null;
+                                          });
+                                        },
                                       ),
                                     ),
                                   );
@@ -1084,11 +1109,13 @@ class _EventBlock extends StatelessWidget {
   final CalendarEvent event;
   final VoidCallback? onDragStarted;
   final VoidCallback? onDragEnd;
+  final ValueChanged<DragUpdateDetails>? onDragUpdate;
 
   const _EventBlock({
     required this.event,
     this.onDragStarted,
     this.onDragEnd,
+    this.onDragUpdate,
   });
 
   Widget _buildCard(BuildContext context, {double opacity = 1.0}) {
@@ -1175,10 +1202,13 @@ class _EventBlock extends StatelessWidget {
     // never lets the scheduler move isFixed events either.
     if (event.isFixed) return card;
 
-    return LongPressDraggable<CalendarEvent>(
+    // PointerAwareDraggable statt LongPressDraggable: mit der Maus wäre der Drag sonst
+    // gar nicht auslösbar — siehe die Erklärung in pointer_aware_draggable.dart.
+    return PointerAwareDraggable<CalendarEvent>(
       data: event,
-      delay: const Duration(milliseconds: 350),
+      touchDelay: const Duration(milliseconds: 350),
       onDragStarted: onDragStarted,
+      onDragUpdate: onDragUpdate,
       onDraggableCanceled: (v, _) => onDragEnd?.call(),
       onDragCompleted: onDragEnd,
       hapticFeedbackOnStart: true,

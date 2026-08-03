@@ -13,6 +13,7 @@ import java.time.DayOfWeek;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
+import java.time.temporal.ChronoUnit;
 import java.time.temporal.TemporalAdjusters;
 import java.util.ArrayList;
 import java.util.List;
@@ -500,6 +501,281 @@ class SmartSchedulerServiceTest {
             assertTrue(t.isBefore(LocalTime.of(12, 0)),
                     "MORNING-Fenster endet 12:00, lag aber bei " + t);
         }
+    }
+
+    // ==================================================================
+    // Drag-and-Drop: manuell verschobene Blöcke müssen die Neuplanung überleben
+    // ==================================================================
+
+    // ------------------------------------------------------------------
+    // Test 17 – Gepinnte Habit-Ausführung belegt ihren Tag und die Wochenquote
+    // ------------------------------------------------------------------
+    @Test
+    void pinnedHabitEventConsumesItsDayAndWeeklyQuota() {
+        LocalDate monday = TODAY.plusDays(1).with(TemporalAdjusters.next(DayOfWeek.MONDAY));
+
+        Habit habit = new Habit();
+        habit.setId(400L);
+        habit.setName("Laufen");
+        habit.setDurationMinutes(45);
+        habit.setPriority(3);
+        habit.setTimesPerWeek(3);
+        habit.setIdealWindow(HabitWindow.ANYTIME);
+        habit.setStartDate(monday);
+
+        // Der Nutzer hat eine Ausführung auf Mittwoch 16:00 gezogen — das Frontend
+        // schickt sie gepinnt zurück, also taucht sie unter den fixen Events auf.
+        LocalDate wednesday = monday.plusDays(2);
+        CalendarEvent pinned = makeFixedEvent(401L, wednesday.atTime(16, 0), wednesday.atTime(16, 45));
+        pinned.setEventType(EventType.HABIT);
+        pinned.setRelatedHabit(habit);
+
+        when(habitRepository.findHabitsActiveInRange(eq(1L), any(), any())).thenReturn(List.of(habit));
+        when(taskService.getSchedulableTasks(1L)).thenReturn(new ArrayList<>());
+        when(calendarEventService.getFixedEvents(eq(1L), any(), any())).thenReturn(List.of(pinned));
+
+        ScheduleResult result = service.generateOptimalSchedule(1L, monday, monday.plusDays(6));
+
+        List<ScheduledItem> habits = result.getScheduledHabits();
+        assertEquals(2, habits.size(),
+                "3x pro Woche minus die eine gepinnte Ausführung ergibt 2 neu zu planende");
+
+        List<LocalDate> days = habits.stream().map(i -> i.getStartTime().toLocalDate()).toList();
+        assertFalse(days.contains(wednesday),
+                "am gepinnten Tag darf keine zweite Ausführung derselben Habit entstehen");
+    }
+
+    // ------------------------------------------------------------------
+    // Test 18 – Gepinnte Ausführung einer Wochentag-Habit (Legacy-Modus)
+    // ------------------------------------------------------------------
+    @Test
+    void pinnedLegacyHabitDayIsNotScheduledAgain() {
+        LocalDate monday = TODAY.plusDays(1).with(TemporalAdjusters.next(DayOfWeek.MONDAY));
+
+        Habit habit = new Habit();
+        habit.setId(410L);
+        habit.setName("Lesen");
+        habit.setDurationMinutes(30);
+        habit.setPriority(3);
+        habit.setMonday(true);
+        habit.setTuesday(true);
+        habit.setStartDate(monday);
+        // timesPerWeek bleibt null -> Legacy-Modus, eine Ausführung je gesetztem Wochentag.
+
+        CalendarEvent pinned = makeFixedEvent(411L, monday.atTime(20, 0), monday.atTime(20, 30));
+        pinned.setEventType(EventType.HABIT);
+        pinned.setRelatedHabit(habit);
+
+        when(habitRepository.findHabitsActiveInRange(eq(1L), any(), any())).thenReturn(List.of(habit));
+        when(taskService.getSchedulableTasks(1L)).thenReturn(new ArrayList<>());
+        when(calendarEventService.getFixedEvents(eq(1L), any(), any())).thenReturn(List.of(pinned));
+
+        ScheduleResult result = service.generateOptimalSchedule(1L, monday, monday.plusDays(1));
+
+        List<LocalDate> days = result.getScheduledHabits().stream()
+                .map(i -> i.getStartTime().toLocalDate()).toList();
+        assertEquals(List.of(monday.plusDays(1)), days,
+                "nur der Dienstag ist noch offen; der Montag hängt bereits gepinnt im Kalender");
+    }
+
+    // ------------------------------------------------------------------
+    // Test 19 – Ein gepinntes Workout wird nicht mehr umgeplant
+    // ------------------------------------------------------------------
+    @Test
+    void pinnedWorkoutStaysWhereTheUserDroppedIt() {
+        LocalDate tomorrow = TODAY.plusDays(1);
+
+        WorkoutSession workout = new WorkoutSession();
+        workout.setId(500L);
+        workout.setName("Push Day");
+        workout.setDurationMinutes(60);
+        workout.setIsFlexible(true);
+        workout.setTargetWeekStart(tomorrow.with(TemporalAdjusters.previousOrSame(DayOfWeek.MONDAY)));
+        workout.setStartTime(tomorrow.atTime(15, 0));
+        workout.setEndTime(tomorrow.atTime(16, 0));
+
+        CalendarEvent pinned = makeFixedEvent(501L, tomorrow.atTime(15, 0), tomorrow.atTime(16, 0));
+        pinned.setEventType(EventType.WORKOUT);
+        pinned.setRelatedWorkout(workout);
+
+        when(workoutSessionRepository.findByUserIdAndIsFlexibleTrue(1L)).thenReturn(List.of(workout));
+        when(workoutSessionRepository.findByUserIdAndStartTimeBetween(eq(1L), any(), any()))
+                .thenReturn(List.of(workout));
+        when(calendarEventService.getFixedEvents(eq(1L), any(), any())).thenReturn(List.of(pinned));
+        // Ein Task, damit das Modell überhaupt etwas zu platzieren hat.
+        Task task = makeTask(510L, "Report", 60, 3, tomorrow.plusDays(2).atTime(23, 59));
+        when(taskService.getSchedulableTasks(1L)).thenReturn(List.of(task));
+
+        ScheduleResult result = service.generateOptimalSchedule(1L, tomorrow, tomorrow);
+
+        assertTrue(result.getScheduledHabits().stream()
+                        .noneMatch(i -> i.getType() == ScheduledItemType.WORKOUT),
+                "ein gepinntes Workout darf nicht erneut platziert werden");
+        // Die Session behält ihre Zeiten — der Solver darf sie nicht überschreiben.
+        assertEquals(tomorrow.atTime(15, 0), workout.getStartTime());
+        verify(workoutSessionRepository, never()).save(any(WorkoutSession.class));
+
+        // Und der Block wirkt weiterhin als belegte Zeit.
+        ScheduledItem scheduled = result.getScheduledTasks().get(0);
+        assertTrue(scheduled.getEndTime().isBefore(tomorrow.atTime(15, 0).plusSeconds(1))
+                        || !scheduled.getStartTime().isBefore(tomorrow.atTime(16, 0)),
+                "der Task darf nicht in das gepinnte Workout hineinlaufen");
+    }
+
+    // ==================================================================
+    // Weitere Szenarien der automatischen Planung
+    // ==================================================================
+
+    // ------------------------------------------------------------------
+    // Test 20 – Vorlesungen blockieren ihren Wochentag-Slot in jeder Woche
+    // ------------------------------------------------------------------
+    @Test
+    void courseScheduleBlocksItsWeekdaySlot() {
+        LocalDate monday = TODAY.plusDays(1).with(TemporalAdjusters.next(DayOfWeek.MONDAY));
+
+        CourseSchedule lecture = new CourseSchedule();
+        lecture.setId(600L);
+        lecture.setDayOfWeek(DayOfWeek.MONDAY);
+        lecture.setStartTime(LocalTime.of(8, 0));
+        lecture.setEndTime(LocalTime.of(12, 0));
+
+        when(courseScheduleRepository.findByUserId(1L)).thenReturn(List.of(lecture));
+        when(taskService.getSchedulableTasks(1L))
+                .thenReturn(List.of(makeTask(610L, "Übungsblatt", 60, 3, monday.atTime(23, 59))));
+        when(calendarEventService.getFixedEvents(eq(1L), any(), any())).thenReturn(new ArrayList<>());
+
+        ScheduleResult result = service.generateOptimalSchedule(1L, monday, monday);
+
+        ScheduledItem item = result.getScheduledTasks().get(0);
+        assertFalse(item.getStartTime().isBefore(monday.atTime(12, 0)),
+                "die Vorlesung von 08:00–12:00 muss den Vormittag belegen, lag aber bei "
+                        + item.getStartTime());
+    }
+
+    // ------------------------------------------------------------------
+    // Test 21 – notBefore verschiebt den frühesten Start
+    // ------------------------------------------------------------------
+    @Test
+    void notBeforeDelaysTheEarliestStart() {
+        LocalDate tomorrow = TODAY.plusDays(1);
+
+        Task task = makeTask(700L, "Rückmeldung", 60, 3, tomorrow.plusDays(1).atTime(23, 59));
+        // Vor 14:00 sinnlos, weil die Zuarbeit erst dann da ist.
+        task.setNotBefore(tomorrow.atTime(14, 0));
+
+        when(taskService.getSchedulableTasks(1L)).thenReturn(List.of(task));
+        when(calendarEventService.getFixedEvents(eq(1L), any(), any())).thenReturn(new ArrayList<>());
+
+        ScheduleResult result = service.generateOptimalSchedule(1L, tomorrow, tomorrow);
+
+        ScheduledItem item = result.getScheduledTasks().get(0);
+        assertEquals(tomorrow.atTime(14, 0), item.getStartTime(),
+                "der Task muss exakt am notBefore-Zeitpunkt beginnen, nicht früher");
+    }
+
+    // ------------------------------------------------------------------
+    // Test 22 – Ein nicht teilbarer Task bleibt ein einziger Block
+    // ------------------------------------------------------------------
+    @Test
+    void unsplittableTaskStaysOneBlock() {
+        LocalDate tomorrow = TODAY.plusDays(1);
+
+        Task task = makeTask(800L, "Klausur schreiben", 240, 4, tomorrow.plusDays(3).atTime(23, 59));
+        task.setSplittable(false);   // Standard-Maximum wären 120 Minuten pro Block
+
+        when(taskService.getSchedulableTasks(1L)).thenReturn(List.of(task));
+        when(calendarEventService.getFixedEvents(eq(1L), any(), any())).thenReturn(new ArrayList<>());
+
+        ScheduleResult result = service.generateOptimalSchedule(1L, tomorrow, tomorrow);
+
+        assertEquals(1, result.getScheduledTasks().size(), "splittable=false darf nicht zerlegt werden");
+        ScheduledItem item = result.getScheduledTasks().get(0);
+        assertEquals(240, ChronoUnit.MINUTES.between(item.getStartTime(), item.getEndTime()));
+    }
+
+    // ------------------------------------------------------------------
+    // Test 23 – Bereits geplante Blöcke bleiben liegen, wo sie liegen
+    // ------------------------------------------------------------------
+    @Test
+    void existingPlacementIsKeptWhenNothingForcesAMove() {
+        LocalDate tomorrow = TODAY.plusDays(1);
+
+        // Priorität 1 mit Absicht: die Dringlichkeit wiegt W_URGENCY * Priorität pro Slot,
+        // das Verschieben W_MOVE = 3. Bei Priorität 3 stünde es exakt unentschieden, und der
+        // Test würde nur noch die Suchreihenfolge des Solvers festschreiben.
+        Task task = makeTask(900L, "Recherche", 60, 1, tomorrow.plusDays(5).atTime(23, 59));
+        when(taskService.getSchedulableTasks(1L)).thenReturn(List.of(task));
+        when(calendarEventService.getFixedEvents(eq(1L), any(), any())).thenReturn(new ArrayList<>());
+
+        // Aus dem letzten Lauf: der Block lag um 14:00, obwohl 08:00 „dringlicher“ wäre.
+        CalendarEvent previous = new CalendarEvent();
+        previous.setId(901L);
+        previous.setIsFixed(false);
+        previous.setEventType(EventType.TASK);
+        previous.setRelatedTask(task);
+        previous.setStartTime(tomorrow.atTime(14, 0));
+        previous.setEndTime(tomorrow.atTime(15, 0));
+        when(calendarEventRepository.findByUserIdAndEventTypeInAndIsFixedAndStartTimeBetween(
+                eq(1L), anyList(), eq(false), any(), any())).thenReturn(List.of(previous));
+
+        ScheduleResult result = service.generateOptimalSchedule(1L, tomorrow, tomorrow);
+
+        assertEquals(tomorrow.atTime(14, 0), result.getScheduledTasks().get(0).getStartTime(),
+                "ohne Grund zu verschieben muss der Block liegen bleiben");
+    }
+
+    // ------------------------------------------------------------------
+    // Test 24 – Mehr Arbeit als Platz: der Rest wird gemeldet, nicht verschluckt
+    // ------------------------------------------------------------------
+    @Test
+    void overloadedDayPlacesWhatFitsAndReportsTheRest() {
+        LocalDate tomorrow = TODAY.plusDays(1);
+
+        // 5 unteilbare Blöcke à 3 Stunden auf einen Tag. Bindend ist hier nicht das
+        // Arbeitsfenster 08:00–17:00 (9 h), sondern das Tageslimit für Task-Zeit von
+        // 480 Minuten — es passen also 2 Blöcke, nicht 3.
+        List<Task> tasks = new ArrayList<>();
+        for (int i = 0; i < 5; i++) {
+            Task t = makeTask(1000L + i, "Brocken " + i, 180, 3, tomorrow.atTime(23, 59));
+            t.setSplittable(false);
+            tasks.add(t);
+        }
+        when(taskService.getSchedulableTasks(1L)).thenReturn(tasks);
+        when(calendarEventService.getFixedEvents(eq(1L), any(), any())).thenReturn(new ArrayList<>());
+
+        ScheduleResult result = service.generateOptimalSchedule(1L, tomorrow, tomorrow);
+
+        assertEquals(2, result.getScheduledTasks().size(),
+                "das Tageslimit von 480 Minuten lässt genau 2 Blöcke à 180 Minuten zu");
+        assertFalse(result.getAtRisk().isEmpty(),
+                "was nicht passt, muss als at-risk gemeldet werden statt lautlos zu verschwinden");
+        assertEquals(3, result.getUnscheduledTasks().size());
+
+        // Und die platzierten Blöcke überlappen sich nicht.
+        List<ScheduledItem> placed = new ArrayList<>(result.getScheduledTasks());
+        placed.sort(java.util.Comparator.comparing(ScheduledItem::getStartTime));
+        for (int i = 1; i < placed.size(); i++) {
+            assertFalse(placed.get(i).getStartTime().isBefore(placed.get(i - 1).getEndTime()),
+                    "Blöcke dürfen sich nicht überlappen");
+        }
+    }
+
+    // ------------------------------------------------------------------
+    // Test 25 – Nichts zu planen ist kein Fehler
+    // ------------------------------------------------------------------
+    @Test
+    void emptyInputProducesAnEmptyScheduleWithoutTouchingTheCalendar() {
+        LocalDate tomorrow = TODAY.plusDays(1);
+
+        when(taskService.getSchedulableTasks(1L)).thenReturn(new ArrayList<>());
+        when(calendarEventService.getFixedEvents(eq(1L), any(), any())).thenReturn(new ArrayList<>());
+
+        ScheduleResult result = service.generateOptimalSchedule(1L, tomorrow, tomorrow);
+
+        assertTrue(result.getScheduledTasks().isEmpty());
+        assertTrue(result.getScheduledHabits().isEmpty());
+        assertEquals(0, result.getTotalTasksScheduled());
+        verify(calendarEventRepository, never()).save(any(CalendarEvent.class));
     }
 
     // ------------------------------------------------------------------

@@ -115,7 +115,8 @@ public class SmartSchedulerService {
 
         Map<Long, Integer> pinnedMinutes = pinnedMinutesPerTask(input.getFixedEvents());
         List<TaskChunk> chunks     = decomposeTasks(input.getTasks(), prefs, pinnedMinutes);
-        List<HabitSlot> habitSlots = expandHabitSlots(input.getHabits(), prefs, startDate, endDate);
+        List<HabitSlot> habitSlots = expandHabitSlots(input.getHabits(), prefs, startDate, endDate,
+                pinnedDatesPerHabit(input.getFixedEvents()));
 
         SolveOutcome outcome = solveWithCpSat(chunks, habitSlots, input, axis, prefs, startDate, endDate);
 
@@ -348,6 +349,15 @@ public class SmartSchedulerService {
                         Collectors.summingInt(e -> (int) ChronoUnit.MINUTES.between(e.getStartTime(), e.getEndTime()))));
     }
 
+    /** Tage, an denen je Habit bereits ein gepinnter Termin liegt (manuell verschoben). */
+    private Map<Long, Set<LocalDate>> pinnedDatesPerHabit(List<CalendarEvent> fixedEvents) {
+        return nz(fixedEvents).stream()
+                .filter(e -> e.getRelatedHabit() != null && e.getStartTime() != null)
+                .collect(Collectors.groupingBy(
+                        e -> e.getRelatedHabit().getId(),
+                        Collectors.mapping(e -> e.getStartTime().toLocalDate(), Collectors.toSet())));
+    }
+
     private List<TaskChunk> decomposeTasks(List<Task> tasks, UserPreferences prefs,
                                            Map<Long, Integer> pinnedMinutes) {
         List<TaskChunk> out = new ArrayList<>();
@@ -431,7 +441,8 @@ public class SmartSchedulerService {
      *    unverändert.
      */
     private List<HabitSlot> expandHabitSlots(List<Habit> habits, UserPreferences prefs,
-                                             LocalDate startDate, LocalDate endDate) {
+                                             LocalDate startDate, LocalDate endDate,
+                                             Map<Long, Set<LocalDate>> pinnedDates) {
         List<HabitSlot> slots = new ArrayList<>();
 
         for (Habit habit : nz(habits)) {
@@ -445,7 +456,13 @@ public class SmartSchedulerService {
                     .findByHabitIdAndCompletionDateBetween(habit.getId(), rangeStart, rangeEnd)
                     .stream()
                     .map(HabitCompletion::getCompletionDate)
-                    .collect(Collectors.toSet());
+                    .collect(Collectors.toCollection(HashSet::new));
+
+            // Ein Tag, an dem bereits ein gepinnter Termin dieser Habit liegt, zählt wie ein
+            // erledigter: der Tag ist belegt und die Wochenquote ist um eins reduziert. Ohne
+            // das legt der Solver nach einem Drag-and-Drop eine ZWEITE Ausführung am selben
+            // Tag an — der verschobene Block bliebe stehen, aber doppelt.
+            completed.addAll(pinnedDates.getOrDefault(habit.getId(), Set.of()));
 
             int duration = nz(habit.getDurationMinutes(), DEFAULT_HABIT_DURATION_MIN);
             int[] window = windowMinutes(habit, prefs);
@@ -1020,8 +1037,17 @@ public class SmartSchedulerService {
                         userId, List.of(EventType.TASK, EventType.HABIT, EventType.WORKOUT),
                         false, start, end));
 
+        // Ein manuell verschobenes Workout hat ein gepinntes Kalender-Event. Es bleibt in der
+        // Datenbank zwar "flexibel", darf aber nicht mehr umgeplant werden — sonst zieht der
+        // Solver es sofort wieder weg und der Drag-and-Drop hätte keine Wirkung.
+        Set<Long> pinnedWorkoutIds = nz(input.getFixedEvents()).stream()
+                .filter(e -> e.getRelatedWorkout() != null)
+                .map(e -> e.getRelatedWorkout().getId())
+                .collect(Collectors.toSet());
+
         List<WorkoutSession> inRange = workoutSessionRepository.findByUserIdAndStartTimeBetween(userId, start, end);
         List<WorkoutSession> flexible = workoutSessionRepository.findByUserIdAndIsFlexibleTrue(userId).stream()
+                .filter(w -> !pinnedWorkoutIds.contains(w.getId()))
                 .filter(w -> isWorkoutRelevantToRange(w, startDate, endDate))
                 .collect(Collectors.toList());
         Set<Long> flexibleIds = flexible.stream().map(WorkoutSession::getId).collect(Collectors.toSet());

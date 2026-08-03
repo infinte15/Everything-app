@@ -1,3 +1,4 @@
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:provider/provider.dart';
@@ -5,24 +6,34 @@ import 'package:everything_app/models/calendar_event.dart';
 import 'package:everything_app/providers/calendar_provider.dart';
 import 'package:everything_app/providers/task_provider.dart';
 import 'package:everything_app/screens/calendar/calendar_screen.dart';
+import 'package:everything_app/widgets/pointer_aware_draggable.dart';
 import '../../support/fake_calendar_service.dart';
 
-/// [CalendarScreen] positions events using [DateTime.now()]-relative navigation, and
-/// [CalendarProvider.ensureScheduleGenerated] re-fetches with a window starting at the
-/// exact moment it runs (a little after these fixtures are built). Anchoring fixtures
-/// to "minutes from now" rather than a fixed clock time keeps them (a) inside that
-/// re-fetch window, since it's always in the future relative to fixture construction,
-/// and (b) within the currently-displayed week almost always, since the offsets are small.
-DateTime _soon(int minutes) => DateTime.now().add(Duration(minutes: minutes));
+/// Fixture-Zeit: [minutes] Minuten nach 09:00 des heutigen Tages.
+///
+/// Bewusst eine feste Uhrzeit statt "jetzt + n Minuten". Mit der Uhrzeit als Basis
+/// rutschten die Fixtures am Abend ans untere Ende der Leinwand, und ein Drag nach
+/// unten landete hinter Mitternacht — also außerhalb des DragTarget, wo gar kein Drop
+/// mehr ankommt. Die Drag-Tests fielen dadurch ab etwa 22 Uhr reihenweise um.
+///
+/// Der heutige Tag genügt: [CalendarProvider.ensureScheduleGenerated] lädt anschließend
+/// den kompletten Monat nach, nicht nur ein Fenster ab jetzt.
+DateTime _at(int minutes) {
+  final now = DateTime.now();
+  return DateTime(now.year, now.month, now.day, 9).add(Duration(minutes: minutes));
+}
 
 Future<CalendarProvider> _pumpCalendar(
   WidgetTester tester, {
   required FakeCalendarService fake,
-}) async {
   // The default 800x600 test surface is narrower/shorter than any real device this
   // screen targets and clips the event detail sheet by a couple of pixels; give it
   // realistic room instead of shrinking the sheet's content to fit a synthetic size.
-  tester.view.physicalSize = const Size(1080, 2400);
+  // Tall enough that the 1536px timeline canvas fits entirely — tests that need the
+  // timeline to actually scroll have to ask for a shorter surface.
+  Size surface = const Size(1080, 2400),
+}) async {
+  tester.view.physicalSize = surface;
   tester.view.devicePixelRatio = 1.0;
   addTearDown(tester.view.resetPhysicalSize);
   addTearDown(tester.view.resetDevicePixelRatio);
@@ -56,8 +67,8 @@ void main() {
       final original = CalendarEvent(
         id: 1,
         title: 'Draggable Event',
-        startTime: _soon(30),
-        endTime: _soon(90),
+        startTime: _at(0),
+        endTime: _at(60),
         eventType: 'TASK',
         isFixed: false,
       );
@@ -72,8 +83,8 @@ void main() {
 
       final start = tester.getCenter(eventFinder);
       final gesture = await tester.startGesture(start);
-      // LongPressDraggable requires holding past its configured delay before a
-      // move is recognized as a drag rather than a tap.
+      // Touch requires holding past the configured delay before a move is
+      // recognized as a drag rather than a tap.
       await tester.pump(const Duration(milliseconds: 500));
       await gesture.moveBy(const Offset(0, 32));
       await tester.pump(const Duration(milliseconds: 50));
@@ -94,12 +105,194 @@ void main() {
       provider.dispose();
     });
 
+    testWidgets('the drop lands on the time it was dropped at, not at the end of the day',
+        (tester) async {
+      // Regression: _globalToTime addierte _scroll.offset auf eine Koordinate, die den
+      // Scroll-Offset über die Paint-Transform schon enthielt. Das Raster startet bei
+      // "jetzt − 2h", also war der doppelt gezählte Wert fast immer jenseits der Leinwand
+      // und der clamp zog jeden Drop auf 23:45. Der alte Test prüfte nur "später als vorher"
+      // und ging deshalb mit.
+      final now = DateTime.now();
+      final start = DateTime(now.year, now.month, now.day, 9, 0);
+      final original = CalendarEvent(
+        id: 40,
+        title: 'Precise Event',
+        startTime: start,
+        endTime: start.add(const Duration(minutes: 60)),
+        eventType: 'TASK',
+        isFixed: false,
+      );
+      final fake = FakeCalendarService([original]);
+      // Kurze Bühne, damit das Raster überhaupt gescrollt ist — ohne Scrollweg wäre der
+      // doppelt gezählte Offset null und der Fehler unsichtbar.
+      final provider =
+          await _pumpCalendar(tester, fake: fake, surface: const Size(1080, 900));
+
+      final eventFinder = find.text('Precise Event');
+      await tester.ensureVisible(eventFinder);
+      await tester.pumpAndSettle();
+
+      // Den Block mittig ins Sichtfeld holen: gescrollt muss das Raster sein, damit der
+      // doppelt gezählte Offset überhaupt auffällt — und mittig, damit der Randscroll
+      // nicht mitmischt und das Ergebnis verwischt.
+      final timeline = find.ancestor(of: eventFinder, matching: find.byType(Scrollable)).first;
+      final pos = tester.state<ScrollableState>(timeline).position;
+      pos.jumpTo(9 * kHourHeight - pos.viewportDimension / 2 + kHourHeight / 2);
+      await tester.pumpAndSettle();
+      expect(pos.pixels, greaterThan(0),
+          reason: 'die Regression zeigt sich nur bei gescrolltem Raster');
+
+      // Genau eine Stundenhöhe nach unten ziehen == genau eine Stunde später.
+      final gesture = await tester.startGesture(
+        tester.getCenter(eventFinder),
+        kind: PointerDeviceKind.mouse,
+      );
+      for (var i = 0; i < 4; i++) {
+        await gesture.moveBy(const Offset(0, kHourHeight / 4));
+        await tester.pump(const Duration(milliseconds: 16));
+      }
+      await gesture.up();
+      await tester.pumpAndSettle();
+
+      final updated = fake.events.firstWhere((e) => e.id == 40);
+      expect(updated.startTime, DateTime(now.year, now.month, now.day, 10, 0),
+          reason: 'ein Block, der um eine Stundenhöhe nach unten gezogen wird, '
+              'muss eine Stunde später liegen');
+      expect(updated.endTime, DateTime(now.year, now.month, now.day, 11, 0));
+
+      provider.dispose();
+    });
+
+    testWidgets('a mouse drag reschedules the event without any hold', (tester) async {
+      // Regression: mit LongPressDraggable kam mit der Maus nie ein Drag zustande.
+      // Dessen DelayedMultiDragGestureRecognizer verwirft die Geste, sobald sich der
+      // Zeiger während der Verzögerung weiter als den Hit-Slop bewegt — und der ist
+      // für PointerDeviceKind.mouse genau 1 Pixel.
+      final original = CalendarEvent(
+        id: 30,
+        title: 'Mouse Event',
+        startTime: _at(0),
+        endTime: _at(60),
+        eventType: 'TASK',
+        isFixed: false,
+      );
+      final fake = FakeCalendarService([original]);
+      final provider = await _pumpCalendar(tester, fake: fake);
+
+      final eventFinder = find.text('Mouse Event');
+      await tester.ensureVisible(eventFinder);
+      await tester.pumpAndSettle();
+
+      final gesture = await tester.startGesture(
+        tester.getCenter(eventFinder),
+        kind: PointerDeviceKind.mouse,
+      );
+      // Bewusst ohne Halten und in kleinen Schritten — genau das, was eine Maus tut.
+      for (var i = 0; i < 6; i++) {
+        await gesture.moveBy(const Offset(0, 12));
+        await tester.pump(const Duration(milliseconds: 16));
+      }
+      await gesture.up();
+      await tester.pumpAndSettle();
+
+      expect(fake.updateCallCount, greaterThanOrEqualTo(1),
+          reason: 'a mouse drag must reschedule the event just like a touch drag');
+      final updated = fake.events.firstWhere((e) => e.id == 30);
+      expect(updated.startTime.isAfter(original.startTime), isTrue,
+          reason: 'dragging downward with the mouse must move the event later');
+      expect(updated.startTime.minute % 15, 0);
+      // Die Dauer darf ein Verschieben nicht verändern.
+      expect(updated.endTime.difference(updated.startTime),
+          original.endTime.difference(original.startTime));
+
+      provider.dispose();
+    });
+
+    testWidgets('a mouse click with a tiny jitter still opens the detail sheet', (tester) async {
+      // Der Maus-Slop muss größer als das eine Framework-Pixel sein, sonst wird aus
+      // jedem leicht verwackelten Klick ein Mini-Drag statt eines Taps.
+      final event = CalendarEvent(
+        id: 31,
+        title: 'Jitter Click',
+        description: 'Daily sync',
+        startTime: _at(0),
+        endTime: _at(60),
+        eventType: 'TASK',
+        isFixed: false,
+      );
+      final fake = FakeCalendarService([event]);
+      final provider = await _pumpCalendar(tester, fake: fake);
+
+      final eventFinder = find.text('Jitter Click');
+      await tester.ensureVisible(eventFinder);
+      await tester.pumpAndSettle();
+
+      final gesture = await tester.startGesture(
+        tester.getCenter(eventFinder),
+        kind: PointerDeviceKind.mouse,
+      );
+      await gesture.moveBy(const Offset(1.5, 1.5));
+      await tester.pump(const Duration(milliseconds: 16));
+      await gesture.up();
+      await tester.pumpAndSettle();
+
+      expect(find.text('Daily sync'), findsOneWidget,
+          reason: 'a jittery click must still count as a tap');
+      expect(fake.updateCallCount, 0, reason: 'a click must not reschedule anything');
+
+      provider.dispose();
+    });
+
+    testWidgets('a touch swipe without holding scrolls instead of dragging', (tester) async {
+      // Die Gegenprobe zum Maus-Test: am Finger muss die Verzögerung erhalten bleiben,
+      // sonst wird jede Wischgeste, die auf einem Event beginnt, zum Verschieben.
+      final event = CalendarEvent(
+        id: 32,
+        title: 'Swipe Event',
+        startTime: _at(0),
+        endTime: _at(60),
+        eventType: 'TASK',
+        isFixed: false,
+      );
+      final fake = FakeCalendarService([event]);
+      // Kurze Bühne, damit die 1536px hohe Leinwand überhaupt Scrollweg hat.
+      final provider =
+          await _pumpCalendar(tester, fake: fake, surface: const Size(1080, 900));
+
+      final eventFinder = find.text('Swipe Event');
+      await tester.ensureVisible(eventFinder);
+      await tester.pumpAndSettle();
+
+      // Der innerste Scrollable über dem Event ist das Zeitraster; byType(...).first
+      // wäre die PageView, die auf eine senkrechte Wischgeste gar nicht reagiert.
+      final timeline = find.ancestor(of: eventFinder, matching: find.byType(Scrollable)).first;
+      final before = tester.state<ScrollableState>(timeline).position.pixels;
+
+      // Nach unten wischen: ensureVisible hat die Leinwand ans Ende gescrollt, nach oben
+      // gäbe es keinen Weg mehr. Es ist zugleich die Richtung, die beim Ziehen das Event
+      // nach hinten verschieben würde — genau der Unterschied, um den es hier geht.
+      final gesture = await tester.startGesture(tester.getCenter(eventFinder));
+      for (var i = 0; i < 6; i++) {
+        await gesture.moveBy(const Offset(0, 12));
+        await tester.pump(const Duration(milliseconds: 16));
+      }
+      await gesture.up();
+      await tester.pumpAndSettle();
+
+      expect(fake.updateCallCount, 0,
+          reason: 'a swipe without holding must not move the event');
+      expect(tester.state<ScrollableState>(timeline).position.pixels, isNot(before),
+          reason: 'the swipe should have scrolled the timeline instead');
+
+      provider.dispose();
+    });
+
     testWidgets('a fixed (pinned) event cannot be dragged', (tester) async {
       final pinned = CalendarEvent(
         id: 2,
         title: 'Pinned Meeting',
-        startTime: _soon(30),
-        endTime: _soon(90),
+        startTime: _at(0),
+        endTime: _at(60),
         eventType: 'FIXED',
         isFixed: true,
       );
@@ -109,10 +302,10 @@ void main() {
       final eventFinder = find.text('Pinned Meeting');
       expect(eventFinder, findsOneWidget);
 
-      // No LongPressDraggable should wrap a fixed event at all.
+      // No draggable should wrap a fixed event at all.
       final draggableAncestor = find.ancestor(
         of: eventFinder,
-        matching: find.byType(LongPressDraggable<CalendarEvent>),
+        matching: find.byType(PointerAwareDraggable<CalendarEvent>),
       );
       expect(draggableAncestor, findsNothing);
 
@@ -132,12 +325,12 @@ void main() {
       provider.dispose();
     });
 
-    testWidgets('a movable (non-fixed) event is wrapped in a LongPressDraggable', (tester) async {
+    testWidgets('a movable (non-fixed) event is wrapped in a draggable', (tester) async {
       final movable = CalendarEvent(
         id: 3,
         title: 'Movable Task',
-        startTime: _soon(30),
-        endTime: _soon(90),
+        startTime: _at(0),
+        endTime: _at(60),
         eventType: 'TASK',
         isFixed: false,
       );
@@ -147,7 +340,7 @@ void main() {
       final eventFinder = find.text('Movable Task');
       final draggableAncestor = find.ancestor(
         of: eventFinder,
-        matching: find.byType(LongPressDraggable<CalendarEvent>),
+        matching: find.byType(PointerAwareDraggable<CalendarEvent>),
       );
       expect(draggableAncestor, findsOneWidget);
 
@@ -161,16 +354,16 @@ void main() {
       final first = CalendarEvent(
         id: 10,
         title: 'Overlap A',
-        startTime: _soon(30),
-        endTime: _soon(90),
+        startTime: _at(0),
+        endTime: _at(60),
         eventType: 'TASK',
         isFixed: false,
       );
       final second = CalendarEvent(
         id: 11,
         title: 'Overlap B',
-        startTime: _soon(45),
-        endTime: _soon(105),
+        startTime: _at(15),
+        endTime: _at(75),
         eventType: 'TASK',
         isFixed: false,
       );
@@ -188,7 +381,7 @@ void main() {
 
       for (final finder in [a, b]) {
         expect(
-          find.ancestor(of: finder, matching: find.byType(LongPressDraggable<CalendarEvent>)),
+          find.ancestor(of: finder, matching: find.byType(PointerAwareDraggable<CalendarEvent>)),
           findsOneWidget,
           reason: 'each overlapping event must remain independently draggable',
         );
@@ -204,8 +397,8 @@ void main() {
       final event = CalendarEvent(
         id: 12,
         title: 'Anchor',
-        startTime: _soon(30),
-        endTime: _soon(90),
+        startTime: _at(0),
+        endTime: _at(60),
         eventType: 'TASK',
         isFixed: false,
       );
@@ -235,8 +428,8 @@ void main() {
       final pinned = CalendarEvent(
         id: 20,
         title: 'Pinned Task',
-        startTime: _soon(30),
-        endTime: _soon(90),
+        startTime: _at(0),
+        endTime: _at(60),
         eventType: 'TASK',
         isFixed: true,
       );
@@ -260,8 +453,8 @@ void main() {
       final movable = CalendarEvent(
         id: 21,
         title: 'Movable Task',
-        startTime: _soon(30),
-        endTime: _soon(90),
+        startTime: _at(0),
+        endTime: _at(60),
         eventType: 'TASK',
         isFixed: false,
       );
@@ -287,8 +480,8 @@ void main() {
         id: 4,
         title: 'Standup',
         description: 'Daily sync',
-        startTime: _soon(30),
-        endTime: _soon(60),
+        startTime: _at(0),
+        endTime: _at(30),
         eventType: 'TASK',
         isFixed: false,
       );
@@ -316,8 +509,8 @@ void main() {
         id: 5,
         title: 'Standup',
         description: 'Daily sync',
-        startTime: _soon(30),
-        endTime: _soon(60),
+        startTime: _at(0),
+        endTime: _at(30),
         eventType: 'STUDY',
         isFixed: false,
       );
