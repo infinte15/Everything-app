@@ -1,22 +1,56 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
-/// Visual language inspired by Lyfta (dark gym tracker).
+/// Layout und Formensprache sind an Lyfta angelehnt (dunkler Gym-Tracker), die
+/// Farben kommen aus der "Kinetic Mono"-Palette der restlichen App ([AppTheme]).
+///
+/// Die Oberflaeche bleibt bewusst weitgehend farblos - Periwinkle setzt nur
+/// Akzente. Davon ausgenommen ist die Anatomie: die Muskelfarben unten sind
+/// Fachfarben (rot = beansprucht, blau = unterstuetzend) und folgen der
+/// Oberflaechenfarbe absichtlich *nicht*.
 abstract final class LyftaTheme {
-  static const background = Color(0xFF000000);
-  static const surface = Color(0xFF1C1C1E);
-  static const surfaceElevated = Color(0xFF2C2C2E);
-  static const surfaceHighlight = Color(0xFF3A3A3C);
-  static const primary = Color(0xFF30D158);
-  static const primaryMuted = Color(0xFF248A3D);
-  static const onPrimary = Color(0xFF000000);
-  static const textPrimary = Color(0xFFFFFFFF);
-  static const textSecondary = Color(0xFF8E8E93);
-  static const textTertiary = Color(0xFF636366);
-  static const divider = Color(0xFF38383A);
-  static const danger = Color(0xFFFF453A);
-  static const warning = Color(0xFFFF9F0A);
-  static const prGold = Color(0xFFFFD60A);
+  static const background = Color(0xFF0E0E0E); // AppTheme.surfaceColor
+  static const surface = Color(0xFF131313); // surfaceContainerLow
+  static const surfaceElevated = Color(0xFF1F2020); // surfaceContainerHigh
+  static const surfaceHighlight = Color(0xFF252626); // surfaceContainerHighest
+
+  /// [AppTheme.primaryColor] - der App-Akzent. Sparsam einsetzen.
+  static const primary = Color(0xFFC2C1FF);
+
+  /// Dunkles Indigo auf hellem Periwinkle, wie der FAB im App-Theme.
+  static const onPrimary = Color(0xFF2D27AD);
+
+  static const textPrimary = Color(0xFFE7E5E5); // onSurfaceColor
+  static const textSecondary = Color(0xFFACABAA); // onSurfaceVariant
+
+  /// Bewusst nicht `outlineVariant` (#484848): das waere auf #0E0E0E nur 2,1:1
+  /// und damit fuer den 11px-[label]-Stil unlesbar. #7A7877 liegt bei 4,5:1.
+  static const textTertiary = Color(0xFF7A7877);
+  static const divider = Color(0xFF484848); // outlineVariant
+  static const danger = Color(0xFFEC7C8A); // AppTheme.errorColor
+
+  /// Persoenliche Bestleistungen. Gold statt Periwinkle, damit ein Rekord nicht
+  /// wie ein weiteres Bedienelement aussieht - entsaettigt, damit es sich in die
+  /// ansonsten farbarme Oberflaeche einfuegt.
+  static const prAccent = Color(0xFFE5C07B);
+
+  // ── Anatomie ───────────────────────────────────────────────────────────────
+  // Heller Koerper auf dunklem Grund, Muskeln rot/blau - so wie in der Vorlage.
+
+  /// Grundfarbe der Muskelflaechen: hell, damit die Figur auf #0E0E0E steht.
+  static const bodyBase = Color(0xFFCFCFD6);
+
+  /// Kopf, Haende, Fuesse, Knie - nie eingefaerbt, etwas dunkler fuer Tiefe.
+  static const bodyNeutral = Color(0xFF9B9BA6);
+
+  /// Trennlinien zwischen den Muskelflaechen.
+  static const bodyOutline = Color(0xFF56565E);
+
+  /// Beanspruchter Muskel.
+  static const musclePrimary = Color(0xFFE5484D);
+
+  /// Unterstuetzender Muskel.
+  static const muscleSecondary = Color(0xFF4C8DF6);
 
   static ThemeData get darkTheme {
     final base = ThemeData(
@@ -27,7 +61,11 @@ abstract final class LyftaTheme {
         surface: surface,
         primary: primary,
         onPrimary: onPrimary,
+        secondary: prAccent,
         error: danger,
+        onSurface: textPrimary,
+        onSurfaceVariant: textSecondary,
+        outlineVariant: divider,
       ),
       dividerColor: divider,
       appBarTheme: AppBarTheme(

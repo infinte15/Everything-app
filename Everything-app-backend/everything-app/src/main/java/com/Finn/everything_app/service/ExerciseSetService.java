@@ -2,10 +2,16 @@ package com.Finn.everything_app.service;
 
 import com.Finn.everything_app.model.*;
 import com.Finn.everything_app.repository.*;
+import com.Finn.everything_app.repository.projection.SessionAggregateRow;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+
+import java.util.Collection;
 import java.util.List;
+import java.util.Map;
+import java.util.function.Function;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -32,6 +38,20 @@ public class ExerciseSetService {
 
     public List<ExerciseSet> getSetsBySession(Long sessionId) {
         return exerciseSetRepository.findByWorkoutSessionIdOrderBySetNumberAsc(sessionId);
+    }
+
+    /** Wie {@link #getSetsBySession(Long)}, aber nur fuer den Besitzer der Einheit. */
+    public List<ExerciseSet> getSetsBySessionForUser(Long sessionId, Long userId) {
+        return exerciseSetRepository.findBySessionForUser(sessionId, userId);
+    }
+
+    /** Satzanzahl und Volumen fuer mehrere Einheiten in einer Abfrage, indiziert nach Session-ID. */
+    public Map<Long, SessionAggregateRow> aggregateBySessionIds(Collection<Long> sessionIds) {
+        if (sessionIds == null || sessionIds.isEmpty()) {
+            return Map.of();
+        }
+        return exerciseSetRepository.aggregateBySessionIds(sessionIds).stream()
+                .collect(Collectors.toMap(SessionAggregateRow::getSessionId, Function.identity()));
     }
 
     public ExerciseSet getSetById(Long id) {

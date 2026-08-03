@@ -3,6 +3,7 @@ package com.Finn.everything_app.controller;
 import com.Finn.everything_app.dto.*;
 import com.Finn.everything_app.mapper.*;
 import com.Finn.everything_app.model.*;
+import com.Finn.everything_app.repository.projection.SessionAggregateRow;
 import com.Finn.everything_app.security.CurrentUser;
 import com.Finn.everything_app.service.*;
 import lombok.RequiredArgsConstructor;
@@ -12,6 +13,7 @@ import org.springframework.web.bind.annotation.*;
 import jakarta.validation.Valid;
 import java.time.LocalDate;
 import java.util.List;
+import java.util.Map;
 import java.util.stream.Collectors;
 
 @RestController
@@ -24,11 +26,13 @@ public class SportsController {
     private final WorkoutSessionService sessionService;
     private final ExerciseService exerciseService;
     private final ExerciseSetService setService;
+    private final WorkoutLoggingService loggingService;
 
     private final WorkoutPlanMapper planMapper;
     private final WorkoutSessionMapper sessionMapper;
     private final ExerciseMapper exerciseMapper;
     private final ExerciseSetMapper setMapper;
+    private final WorkoutLogMapper logMapper;
 
     // ==================== WORKOUT PLANS ====================
 
@@ -96,10 +100,23 @@ public class SportsController {
 
     @GetMapping("/sessions")
     public ResponseEntity<List<WorkoutSessionDTO>> getAllSessions(@CurrentUser Long userId) {
-        List<WorkoutSession> sessions = sessionService.getUserSessions(userId);
-        return ResponseEntity.ok(
-                sessions.stream().map(sessionMapper::toDTO).collect(Collectors.toList())
-        );
+        return ResponseEntity.ok(withAggregates(sessionService.getUserSessions(userId)));
+    }
+
+    /**
+     * Haengt Satzanzahl und Volumen an eine Liste von Einheiten - mit genau einer zusaetzlichen
+     * Abfrage statt einer pro Einheit.
+     */
+    private List<WorkoutSessionDTO> withAggregates(List<WorkoutSession> sessions) {
+        if (sessions.isEmpty()) {
+            return List.of();
+        }
+        List<Long> ids = sessions.stream().map(WorkoutSession::getId).toList();
+        Map<Long, SessionAggregateRow> byId = setService.aggregateBySessionIds(ids);
+
+        return sessions.stream()
+                .map(s -> sessionMapper.toDTO(s, byId.get(s.getId())))
+                .collect(Collectors.toList());
     }
 
 
@@ -122,16 +139,21 @@ public class SportsController {
         LocalDate end = LocalDate.parse(endDate);
 
         List<WorkoutSession> sessions = sessionService.getSessionsInDateRange(userId, start, end);
-        return ResponseEntity.ok(
-                sessions.stream().map(sessionMapper::toDTO).collect(Collectors.toList())
-        );
+        return ResponseEntity.ok(withAggregates(sessions));
     }
 
 
+    /**
+     * Liefert die Einheit inklusive aller protokollierten Übungen und Sätze. Zwingend
+     * user-gebunden - hier hängt die komplette Trainingshistorie dran.
+     */
     @GetMapping("/sessions/{id}")
-    public ResponseEntity<WorkoutSessionDTO> getSessionById(@PathVariable Long id) {
-        WorkoutSession session = sessionService.getSessionById(id);
-        return ResponseEntity.ok(sessionMapper.toDTO(session));
+    public ResponseEntity<WorkoutSessionDetailDTO> getSessionById(
+            @CurrentUser Long userId,
+            @PathVariable Long id) {
+
+        WorkoutSession session = loggingService.getSessionDetail(userId, id);
+        return ResponseEntity.ok(logMapper.toDetail(session));
     }
 
 
@@ -177,12 +199,82 @@ public class SportsController {
     // ==================== EXERCISES ====================
 
 
+    /**
+     * Paginierte Katalog-Suche. Ohne Parameter liefert der Endpunkt die erste Seite
+     * alphabetisch - der Katalog hat ~870 Einträge, eine ungefilterte Vollausgabe wäre
+     * für den Client unbrauchbar.
+     */
     @GetMapping("/exercises")
-    public ResponseEntity<List<ExerciseDTO>> getAllExercises() {
-        List<Exercise> exercises = exerciseService.getAllExercises();
+    public ResponseEntity<PagedResponse<ExerciseDTO>> searchExercises(
+            @CurrentUser Long userId,
+            @RequestParam(required = false) String search,
+            @RequestParam(required = false) String muscle,
+            @RequestParam(required = false) String equipment,
+            @RequestParam(required = false) String category,
+            @RequestParam(required = false) String difficulty,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "30") int size) {
+
+        return ResponseEntity.ok(PagedResponse.of(
+                exerciseService.searchExercises(
+                        userId, search, muscle, equipment, category, difficulty, page, size),
+                exerciseMapper::toDTO
+        ));
+    }
+
+
+    @GetMapping("/exercises/muscles")
+    public ResponseEntity<List<MuscleGroupDTO>> getMuscleGroups() {
         return ResponseEntity.ok(
-                exercises.stream().map(exerciseMapper::toDTO).collect(Collectors.toList())
+                java.util.Arrays.stream(MuscleGroup.values())
+                        .map(m -> new MuscleGroupDTO(m.getSlug(), m.getLabel()))
+                        .collect(Collectors.toList())
         );
+    }
+
+
+    @GetMapping("/exercises/filters")
+    public ResponseEntity<ExerciseFiltersDTO> getExerciseFilters() {
+        return ResponseEntity.ok(new ExerciseFiltersDTO(
+                exerciseService.getEquipmentValues(),
+                exerciseService.getCategoryValues(),
+                exerciseService.getDifficultyValues()
+        ));
+    }
+
+
+    @GetMapping("/exercises/{id}")
+    public ResponseEntity<ExerciseDTO> getExerciseById(@PathVariable Long id) {
+        return ResponseEntity.ok(exerciseMapper.toDTO(exerciseService.getExerciseById(id)));
+    }
+
+
+    @GetMapping("/exercises/{id}/history")
+    public ResponseEntity<List<ExerciseHistoryEntryDTO>> getExerciseHistory(
+            @CurrentUser Long userId,
+            @PathVariable Long id,
+            @RequestParam(defaultValue = "20") int limit) {
+
+        return ResponseEntity.ok(loggingService.getExerciseHistory(userId, id, limit));
+    }
+
+
+    @GetMapping("/exercises/{id}/last")
+    public ResponseEntity<ExerciseHistoryEntryDTO> getLastPerformance(
+            @CurrentUser Long userId,
+            @PathVariable Long id) {
+
+        ExerciseHistoryEntryDTO last = loggingService.getLastPerformance(userId, id);
+        return last != null ? ResponseEntity.ok(last) : ResponseEntity.noContent().build();
+    }
+
+
+    @GetMapping("/exercises/{id}/records")
+    public ResponseEntity<PersonalRecordDTO> getPersonalRecords(
+            @CurrentUser Long userId,
+            @PathVariable Long id) {
+
+        return ResponseEntity.ok(loggingService.getPersonalRecords(userId, id));
     }
 
 
@@ -211,19 +303,20 @@ public class SportsController {
 
     @PutMapping("/exercises/{id}")
     public ResponseEntity<ExerciseDTO> updateExercise(
+            @CurrentUser Long userId,
             @PathVariable Long id,
             @Valid @RequestBody ExerciseDTO exerciseDTO) {
 
         Exercise exercise = exerciseMapper.toEntity(exerciseDTO);
-        Exercise updated = exerciseService.updateExercise(id, exercise);
+        Exercise updated = exerciseService.updateExercise(userId, id, exercise);
 
         return ResponseEntity.ok(exerciseMapper.toDTO(updated));
     }
 
 
     @DeleteMapping("/exercises/{id}")
-    public ResponseEntity<Void> deleteExercise(@PathVariable Long id) {
-        exerciseService.deleteExercise(id);
+    public ResponseEntity<Void> deleteExercise(@CurrentUser Long userId, @PathVariable Long id) {
+        exerciseService.deleteExercise(userId, id);
         return ResponseEntity.noContent().build();
     }
 
@@ -231,8 +324,11 @@ public class SportsController {
 
 
     @GetMapping("/sets/session/{sessionId}")
-    public ResponseEntity<List<ExerciseSetDTO>> getSetsBySession(@PathVariable Long sessionId) {
-        List<ExerciseSet> sets = setService.getSetsBySession(sessionId);
+    public ResponseEntity<List<ExerciseSetDTO>> getSetsBySession(
+            @CurrentUser Long userId,
+            @PathVariable Long sessionId) {
+
+        List<ExerciseSet> sets = setService.getSetsBySessionForUser(sessionId, userId);
         return ResponseEntity.ok(
                 sets.stream().map(setMapper::toDTO).collect(Collectors.toList())
         );

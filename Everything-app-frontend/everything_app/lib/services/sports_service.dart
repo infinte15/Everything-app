@@ -1,205 +1,312 @@
 import 'dart:convert';
-import 'package:flutter/foundation.dart';
+
+import '../config/api_config.dart';
+import '../models/gym/gym_models.dart';
 import 'api_service.dart';
+
+/// Ergebnis einer Katalog-Seite.
+class GymExercisePage {
+  final List<GymExercise> content;
+  final int page;
+  final int totalElements;
+  final bool last;
+
+  const GymExercisePage({
+    this.content = const [],
+    this.page = 0,
+    this.totalElements = 0,
+    this.last = true,
+  });
+
+  factory GymExercisePage.fromMap(Map<String, dynamic> m) => GymExercisePage(
+        content: (m['content'] as List? ?? [])
+            .whereType<Map>()
+            .map((e) => GymExercise.fromMap(Map<String, dynamic>.from(e)))
+            .toList(),
+        page: m['page'] as int? ?? 0,
+        totalElements: m['totalElements'] as int? ?? 0,
+        last: m['last'] as bool? ?? true,
+      );
+}
+
+/// Belegte Filterwerte des Katalogs.
+class GymExerciseFilters {
+  final List<String> equipment;
+  final List<String> categories;
+  final List<String> difficulties;
+
+  const GymExerciseFilters({
+    this.equipment = const [],
+    this.categories = const [],
+    this.difficulties = const [],
+  });
+
+  factory GymExerciseFilters.fromMap(Map<String, dynamic> m) => GymExerciseFilters(
+        equipment: (m['equipment'] as List? ?? []).map((e) => e.toString()).toList(),
+        categories: (m['categories'] as List? ?? []).map((e) => e.toString()).toList(),
+        difficulties: (m['difficulties'] as List? ?? []).map((e) => e.toString()).toList(),
+      );
+}
+
+/// Wird geworfen, wenn das Backend einen Fehler meldet - der Provider macht daraus
+/// eine Meldung für den Nutzer. Fehler werden bewusst nicht mehr verschluckt.
+class SportsApiException implements Exception {
+  final String message;
+  const SportsApiException(this.message);
+
+  @override
+  String toString() => message;
+}
 
 class SportsService {
   final ApiService _api = ApiService();
 
-  // ── Workout Plans ────────────────────────────────────────────────────────────
+  // ── Übungs-Katalog ───────────────────────────────────────────────────────────
 
-  Future<List<Map<String, dynamic>>> getAllPlans() async {
-    try {
-      final response = await _api.get('/api/sports/plans');
-      if (_api.isSuccess(response)) {
-        final List<dynamic> data = json.decode(response.body);
-        return data.cast<Map<String, dynamic>>();
-      }
-      return [];
-    } catch (e) {
-      debugPrint('Error fetching workout plans: $e');
-      return [];
-    }
-  }
-
-  Future<Map<String, dynamic>?> createPlan(Map<String, dynamic> plan) async {
-    try {
-      final response = await _api.post('/api/sports/plans', plan);
-      if (_api.isSuccess(response)) {
-        return json.decode(response.body);
-      }
-      return null;
-    } catch (e) {
-      debugPrint('Error creating plan: $e');
-      return null;
-    }
-  }
-
-  Future<Map<String, dynamic>?> updatePlan(
-    int id,
-    Map<String, dynamic> plan,
-  ) async {
-    try {
-      final response = await _api.put('/api/sports/plans/$id', plan);
-      if (_api.isSuccess(response)) {
-        return json.decode(response.body);
-      }
-      return null;
-    } catch (e) {
-      debugPrint('Error updating plan: $e');
-      return null;
-    }
-  }
-
-  Future<bool> deletePlan(int id) async {
-    try {
-      final response = await _api.delete('/api/sports/plans/$id');
-      return _api.isSuccess(response);
-    } catch (e) {
-      debugPrint('Error deleting plan: $e');
-      return false;
-    }
-  }
-
-  // ── Workout Sessions ─────────────────────────────────────────────────────────
-
-  Future<List<Map<String, dynamic>>> getAllSessions() async {
-    try {
-      final response = await _api.get('/api/sports/sessions');
-      if (_api.isSuccess(response)) {
-        final List<dynamic> data = json.decode(response.body);
-        return data.cast<Map<String, dynamic>>();
-      }
-      return [];
-    } catch (e) {
-      debugPrint('Error fetching sessions: $e');
-      return [];
-    }
-  }
-
-  Future<Map<String, dynamic>?> createSession(
-    Map<String, dynamic> session,
-  ) async {
-    try {
-      final response = await _api.post('/api/sports/sessions', session);
-      if (_api.isSuccess(response)) {
-        return json.decode(response.body);
-      }
-      debugPrint('Failed to create session: ${response.statusCode} ${response.body}');
-      return null;
-    } catch (e) {
-      debugPrint('Error creating session: $e');
-      return null;
-    }
-  }
-
-  Future<Map<String, dynamic>?> updateSession(
-    int id,
-    Map<String, dynamic> session,
-  ) async {
-    try {
-      final response = await _api.put('/api/sports/sessions/$id', session);
-      if (_api.isSuccess(response)) {
-        return json.decode(response.body);
-      }
-      return null;
-    } catch (e) {
-      debugPrint('Error updating session: $e');
-      return null;
-    }
-  }
-
-  Future<bool> deleteSession(int id) async {
-    try {
-      final response = await _api.delete('/api/sports/sessions/$id');
-      return _api.isSuccess(response);
-    } catch (e) {
-      debugPrint('Error deleting session: $e');
-      return false;
-    }
-  }
-
-  // ── Exercises ────────────────────────────────────────────────────────────────
-
-  Future<List<Map<String, dynamic>>> getAllExercises() async {
-    try {
-      final response = await _api.get('/api/sports/exercises');
-      if (_api.isSuccess(response)) {
-        final List<dynamic> data = json.decode(response.body);
-        return data.cast<Map<String, dynamic>>();
-      }
-      return [];
-    } catch (e) {
-      debugPrint('Error fetching exercises: $e');
-      return [];
-    }
-  }
-
-  Future<Map<String, dynamic>?> createExercise(
-    Map<String, dynamic> exercise,
-  ) async {
-    try {
-      final response = await _api.post('/api/sports/exercises', exercise);
-      if (_api.isSuccess(response)) {
-        return json.decode(response.body);
-      }
-      return null;
-    } catch (e) {
-      debugPrint('Error creating exercise: $e');
-      return null;
-    }
-  }
-
-  // ── Exercise Sets ────────────────────────────────────────────────────────────
-
-  Future<List<Map<String, dynamic>>> getSetsBySession(int sessionId) async {
-    try {
-      final response = await _api.get('/api/sports/sets/session/$sessionId');
-      if (_api.isSuccess(response)) {
-        final List<dynamic> data = json.decode(response.body);
-        return data.cast<Map<String, dynamic>>();
-      }
-      return [];
-    } catch (e) {
-      debugPrint('Error fetching sets: $e');
-      return [];
-    }
-  }
-
-  Future<Map<String, dynamic>?> createSet(Map<String, dynamic> setData) async {
-    try {
-      final response = await _api.post('/api/sports/sets', setData);
-      if (_api.isSuccess(response)) {
-        return json.decode(response.body);
-      }
-      debugPrint('Failed to create set: ${response.statusCode} ${response.body}');
-      return null;
-    } catch (e) {
-      debugPrint('Error creating set: $e');
-      return null;
-    }
-  }
-
-  // ── Statistics ───────────────────────────────────────────────────────────────
-
-  Future<Map<String, dynamic>?> getProgress({
-    String? startDate,
-    String? endDate,
+  Future<GymExercisePage> searchExercises({
+    String? search,
+    String? muscle,
+    String? equipment,
+    String? category,
+    String? difficulty,
+    int page = 0,
+    int size = 30,
   }) async {
-    try {
-      String url = '/api/sports/stats/progress';
-      final params = <String>[];
-      if (startDate != null) params.add('startDate=$startDate');
-      if (endDate != null) params.add('endDate=$endDate');
-      if (params.isNotEmpty) url += '?${params.join('&')}';
+    final query = <String, String>{
+      if (search != null && search.isNotEmpty) 'search': search,
+      if (muscle != null && muscle.isNotEmpty) 'muscle': muscle,
+      if (equipment != null && equipment.isNotEmpty) 'equipment': equipment,
+      if (category != null && category.isNotEmpty) 'category': category,
+      if (difficulty != null && difficulty.isNotEmpty) 'difficulty': difficulty,
+      'page': '$page',
+      'size': '$size',
+    };
+    final url = Uri.parse(ApiConfig.exercises).replace(queryParameters: query).toString();
+    return GymExercisePage.fromMap(await _getMap(url));
+  }
 
-      final response = await _api.get(url);
-      if (_api.isSuccess(response)) {
-        return json.decode(response.body);
-      }
-      return null;
-    } catch (e) {
-      debugPrint('Error fetching progress: $e');
-      return null;
+  Future<GymExercise> getExercise(int id) async =>
+      GymExercise.fromMap(await _getMap(ApiConfig.exerciseById(id)));
+
+  Future<List<GymMuscleOption>> getMuscleGroups() async {
+    final list = await _getList(ApiConfig.muscleGroups);
+    return list.map(GymMuscleOption.fromMap).toList();
+  }
+
+  Future<GymExerciseFilters> getExerciseFilters() async =>
+      GymExerciseFilters.fromMap(await _getMap(ApiConfig.exerciseFilters));
+
+  Future<List<GymHistoryEntry>> getExerciseHistory(int exerciseId, {int limit = 20}) async {
+    final list = await _getList(ApiConfig.exerciseHistory(exerciseId, limit: limit));
+    return list.map(GymHistoryEntry.fromMap).toList();
+  }
+
+  Future<GymPersonalRecord> getPersonalRecords(int exerciseId) async =>
+      GymPersonalRecord.fromMap(await _getMap(ApiConfig.exerciseRecords(exerciseId)));
+
+  // ── Routinen ─────────────────────────────────────────────────────────────────
+
+  Future<List<GymRoutine>> getRoutines() async {
+    final list = await _getList(ApiConfig.routines);
+    return list.map(GymRoutine.fromMap).toList();
+  }
+
+  Future<GymRoutine> getRoutine(int id) async =>
+      GymRoutine.fromMap(await _getMap(ApiConfig.routineById(id)));
+
+  Future<GymRoutine> createRoutine({
+    required String name,
+    String? description,
+    String? imageUrl,
+    String? dayLabel,
+    int? estimatedDurationMinutes,
+    int? workoutPlanId,
+    required List<GymRoutineExercise> exercises,
+  }) async {
+    final body = _routineBody(
+      name: name,
+      description: description,
+      imageUrl: imageUrl,
+      dayLabel: dayLabel,
+      estimatedDurationMinutes: estimatedDurationMinutes,
+      workoutPlanId: workoutPlanId,
+      exercises: exercises,
+    );
+    final response = await _api.post(ApiConfig.routines, body);
+    return GymRoutine.fromMap(_decodeMap(response.body, response.statusCode, _api.isSuccess(response)));
+  }
+
+  Future<GymRoutine> updateRoutine({
+    required int id,
+    required String name,
+    String? description,
+    String? imageUrl,
+    String? dayLabel,
+    int? estimatedDurationMinutes,
+    int? workoutPlanId,
+    required List<GymRoutineExercise> exercises,
+  }) async {
+    final body = _routineBody(
+      name: name,
+      description: description,
+      imageUrl: imageUrl,
+      dayLabel: dayLabel,
+      estimatedDurationMinutes: estimatedDurationMinutes,
+      workoutPlanId: workoutPlanId,
+      exercises: exercises,
+    );
+    final response = await _api.put(ApiConfig.routineById(id), body);
+    return GymRoutine.fromMap(_decodeMap(response.body, response.statusCode, _api.isSuccess(response)));
+  }
+
+  Future<void> deleteRoutine(int id) async {
+    final response = await _api.delete(ApiConfig.routineById(id));
+    if (!_api.isSuccess(response)) {
+      throw SportsApiException(_api.getErrorMessage(response));
     }
   }
+
+  Map<String, dynamic> _routineBody({
+    required String name,
+    String? description,
+    String? imageUrl,
+    String? dayLabel,
+    int? estimatedDurationMinutes,
+    int? workoutPlanId,
+    required List<GymRoutineExercise> exercises,
+  }) =>
+      {
+        'name': name,
+        if (description != null) 'description': description,
+        if (imageUrl != null) 'imageUrl': imageUrl,
+        if (dayLabel != null) 'dayLabel': dayLabel,
+        if (estimatedDurationMinutes != null)
+          'estimatedDurationMinutes': estimatedDurationMinutes,
+        if (workoutPlanId != null) 'workoutPlanId': workoutPlanId,
+        'exercises': exercises.map((e) => e.toRequest()).toList(),
+      };
+
+  // ── Laufendes Training ───────────────────────────────────────────────────────
+
+  /// Startet ein Training und liefert die geplanten Übungen samt letzter Leistung.
+  Future<Map<String, dynamic>> startWorkout({int? routineId, int? sessionId, String? name}) async {
+    final response = await _api.post(ApiConfig.startWorkout, {
+      if (routineId != null) 'routineId': routineId,
+      if (sessionId != null) 'sessionId': sessionId,
+      if (name != null) 'name': name,
+    });
+    return _decodeMap(response.body, response.statusCode, _api.isSuccess(response));
+  }
+
+  /// Speichert Einheit und alle Sätze in einem Request.
+  Future<GymSession> finishWorkout({
+    required int sessionId,
+    required List<GymWorkoutExercise> exercises,
+    String? notes,
+    int? durationMinutes,
+  }) async {
+    final body = <String, dynamic>{
+      if (notes != null) 'notes': notes,
+      if (durationMinutes != null) 'durationMinutes': durationMinutes,
+      'exercises': [
+        for (var i = 0; i < exercises.length; i++) exercises[i].toRequest(i),
+      ],
+    };
+    final response = await _api.post(ApiConfig.finishWorkout(sessionId), body);
+    return GymSession.fromMap(
+        _decodeMap(response.body, response.statusCode, _api.isSuccess(response)));
+  }
+
+  // ── Trainingseinheiten ───────────────────────────────────────────────────────
+
+  Future<List<GymSession>> getSessions() async {
+    final list = await _getList(ApiConfig.workoutSessions);
+    return list.map(GymSession.fromMap).toList();
+  }
+
+  Future<GymSession> getSession(int id) async =>
+      GymSession.fromMap(await _getMap(ApiConfig.workoutSessionById(id)));
+
+  Future<void> deleteSession(int id) async {
+    final response = await _api.delete(ApiConfig.workoutSessionById(id));
+    if (!_api.isSuccess(response)) {
+      throw SportsApiException(_api.getErrorMessage(response));
+    }
+  }
+
+  // ── Auswertungen ─────────────────────────────────────────────────────────────
+
+  Future<GymWeeklyStats> getWeeklyStats({DateTime? weekStart}) async {
+    var url = ApiConfig.gymWeeklyStats;
+    if (weekStart != null) {
+      url = '$url?weekStart=${_isoDate(weekStart)}';
+    }
+    return GymWeeklyStats.fromMap(await _getMap(url));
+  }
+
+  Future<List<GymMuscleVolume>> getMuscleVolume({
+    DateTime? startDate,
+    DateTime? endDate,
+  }) async {
+    final params = <String>[
+      if (startDate != null) 'startDate=${_isoDate(startDate)}',
+      if (endDate != null) 'endDate=${_isoDate(endDate)}',
+    ];
+    final url = params.isEmpty
+        ? ApiConfig.gymMuscleStats
+        : '${ApiConfig.gymMuscleStats}?${params.join('&')}';
+
+    final list = await _getList(url);
+    return list.map(GymMuscleVolume.fromMap).toList();
+  }
+
+  // ── Trainingspläne (für die Ziel-Vorgabe) ────────────────────────────────────
+
+  Future<Map<String, dynamic>?> getActivePlan() async {
+    final response = await _api.get(ApiConfig.activeWorkoutPlan);
+    if (!_api.isSuccess(response) || response.body.isEmpty) return null;
+    final decoded = json.decode(response.body);
+    return decoded is Map<String, dynamic> ? decoded : null;
+  }
+
+  // ── Hilfsfunktionen ──────────────────────────────────────────────────────────
+
+  Future<Map<String, dynamic>> _getMap(String url) async {
+    final response = await _api.get(url);
+    return _decodeMap(response.body, response.statusCode, _api.isSuccess(response));
+  }
+
+  Future<List<Map<String, dynamic>>> _getList(String url) async {
+    final response = await _api.get(url);
+    if (!_api.isSuccess(response)) {
+      throw SportsApiException(_api.getErrorMessage(response));
+    }
+    if (response.body.isEmpty) return [];
+    final decoded = json.decode(response.body);
+    if (decoded is! List) return [];
+    return decoded.whereType<Map>().map((e) => Map<String, dynamic>.from(e)).toList();
+  }
+
+  Map<String, dynamic> _decodeMap(String body, int statusCode, bool success) {
+    if (!success) {
+      String message = 'Serverfehler ($statusCode)';
+      try {
+        final decoded = json.decode(body);
+        if (decoded is Map && decoded['message'] != null) {
+          message = decoded['message'].toString();
+        }
+      } catch (_) {
+        // Antwort war kein JSON - die Standardmeldung reicht.
+      }
+      throw SportsApiException(message);
+    }
+    if (body.isEmpty) return {};
+    final decoded = json.decode(body);
+    return decoded is Map<String, dynamic> ? decoded : {};
+  }
+
+  String _isoDate(DateTime date) =>
+      '${date.year.toString().padLeft(4, '0')}-'
+      '${date.month.toString().padLeft(2, '0')}-'
+      '${date.day.toString().padLeft(2, '0')}';
 }

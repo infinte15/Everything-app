@@ -38,6 +38,13 @@ public class WorkoutSessionDTO {
 
     private Boolean isCompleted;
 
+    private Long routineId;
+    private String routineName;
+
+    /** Aus den protokollierten Saetzen aggregiert, nicht an der Einheit gespeichert. */
+    private Integer totalSets;
+    private Double totalVolumeKg;
+
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
 }

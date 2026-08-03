@@ -1,170 +1,132 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
-import '../../../models/gym/gym_models.dart';
 import '../../../providers/sports_provider.dart';
 import '../../../theme/lyfta_theme.dart';
-import '../workout/active_workout_page.dart';
 import '../widgets/create_routine_sheet.dart';
+import '../widgets/routine_card.dart';
+import '../workout/active_workout_page.dart';
+import 'routine_detail_page.dart';
 
 class GymWorkoutTab extends StatelessWidget {
-  const GymWorkoutTab({super.key});
+  final VoidCallback onOpenActiveWorkout;
+
+  const GymWorkoutTab({super.key, required this.onOpenActiveWorkout});
 
   @override
   Widget build(BuildContext context) {
     final sports = context.watch<SportsProvider>();
 
-    return CustomScrollView(
-      slivers: [
-        SliverAppBar(
-          floating: true,
-          backgroundColor: LyftaTheme.background,
-          title: Text('Workout', style: LyftaTheme.title),
-        ),
-        SliverPadding(
-          padding: const EdgeInsets.fromLTRB(16, 0, 16, 100),
-          sliver: SliverList(
-            delegate: SliverChildListDelegate([
-              Text('My Routines', style: LyftaTheme.headline.copyWith(fontSize: 22)),
-              const SizedBox(height: 12),
-              OutlinedButton.icon(
-                onPressed: () => CreateRoutineSheet.show(context),
-                icon: const Icon(Icons.add, color: LyftaTheme.primary),
-                label: const Text('Create Routine', style: TextStyle(color: LyftaTheme.primary)),
-                style: OutlinedButton.styleFrom(
-                  side: const BorderSide(color: LyftaTheme.primary),
-                  minimumSize: const Size.fromHeight(48),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                ),
-              ),
-              const SizedBox(height: 16),
-              if (sports.workoutPlans.isEmpty)
-                Text('No routines yet', style: LyftaTheme.subtitle)
-              else
-                ...sports.workoutPlans.map((p) => _RoutineCard(plan: p)),
-              const SizedBox(height: 28),
-              Text('Programs', style: LyftaTheme.headline.copyWith(fontSize: 22)),
-              const SizedBox(height: 8),
-              Text('Expert templates — tap to preview', style: LyftaTheme.subtitle),
-              const SizedBox(height: 12),
-              ...sports.programTemplates.map((t) => _ProgramCard(template: t)),
-            ]),
+    return RefreshIndicator(
+      color: LyftaTheme.primary,
+      backgroundColor: LyftaTheme.surface,
+      onRefresh: sports.loadData,
+      child: CustomScrollView(
+        physics: const AlwaysScrollableScrollPhysics(),
+        slivers: [
+          SliverAppBar(
+            floating: true,
+            backgroundColor: LyftaTheme.background,
+            title: Text('Training', style: LyftaTheme.title),
           ),
-        ),
-      ],
-    );
-  }
-}
-
-class _RoutineCard extends StatelessWidget {
-  final Map<String, dynamic> plan;
-  const _RoutineCard({required this.plan});
-
-  @override
-  Widget build(BuildContext context) {
-    final exercises = plan['exercises'] as List? ?? [];
-    final duration = plan['estimatedDuration'] as int? ?? 60;
-
-    return Container(
-      margin: const EdgeInsets.only(bottom: 12),
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: LyftaTheme.surface,
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Expanded(child: Text(plan['name'] as String? ?? '', style: LyftaTheme.title)),
-              if (plan['day'] != null)
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                  decoration: BoxDecoration(
-                    color: LyftaTheme.primary.withValues(alpha: 0.15),
-                    borderRadius: BorderRadius.circular(6),
+          SliverPadding(
+            padding: const EdgeInsets.fromLTRB(16, 0, 16, 100),
+            sliver: SliverList(
+              delegate: SliverChildListDelegate([
+                Text(
+                  'Meine Routinen',
+                  style: LyftaTheme.headline.copyWith(fontSize: 22),
+                ),
+                const SizedBox(height: 12),
+                OutlinedButton.icon(
+                  onPressed: () => CreateRoutineSheet.show(context),
+                  icon: const Icon(Icons.add, color: LyftaTheme.primary),
+                  label: const Text(
+                    'Routine erstellen',
+                    style: TextStyle(color: LyftaTheme.primary),
                   ),
-                  child: Text(
-                    '${plan['day']}',
-                    style: const TextStyle(color: LyftaTheme.primary, fontSize: 12, fontWeight: FontWeight.w600),
+                  style: OutlinedButton.styleFrom(
+                    side: const BorderSide(color: LyftaTheme.primary),
+                    minimumSize: const Size.fromHeight(48),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
                   ),
                 ),
-            ],
-          ),
-          const SizedBox(height: 6),
-          Text('$duration min · ${exercises.length} exercises', style: LyftaTheme.subtitle),
-          const SizedBox(height: 12),
-          Wrap(
-            spacing: 6,
-            runSpacing: 6,
-            children: exercises.take(4).map((ex) {
-              final name = (ex as Map)['name'] as String? ?? '';
-              return Chip(
-                label: Text(name, style: const TextStyle(fontSize: 12)),
-                visualDensity: VisualDensity.compact,
-                materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-              );
-            }).toList(),
-          ),
-          const SizedBox(height: 14),
-          SizedBox(
-            width: double.infinity,
-            child: FilledButton(
-              onPressed: () async {
-                final sports = context.read<SportsProvider>();
-                final ok = await sports.startWorkout(plan['id'] as int);
-                if (ok && context.mounted) {
-                  Navigator.of(context).push(
-                    MaterialPageRoute(builder: (_) => const ActiveWorkoutPage()),
-                  );
-                }
-              },
-              child: const Text('Start Routine'),
+                const SizedBox(height: 18),
+                if (sports.isLoading && sports.routines.isEmpty)
+                  const Center(
+                    child: Padding(
+                      padding: EdgeInsets.symmetric(vertical: 40),
+                      child: CircularProgressIndicator(color: LyftaTheme.primary),
+                    ),
+                  )
+                else if (sports.routines.isEmpty)
+                  const _NoRoutines()
+                else
+                  ...sports.routines.map(
+                    (routine) => RoutineCard(
+                      routine: routine,
+                      muscleOptions: sports.muscleOptions,
+                      onTap: () => Navigator.of(context).push(
+                        MaterialPageRoute(
+                          builder: (_) => RoutineDetailPage(routineId: routine.id),
+                        ),
+                      ),
+                      onStart: () => _startRoutine(context, routine.id),
+                    ),
+                  ),
+              ]),
             ),
           ),
         ],
       ),
     );
   }
+
+  Future<void> _startRoutine(BuildContext context, int routineId) async {
+    final sports = context.read<SportsProvider>();
+    final navigator = Navigator.of(context);
+    final messenger = ScaffoldMessenger.of(context);
+
+    if (sports.hasActiveWorkout) {
+      onOpenActiveWorkout();
+      return;
+    }
+
+    final started = await sports.startRoutine(routineId);
+    if (!started) {
+      messenger.showSnackBar(
+        SnackBar(content: Text(sports.error ?? 'Training konnte nicht gestartet werden')),
+      );
+      return;
+    }
+    navigator.push(MaterialPageRoute(builder: (_) => const ActiveWorkoutPage()));
+  }
 }
 
-class _ProgramCard extends StatelessWidget {
-  final GymProgramTemplate template;
-  const _ProgramCard({required this.template});
+class _NoRoutines extends StatelessWidget {
+  const _NoRoutines();
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      margin: const EdgeInsets.only(bottom: 12),
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.symmetric(vertical: 36, horizontal: 20),
       decoration: BoxDecoration(
         color: LyftaTheme.surface,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: LyftaTheme.divider),
       ),
       child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            children: [
-              Expanded(child: Text(template.name, style: LyftaTheme.title)),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                decoration: BoxDecoration(
-                  color: LyftaTheme.surfaceElevated,
-                  borderRadius: BorderRadius.circular(6),
-                ),
-                child: Text(template.level, style: LyftaTheme.caption),
-              ),
-            ],
-          ),
+          const Icon(Icons.list_alt_rounded, size: 32, color: LyftaTheme.textTertiary),
+          const SizedBox(height: 12),
+          Text('Noch keine Routinen', style: LyftaTheme.title),
           const SizedBox(height: 6),
-          Text(template.description, style: LyftaTheme.subtitle),
-          const SizedBox(height: 8),
           Text(
-            '${template.daysPerWeek} days/week · ${template.routines.length} routines',
-            style: LyftaTheme.caption,
+            'Stelle dir eine Routine aus dem Übungskatalog zusammen - '
+            'sie merkt sich Sätze, Wiederholungen und Pausen.',
+            style: LyftaTheme.subtitle.copyWith(fontSize: 13),
+            textAlign: TextAlign.center,
           ),
         ],
       ),

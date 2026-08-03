@@ -2,15 +2,29 @@ package com.Finn.everything_app.mapper;
 
 import com.Finn.everything_app.dto.WorkoutSessionDTO;
 import com.Finn.everything_app.model.WorkoutSession;
+import com.Finn.everything_app.repository.projection.SessionAggregateRow;
 import org.springframework.stereotype.Component;
 
 @Component
 public class WorkoutSessionMapper {
 
     public WorkoutSessionDTO toDTO(WorkoutSession session) {
+        return toDTO(session, null);
+    }
+
+    /**
+     * @param aggregate vorab gesammelte Satz-/Volumen-Summe; {@code null}, wenn nicht geladen.
+     */
+    public WorkoutSessionDTO toDTO(WorkoutSession session, SessionAggregateRow aggregate) {
         if (session == null) return null;
 
         WorkoutSessionDTO dto = new WorkoutSessionDTO();
+        fill(dto, session, aggregate);
+        return dto;
+    }
+
+    /** Fuellt die gemeinsamen Felder - auch fuer {@code WorkoutSessionDetailDTO} nutzbar. */
+    public void fill(WorkoutSessionDTO dto, WorkoutSession session, SessionAggregateRow aggregate) {
         dto.setId(session.getId());
         dto.setName(session.getName());
         dto.setDescription(session.getDescription());
@@ -25,10 +39,18 @@ public class WorkoutSessionMapper {
         dto.setNotes(session.getNotes());
         dto.setLocation(session.getLocation());
         dto.setIsCompleted(session.getIsCompleted());
+        dto.setRoutineId(session.getRoutine() != null ? session.getRoutine().getId() : null);
+        dto.setRoutineName(session.getRoutine() != null ? session.getRoutine().getName() : null);
         dto.setCreatedAt(session.getCreatedAt());
         dto.setUpdatedAt(session.getUpdatedAt());
 
-        return dto;
+        if (aggregate != null) {
+            dto.setTotalSets(aggregate.getSetCount() != null ? aggregate.getSetCount().intValue() : 0);
+            dto.setTotalVolumeKg(aggregate.getVolume() != null ? aggregate.getVolume() : 0d);
+        } else {
+            dto.setTotalSets(0);
+            dto.setTotalVolumeKg(0d);
+        }
     }
 
     public WorkoutSession toEntity(WorkoutSessionDTO dto) {

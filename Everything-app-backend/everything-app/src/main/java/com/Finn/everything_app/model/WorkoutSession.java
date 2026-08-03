@@ -65,6 +65,12 @@ public class WorkoutSession {
     @JoinColumn(name = "workout_plan_id")
     private WorkoutPlan workoutPlan;
 
+    // Welche Routine hier trainiert wird bzw. werden soll. Auch vom Scheduler gesetzt, damit ein
+    // automatisch platzierter Platzhalter weiss, welches Training dahintersteckt.
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "routine_id")
+    private Routine routine;
+
     @OneToMany(mappedBy = "workoutSession", cascade = CascadeType.ALL, orphanRemoval = true)
     private List<ExerciseSet> exerciseSets;
 

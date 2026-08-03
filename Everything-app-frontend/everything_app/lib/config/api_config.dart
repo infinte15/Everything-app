@@ -40,10 +40,34 @@ class ApiConfig {
   //SPORTS ENDPOINTS
   static const String workoutPlans = '$baseUrl/sports/plans';
   static String workoutPlanById(int id) => '$baseUrl/sports/plans/$id';
+  static const String activeWorkoutPlan = '$baseUrl/sports/plans/active';
   static const String workoutSessions = '$baseUrl/sports/sessions';
   static String workoutSessionById(int id) => '$baseUrl/sports/sessions/$id';
   static const String exercises = '$baseUrl/sports/exercises';
   static const String exerciseSets = '$baseUrl/sports/sets';
+
+  // Übungs-Katalog
+  static String exerciseById(int id) => '$baseUrl/sports/exercises/$id';
+  static const String muscleGroups = '$baseUrl/sports/exercises/muscles';
+  static const String exerciseFilters = '$baseUrl/sports/exercises/filters';
+  static String exerciseHistory(int id, {int limit = 20}) =>
+      '$baseUrl/sports/exercises/$id/history?limit=$limit';
+  static String exerciseRecords(int id) => '$baseUrl/sports/exercises/$id/records';
+
+  // Routinen
+  static const String routines = '$baseUrl/sports/routines';
+  static String routineById(int id) => '$baseUrl/sports/routines/$id';
+  static const String routinesReorder = '$baseUrl/sports/routines/reorder';
+
+  // Laufendes Training
+  static const String workoutLog = '$baseUrl/sports/workouts';
+  static const String startWorkout = '$baseUrl/sports/workouts/start';
+  static String finishWorkout(int sessionId) =>
+      '$baseUrl/sports/workouts/$sessionId/finish';
+
+  // Auswertungen
+  static const String gymWeeklyStats = '$baseUrl/sports/stats/week';
+  static const String gymMuscleStats = '$baseUrl/sports/stats/muscles';
   
   //RECIPE ENDPOINTS
   static const String recipes = '$baseUrl/recipes';

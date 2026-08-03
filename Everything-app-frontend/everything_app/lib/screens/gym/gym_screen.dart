@@ -30,13 +30,18 @@ class _GymScreenState extends State<GymScreen> {
 
   void _onStartWorkout() {
     final sports = context.read<SportsProvider>();
-    if (sports.currentWorkout != null) {
-      Navigator.of(context).push(
-        MaterialPageRoute(builder: (_) => const ActiveWorkoutPage()),
-      );
+    // Läuft schon ein Training, führt der Knopf dorthin zurück statt ein zweites zu starten.
+    if (sports.hasActiveWorkout) {
+      _openActiveWorkout();
       return;
     }
     GymQuickStartSheet.show(context);
+  }
+
+  void _openActiveWorkout() {
+    Navigator.of(context).push(
+      MaterialPageRoute(builder: (_) => const ActiveWorkoutPage()),
+    );
   }
 
   @override
@@ -50,8 +55,11 @@ class _GymScreenState extends State<GymScreen> {
         body: IndexedStack(
           index: stackIndex.clamp(0, 3),
           children: [
-            GymHomeTab(onStartWorkout: _onStartWorkout),
-            const GymWorkoutTab(),
+            GymHomeTab(
+              onStartWorkout: _onStartWorkout,
+              onOpenActiveWorkout: _openActiveWorkout,
+            ),
+            GymWorkoutTab(onOpenActiveWorkout: _openActiveWorkout),
             const GymExploreTab(),
             const GymProfileTab(),
           ],
@@ -93,11 +101,11 @@ class _LyftaBottomNav extends StatelessWidget {
           child: Row(
             mainAxisAlignment: MainAxisAlignment.spaceAround,
             children: [
-              _item(Icons.home_rounded, 'Home', 0),
-              _item(Icons.fitness_center_rounded, 'Workout', 1),
-              _fab(),
-              _item(Icons.explore_rounded, 'Explore', 3),
-              _item(Icons.person_rounded, 'You', 4),
+              _item(Icons.home_rounded, 'Start', 0),
+              _item(Icons.fitness_center_rounded, 'Training', 1),
+              _fab(context),
+              _item(Icons.search_rounded, 'Übungen', 3),
+              _item(Icons.person_rounded, 'Du', 4),
             ],
           ),
         ),
@@ -133,7 +141,10 @@ class _LyftaBottomNav extends StatelessWidget {
     );
   }
 
-  Widget _fab() {
+  Widget _fab(BuildContext context) {
+    // Läuft ein Training, zeigt der Knopf einen Pfeil statt eines Plus.
+    final running = context.select<SportsProvider, bool>((s) => s.hasActiveWorkout);
+
     return Expanded(
       child: GestureDetector(
         onTap: () => onSelect(2),
@@ -146,15 +157,12 @@ class _LyftaBottomNav extends StatelessWidget {
               decoration: BoxDecoration(
                 color: LyftaTheme.primary,
                 shape: BoxShape.circle,
-                boxShadow: [
-                  BoxShadow(
-                    color: LyftaTheme.primary.withValues(alpha: 0.35),
-                    blurRadius: 12,
-                    offset: const Offset(0, 4),
-                  ),
-                ],
               ),
-              child: const Icon(Icons.add, color: LyftaTheme.onPrimary, size: 28),
+              child: Icon(
+                running ? Icons.play_arrow_rounded : Icons.add,
+                color: LyftaTheme.onPrimary,
+                size: 28,
+              ),
             ),
           ],
         ),

@@ -81,9 +81,9 @@ class Project {
       completionPercentage: completionPercentage ?? this.completionPercentage,
       tasksTotal: tasksTotal ?? this.tasksTotal,
       tasksCompleted: tasksCompleted ?? this.tasksCompleted,
-      startDate: startDate ?? this.startDate,
-      targetEndDate: targetEndDate ?? this.targetEndDate,
-      actualEndDate: actualEndDate ?? this.actualEndDate,
+      startDate: startDate ?? startDate,
+      targetEndDate: targetEndDate ?? targetEndDate,
+      actualEndDate: actualEndDate ?? actualEndDate,
       weeklySessionCount: weeklySessionCount ?? this.weeklySessionCount,
       sessionDurationMinutes: sessionDurationMinutes ?? this.sessionDurationMinutes,
     );

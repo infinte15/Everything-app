@@ -8,6 +8,7 @@ import org.springframework.stereotype.Repository;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Optional;
 
 @Repository
 public interface WorkoutSessionRepository extends JpaRepository<WorkoutSession, Long> {
@@ -63,4 +64,20 @@ public interface WorkoutSessionRepository extends JpaRepository<WorkoutSession, 
     // Manuell fest eingetragene Sessions, die in diese Woche fallen
     long countByWorkoutPlanIdAndIsFlexibleAndStartTimeBetween(
             Long planId, Boolean isFlexible, LocalDateTime start, LocalDateTime end);
+
+    Optional<WorkoutSession> findByIdAndUserId(Long id, Long userId);
+
+    /**
+     * Einheit samt Saetzen und Uebungen in einer Abfrage. Es wird bewusst nur eine Sammlung
+     * per fetch join geladen (exerciseSets), sonst wirft Hibernate MultipleBagFetchException;
+     * die Muskelgruppen der Uebungen kommen ueber @BatchSize gebuendelt nach.
+     */
+    @Query("""
+            select distinct ws from WorkoutSession ws
+            left join fetch ws.exerciseSets s
+            left join fetch s.exercise e
+            where ws.id = :id and ws.user.id = :userId
+            """)
+    Optional<WorkoutSession> findDetailByIdAndUserId(@Param("id") Long id,
+                                                     @Param("userId") Long userId);
 }

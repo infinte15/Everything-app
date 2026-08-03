@@ -1,8 +1,11 @@
+import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import '../../../models/gym/gym_models.dart';
 import '../../../providers/sports_provider.dart';
 import '../../../theme/lyfta_theme.dart';
+import '../widgets/body_activation_map.dart';
 import '../widgets/gym_session_card.dart';
 
 class GymProfileTab extends StatefulWidget {
@@ -12,14 +15,9 @@ class GymProfileTab extends StatefulWidget {
   State<GymProfileTab> createState() => _GymProfileTabState();
 }
 
-class _GymProfileTabState extends State<GymProfileTab> with SingleTickerProviderStateMixin {
-  late TabController _tab;
-
-  @override
-  void initState() {
-    super.initState();
-    _tab = TabController(length: 3, vsync: this);
-  }
+class _GymProfileTabState extends State<GymProfileTab>
+    with SingleTickerProviderStateMixin {
+  late final TabController _tab = TabController(length: 3, vsync: this);
 
   @override
   void dispose() {
@@ -30,34 +28,38 @@ class _GymProfileTabState extends State<GymProfileTab> with SingleTickerProvider
   @override
   Widget build(BuildContext context) {
     final sports = context.watch<SportsProvider>();
-    final chartPoints = sports.getVolumeChartPoints();
-    final maxVol = chartPoints.isEmpty ? 1.0 : chartPoints.reduce((a, b) => a > b ? a : b);
 
-    return NestedScrollView(
-      headerSliverBuilder: (_, _) => [
-        SliverAppBar(
-          floating: true,
-          backgroundColor: LyftaTheme.background,
-          title: Text('You', style: LyftaTheme.title),
-        ),
-        SliverToBoxAdapter(
-          child: Padding(
-            padding: const EdgeInsets.all(16),
+    return SafeArea(
+      child: Column(
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
             child: Row(
               children: [
-                CircleAvatar(
-                  radius: 32,
-                  backgroundColor: LyftaTheme.surfaceElevated,
-                  child: const Icon(Icons.person, size: 32, color: LyftaTheme.primary),
+                Container(
+                  width: 56,
+                  height: 56,
+                  decoration: BoxDecoration(
+                    color: LyftaTheme.surfaceElevated,
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(
+                    Icons.person_rounded,
+                    size: 28,
+                    color: LyftaTheme.textSecondary,
+                  ),
                 ),
-                const SizedBox(width: 16),
+                const SizedBox(width: 14),
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text('Lifter', style: LyftaTheme.headline.copyWith(fontSize: 22)),
+                      Text('Dein Training',
+                          style: LyftaTheme.headline.copyWith(fontSize: 22)),
+                      const SizedBox(height: 2),
                       Text(
-                        '${sports.totalWorkouts} workouts · ${sports.totalVolumeAllTime.round()} kg total',
+                        '${sports.totalWorkouts} Trainings · '
+                        '${(sports.totalVolumeAllTime / 1000).toStringAsFixed(1)} t bewegt',
                         style: LyftaTheme.subtitle,
                       ),
                     ],
@@ -66,184 +68,315 @@ class _GymProfileTabState extends State<GymProfileTab> with SingleTickerProvider
               ],
             ),
           ),
-        ),
-        SliverPersistentHeader(
-          pinned: true,
-          delegate: _TabBarDelegate(
-            TabBar(
+          TabBar(
+            controller: _tab,
+            labelColor: LyftaTheme.primary,
+            unselectedLabelColor: LyftaTheme.textSecondary,
+            indicatorColor: LyftaTheme.primary,
+            tabs: const [
+              Tab(text: 'Fortschritt'),
+              Tab(text: 'Verlauf'),
+              Tab(text: 'Körper'),
+            ],
+          ),
+          Expanded(
+            child: TabBarView(
               controller: _tab,
-              labelColor: LyftaTheme.primary,
-              unselectedLabelColor: LyftaTheme.textTertiary,
-              indicatorColor: LyftaTheme.primary,
-              tabs: const [
-                Tab(text: 'Progress'),
-                Tab(text: 'History'),
-                Tab(text: 'Body'),
+              children: [
+                _ProgressTab(sports: sports),
+                _HistoryTab(sports: sports),
+                _BodyTab(sports: sports),
               ],
             ),
           ),
-        ),
-      ],
-      body: TabBarView(
-        controller: _tab,
-        children: [
-          ListView(
-            padding: const EdgeInsets.all(16),
-            children: [
-              Text('Volume (8 weeks)', style: LyftaTheme.title),
-              const SizedBox(height: 16),
-              SizedBox(
-                height: 160,
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.end,
-                  children: chartPoints.asMap().entries.map((e) {
-                    final h = maxVol > 0 ? (e.value / maxVol).clamp(0.05, 1.0) : 0.05;
-                    final isLast = e.key == chartPoints.length - 1;
-                    return Expanded(
-                      child: Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 3),
-                        child: Column(
-                          mainAxisAlignment: MainAxisAlignment.end,
-                          children: [
-                            if (isLast && e.value > 0)
-                              Text(
-                                '${e.value.round()}',
-                                style: LyftaTheme.caption.copyWith(fontSize: 9),
-                              ),
-                            const SizedBox(height: 4),
-                            Container(
-                              height: 120 * h,
-                              decoration: BoxDecoration(
-                                color: isLast ? LyftaTheme.primary : LyftaTheme.surfaceElevated,
-                                borderRadius: const BorderRadius.vertical(top: Radius.circular(4)),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    );
-                  }).toList(),
-                ),
-              ),
-              const SizedBox(height: 24),
-              _settingsTile(Icons.straighten, 'Units', 'Metric (kg, cm)'),
-              _settingsTile(Icons.timer_outlined, 'Default rest', '${sports.defaultRestSeconds}s'),
-            ],
-          ),
-          sports.workoutSessions.isEmpty
-              ? Center(child: Text('No workouts yet', style: LyftaTheme.subtitle))
-              : ListView.builder(
-                  padding: const EdgeInsets.fromLTRB(16, 16, 16, 100),
-                  itemCount: sports.workoutSessions.length,
-                  itemBuilder: (_, i) => Padding(
-                    padding: const EdgeInsets.only(bottom: 10),
-                    child: GymSessionCard(session: sports.workoutSessions[i]),
-                  ),
-                ),
-          _BodyMeasuresTab(),
         ],
       ),
     );
   }
-
-  Widget _settingsTile(IconData icon, String title, String value) {
-    return Container(
-      margin: const EdgeInsets.only(bottom: 8),
-      decoration: BoxDecoration(
-        color: LyftaTheme.surface,
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: ListTile(
-        leading: Icon(icon, color: LyftaTheme.primary),
-        title: Text(title, style: LyftaTheme.title.copyWith(fontSize: 16)),
-        trailing: Text(value, style: LyftaTheme.subtitle),
-      ),
-    );
-  }
 }
 
-class _TabBarDelegate extends SliverPersistentHeaderDelegate {
-  final TabBar tabBar;
-  _TabBarDelegate(this.tabBar);
+class _ProgressTab extends StatelessWidget {
+  final SportsProvider sports;
 
-  @override
-  double get minExtent => tabBar.preferredSize.height;
-  @override
-  double get maxExtent => tabBar.preferredSize.height;
-
-  @override
-  Widget build(context, shrink, overlap) {
-    return Container(color: LyftaTheme.background, child: tabBar);
-  }
-
-  @override
-  bool shouldRebuild(covariant _TabBarDelegate old) => false;
-}
-
-class _BodyMeasuresTab extends StatelessWidget {
-  static const _measures = [
-    ('Weight', '78.5 kg', '+0.3'),
-    ('Chest', '108 cm', '+1.0'),
-    ('Waist', '82 cm', '-0.5'),
-    ('Hips', '98 cm', '0'),
-    ('Left bicep', '37 cm', '+0.5'),
-  ];
+  const _ProgressTab({required this.sports});
 
   @override
   Widget build(BuildContext context) {
-    return ListView.builder(
-      padding: const EdgeInsets.fromLTRB(16, 16, 16, 100),
-      itemCount: _measures.length + 1,
-      itemBuilder: (_, i) {
-        if (i == 0) {
-          return Padding(
-            padding: const EdgeInsets.only(bottom: 16),
-            child: OutlinedButton.icon(
-              onPressed: () {},
-              icon: const Icon(Icons.add, color: LyftaTheme.primary),
-              label: const Text('Log measurement', style: TextStyle(color: LyftaTheme.primary)),
-              style: OutlinedButton.styleFrom(
-                minimumSize: const Size.fromHeight(48),
-                side: const BorderSide(color: LyftaTheme.primary),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-              ),
-            ),
-          );
-        }
-        final m = _measures[i - 1];
-        return Container(
-          margin: const EdgeInsets.only(bottom: 8),
-          padding: const EdgeInsets.all(16),
+    final series = sports.weeklyStats.volumeSeries;
+
+    return ListView(
+      padding: const EdgeInsets.fromLTRB(16, 18, 16, 100),
+      children: [
+        Text('VOLUMEN JE WOCHE', style: LyftaTheme.label),
+        const SizedBox(height: 14),
+        Container(
+          padding: const EdgeInsets.fromLTRB(8, 18, 14, 8),
           decoration: BoxDecoration(
             color: LyftaTheme.surface,
             borderRadius: BorderRadius.circular(12),
           ),
-          child: Row(
+          height: 210,
+          child: series.isEmpty
+              ? Center(child: Text('Noch keine Daten', style: LyftaTheme.subtitle))
+              : LineChart(_chartData(series)),
+        ),
+        const SizedBox(height: 24),
+        Text('KENNZAHLEN', style: LyftaTheme.label),
+        const SizedBox(height: 12),
+        _statTile(
+          Icons.local_fire_department_rounded,
+          'Aktuelle Serie',
+          '${sports.weeklyStats.currentStreakWeeks} Wochen in Folge',
+        ),
+        _statTile(
+          Icons.emoji_events_outlined,
+          'Längste Serie',
+          '${sports.weeklyStats.longestStreakWeeks} Wochen',
+        ),
+        _statTile(
+          Icons.timer_outlined,
+          'Standard-Pause',
+          '${sports.defaultRestSeconds} Sekunden',
+        ),
+      ],
+    );
+  }
+
+  LineChartData _chartData(List<GymVolumePoint> series) {
+    final maxVolume = series.fold<double>(0, (m, p) => p.volumeKg > m ? p.volumeKg : m);
+
+    return LineChartData(
+      minY: 0,
+      // Bei durchweg 0 kg braucht die Achse trotzdem eine Höhe.
+      maxY: maxVolume <= 0 ? 1 : maxVolume * 1.2,
+      gridData: FlGridData(
+        show: true,
+        drawVerticalLine: false,
+        getDrawingHorizontalLine: (_) =>
+            // divider ist ein Rahmen-Wert; ueber die volle Diagrammbreite
+            // gezogen ist er schwerer als der alte #38383A - daher abgesenkt.
+            FlLine(
+              color: LyftaTheme.divider.withValues(alpha: 0.45),
+              strokeWidth: 0.6,
+            ),
+      ),
+      borderData: FlBorderData(show: false),
+      titlesData: FlTitlesData(
+        leftTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+        topTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+        rightTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+        bottomTitles: AxisTitles(
+          sideTitles: SideTitles(
+            showTitles: true,
+            reservedSize: 26,
+            interval: 1,
+            getTitlesWidget: (value, meta) {
+              final index = value.toInt();
+              if (index < 0 || index >= series.length) return const SizedBox.shrink();
+              final week = series[index].weekStart;
+              return Padding(
+                padding: const EdgeInsets.only(top: 6),
+                child: Text(
+                  week == null ? '' : '${week.day}.${week.month}.',
+                  style: LyftaTheme.label.copyWith(fontSize: 9),
+                ),
+              );
+            },
+          ),
+        ),
+      ),
+      lineBarsData: [
+        LineChartBarData(
+          spots: [
+            for (var i = 0; i < series.length; i++)
+              FlSpot(i.toDouble(), series[i].volumeKg),
+          ],
+          isCurved: true,
+          barWidth: 2.5,
+          color: LyftaTheme.primary,
+          dotData: FlDotData(
+            show: true,
+            getDotPainter: (_, _, _, _) => FlDotCirclePainter(
+              radius: 3,
+              color: LyftaTheme.primary,
+              strokeWidth: 0,
+            ),
+          ),
+          belowBarData: BarAreaData(
+            show: true,
+            color: LyftaTheme.primary.withValues(alpha: 0.15),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _statTile(IconData icon, String label, String value) => Container(
+        margin: const EdgeInsets.only(bottom: 10),
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          color: LyftaTheme.surface,
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: Row(
+          children: [
+            Icon(icon, size: 20, color: LyftaTheme.primary),
+            const SizedBox(width: 14),
+            Expanded(child: Text(label, style: LyftaTheme.title.copyWith(fontSize: 15))),
+            Text(value, style: LyftaTheme.caption),
+          ],
+        ),
+      );
+}
+
+class _HistoryTab extends StatelessWidget {
+  final SportsProvider sports;
+
+  const _HistoryTab({required this.sports});
+
+  @override
+  Widget build(BuildContext context) {
+    if (sports.sessions.isEmpty) {
+      return Center(
+        child: Text('Noch keine Trainings', style: LyftaTheme.subtitle),
+      );
+    }
+    return ListView.builder(
+      padding: const EdgeInsets.fromLTRB(16, 18, 16, 100),
+      itemCount: sports.sessions.length,
+      itemBuilder: (_, i) => GymSessionCard(session: sports.sessions[i]),
+    );
+  }
+}
+
+/// Ganzseitige Körper-Grafik mit Zeitraum-Auswahl.
+class _BodyTab extends StatefulWidget {
+  final SportsProvider sports;
+
+  const _BodyTab({required this.sports});
+
+  @override
+  State<_BodyTab> createState() => _BodyTabState();
+}
+
+class _BodyTabState extends State<_BodyTab> {
+  static const List<(String, int)> _ranges = [
+    ('Woche', 7),
+    ('Monat', 30),
+    ('3 Monate', 90),
+  ];
+
+  int _days = 7;
+
+  void _select(int days) {
+    setState(() => _days = days);
+    widget.sports.loadMuscleVolume(
+      from: DateTime.now().subtract(Duration(days: days - 1)),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final volumes = widget.sports.muscleVolumes.where((m) => m.share > 0).toList()
+      ..sort((a, b) => b.weightedSets.compareTo(a.weightedSets));
+
+    return ListView(
+      padding: const EdgeInsets.fromLTRB(16, 18, 16, 100),
+      children: [
+        Row(
+          children: _ranges
+              .map((range) => Padding(
+                    padding: const EdgeInsets.only(right: 8),
+                    child: GestureDetector(
+                      onTap: () => _select(range.$2),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 14, vertical: 8),
+                        decoration: BoxDecoration(
+                          color: _days == range.$2
+                              ? LyftaTheme.surfaceHighlight
+                              : LyftaTheme.surfaceElevated,
+                          borderRadius: BorderRadius.circular(20),
+                        ),
+                        child: Text(
+                          range.$1,
+                          style: LyftaTheme.caption.copyWith(
+                            color: _days == range.$2
+                                ? LyftaTheme.primary
+                                : LyftaTheme.textSecondary,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ))
+              .toList(),
+        ),
+        const SizedBox(height: 18),
+        SizedBox(
+          height: 420,
+          child: BodyActivationMap(
+            activation: widget.sports.muscleActivation,
+          ),
+        ),
+        const SizedBox(height: 16),
+        const BodyActivationLegend(),
+        const SizedBox(height: 26),
+        Text('SÄTZE JE MUSKELGRUPPE', style: LyftaTheme.label),
+        const SizedBox(height: 12),
+        if (volumes.isEmpty)
+          Text(
+            'Für diesen Zeitraum sind keine Sätze aufgezeichnet.',
+            style: LyftaTheme.subtitle,
+          )
+        else
+          ...volumes.map((m) => _MuscleBar(volume: m, max: volumes.first.weightedSets)),
+      ],
+    );
+  }
+}
+
+class _MuscleBar extends StatelessWidget {
+  final GymMuscleVolume volume;
+  final double max;
+
+  const _MuscleBar({required this.volume, required this.max});
+
+  @override
+  Widget build(BuildContext context) {
+    final fraction = max > 0 ? (volume.weightedSets / max).clamp(0.0, 1.0) : 0.0;
+
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
             children: [
               Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(m.$1, style: LyftaTheme.title.copyWith(fontSize: 16)),
-                    Text(m.$2, style: LyftaTheme.subtitle),
-                  ],
-                ),
+                child: Text(volume.label, style: LyftaTheme.caption.copyWith(
+                  color: LyftaTheme.textPrimary,
+                )),
               ),
               Text(
-                m.$3,
-                style: TextStyle(
-                  color: m.$3.startsWith('-')
-                      ? LyftaTheme.primary
-                      : m.$3 == '0'
-                          ? LyftaTheme.textTertiary
-                          : LyftaTheme.warning,
-                  fontWeight: FontWeight.w600,
-                ),
+                volume.weightedSets % 1 == 0
+                    ? '${volume.weightedSets.toInt()} Sätze'
+                    : '${volume.weightedSets.toStringAsFixed(1)} Sätze',
+                style: LyftaTheme.caption,
               ),
             ],
           ),
-        );
-      },
+          const SizedBox(height: 6),
+          ClipRRect(
+            borderRadius: BorderRadius.circular(3),
+            child: LinearProgressIndicator(
+              value: fraction,
+              minHeight: 6,
+              backgroundColor: LyftaTheme.surfaceElevated,
+              color: LyftaTheme.primary,
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

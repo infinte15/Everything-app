@@ -1,10 +1,15 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import '../../../models/gym/gym_models.dart';
 import '../../../providers/sports_provider.dart';
 import '../../../theme/lyfta_theme.dart';
 import '../widgets/exercise_detail_sheet.dart';
+import '../widgets/exercise_picker_sheet.dart' show ExerciseListTile;
 
+/// Durchsuchbarer Übungskatalog.
 class GymExploreTab extends StatefulWidget {
   const GymExploreTab({super.key});
 
@@ -13,136 +18,202 @@ class GymExploreTab extends StatefulWidget {
 }
 
 class _GymExploreTabState extends State<GymExploreTab> {
-  String _search = '';
-  String _category = 'All';
+  final TextEditingController _searchController = TextEditingController();
+  final ScrollController _scrollController = ScrollController();
+  final List<GymExercise> _results = [];
 
-  static const _categories = [
-    'All',
-    'Chest',
-    'Back',
-    'Legs',
-    'Shoulders',
-    'Arms',
-    'Core',
-  ];
+  Timer? _debounce;
+  String? _muscle;
+  int _page = 0;
+  int _total = 0;
+  bool _loading = false;
+  bool _last = false;
+  String? _error;
+
+  @override
+  void initState() {
+    super.initState();
+    _scrollController.addListener(() {
+      if (_scrollController.position.pixels >=
+          _scrollController.position.maxScrollExtent - 400) {
+        _search();
+      }
+    });
+    WidgetsBinding.instance.addPostFrameCallback((_) => _search(reset: true));
+  }
+
+  @override
+  void dispose() {
+    _debounce?.cancel();
+    _searchController.dispose();
+    _scrollController.dispose();
+    super.dispose();
+  }
+
+  /// Suche wird entprellt - sonst geht pro Tastendruck eine Anfrage raus.
+  void _onQueryChanged(String _) {
+    _debounce?.cancel();
+    _debounce = Timer(const Duration(milliseconds: 350), () => _search(reset: true));
+  }
+
+  Future<void> _search({bool reset = false}) async {
+    if (_loading || (!reset && _last)) return;
+    setState(() {
+      _loading = true;
+      if (reset) {
+        _page = 0;
+        _last = false;
+        _results.clear();
+        _error = null;
+      }
+    });
+
+    try {
+      final page = await context.read<SportsProvider>().searchExercises(
+            search: _searchController.text.trim(),
+            muscle: _muscle,
+            page: _page,
+          );
+      if (!mounted) return;
+      setState(() {
+        _results.addAll(page.content);
+        _total = page.totalElements;
+        _last = page.last;
+        _page++;
+        _loading = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _loading = false;
+        _error = 'Übungen konnten nicht geladen werden';
+      });
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
-    final sports = context.watch<SportsProvider>();
-    final filtered = sports.exercises.where((ex) {
-      final name = (ex['name'] as String? ?? '').toLowerCase();
-      final cat = ex['category'] as String? ?? '';
-      final matchSearch = name.contains(_search.toLowerCase());
-      final matchCat = _category == 'All' || cat == _category;
-      return matchSearch && matchCat;
-    }).toList();
+    final options = context.watch<SportsProvider>().muscleOptions;
 
-    return CustomScrollView(
-      slivers: [
-        SliverAppBar(
-          floating: true,
-          backgroundColor: LyftaTheme.background,
-          title: Text('Explore', style: LyftaTheme.title),
-        ),
-        SliverPadding(
-          padding: const EdgeInsets.fromLTRB(16, 0, 16, 100),
-          sliver: SliverList(
-            delegate: SliverChildListDelegate([
-              TextField(
-                onChanged: (v) => setState(() => _search = v),
-                style: const TextStyle(color: LyftaTheme.textPrimary),
-                decoration: const InputDecoration(
-                  hintText: 'Search 5000+ exercises',
-                  prefixIcon: Icon(Icons.search, color: LyftaTheme.textTertiary),
-                ),
-              ),
-              const SizedBox(height: 12),
-              SizedBox(
-                height: 36,
-                child: ListView.separated(
-                  scrollDirection: Axis.horizontal,
-                  itemCount: _categories.length,
-                  separatorBuilder: (_, _) => const SizedBox(width: 8),
-                  itemBuilder: (_, i) {
-                    final cat = _categories[i];
-                    final sel = _category == cat;
-                    return FilterChip(
-                      label: Text(cat),
-                      selected: sel,
-                      onSelected: (_) => setState(() => _category = cat),
-                      selectedColor: LyftaTheme.primary.withValues(alpha: 0.25),
-                      checkmarkColor: LyftaTheme.primary,
-                    );
-                  },
-                ),
-              ),
-              const SizedBox(height: 16),
-              Text('${filtered.length} exercises', style: LyftaTheme.caption),
-              const SizedBox(height: 12),
-              ...filtered.map((ex) => _ExerciseTile(
-                    exercise: ex,
-                    onTap: () => ExerciseDetailSheet.show(context, ex),
-                  )),
-            ]),
+    return SafeArea(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+            child: Text('Übungen', style: LyftaTheme.headline.copyWith(fontSize: 24)),
           ),
-        ),
-      ],
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 14, 16, 0),
+            child: TextField(
+              controller: _searchController,
+              onChanged: _onQueryChanged,
+              decoration: const InputDecoration(
+                hintText: 'Übung suchen',
+                prefixIcon: Icon(Icons.search_rounded, color: LyftaTheme.textTertiary),
+              ),
+            ),
+          ),
+          const SizedBox(height: 12),
+          SizedBox(
+            height: 36,
+            child: ListView(
+              scrollDirection: Axis.horizontal,
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              children: [
+                _chip('Alle', _muscle == null, () {
+                  setState(() => _muscle = null);
+                  _search(reset: true);
+                }),
+                ...options.map(
+                  (option) => _chip(option.label, _muscle == option.slug, () {
+                    setState(() => _muscle = option.slug);
+                    _search(reset: true);
+                  }),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 12),
+          if (_total > 0)
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              child: Text('$_total Übungen', style: LyftaTheme.label),
+            ),
+          const SizedBox(height: 8),
+          Expanded(child: _body(options)),
+        ],
+      ),
     );
   }
-}
 
-class _ExerciseTile extends StatelessWidget {
-  final Map<String, dynamic> exercise;
-  final VoidCallback onTap;
-
-  const _ExerciseTile({required this.exercise, required this.onTap});
-
-  @override
-  Widget build(BuildContext context) {
-    final diff = exercise['difficulty'] as String? ?? 'beginner';
-    Color badge;
-    switch (diff) {
-      case 'advanced':
-        badge = LyftaTheme.danger;
-        break;
-      case 'intermediate':
-        badge = LyftaTheme.warning;
-        break;
-      default:
-        badge = LyftaTheme.primary;
+  Widget _body(List<GymMuscleOption> options) {
+    if (_error != null) {
+      return Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(_error!, style: LyftaTheme.subtitle),
+            const SizedBox(height: 12),
+            TextButton(
+              onPressed: () => _search(reset: true),
+              child: const Text('Erneut versuchen'),
+            ),
+          ],
+        ),
+      );
+    }
+    if (_results.isEmpty && _loading) {
+      return const Center(child: CircularProgressIndicator(color: LyftaTheme.primary));
+    }
+    if (_results.isEmpty) {
+      return Center(child: Text('Keine Treffer', style: LyftaTheme.subtitle));
     }
 
-    return Container(
-      margin: const EdgeInsets.only(bottom: 8),
-      decoration: BoxDecoration(
-        color: LyftaTheme.surface,
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: ListTile(
+    return ListView.builder(
+      controller: _scrollController,
+      padding: const EdgeInsets.fromLTRB(16, 0, 16, 100),
+      itemCount: _results.length + (_last ? 0 : 1),
+      itemBuilder: (context, index) {
+        if (index >= _results.length) {
+          return const Padding(
+            padding: EdgeInsets.symmetric(vertical: 20),
+            child: Center(child: CircularProgressIndicator(color: LyftaTheme.primary)),
+          );
+        }
+        final exercise = _results[index];
+        return ExerciseListTile(
+          exercise: exercise,
+          options: options,
+          trailing: const Icon(
+            Icons.chevron_right_rounded,
+            color: LyftaTheme.textTertiary,
+          ),
+          onTap: () => ExerciseDetailSheet.show(context, exercise),
+        );
+      },
+    );
+  }
+
+  Widget _chip(String label, bool selected, VoidCallback onTap) {
+    return Padding(
+      padding: const EdgeInsets.only(right: 8),
+      child: GestureDetector(
         onTap: onTap,
-        leading: Container(
-          width: 48,
-          height: 48,
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
           decoration: BoxDecoration(
             color: LyftaTheme.surfaceElevated,
-            borderRadius: BorderRadius.circular(10),
-          ),
-          child: const Icon(Icons.play_circle_outline, color: LyftaTheme.primary, size: 28),
-        ),
-        title: Text(exercise['name'] as String? ?? '', style: LyftaTheme.title.copyWith(fontSize: 16)),
-        subtitle: Text(
-          '${exercise['category']} · ${exercise['equipment']}',
-          style: LyftaTheme.subtitle,
-        ),
-        trailing: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-          decoration: BoxDecoration(
-            color: badge.withValues(alpha: 0.15),
-            borderRadius: BorderRadius.circular(6),
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(
+              color: selected ? LyftaTheme.primary : LyftaTheme.divider,
+            ),
           ),
           child: Text(
-            diff[0].toUpperCase() + diff.substring(1),
-            style: TextStyle(color: badge, fontSize: 11, fontWeight: FontWeight.w600),
+            label,
+            style: LyftaTheme.caption.copyWith(
+              color: selected ? LyftaTheme.primary : LyftaTheme.textSecondary,
+            ),
           ),
         ),
       ),

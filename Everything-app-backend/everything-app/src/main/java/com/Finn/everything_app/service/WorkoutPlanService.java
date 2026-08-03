@@ -19,6 +19,7 @@ public class WorkoutPlanService {
 
     private final WorkoutPlanRepository workoutPlanRepository;
     private final WorkoutSessionRepository workoutSessionRepository;
+    private final RoutineRepository routineRepository;
     private final UserRepository userRepository;
     private final ApplicationEventPublisher eventPublisher;
 
@@ -109,6 +110,9 @@ public class WorkoutPlanService {
     public void deletePlan(Long id) {
         WorkoutPlan plan = getPlanById(id);
         Long userId = plan.getUser().getId();
+        // Routinen sind wiederverwendbar und ueberleben ihr Programm - erst die Zuordnung
+        // loesen, sonst laeuft das Delete in die Fremdschluessel-Bedingung.
+        routineRepository.detachFromPlan(id);
         workoutPlanRepository.delete(plan);
         eventPublisher.publishEvent(new ScheduleChangedEvent(this, userId));
     }
@@ -143,16 +147,32 @@ public class WorkoutPlanService {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new RuntimeException("User nicht gefunden"));
 
+        // Hat der Plan Routinen, werden sie der Reihe nach eingeplant. Der Versatz um
+        // placeholderCount setzt die Rotation fort, wenn die Woche schon teilweise belegt ist.
+        List<Routine> routines = routineRepository
+                .findByWorkoutPlanIdAndIsArchivedFalseOrderByOrderIndexAscIdAsc(plan.getId());
+
         for (int i = 0; i < shortfall; i++) {
             WorkoutSession placeholder = new WorkoutSession();
             placeholder.setUser(user);
             placeholder.setWorkoutPlan(plan);
-            placeholder.setName(plan.getName() + " Session");
-            placeholder.setDurationMinutes(DEFAULT_SESSION_DURATION_MINUTES);
             placeholder.setIntensity(5);
             placeholder.setIsCompleted(false);
             placeholder.setIsFlexible(true);
             placeholder.setTargetWeekStart(weekStart);
+
+            if (routines.isEmpty()) {
+                placeholder.setName(plan.getName() + " Session");
+                placeholder.setDurationMinutes(DEFAULT_SESSION_DURATION_MINUTES);
+            } else {
+                Routine routine = routines.get((int) ((placeholderCount + i) % routines.size()));
+                placeholder.setRoutine(routine);
+                placeholder.setName(routine.getName());
+                placeholder.setDurationMinutes(routine.getEstimatedDurationMinutes() != null
+                        ? routine.getEstimatedDurationMinutes()
+                        : DEFAULT_SESSION_DURATION_MINUTES);
+            }
+
             workoutSessionRepository.save(placeholder);
         }
     }

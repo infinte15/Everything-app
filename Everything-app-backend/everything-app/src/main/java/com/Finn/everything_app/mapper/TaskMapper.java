@@ -47,8 +47,15 @@ public class TaskMapper {
         task.setPriority(dto.getPriority());
         task.setDeadline(dto.getDeadline());
         task.setEstimatedDurationMinutes(dto.getEstimatedDurationMinutes());
-        task.setStatus(dto.getStatus());
-        task.setSpaceType(dto.getSpaceType());
+        // Nur ueberschreiben, wenn das DTO wirklich einen Wert liefert - sonst bleiben die
+        // NOT-NULL-Defaults der Entity erhalten. Ohne diese Pruefung schreibt ein Request
+        // ohne status/spaceType null in zwei nullable=false-Spalten.
+        if (dto.getStatus() != null) {
+            task.setStatus(dto.getStatus());
+        }
+        if (dto.getSpaceType() != null) {
+            task.setSpaceType(dto.getSpaceType());
+        }
         task.setCategory(dto.getCategory());
         task.setMinChunkMinutes(dto.getMinChunkMinutes());
         task.setMaxChunkMinutes(dto.getMaxChunkMinutes());

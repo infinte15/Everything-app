@@ -3,6 +3,7 @@ package com.Finn.everything_app.mapper;
 
 import com.Finn.everything_app.dto.ExerciseSetDTO;
 import com.Finn.everything_app.model.ExerciseSet;
+import com.Finn.everything_app.model.SetType;
 import org.springframework.stereotype.Component;
 
 @Component
@@ -22,6 +23,12 @@ public class ExerciseSetMapper {
         dto.setDurationSeconds(set.getDurationSeconds());
         dto.setNotes(set.getNotes());
         dto.setIsCompleted(set.getIsCompleted());
+        dto.setSetType(SetType.orDefault(set.getSetType()));
+        dto.setRestSeconds(set.getRestSeconds());
+        dto.setRpe(set.getRpe());
+        dto.setExerciseOrder(set.getExerciseOrder());
+        dto.setRoutineExerciseId(set.getRoutineExerciseId());
+        dto.setCompletedAt(set.getCompletedAt());
 
         return dto;
     }
@@ -37,6 +44,11 @@ public class ExerciseSetMapper {
         set.setDurationSeconds(dto.getDurationSeconds());
         set.setNotes(dto.getNotes());
         set.setIsCompleted(dto.getIsCompleted());
+        set.setSetType(SetType.orDefault(dto.getSetType()));
+        set.setRestSeconds(dto.getRestSeconds());
+        set.setRpe(dto.getRpe());
+        set.setExerciseOrder(dto.getExerciseOrder());
+        set.setRoutineExerciseId(dto.getRoutineExerciseId());
 
         return set;
     }

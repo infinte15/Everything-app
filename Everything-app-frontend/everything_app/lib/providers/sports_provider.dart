@@ -1,335 +1,453 @@
 import 'dart:async';
-import 'package:flutter/material.dart';
+import 'dart:convert';
+
+import 'package:flutter/foundation.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+
 import '../models/gym/gym_models.dart';
 import '../services/sports_service.dart';
 
+/// Zustand des Gym-Bereichs.
+///
+/// Alle Kennzahlen kommen vom Server - hier wird nichts mehr aus unvollstaendigen
+/// Session-Daten nachgerechnet. Ein laufendes Training wird zusaetzlich lokal
+/// gesichert, damit ein Absturz oder App-Neustart es nicht verliert.
 class SportsProvider with ChangeNotifier {
-  final SportsService _service = SportsService();
+  SportsProvider({SportsService? service}) : _service = service ?? SportsService();
 
-  List<Map<String, dynamic>> _workoutPlans = [];
-  List<Map<String, dynamic>> _workoutSessions = [];
-  List<Map<String, dynamic>> _exercises = [];
-  Map<String, dynamic>? _currentWorkout;
+  final SportsService _service;
+
+  static const String _activeWorkoutKey = 'gym_active_workout';
+  static const int _fallbackRestSeconds = 90;
+
+  // ── Zustand ──────────────────────────────────────────────────────────────────
+
+  List<GymRoutine> _routines = [];
+  List<GymSession> _sessions = [];
+  List<GymMuscleOption> _muscleOptions = [];
+  List<GymMuscleVolume> _muscleVolumes = [];
+  GymWeeklyStats _weeklyStats = const GymWeeklyStats();
+
+  ActiveWorkout? _activeWorkout;
 
   bool _isLoading = false;
+  bool _isSaving = false;
   String? _error;
 
   int _restSecondsRemaining = 0;
+  int _restSecondsTotal = 0;
   Timer? _restTimer;
-  int _defaultRestSeconds = 90;
   String? _restExerciseName;
+  int _defaultRestSeconds = _fallbackRestSeconds;
+
+  // ── Getter ───────────────────────────────────────────────────────────────────
 
   bool get isLoading => _isLoading;
+  bool get isSaving => _isSaving;
   String? get error => _error;
-  List<Map<String, dynamic>> get workoutPlans => _workoutPlans;
-  List<Map<String, dynamic>> get workoutSessions => _workoutSessions;
-  List<Map<String, dynamic>> get exercises => _exercises;
-  Map<String, dynamic>? get currentWorkout => _currentWorkout;
+
+  List<GymRoutine> get routines => List.unmodifiable(_routines);
+  List<GymSession> get sessions => List.unmodifiable(_sessions);
+  List<GymMuscleOption> get muscleOptions => List.unmodifiable(_muscleOptions);
+  List<GymMuscleVolume> get muscleVolumes => List.unmodifiable(_muscleVolumes);
+  GymWeeklyStats get weeklyStats => _weeklyStats;
+
+  ActiveWorkout? get activeWorkout => _activeWorkout;
+  bool get hasActiveWorkout => _activeWorkout != null;
+
   int get restSecondsRemaining => _restSecondsRemaining;
+  int get restSecondsTotal => _restSecondsTotal;
   bool get isResting => _restSecondsRemaining > 0;
   String? get restExerciseName => _restExerciseName;
   int get defaultRestSeconds => _defaultRestSeconds;
 
-  int get totalWorkouts => _workoutSessions.length;
-  int get currentStreak => _calculateStreak();
+  /// 0..1 - Fortschritt des laufenden Pausen-Timers, für den Ring.
+  double get restProgress =>
+      _restSecondsTotal > 0 ? _restSecondsRemaining / _restSecondsTotal : 0;
 
-  double get totalVolumeAllTime => _workoutSessions.fold<double>(
-        0,
-        (s, w) => s + ((w['totalVolumeKg'] as num?)?.toDouble() ?? _sessionVolume(w)),
-      );
+  int get totalWorkouts => _sessions.length;
+  int get currentStreakWeeks => _weeklyStats.currentStreakWeeks;
 
-  double get weeklyVolume {
-    final now = DateTime.now();
-    final weekStart = now.subtract(Duration(days: now.weekday - 1));
-    return _workoutSessions.where((w) {
-      final d = w['date'] != null ? DateTime.parse(w['date'].toString()) : DateTime.now();
-      return !d.isBefore(weekStart);
-    }).fold<double>(0, (s, w) => s + ((w['totalVolumeKg'] as num?)?.toDouble() ?? _sessionVolume(w)));
-  }
+  double get totalVolumeAllTime =>
+      _sessions.fold(0.0, (sum, s) => sum + s.totalVolumeKg);
 
-  int get weeklyWorkoutCount {
-    final stats = getWeeklyStats();
-    return stats['workouts'] as int? ?? 0;
-  }
+  /// Muskel-Slug -> Auslastung 0..1, direkt für die Körper-Grafik.
+  Map<String, double> get muscleActivation => {
+        for (final m in _muscleVolumes) m.muscle: m.share,
+      };
 
-  List<GymProgramTemplate> get programTemplates => _templates;
-
-  static final List<GymProgramTemplate> _templates = [
-    GymProgramTemplate(
-      name: 'Push Pull Legs',
-      description: 'Classic 6-day hypertrophy split',
-      level: 'Intermediate',
-      daysPerWeek: 6,
-      routines: [
-        GymRoutine(id: 101, name: 'Push', exercises: [
-          {'name': 'Bench Press', 'sets': 4, 'reps': 8, 'weight': 60},
-          {'name': 'Incline Dumbbell Press', 'sets': 3, 'reps': 10, 'weight': 24},
-          {'name': 'Lateral Raise', 'sets': 3, 'reps': 15, 'weight': 10},
-        ], estimatedMinutes: 55),
-        GymRoutine(id: 102, name: 'Pull', exercises: [
-          {'name': 'Barbell Row', 'sets': 4, 'reps': 8, 'weight': 70},
-          {'name': 'Lat Pulldown', 'sets': 3, 'reps': 10, 'weight': 50},
-          {'name': 'Barbell Curl', 'sets': 3, 'reps': 12, 'weight': 25},
-        ], estimatedMinutes: 55),
-        GymRoutine(id: 103, name: 'Legs', exercises: [
-          {'name': 'Squat', 'sets': 4, 'reps': 6, 'weight': 100},
-          {'name': 'Romanian Deadlift', 'sets': 3, 'reps': 10, 'weight': 80},
-          {'name': 'Leg Extension', 'sets': 3, 'reps': 12, 'weight': 45},
-        ], estimatedMinutes: 65),
-      ],
-    ),
-    GymProgramTemplate(
-      name: 'StrongLifts 5×5',
-      description: 'Linear progression strength program',
-      level: 'Beginner',
-      daysPerWeek: 3,
-      routines: [
-        GymRoutine(id: 201, name: 'Workout A', exercises: [
-          {'name': 'Squat', 'sets': 5, 'reps': 5, 'weight': 60},
-          {'name': 'Bench Press', 'sets': 5, 'reps': 5, 'weight': 40},
-          {'name': 'Barbell Row', 'sets': 5, 'reps': 5, 'weight': 40},
-        ], estimatedMinutes: 45),
-        GymRoutine(id: 202, name: 'Workout B', exercises: [
-          {'name': 'Squat', 'sets': 5, 'reps': 5, 'weight': 60},
-          {'name': 'Overhead Press', 'sets': 5, 'reps': 5, 'weight': 30},
-          {'name': 'Deadlift', 'sets': 1, 'reps': 5, 'weight': 80},
-        ], estimatedMinutes: 45),
-      ],
-    ),
-  ];
+  // ── Laden ────────────────────────────────────────────────────────────────────
 
   Future<void> loadData() async {
     _isLoading = true;
     _error = null;
     notifyListeners();
 
+    await _restoreActiveWorkout();
+
     try {
-      await Future.wait([
-        _loadWorkoutPlans(),
-        _loadWorkoutSessions(),
-        _loadExercises(),
+      final results = await Future.wait([
+        _service.getRoutines(),
+        _service.getSessions(),
+        _service.getWeeklyStats(),
+        _service.getMuscleVolume(startDate: _weekStart(), endDate: DateTime.now()),
+        _service.getMuscleGroups(),
       ]);
+
+      _routines = results[0] as List<GymRoutine>;
+      _sessions = results[1] as List<GymSession>;
+      _weeklyStats = results[2] as GymWeeklyStats;
+      _muscleVolumes = results[3] as List<GymMuscleVolume>;
+      _muscleOptions = results[4] as List<GymMuscleOption>;
       _error = null;
     } catch (e) {
-      _error = 'Fehler beim Laden: $e';
+      _error = 'Daten konnten nicht geladen werden: $e';
     }
 
     _isLoading = false;
     notifyListeners();
   }
 
-  Future<void> _loadWorkoutPlans() async {
-    _workoutPlans = await _service.getAllPlans();
-    // Falls keine Backend-Workouts existieren, kann man Optional die Templates importieren.
-    // Aber wir belassen es bei leeren Listen, wenn das Backend leer ist.
-  }
-
-  Future<void> _loadWorkoutSessions() async {
-    final sessions = await _service.getAllSessions();
-    
-    // Wir müssen die Sets für jede Session laden oder das Backend gibt sie mit. 
-    // Hier formatieren wir die Datum-Strings zu echten DateTimes für das Frontend
-    _workoutSessions = sessions.map((s) {
-      if (s['startTime'] != null && s['date'] == null) {
-         s['date'] = s['startTime']; // Fallback
-      }
-      return s;
-    }).toList();
-  }
-
-  Future<void> _loadExercises() async {
-    _exercises = await _service.getAllExercises();
-  }
-
-  Future<void> addRoutine({
-    required String name,
-    String? day,
-    required List<Map<String, dynamic>> exercises,
-    int estimatedMinutes = 60,
-  }) async {
-    final planData = {
-      'name': name,
-      'goal': 'Hypertrophy',
-      'difficulty': 'Intermediate',
-      'durationWeeks': 12,
-      'workoutsPerWeek': 3,
-      // Das Backend hat keine direkten "Exercises" im Plan-DTO verknüpft,
-      // man müsste hier ggf. Sessions/Routinen zum Plan erstellen.
-    };
-    
-    final created = await _service.createPlan(planData);
-    if (created != null) {
-       _workoutPlans.add(created);
-       notifyListeners();
+  /// Lädt nur die Auswertungen neu - nach dem Abschluss eines Trainings.
+  Future<void> refreshStats() async {
+    try {
+      final results = await Future.wait([
+        _service.getWeeklyStats(),
+        _service.getMuscleVolume(startDate: _weekStart(), endDate: DateTime.now()),
+        _service.getSessions(),
+      ]);
+      _weeklyStats = results[0] as GymWeeklyStats;
+      _muscleVolumes = results[1] as List<GymMuscleVolume>;
+      _sessions = results[2] as List<GymSession>;
+      notifyListeners();
+    } catch (e) {
+      debugPrint('Statistiken konnten nicht aktualisiert werden: $e');
     }
   }
 
-  Future<bool> startWorkout(int workoutPlanId) async {
+  /// Muskel-Belastung für einen anderen Zeitraum (Woche / Monat / Jahr).
+  Future<void> loadMuscleVolume({required DateTime from, DateTime? to}) async {
     try {
-      final plan = _workoutPlans.firstWhere((p) => p['id'] == workoutPlanId);
-      // Fallback auf leere Übungsliste, wenn keine "exercises" am Plan hängen
-      final templateExercises = plan.containsKey('exercises') 
-          ? List<Map<String, dynamic>>.from(plan['exercises'] as List)
-          : <Map<String, dynamic>>[];
-          
-      _initWorkout(
-        name: plan['name'] as String? ?? 'Workout',
-        planId: workoutPlanId,
-        templateExercises: templateExercises,
+      _muscleVolumes = await _service.getMuscleVolume(
+        startDate: from,
+        endDate: to ?? DateTime.now(),
       );
+      notifyListeners();
+    } catch (e) {
+      debugPrint('Muskelauswertung fehlgeschlagen: $e');
+    }
+  }
+
+  // ── Routinen ─────────────────────────────────────────────────────────────────
+
+  Future<bool> saveRoutine({
+    int? id,
+    required String name,
+    String? dayLabel,
+    int? estimatedDurationMinutes,
+    required List<GymRoutineExercise> exercises,
+  }) async {
+    _isSaving = true;
+    notifyListeners();
+    try {
+      final routine = id == null
+          ? await _service.createRoutine(
+              name: name,
+              dayLabel: dayLabel,
+              estimatedDurationMinutes: estimatedDurationMinutes,
+              exercises: exercises,
+            )
+          : await _service.updateRoutine(
+              id: id,
+              name: name,
+              dayLabel: dayLabel,
+              estimatedDurationMinutes: estimatedDurationMinutes,
+              exercises: exercises,
+            );
+
+      final index = _routines.indexWhere((r) => r.id == routine.id);
+      if (index >= 0) {
+        _routines[index] = routine;
+      } else {
+        _routines.add(routine);
+      }
+      _error = null;
       return true;
     } catch (e) {
-      _error = 'Workout konnte nicht gestartet werden: $e';
+      _error = 'Routine konnte nicht gespeichert werden: $e';
+      return false;
+    } finally {
+      _isSaving = false;
+      notifyListeners();
+    }
+  }
+
+  Future<bool> deleteRoutine(int id) async {
+    try {
+      await _service.deleteRoutine(id);
+      _routines.removeWhere((r) => r.id == id);
+      notifyListeners();
+      return true;
+    } catch (e) {
+      _error = 'Routine konnte nicht gelöscht werden: $e';
       notifyListeners();
       return false;
     }
   }
 
-  Future<bool> startEmptyWorkout({String name = 'Workout'}) async {
-    _initWorkout(name: name, planId: null, templateExercises: []);
-    return true;
-  }
-
-  void _initWorkout({
-    required String name,
-    required int? planId,
-    required List<Map<String, dynamic>> templateExercises,
-  }) {
-    final exercises = templateExercises.map((ex) {
-      final setsCount = ex['sets'] as int? ?? 3;
-      final defaultReps = ex['reps'] as int? ?? 10;
-      final defaultWeight = (ex['weight'] as num?)?.toDouble() ?? 0;
-      final exName = ex['name'] as String? ?? '';
-      return {
-        'name': exName,
-        'exerciseId': ex['exerciseId'] ?? _exerciseIdByName(exName),
-        'loggedSets': List.generate(
-          setsCount,
-          (i) => {
-            'set': i + 1,
-            'weight': defaultWeight,
-            'reps': defaultReps,
-            'done': false,
-            'type': GymSetType.normal.name,
-          },
-        ),
-      };
-    }).toList();
-
-    _currentWorkout = {
-      'workoutPlanId': planId,
-      'name': name,
-      'startTime': DateTime.now(),
-      'exercises': exercises,
-      'completedSets': 0,
-    };
-    notifyListeners();
-  }
-
-  int _exerciseIdByName(String name) {
-    for (final e in _exercises) {
-      if (e['name'] == name) return e['id'] as int? ?? 0;
+  Future<GymRoutine?> loadRoutineDetail(int id) async {
+    try {
+      final routine = await _service.getRoutine(id);
+      final index = _routines.indexWhere((r) => r.id == id);
+      if (index >= 0) _routines[index] = routine;
+      notifyListeners();
+      return routine;
+    } catch (e) {
+      _error = 'Routine konnte nicht geladen werden: $e';
+      notifyListeners();
+      return null;
     }
-    return 0; // 0 ist ungültig, Backend erwartet valide ID
   }
 
-  void addExerciseToWorkout(Map<String, dynamic> exercise, {int sets = 3}) {
-    if (_currentWorkout == null) return;
-    final list = _currentWorkout!['exercises'] as List<Map<String, dynamic>>;
-    final weight = (exercise['weight'] as num?)?.toDouble() ?? 0;
-    list.add({
-      'name': exercise['name'],
-      'exerciseId': exercise['id'],
-      'loggedSets': List.generate(
-        sets,
-        (i) => {
-          'set': i + 1,
-          'weight': weight,
-          'reps': 10,
-          'done': false,
-          'type': GymSetType.normal.name,
-        },
-      ),
-    });
-    notifyListeners();
-  }
+  // ── Übungs-Katalog ───────────────────────────────────────────────────────────
 
-  void completeSet({String? exerciseName, int restSeconds = 90}) {
-    if (_currentWorkout == null) return;
-    _currentWorkout!['completedSets'] =
-        (_currentWorkout!['completedSets'] as int? ?? 0) + 1;
-    startRestTimer(seconds: restSeconds, exerciseName: exerciseName);
-    notifyListeners();
-  }
+  Future<GymExercisePage> searchExercises({
+    String? search,
+    String? muscle,
+    String? equipment,
+    int page = 0,
+    int size = 30,
+  }) =>
+      _service.searchExercises(
+        search: search,
+        muscle: muscle,
+        equipment: equipment,
+        page: page,
+        size: size,
+      );
 
-  void toggleSetDone(int exerciseIndex, int setIndex, {bool startRest = true}) {
-    if (_currentWorkout == null) return;
-    final exercises = _currentWorkout!['exercises'] as List;
-    if (exerciseIndex >= exercises.length) return;
-    final ex = exercises[exerciseIndex] as Map<String, dynamic>;
-    final sets = ex['loggedSets'] as List;
-    if (setIndex >= sets.length) return;
-    final set = sets[setIndex] as Map<String, dynamic>;
-    final wasDone = set['done'] as bool? ?? false;
-    set['done'] = !wasDone;
-    if (!wasDone) {
-      _currentWorkout!['completedSets'] =
-          (_currentWorkout!['completedSets'] as int? ?? 0) + 1;
-      if (startRest) {
-        startRestTimer(
-          seconds: _defaultRestSeconds,
-          exerciseName: ex['name'] as String?,
-        );
-      }
-    } else {
-      _currentWorkout!['completedSets'] =
-          ((_currentWorkout!['completedSets'] as int? ?? 1) - 1).clamp(0, 9999);
+  Future<List<GymHistoryEntry>> exerciseHistory(int exerciseId, {int limit = 20}) =>
+      _service.getExerciseHistory(exerciseId, limit: limit);
+
+  Future<GymPersonalRecord?> personalRecords(int exerciseId) async {
+    try {
+      return await _service.getPersonalRecords(exerciseId);
+    } catch (e) {
+      debugPrint('Bestleistungen konnten nicht geladen werden: $e');
+      return null;
     }
-    notifyListeners();
+  }
+
+  // ── Training starten ─────────────────────────────────────────────────────────
+
+  Future<bool> startRoutine(int routineId) => _start(routineId: routineId);
+
+  Future<bool> startEmptyWorkout({String name = 'Training'}) => _start(name: name);
+
+  /// Übernimmt eine vom Scheduler eingeplante Einheit als laufendes Training.
+  Future<bool> startScheduledSession(int sessionId) => _start(sessionId: sessionId);
+
+  Future<bool> _start({int? routineId, int? sessionId, String? name}) async {
+    try {
+      final data = await _service.startWorkout(
+        routineId: routineId,
+        sessionId: sessionId,
+        name: name,
+      );
+      _activeWorkout = ActiveWorkout.fromResponse(data);
+      await _persistActiveWorkout();
+      _error = null;
+      notifyListeners();
+      return true;
+    } catch (e) {
+      _error = 'Training konnte nicht gestartet werden: $e';
+      notifyListeners();
+      return false;
+    }
+  }
+
+  // ── Laufendes Training bearbeiten ────────────────────────────────────────────
+
+  void addExerciseToWorkout(GymExercise exercise, {int sets = 3}) {
+    final workout = _activeWorkout;
+    if (workout == null) return;
+    workout.exercises.add(GymWorkoutExercise.fromExercise(exercise, sets: sets));
+    _afterWorkoutChange();
+  }
+
+  void removeExerciseFromWorkout(int exerciseIndex) {
+    final workout = _activeWorkout;
+    if (workout == null || exerciseIndex >= workout.exercises.length) return;
+    workout.exercises.removeAt(exerciseIndex);
+    _afterWorkoutChange();
   }
 
   void addSetToExercise(int exerciseIndex) {
-    if (_currentWorkout == null) return;
-    final exercises = _currentWorkout!['exercises'] as List;
-    if (exerciseIndex >= exercises.length) return;
-    final ex = exercises[exerciseIndex] as Map<String, dynamic>;
-    final sets = ex['loggedSets'] as List<Map<String, dynamic>>;
-    final last = sets.isNotEmpty ? sets.last : null;
-    sets.add({
-      'set': sets.length + 1,
-      'weight': last?['weight'] ?? 0,
-      'reps': last?['reps'] ?? 10,
-      'done': false,
-      'type': GymSetType.normal.name,
-    });
-    notifyListeners();
+    final block = _blockAt(exerciseIndex);
+    if (block == null) return;
+    final last = block.sets.isNotEmpty ? block.sets.last : null;
+    block.sets.add(GymLoggedSet(
+      setNumber: block.sets.length + 1,
+      weight: last?.weight,
+      reps: last?.reps,
+    ));
+    _afterWorkoutChange();
   }
 
-  void setSetType(int exerciseIndex, int setIndex, GymSetType type) {
-    if (_currentWorkout == null) return;
-    final exercises = _currentWorkout!['exercises'] as List;
-    final sets = (exercises[exerciseIndex] as Map)['loggedSets'] as List;
-    (sets[setIndex] as Map)['type'] = type.name;
-    notifyListeners();
+  void removeSet(int exerciseIndex, int setIndex) {
+    final block = _blockAt(exerciseIndex);
+    if (block == null || setIndex >= block.sets.length) return;
+    block.sets.removeAt(setIndex);
+    for (var i = 0; i < block.sets.length; i++) {
+      block.sets[i].setNumber = i + 1;
+    }
+    _afterWorkoutChange();
+  }
+
+  /// Hakt einen Satz ab bzw. wieder aus. Beim Abhaken startet die Pause automatisch.
+  void toggleSetDone(int exerciseIndex, int setIndex, {bool startRest = true}) {
+    final block = _blockAt(exerciseIndex);
+    if (block == null || setIndex >= block.sets.length) return;
+
+    final set = block.sets[setIndex];
+    set.isCompleted = !set.isCompleted;
+
+    if (set.isCompleted && startRest) {
+      startRestTimer(
+        seconds: restSecondsFor(exerciseIndex),
+        exerciseName: block.name,
+      );
+    }
+    _afterWorkoutChange();
   }
 
   void updateSetValues(int exerciseIndex, int setIndex, {double? weight, int? reps}) {
-    if (_currentWorkout == null) return;
-    final exercises = _currentWorkout!['exercises'] as List;
-    if (exerciseIndex >= exercises.length) return;
-    final sets = (exercises[exerciseIndex] as Map)['loggedSets'] as List;
-    if (setIndex >= sets.length) return;
-    final set = sets[setIndex] as Map<String, dynamic>;
-    if (weight != null) set['weight'] = weight;
-    if (reps != null) set['reps'] = reps;
-    notifyListeners();
+    final block = _blockAt(exerciseIndex);
+    if (block == null || setIndex >= block.sets.length) return;
+    final set = block.sets[setIndex];
+    if (weight != null) set.weight = weight;
+    if (reps != null) set.reps = reps;
+    _afterWorkoutChange(notify: false);
   }
+
+  void setSetType(int exerciseIndex, int setIndex, GymSetType type) {
+    final block = _blockAt(exerciseIndex);
+    if (block == null || setIndex >= block.sets.length) return;
+    block.sets[setIndex].setType = type;
+    _afterWorkoutChange();
+  }
+
+  /// Pausenzeit dieser Übung: Routine-Vorgabe, sonst der persönliche Standard.
+  int restSecondsFor(int exerciseIndex) {
+    final block = _blockAt(exerciseIndex);
+    return block?.restSeconds ?? _defaultRestSeconds;
+  }
+
+  /// Pausenzeit nur für diese Übung in diesem Training, unabhängig von der
+  /// Routinen-Vorgabe oder dem persönlichen Standard.
+  void setExerciseRestSeconds(int exerciseIndex, int seconds) {
+    final block = _blockAt(exerciseIndex);
+    if (block == null) return;
+    block.restSeconds = seconds.clamp(0, 900);
+    _afterWorkoutChange();
+  }
+
+  /// Erkennt eine neue Bestleistung, um den Satz im UI zu markieren.
+  bool isPersonalRecord(int exerciseIndex, int setIndex) {
+    final block = _blockAt(exerciseIndex);
+    if (block == null || setIndex >= block.sets.length) return false;
+    final set = block.sets[setIndex];
+    final record = block.personalRecordWeight;
+    if (!set.isCompleted || set.weight == null || record == null) return false;
+    return set.weight! > record;
+  }
+
+  GymWorkoutExercise? _blockAt(int index) {
+    final workout = _activeWorkout;
+    if (workout == null || index < 0 || index >= workout.exercises.length) return null;
+    return workout.exercises[index];
+  }
+
+  ActiveWorkoutStats get activeWorkoutStats {
+    final workout = _activeWorkout;
+    if (workout == null) return const ActiveWorkoutStats();
+    var volume = 0.0;
+    var completed = 0;
+    var total = 0;
+    for (final block in workout.exercises) {
+      for (final set in block.sets) {
+        total++;
+        if (set.isCompleted) {
+          completed++;
+          volume += set.volume;
+        }
+      }
+    }
+    return ActiveWorkoutStats(
+      volumeKg: volume,
+      completedSets: completed,
+      totalSets: total,
+    );
+  }
+
+  // ── Training abschliessen ────────────────────────────────────────────────────
+
+  Future<bool> finishWorkout({String? notes}) async {
+    final workout = _activeWorkout;
+    if (workout == null) return false;
+
+    _isSaving = true;
+    notifyListeners();
+    try {
+      final minutes = DateTime.now().difference(workout.startedAt).inMinutes;
+      await _service.finishWorkout(
+        sessionId: workout.sessionId,
+        exercises: workout.exercises,
+        notes: notes,
+        durationMinutes: minutes < 1 ? 1 : minutes,
+      );
+
+      _activeWorkout = null;
+      await _clearPersistedWorkout();
+      skipRest();
+      _error = null;
+      await refreshStats();
+      return true;
+    } catch (e) {
+      _error = 'Training konnte nicht gespeichert werden: $e';
+      return false;
+    } finally {
+      _isSaving = false;
+      notifyListeners();
+    }
+  }
+
+  /// Verwirft das laufende Training. Die leere Einheit bleibt serverseitig bestehen
+  /// und wird beim nächsten Abschluss überschrieben bzw. kann gelöscht werden.
+  Future<void> cancelWorkout() async {
+    final workout = _activeWorkout;
+    _activeWorkout = null;
+    await _clearPersistedWorkout();
+    skipRest();
+    notifyListeners();
+
+    if (workout != null) {
+      try {
+        await _service.deleteSession(workout.sessionId);
+      } catch (e) {
+        debugPrint('Verworfene Einheit konnte nicht entfernt werden: $e');
+      }
+    }
+  }
+
+  // ── Pausen-Timer ─────────────────────────────────────────────────────────────
 
   void startRestTimer({required int seconds, String? exerciseName}) {
     _restTimer?.cancel();
     _restSecondsRemaining = seconds;
+    _restSecondsTotal = seconds;
     _restExerciseName = exerciseName;
-    _restTimer = Timer.periodic(const Duration(seconds: 1), (t) {
+    _restTimer = Timer.periodic(const Duration(seconds: 1), (_) {
       if (_restSecondsRemaining <= 1) {
         skipRest();
       } else {
@@ -342,222 +460,69 @@ class SportsProvider with ChangeNotifier {
 
   void skipRest() {
     _restTimer?.cancel();
+    _restTimer = null;
     _restSecondsRemaining = 0;
+    _restSecondsTotal = 0;
     _restExerciseName = null;
     notifyListeners();
   }
 
   void adjustRest(int delta) {
-    _restSecondsRemaining = (_restSecondsRemaining + delta).clamp(0, 600);
+    if (!isResting) return;
+    _restSecondsRemaining = (_restSecondsRemaining + delta).clamp(1, 900);
+    // Der Ring darf nicht überlaufen, wenn Zeit draufgelegt wird.
+    if (_restSecondsRemaining > _restSecondsTotal) {
+      _restSecondsTotal = _restSecondsRemaining;
+    }
     notifyListeners();
   }
 
   void setDefaultRestSeconds(int seconds) {
-    _defaultRestSeconds = seconds.clamp(15, 300);
+    _defaultRestSeconds = seconds.clamp(15, 600);
     notifyListeners();
   }
 
-  String? getPreviousPerformance(String exerciseName) {
-    for (final session in _workoutSessions) {
-      final exercises = session['exercises'] as List? ?? [];
-      for (final ex in exercises) {
-        if (ex['name'] == exerciseName) {
-          return '${ex['weight']} kg × ${ex['reps']}';
-        }
-      }
-    }
-    return null;
+  // ── Lokale Sicherung des laufenden Trainings ─────────────────────────────────
+
+  void _afterWorkoutChange({bool notify = true}) {
+    unawaited(_persistActiveWorkout());
+    if (notify) notifyListeners();
   }
 
-  double? getPersonalRecord(String exerciseName) {
-    double? best;
-    for (final session in _workoutSessions) {
-      final exercises = session['exercises'] as List? ?? [];
-      for (final ex in exercises) {
-        if (ex['name'] == exerciseName) {
-          final w = (ex['weight'] as num?)?.toDouble() ?? 0;
-          if (best == null || w > best) best = w;
-        }
-      }
-    }
-    return best;
-  }
-
-  Map<String, dynamic> getActiveWorkoutStats() {
-    if (_currentWorkout == null) {
-      return {'volume': 0.0, 'completedSets': 0, 'totalSets': 0};
-    }
-    double volume = 0;
-    int completed = 0;
-    int total = 0;
-    for (final ex in _currentWorkout!['exercises'] as List) {
-      for (final s in (ex as Map)['loggedSets'] as List) {
-        total++;
-        if (s['done'] == true) {
-          completed++;
-          volume += ((s['weight'] as num?) ?? 0) * ((s['reps'] as num?) ?? 0);
-        }
-      }
-    }
-    return {
-      'volume': volume,
-      'completedSets': completed,
-      'totalSets': total,
-    };
-  }
-
-  Future<bool> finishWorkout({String? notes}) async {
-    if (_currentWorkout == null) return false;
-
+  Future<void> _persistActiveWorkout() async {
+    final workout = _activeWorkout;
+    if (workout == null) return;
     try {
-      final startTime = _currentWorkout!['startTime'] as DateTime;
-      final durationMinutes = DateTime.now().difference(startTime).inMinutes;
-      final stats = getActiveWorkoutStats();
-
-      // Create Session via API
-      final sessionData = {
-        'workoutPlanId': _currentWorkout!['workoutPlanId'],
-        'name': _currentWorkout!['name'],
-        'startTime': startTime.toIso8601String(),
-        'endTime': DateTime.now().toIso8601String(),
-        'durationMinutes': durationMinutes < 1 ? 1 : durationMinutes,
-        'caloriesBurned': durationMinutes * 8, // dummy calc
-        'intensity': 7, // dummy
-        'notes': notes ?? '',
-        'isCompleted': true,
-        'workoutType': 'WEIGHTLIFTING'
-      };
-
-      final createdSession = await _service.createSession(sessionData);
-      
-      if (createdSession != null) {
-        final sessionId = createdSession['id'];
-        
-        // Also log sets
-        for (final ex in _currentWorkout!['exercises'] as List) {
-          final exerciseId = ex['exerciseId'] as int;
-          for (final s in (ex as Map)['loggedSets'] as List) {
-            if (s['done'] == true) {
-              await _service.createSet({
-                'exerciseId': exerciseId,
-                'workoutSessionId': sessionId,
-                'setNumber': s['set'],
-                'reps': s['reps'],
-                'weight': s['weight'],
-                'isCompleted': true
-              });
-            }
-          }
-        }
-        
-        // Optimistic UI Update
-        createdSession['date'] = createdSession['startTime']; 
-        createdSession['exercises'] = _currentWorkout!['exercises'];
-        createdSession['totalSets'] = stats['completedSets'];
-        createdSession['totalVolumeKg'] = stats['volume'];
-        
-        _workoutSessions.insert(0, createdSession);
-      }
-
-      _currentWorkout = null;
-      skipRest();
-      notifyListeners();
-      return true;
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString(_activeWorkoutKey, json.encode(workout.toCache()));
     } catch (e) {
-      _error = 'Fehler beim Speichern: $e';
-      notifyListeners();
-      return false;
+      debugPrint('Training konnte nicht zwischengespeichert werden: $e');
     }
   }
 
-  void cancelWorkout() {
-    _currentWorkout = null;
-    skipRest();
-    notifyListeners();
+  Future<void> _clearPersistedWorkout() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.remove(_activeWorkoutKey);
+    } catch (e) {
+      debugPrint('Zwischenspeicher konnte nicht geleert werden: $e');
+    }
   }
 
-  List<Map<String, dynamic>> getWorkoutsForWeek(DateTime weekStart) {
-    final weekEnd = weekStart.add(const Duration(days: 7));
-    return _workoutSessions.where((w) {
-      final date = w['date'] != null ? DateTime.parse(w['date'].toString()) : DateTime.now();
-      return !date.isBefore(weekStart) && date.isBefore(weekEnd);
-    }).toList();
-  }
-
-  Map<String, dynamic> getWeeklyStats() {
-    final now = DateTime.now();
-    final weekStart = DateTime(now.year, now.month, now.day)
-        .subtract(Duration(days: now.weekday - 1));
-    final weekWorkouts = getWorkoutsForWeek(weekStart);
-
-    return {
-      'workouts': weekWorkouts.length,
-      'goal': 5,
-      'totalMinutes': weekWorkouts.fold<int>(
-        0,
-        (sum, w) => sum + (w['durationMinutes'] as int? ?? 0),
-      ),
-      'totalVolume': weekWorkouts.fold<double>(
-        0,
-        (sum, w) => sum + ((w['totalVolumeKg'] as num?)?.toDouble() ?? 0),
-      ),
-      'streak': currentStreak,
-    };
-  }
-
-  List<double> getVolumeChartPoints({int weeks = 8}) {
-    final now = DateTime.now();
-    return List.generate(weeks, (i) {
-      final start = now.subtract(Duration(days: (weeks - i) * 7));
-      final end = start.add(const Duration(days: 7));
-      return _workoutSessions.where((w) {
-        final d = w['date'] != null ? DateTime.parse(w['date'].toString()) : DateTime.now();
-        return !d.isBefore(start) && d.isBefore(end);
-      }).fold<double>(
-        0,
-        (s, w) => s + ((w['totalVolumeKg'] as num?)?.toDouble() ?? 0),
-      );
-    });
-  }
-
-  int _calculateStreak() {
-    if (_workoutSessions.isEmpty) return 0;
-    final sorted = List<Map<String, dynamic>>.from(_workoutSessions)
-      ..sort((a, b) {
-        final dateA = a['date'] != null ? DateTime.parse(a['date'].toString()) : DateTime.now();
-        final dateB = b['date'] != null ? DateTime.parse(b['date'].toString()) : DateTime.now();
-        return dateB.compareTo(dateA);
-      });
-
-    int streak = 0;
-    DateTime? lastDate;
-
-    for (final session in sorted) {
-      final date = session['date'] != null ? DateTime.parse(session['date'].toString()) : DateTime.now();
-      if (lastDate == null) {
-        final daysDiff = DateTime.now().difference(date).inDays;
-        if (daysDiff > 7) return 0;
-        streak = 1;
-        lastDate = date;
-      } else {
-        final daysDiff = lastDate.difference(date).inDays;
-        if (daysDiff <= 7) {
-          streak++;
-          lastDate = date;
-        } else {
-          break;
-        }
+  Future<void> _restoreActiveWorkout() async {
+    if (_activeWorkout != null) return;
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final raw = prefs.getString(_activeWorkoutKey);
+      if (raw == null) return;
+      final decoded = json.decode(raw);
+      if (decoded is Map<String, dynamic>) {
+        _activeWorkout = ActiveWorkout.fromCache(decoded);
       }
+    } catch (e) {
+      debugPrint('Laufendes Training konnte nicht wiederhergestellt werden: $e');
+      await _clearPersistedWorkout();
     }
-    return streak;
-  }
-
-  double _sessionVolume(Map<String, dynamic> session) {
-    double v = 0;
-    for (final ex in (session['exercises'] as List? ?? [])) {
-      v += ((ex['weight'] as num?) ?? 0) * ((ex['reps'] as num?) ?? 0) * ((ex['sets'] as num?) ?? 1);
-    }
-    return v;
   }
 
   void clearError() {
@@ -565,9 +530,81 @@ class SportsProvider with ChangeNotifier {
     notifyListeners();
   }
 
+  static DateTime _weekStart() {
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    return today.subtract(Duration(days: today.weekday - 1));
+  }
+
   @override
   void dispose() {
     _restTimer?.cancel();
     super.dispose();
   }
+}
+
+/// Ein laufendes Training.
+class ActiveWorkout {
+  final int sessionId;
+  final String name;
+  final DateTime startedAt;
+  final int? routineId;
+  final List<GymWorkoutExercise> exercises;
+
+  ActiveWorkout({
+    required this.sessionId,
+    required this.name,
+    required this.startedAt,
+    this.routineId,
+    required this.exercises,
+  });
+
+  factory ActiveWorkout.fromResponse(Map<String, dynamic> m) => ActiveWorkout(
+        sessionId: m['sessionId'] as int? ?? 0,
+        name: m['name'] as String? ?? 'Training',
+        startedAt: _date(m['startedAt']) ?? DateTime.now(),
+        routineId: m['routineId'] as int?,
+        exercises: (m['plannedExercises'] as List? ?? [])
+            .whereType<Map>()
+            .map((e) => GymWorkoutExercise.fromPlanned(Map<String, dynamic>.from(e)))
+            .toList(),
+      );
+
+  factory ActiveWorkout.fromCache(Map<String, dynamic> m) => ActiveWorkout(
+        sessionId: m['sessionId'] as int? ?? 0,
+        name: m['name'] as String? ?? 'Training',
+        startedAt: _date(m['startedAt']) ?? DateTime.now(),
+        routineId: m['routineId'] as int?,
+        exercises: (m['exercises'] as List? ?? [])
+            .whereType<Map>()
+            .map((e) => GymWorkoutExercise.fromCache(Map<String, dynamic>.from(e)))
+            .toList(),
+      );
+
+  Map<String, dynamic> toCache() => {
+        'sessionId': sessionId,
+        'name': name,
+        'startedAt': startedAt.toIso8601String(),
+        'routineId': routineId,
+        'exercises': exercises.map((e) => e.toCache()).toList(),
+      };
+
+  Duration get elapsed => DateTime.now().difference(startedAt);
+
+  static DateTime? _date(dynamic value) {
+    if (value == null) return null;
+    return DateTime.tryParse(value.toString().replaceFirst(' ', 'T'));
+  }
+}
+
+class ActiveWorkoutStats {
+  final double volumeKg;
+  final int completedSets;
+  final int totalSets;
+
+  const ActiveWorkoutStats({
+    this.volumeKg = 0,
+    this.completedSets = 0,
+    this.totalSets = 0,
+  });
 }
