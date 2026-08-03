@@ -34,3 +34,7 @@ build/
 
 
 src/main/resources/application.properties
+
+### Laufzeit-Logs ###
+# Werden bei jedem Start neu geschrieben bzw. rotiert und tauchten sonst in jedem Diff auf.
+logs/
