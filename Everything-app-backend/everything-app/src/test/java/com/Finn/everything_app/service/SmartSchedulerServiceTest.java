@@ -186,6 +186,57 @@ class SmartSchedulerServiceTest {
     }
 
     // ------------------------------------------------------------------
+    // Test 4b – Over a long horizon habits land in EVERY week, while tasks
+    //           stay inside the (shorter) task horizon
+    // ------------------------------------------------------------------
+    @Test
+    void habitsAreScheduledInEveryWeekOfALongHorizon() {
+        LocalDate start    = TODAY.plusDays(1);
+        LocalDate rangeEnd = start.plusDays(83);   // 12 Wochen, der Produktions-Horizont
+
+        Habit habit = new Habit();
+        habit.setId(52L);
+        habit.setName("Laufen");
+        habit.setTimesPerWeek(3);
+        habit.setDurationMinutes(45);
+        habit.setPreferredTime(LocalTime.of(9, 0));
+        habit.setStartDate(start.minusDays(30));
+
+        // Ein Task mit Deadline weit hinten darf trotzdem nicht jenseits des Task-Horizonts
+        // (14 Tage) landen — sonst wäre der Zuschnitt wirkungslos.
+        Task task = makeTask(150L, "Semesterarbeit", 120, 3, rangeEnd.atTime(23, 59));
+
+        when(taskService.getSchedulableTasks(1L)).thenReturn(List.of(task));
+        when(calendarEventService.getFixedEvents(eq(1L), any(), any())).thenReturn(new ArrayList<>());
+        when(habitRepository.findHabitsActiveInRange(eq(1L), any(), any())).thenReturn(List.of(habit));
+
+        ScheduleResult result = service.generateOptimalSchedule(1L, start, rangeEnd);
+
+        List<ScheduledItem> habitItems = result.getScheduledHabits().stream()
+                .filter(i -> i.getType() == ScheduledItemType.HABIT)
+                .toList();
+
+        // Jede ISO-Woche des Horizonts, die vollständig drinliegt, muss belegt sein.
+        for (LocalDate week = start.with(TemporalAdjusters.nextOrSame(DayOfWeek.MONDAY));
+             !week.plusDays(6).isAfter(rangeEnd);
+             week = week.plusWeeks(1)) {
+            final LocalDate weekStart = week;
+            long inWeek = habitItems.stream()
+                    .map(i -> i.getStartTime().toLocalDate())
+                    .filter(d -> !d.isBefore(weekStart) && d.isBefore(weekStart.plusWeeks(1)))
+                    .count();
+            assertEquals(3, inWeek, "Woche ab " + weekStart + " muss 3 Habit-Blöcke bekommen");
+        }
+
+        assertFalse(result.getScheduledTasks().isEmpty(), "Task muss geplant werden");
+        LocalDate taskHorizonEnd = start.plusDays(14);
+        for (ScheduledItem item : result.getScheduledTasks()) {
+            assertFalse(item.getStartTime().toLocalDate().isAfter(taskHorizonEnd),
+                    "Task-Block darf nicht hinter den Task-Horizont rutschen");
+        }
+    }
+
+    // ------------------------------------------------------------------
     // Test 5 – Habit is pulled toward its preferredTime, not the horizon start
     // ------------------------------------------------------------------
     @Test

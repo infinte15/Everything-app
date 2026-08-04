@@ -61,7 +61,10 @@ class FakeCalendarService extends CalendarService {
   }
 
   @override
-  Future<Map<String, dynamic>> generateSchedule(DateTime startDate, DateTime endDate) async {
+  Future<Map<String, dynamic>> generateSchedule(
+    DateTime startDate, {
+    DateTime? endDate,
+  }) async {
     generateScheduleCallCount++;
     if (!generateScheduleSucceeds) {
       return {'success': false, 'error': 'boom'};

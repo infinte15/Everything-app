@@ -12,6 +12,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import jakarta.validation.Valid;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.stream.Collectors;
@@ -90,10 +91,14 @@ public class CalendarController {
             @CurrentUser Long userId,
             @Valid @RequestBody ScheduleRequest request) {
 
+        LocalDate endDate = request.getEndDate() != null
+                ? request.getEndDate()
+                : smartSchedulerService.defaultHorizonEnd(request.getStartDate());
+
         ScheduleResult result = smartSchedulerService.generateOptimalSchedule(
                 userId,
                 request.getStartDate(),
-                request.getEndDate()
+                endDate
         );
 
         ScheduleResultDTO resultDTO = new ScheduleResultDTO();

@@ -37,7 +37,6 @@ public class ScheduleRegenerationCoordinator {
     private final UserService userService;
     private final long quietPeriodMs;
     private final long maxDelayMs;
-    private final int  horizonDays;
 
     private final ScheduledExecutorService exec = Executors.newSingleThreadScheduledExecutor(r -> {
         Thread t = new Thread(r, "schedule-regen");
@@ -52,13 +51,11 @@ public class ScheduleRegenerationCoordinator {
             SmartSchedulerService scheduler,
             UserService userService,
             @Value("${scheduler.debounce-ms:2000}")   long quietPeriodMs,
-            @Value("${scheduler.max-delay-ms:15000}") long maxDelayMs,
-            @Value("${scheduler.horizon-days:14}")    int horizonDays) {
+            @Value("${scheduler.max-delay-ms:15000}") long maxDelayMs) {
         this.scheduler     = scheduler;
         this.userService   = userService;
         this.quietPeriodMs = quietPeriodMs;
         this.maxDelayMs    = maxDelayMs;
-        this.horizonDays   = horizonDays;
     }
 
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
@@ -86,8 +83,11 @@ public class ScheduleRegenerationCoordinator {
                 log.debug("Automatische Neuplanung für User {} ist deaktiviert", userId);
                 return;
             }
+            // Der Horizont kommt bewusst vom Scheduler und nicht aus einem eigenen Feld: sonst
+            // stünde derselbe Wert an zwei Stellen und der manuelle Lauf über den Controller
+            // könnte einen anderen Zeitraum abdecken als die automatische Neuplanung.
             LocalDate today = LocalDate.now();
-            scheduler.generateOptimalSchedule(userId, today, today.plusDays(horizonDays));
+            scheduler.generateOptimalSchedule(userId, today, scheduler.defaultHorizonEnd(today));
         } catch (Exception e) {
             // Ohne dieses catch verschwindet jede Exception im ScheduledExecutor spurlos.
             log.error("Automatische Neuplanung für User {} fehlgeschlagen", userId, e);

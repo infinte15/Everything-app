@@ -113,16 +113,19 @@ class CalendarService {
   }
 
 
+  // endDate ist optional: ohne Enddatum plant das Backend über seinen konfigurierten Horizont
+  // (scheduler.horizon-days). Der Client soll die Horizontlänge nicht kennen müssen — ein hier
+  // hartkodiertes Fenster deckte sonst weniger Wochen ab als die automatische Neuplanung.
   Future<Map<String, dynamic>> generateSchedule(
-    DateTime startDate,
-    DateTime endDate,
-  ) async {
+    DateTime startDate, {
+    DateTime? endDate,
+  }) async {
     try {
       final response = await _apiService.post(
         ApiConfig.generateSchedule,
         {
           'startDate': startDate.toIso8601String().split('T')[0],
-          'endDate': endDate.toIso8601String().split('T')[0],
+          if (endDate != null) 'endDate': endDate.toIso8601String().split('T')[0],
         },
       );
 

@@ -24,7 +24,8 @@ class ScheduleRegenerationCoordinatorTest {
 
     private ScheduleRegenerationCoordinator coordinator(long quietMs, long maxDelayMs) {
         lenient().when(userService.getOrCreatePreferences(anyLong())).thenReturn(enabledPrefs());
-        return new ScheduleRegenerationCoordinator(scheduler, userService, quietMs, maxDelayMs, 14);
+        lenient().when(scheduler.defaultHorizonEnd(any())).thenAnswer(i -> i.<LocalDate>getArgument(0).plusDays(84));
+        return new ScheduleRegenerationCoordinator(scheduler, userService, quietMs, maxDelayMs);
     }
 
     private UserPreferences enabledPrefs() {
@@ -41,7 +42,9 @@ class ScheduleRegenerationCoordinatorTest {
 
         verify(scheduler, timeout(2000).times(1))
                 .generateOptimalSchedule(eq(1L), any(LocalDate.class), any(LocalDate.class));
-        verifyNoMoreInteractions(scheduler);
+        // ignoreStubs blendet den gestubbten Horizont-Aufruf aus; geprüft wird nur, dass keine
+        // ZWEITE Neuplanung stattgefunden hat.
+        verifyNoMoreInteractions(ignoreStubs(scheduler));
     }
 
     @Test
@@ -77,7 +80,7 @@ class ScheduleRegenerationCoordinatorTest {
         off.setAutoScheduleEnabled(false);
         when(userService.getOrCreatePreferences(1L)).thenReturn(off);
         ScheduleRegenerationCoordinator coord =
-                new ScheduleRegenerationCoordinator(scheduler, userService, 50L, 5000L, 14);
+                new ScheduleRegenerationCoordinator(scheduler, userService, 50L, 5000L);
 
         coord.request(1L);
 

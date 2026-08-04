@@ -87,6 +87,22 @@ public class SmartSchedulerService {
     @Value("${scheduler.solver-time-limit-seconds:10.0}")
     private double solverTimeLimitSeconds = 10.0;
 
+    /**
+     * Wie weit im Voraus TASKS Blöcke bekommen — gemessen in Tagen ab startDate, unabhängig vom
+     * Gesamthorizont. Habits und Workouts laufen bewusst über den vollen Horizont: sie sind
+     * wiederkehrend und sollen in JEDER Woche im Kalender stehen. Ein Task-Block drei Monate im
+     * Voraus wäre dagegen wertlos (bis dahin hat sich die Aufgabenlage längst geändert) und
+     * teuer: jeder Task-Chunk bekommt eine Tages-Boolean pro Horizont-Tag, ein Habit-Slot nur
+     * für die sieben Tage seiner eigenen Woche. Ohne den Zuschnitt wächst allein der Task-Teil
+     * des Modells linear mit dem Horizont.
+     */
+    @Value("${scheduler.task-horizon-days:14}")
+    private int taskHorizonDays = 14;
+
+    /** Gesamthorizont, wenn der Aufrufer kein Enddatum mitgibt. */
+    @Value("${scheduler.horizon-days:84}")
+    private int horizonDays = 84;
+
     // OR-Tools JNI einmalig laden.
     static {
         Loader.loadNativeLibraries();
@@ -109,6 +125,11 @@ public class SmartSchedulerService {
         }
     }
 
+    /** Standard-Enddatum des Horizonts, damit Aufrufer den Wert nicht doppelt konfigurieren müssen. */
+    public LocalDate defaultHorizonEnd(LocalDate startDate) {
+        return startDate.plusDays(Math.max(1, horizonDays));
+    }
+
     private ScheduleResult doGenerateOptimalSchedule(Long userId, LocalDate startDate, LocalDate endDate) {
         log.info("Generiere CP-SAT Schedule für User {} | {} – {}", userId, startDate, endDate);
 
@@ -121,6 +142,9 @@ public class SmartSchedulerService {
         int totalDays = (int) ChronoUnit.DAYS.between(startDate, endDate) + 1;
         Axis axis = new Axis(startDate, totalDays);
 
+        // Letzter Tag, an dem noch Task-Blöcke liegen dürfen (siehe taskHorizonDays).
+        int taskLastDay = Math.min(totalDays - 1, Math.max(0, taskHorizonDays));
+
         // Gepinnte und eingefrorene Blöcke sind für die Zerlegung dasselbe: beide belegen Zeit,
         // die weder neu geplant noch doppelt verplant werden darf.
         List<CalendarEvent> committed = concat(input.getFixedEvents(), input.getFrozenEvents());
@@ -130,7 +154,8 @@ public class SmartSchedulerService {
         List<HabitSlot> habitSlots = expandHabitSlots(input.getHabits(), prefs, startDate, endDate,
                 pinnedDatesPerHabit(committed));
 
-        SolveOutcome outcome = solveWithCpSat(chunks, habitSlots, input, axis, prefs, startDate, endDate);
+        SolveOutcome outcome = solveWithCpSat(chunks, habitSlots, input, axis, prefs, startDate, endDate,
+                taskLastDay);
 
         // Der entscheidende Unterschied zur alten Implementierung: gelöscht wird ERST, wenn eine
         // verwertbare Lösung vorliegt. Ein leerer Kalender ist schlechter als ein veralteter.
@@ -633,7 +658,7 @@ public class SmartSchedulerService {
 
     private SolveOutcome solveWithCpSat(List<TaskChunk> chunks, List<HabitSlot> habitSlots,
                                         ScheduleInput input, Axis axis, UserPreferences prefs,
-                                        LocalDate startDate, LocalDate endDate) {
+                                        LocalDate startDate, LocalDate endDate, int taskLastDay) {
 
         List<WorkoutSession> flexibleWorkouts = nz(input.getFlexibleWorkouts());
         if (chunks.isEmpty() && habitSlots.isEmpty() && flexibleWorkouts.isEmpty()) {
@@ -698,7 +723,8 @@ public class SmartSchedulerService {
                 int sizeSlots = Axis.slotsFor(c.durationMinutes);
                 String name = "task" + task.getId() + "_c" + ci;
 
-                List<DayWindow> windows = dayWindows(axis, workStartSlot, workEndSlot, sizeSlots, earliest, null);
+                List<DayWindow> windows = dayWindows(axis, workStartSlot, workEndSlot, sizeSlots, earliest,
+                        null, taskLastDay);
                 Placeable p = makePlaceable(model, name, sizeSlots, c.durationMinutes, windows, gapSlots);
                 c.placeable = p;
                 allPlaceables.add(p);
@@ -758,7 +784,8 @@ public class SmartSchedulerService {
             int sizeSlots = Axis.slotsFor(s.durationMinutes);
             String name = "habit" + s.habit.getId() + "_" + i;
 
-            List<DayWindow> windows = dayWindows(axis, workStartSlot, workEndSlot, sizeSlots, nowSlot, s.allowedDays);
+            List<DayWindow> windows = dayWindows(axis, workStartSlot, workEndSlot, sizeSlots, nowSlot,
+                    s.allowedDays, axis.totalDays - 1);
             Placeable p = makePlaceable(model, name, sizeSlots, s.durationMinutes, windows, gapSlots);
             s.placeable = p;
             allPlaceables.add(p);
@@ -832,7 +859,8 @@ public class SmartSchedulerService {
                 days.add((int) ChronoUnit.DAYS.between(startDate, d));
             }
 
-            List<DayWindow> windows = dayWindows(axis, workStartSlot, workEndSlot, sizeSlots, nowSlot, days);
+            List<DayWindow> windows = dayWindows(axis, workStartSlot, workEndSlot, sizeSlots, nowSlot,
+                    days, axis.totalDays - 1);
             Placeable p = makePlaceable(model, name, sizeSlots, duration, windows, gapSlots);
             allPlaceables.add(p);
             allIntervals.add(p.interval);
@@ -854,7 +882,7 @@ public class SmartSchedulerService {
         // addCumulative wäre hier falsch: es begrenzt die MOMENTANE Auslastung, nicht das Integral
         // über einen Tag. Die inDay-Booleans drücken genau das aus, was gemeint ist.
         int capSlots = Axis.slotsFor(nz(prefs.getMaxTaskMinutesPerDay(), FALLBACK_MAX_TASK_MIN_PER_DAY));
-        for (int d = 0; d < axis.totalDays; d++) {
+        for (int d = 0; d <= taskLastDay; d++) {
             LinearExprBuilder load = LinearExpr.newBuilder();
             boolean any = false;
             for (TaskChunk c : chunks) {
@@ -911,11 +939,16 @@ public class SmartSchedulerService {
         return extract(solver, effective, chunks, habitSlots, flexibleWorkouts, workoutPlaceables, axis);
     }
 
-    /** Pro Tag ein erlaubtes Startfenster, bereits um "jetzt" und die Arbeitszeit beschnitten. */
+    /**
+     * Pro Tag ein erlaubtes Startfenster, bereits um "jetzt" und die Arbeitszeit beschnitten.
+     * {@code lastDay} begrenzt zusätzlich, wie weit in den Horizont hinein das Item überhaupt
+     * darf — für Tasks der Task-Horizont, für Habits und Workouts der volle Horizont.
+     */
     private List<DayWindow> dayWindows(Axis axis, int workStartSlot, int workEndSlot, int sizeSlots,
-                                       int earliestSlot, List<Integer> restrictToDays) {
+                                       int earliestSlot, List<Integer> restrictToDays, int lastDay) {
         List<DayWindow> out = new ArrayList<>();
-        for (int d = 0; d < axis.totalDays; d++) {
+        int upper = Math.min(lastDay, axis.totalDays - 1);
+        for (int d = 0; d <= upper; d++) {
             if (restrictToDays != null && !restrictToDays.contains(d)) continue;
             int base = d * SLOTS_PER_DAY;
             int lo = Math.max(base + workStartSlot, earliestSlot);
