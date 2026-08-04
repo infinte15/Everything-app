@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
@@ -263,7 +264,12 @@ class _CalendarHeader extends StatelessWidget {
       dateSubtitle = 'Month View';
     }
 
-    return Column(
+    // Die Kopfzeile ist Chrome mit festen Abständen: bei System-Schriftgröße 2.0
+    // wüchse sie über die halbe Displayhöhe und ließe für Raster bzw. Zeitleiste
+    // nichts mehr übrig. Deshalb skaliert sie höchstens bis 1.3 mit.
+    return MediaQuery.withClampedTextScaling(
+      maxScaleFactor: 1.3,
+      child: Column(
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -278,7 +284,14 @@ class _CalendarHeader extends StatelessWidget {
             children: [
               Icon(Icons.calendar_today_outlined, color: theme.colorScheme.primary, size: 24),
               const SizedBox(width: 12),
-              const Text('Calendar', style: TextStyle(fontSize: 20, fontWeight: FontWeight.w800, color: Colors.white, fontFamily: 'Manrope')),
+              // Flexible: bei großer System-Schriftgröße passt der Titel sonst nicht
+              // mehr neben das Icon.
+              const Flexible(
+                child: Text('Calendar',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(fontSize: 20, fontWeight: FontWeight.w800, color: Colors.white, fontFamily: 'Manrope')),
+              ),
             ],
           ),
         ),
@@ -369,6 +382,7 @@ Expanded(
           ),
         ),
       ],
+      ),
     );
   }
 }
@@ -456,36 +470,49 @@ class _WeekStrip extends StatelessWidget {
                       margin: const EdgeInsets.only(left: 1), // gap-px
                       height: 60,
                       color: surfaceColor,
-                      child: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Text(
-                            DateFormat('E').format(day).substring(0, 3).toUpperCase(),
-                            style: TextStyle(
-                              fontSize: 15,
-                              fontWeight: FontWeight.w800,
-                              color: isToday
-                                  ? const Color(0xFF918AFA)
-                                  : theme.colorScheme.onSurfaceVariant,
-                            
-                              letterSpacing: 1.0,
-                              fontFamily: 'Manrope',
-                            ),
+                      // FittedBox um die ganze Spalte: auf schmalen Displays ist eine
+                      // Spalte keine 40px breit, und bei großer System-Schriftgröße
+                      // passen zwei Zeilen nicht mehr in die 60px Höhe. Skaliert wird
+                      // deshalb der komplette Block, nicht die Texte einzeln.
+                      child: Center(
+                        child: FittedBox(
+                          fit: BoxFit.scaleDown,
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Text(
+                                DateFormat('E').format(day).substring(0, 3).toUpperCase(),
+                                maxLines: 1,
+                                softWrap: false,
+                                style: TextStyle(
+                                  fontSize: 15,
+                                  fontWeight: FontWeight.w800,
+                                  color: isToday
+                                      ? const Color(0xFF918AFA)
+                                      : theme.colorScheme.onSurfaceVariant,
+
+                                  letterSpacing: 1.0,
+                                  fontFamily: 'Manrope',
+                                ),
+                              ),
+                              const SizedBox(height: 2),
+                              Text(
+                                '${day.day}',
+                                maxLines: 1,
+                                softWrap: false,
+                                style: TextStyle(
+                                  fontSize: 15,
+                                  fontWeight: FontWeight.w800,
+                                  fontFamily: 'Manrope',
+                                  color: isToday
+                                      ? const Color(0xFF918AFA)
+                                      : (day.weekday >= 6 ? theme.colorScheme.error : Colors.white),
+                                ),
+                              ),
+
+                            ],
                           ),
-                          const SizedBox(height: 2),
-                          Text(
-                            '${day.day}',
-                            style: TextStyle(
-                              fontSize: 15,
-                              fontWeight: FontWeight.w800,
-                              fontFamily: 'Manrope',
-                              color: isToday
-                                  ? const Color(0xFF918AFA)
-                                  : (day.weekday >= 6 ? theme.colorScheme.error : Colors.white),
-                            ),
-                          ),
-                          
-                        ],
+                        ),
                       ),
                     ),
                   ),
@@ -1105,6 +1132,11 @@ class _DragIndicator extends StatelessWidget {
 
 // ─── Event Block ──────────────────────────────────────────────────────────────
 
+/// [Flexible] nur bei begrenzter Höhe — mit unbegrenzten Constraints (etwa im
+/// Drag-Feedback) wirft ein Flex-Kind sonst eine Assertion.
+Widget _maybeFlexible(bool bounded, Widget child) =>
+    bounded ? Flexible(child: child) : child;
+
 class _EventBlock extends StatelessWidget {
   final CalendarEvent event;
   final VoidCallback? onDragStarted;
@@ -1122,65 +1154,109 @@ class _EventBlock extends StatelessWidget {
     final color = event.color != null ? event.colorObject : _typeColor(event.eventType);
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final bg = isDark ? color.withValues(alpha: 0.20) : color.withValues(alpha: 0.15);
-    final dmin = event.durationInMinutes;
-    // Below ~35 min the card is too short (< kHourHeight/60*35 ≈ 37px, minus padding)
-    // for the two-line type+title layout to fit without overflowing its own bounds —
-    // fall back to the compact single-line layout instead.
-    final useCompactLayout = dmin < 35;
+
+    // Layout richtet sich nach dem tatsächlich verfügbaren Platz statt nach der
+    // Dauer allein: liegen zwei Termine parallel, teilen sie sich die Spalte und
+    // die Karte wird schmal — Typ-Label und Titel müssen dann einzeilig bleiben,
+    // sonst laufen sie über den Kartenrand hinaus.
     return Opacity(
       opacity: opacity,
-      child: Stack(
-        children: [
-          Container(
+      child: LayoutBuilder(
+        builder: (context, c) {
+          const padH = 6.0 + 4.0 + 4.0; // linker Rand + horizontales Padding
+          const padV = 8.0;
+          final availW = c.maxWidth.isFinite ? c.maxWidth - padH : double.infinity;
+          final bounded = c.maxHeight.isFinite;
+          final availH = bounded ? c.maxHeight - padV : double.infinity;
+
+          // Die Zeilenhöhen müssen mit der System-Schriftgröße mitwachsen, sonst
+          // rechnet der Platzbedarf unten zu klein und der Text läuft bei
+          // "große Schrift" aus der Karte heraus.
+          final scaler = MediaQuery.textScalerOf(context);
+          final narrow = availW < 70;
+          final titleSize = narrow ? 10.0 : 12.0;
+          const titleHeightFactor = 1.15;
+          final titleLineH = scaler.scale(titleSize) * titleHeightFactor;
+          // 8px Typ-Label (Zeilenhöhe 1.2) bzw. das 10px Schloss-Icon, + 1px Abstand
+          final typeRowH = math.max(scaler.scale(8) * 1.2, 10.0) + 1;
+
+          final showLock = event.isFixed && availW >= 34;
+          final showType = !narrow && availH >= typeRowH + titleLineH;
+          final titleBudget = availH - (showType ? typeRowH : 0);
+          final titleLines =
+              titleBudget.isFinite ? (titleBudget / titleLineH).floor().clamp(1, 2) : 2;
+
+          return Container(
             decoration: BoxDecoration(
               color: bg,
               borderRadius: BorderRadius.zero,
               border: Border(left: BorderSide(color: color, width: 4)),
             ),
             padding: const EdgeInsets.fromLTRB(6, 4, 4, 4),
-            child: useCompactLayout
-                ? Row(children: [
-                    Expanded(
-                      child: Text(
-                        event.title,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(fontSize: 11, fontWeight: FontWeight.w800, color: color),
-                      ),
-                    ),
-                    if (event.isFixed) Icon(Icons.lock_rounded, size: 10, color: color.withValues(alpha: 0.7)),
-                  ])
-                // ClipRect guards against the ~24-30px band of short-duration events
-                // (e.g. exactly 30 min = 32px card minus padding = 24px budget), where
-                // the type label + title naturally need a hair more vertical room than
-                // is available and would otherwise trip Flutter's overflow assertion.
-                : ClipRect(
-                    child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
+            // ClipRect fängt die letzten Pixel ab, wenn die Zeilenhöhe der
+            // konkreten Schrift minimal über der Schätzung oben liegt.
+            child: ClipRect(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  // Feste Höhe: so kann die Zeile die Spalte nicht sprengen, egal
+                  // wie das Typ-Label bei der eingestellten Schriftgröße ausfällt.
+                  if (showType) ...[
+                    SizedBox(
+                      height: typeRowH - 1,
+                      child: Row(
                         children: [
                           Expanded(
                             child: Text(
                               event.eventType.toUpperCase(),
-                              style: TextStyle(fontSize: 8, fontWeight: FontWeight.w800, letterSpacing: 1.2, color: color.withValues(alpha: 0.8)),
+                              maxLines: 1,
+                              softWrap: false,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(
+                                  fontSize: 8,
+                                  height: 1.2,
+                                  fontWeight: FontWeight.w800,
+                                  letterSpacing: 1.2,
+                                  color: color.withValues(alpha: 0.8)),
                             ),
                           ),
-                          if (event.isFixed) Icon(Icons.lock_rounded, size: 10, color: color.withValues(alpha: 0.7)),
+                          if (showLock)
+                            Icon(Icons.lock_rounded, size: 10, color: color.withValues(alpha: 0.7)),
                         ],
                       ),
-                      const SizedBox(height: 1),
-                      Text(
-                        event.title,
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(fontSize: 12, fontWeight: FontWeight.w800, color: color, height: 1.1),
-                      ),
-                    ],
+                    ),
+                    const SizedBox(height: 1),
+                  ],
+                  // Der Titel bekommt den Rest als Obergrenze (Flexible), damit die
+                  // Spalte auch dann nicht überläuft, wenn die Schätzung oben um
+                  // ein paar Pixel danebenliegt.
+                  _maybeFlexible(
+                    bounded,
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            event.title,
+                            maxLines: titleLines,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                                fontSize: titleSize,
+                                fontWeight: FontWeight.w800,
+                                color: color,
+                                height: titleHeightFactor),
+                          ),
+                        ),
+                        if (showLock && !showType)
+                          Icon(Icons.lock_rounded, size: 10, color: color.withValues(alpha: 0.7)),
+                      ],
                     ),
                   ),
-          ),
-        ],
+                ],
+              ),
+            ),
+          );
+        },
       ),
     );
   }
@@ -1266,99 +1342,183 @@ class _MonthView extends StatelessWidget {
     final rows = (totalCells / 7).ceil();
     const dayHeaders = ['Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa', 'Su'];
 
-    return Column(
-      children: [
-        // Day labels
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
-          child: Row(
-            children: dayHeaders.map((d) => Expanded(
-              child: Center(
-                child: Text(d,
-                    style: const TextStyle(
-                        fontSize: 11, fontWeight: FontWeight.w700, color: Colors.grey, letterSpacing: 0.5)),
-              ),
-            )).toList(),
-          ),
-        ),
-        Divider(height: 1, color: isDark ? const Color(0xFF2A2A38) : const Color(0xFFE8EAF0)),
-        Expanded(
-          child: GridView.builder(
-            padding: const EdgeInsets.all(8),
-            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-              crossAxisCount: 7,
-              childAspectRatio: 0.75,
-              mainAxisSpacing: 4,
-              crossAxisSpacing: 4,
-            ),
-            itemCount: rows * 7,
-            itemBuilder: (ctx, idx) {
-              final dayNum = idx - startOffset + 1;
-              if (dayNum < 1 || dayNum > daysInMonth) return const SizedBox.shrink();
-              final day = DateTime(selected.year, selected.month, dayNum);
-              final isSel = isSameDay(day, selected);
-              final isToday = isSameDay(day, DateTime.now());
-              final evts = cal.getEventsForDay(day);
-              return GestureDetector(
-                onTap: () => onDayTap(day),
-                child: Container(
-                  decoration: BoxDecoration(
-                    color: isSel
-                        ? AppTheme.primaryColor
-                        : isToday
-                            ? AppTheme.primaryColor.withValues(alpha: 0.1)
-                            : Colors.transparent,
-                    borderRadius: BorderRadius.zero,
-                  ),
-                  padding: const EdgeInsets.all(4),
-                  child: Column(
-                    children: [
-                      Text(
-                        '$dayNum',
-                        style: TextStyle(
-                          fontSize: 13,
-                          fontWeight: FontWeight.w700,
-                          color: isSel ? Colors.white : isToday ? const Color(0xFF918AFA) : null,
-                        ),
+    final divider =
+        Divider(height: 1, color: isDark ? const Color(0xFF2A2A38) : const Color(0xFFE8EAF0));
+
+    // Das Raster scrollt bewusst nicht: es bekommt die verbleibende Höhe und
+    // teilt sie durch die Zeilenzahl auf, damit der komplette Monat auf jedem
+    // Display in einen Screen passt.
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final h = constraints.maxHeight;
+        // Feste Höhe für die Wochentagsleiste, damit die Aufteilung unten nicht
+        // von der System-Schriftgröße abhängt (die Labels skalieren via FittedBox).
+        const labelsH = 24.0;
+        final chrome = labelsH + 1;
+        // Das Raster braucht mindestens so viel, dass jede Zeile noch sichtbar ist.
+        final gridMin = rows * 18.0;
+
+        // Die Vorschau darf dem Raster höchstens ein Drittel wegnehmen — und nur
+        // das, was nach dem Mindestraster übrig bleibt. Passt danach zu wenig für
+        // eine sinnvolle Liste, entfällt sie ganz.
+        var previewH = cal.selectedDayEvents.isEmpty ? 0.0 : (h * 0.32).clamp(0.0, 180.0);
+        if (previewH > 0) {
+          final maxPreview = h - chrome - 1 - gridMin;
+          previewH = math.min(previewH, maxPreview);
+          if (previewH < 60) previewH = 0;
+        }
+        final hasPreview = previewH > 0;
+
+        return Column(
+          children: [
+            // Day labels
+            SizedBox(
+              height: labelsH,
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                child: Row(
+                  children: dayHeaders.map((d) => Expanded(
+                    child: Center(
+                      child: FittedBox(
+                        fit: BoxFit.scaleDown,
+                        child: Text(d,
+                            maxLines: 1,
+                            style: const TextStyle(
+                                fontSize: 11, fontWeight: FontWeight.w700, color: Colors.grey, letterSpacing: 0.5)),
                       ),
-                      const SizedBox(height: 3),
-                      Wrap(
-                        spacing: 2,
-                        runSpacing: 2,
-                        children: evts
-                            .take(3)
-                            .map((e) => Container(
-                                  width: 6,
-                                  height: 6,
-                                  decoration: BoxDecoration(
-                                    color: isSel
-                                        ? Colors.white.withValues(alpha: 0.8)
-                                        : (e.color != null ? e.colorObject : _typeColor(e.eventType)),
-                                    shape: BoxShape.rectangle,
-                                  ),
-                                ))
-                            .toList(),
-                      ),
-                    ],
-                  ),
+                    ),
+                  )).toList(),
                 ),
-              );
-            },
+              ),
+            ),
+            divider,
+            Expanded(
+              child: Padding(
+                padding: const EdgeInsets.all(6),
+                child: LayoutBuilder(
+                  builder: (context, grid) {
+                    const spacing = 3.0;
+                    final cellH =
+                        ((grid.maxHeight - (rows - 1) * spacing) / rows).clamp(0.0, double.infinity);
+                    final cellW = (grid.maxWidth - 6 * spacing) / 7;
+
+                    return Column(
+                      children: [
+                        for (var r = 0; r < rows; r++) ...[
+                          if (r > 0) const SizedBox(height: spacing),
+                          SizedBox(
+                            height: cellH,
+                            child: Row(
+                              children: [
+                                for (var c = 0; c < 7; c++) ...[
+                                  if (c > 0) const SizedBox(width: spacing),
+                                  Expanded(
+                                    child: _buildCell(
+                                      r * 7 + c,
+                                      startOffset,
+                                      daysInMonth,
+                                      cellH,
+                                      cellW,
+                                    ),
+                                  ),
+                                ],
+                              ],
+                            ),
+                          ),
+                        ],
+                      ],
+                    );
+                  },
+                ),
+              ),
+            ),
+            // Selected day events preview
+            if (hasPreview) ...[
+              divider,
+              SizedBox(
+                height: previewH,
+                child: ListView.builder(
+                  padding: const EdgeInsets.all(12),
+                  itemCount: cal.selectedDayEvents.length,
+                  itemBuilder: (_, i) => _EventListTile(event: cal.selectedDayEvents[i]),
+                ),
+              ),
+            ],
+          ],
+        );
+      },
+    );
+  }
+
+  Widget _buildCell(int idx, int startOffset, int daysInMonth, double cellH, double cellW) {
+    final dayNum = idx - startOffset + 1;
+    if (dayNum < 1 || dayNum > daysInMonth) return const SizedBox.shrink();
+    final day = DateTime(selected.year, selected.month, dayNum);
+    final isSel = isSameDay(day, selected);
+    final isToday = isSameDay(day, DateTime.now());
+    final evts = cal.getEventsForDay(day);
+
+    // Schrift- und Punktgrößen richten sich nach der tatsächlichen Zellgröße —
+    // auf einem kleinen Handy mit 6 Wochenzeilen bleibt sonst nichts übrig.
+    final numSize = cellH < 22 ? 9.0 : (cellH < 30 ? 10.0 : (cellH < 42 ? 11.5 : 13.0));
+    final dotSize = cellH < 34 ? 4.0 : 5.0;
+    final showDots = evts.isNotEmpty && cellH >= numSize * 1.4 + dotSize + 6;
+    final maxDots = ((cellW - 6 + 2) / (dotSize + 2)).floor().clamp(1, 4);
+
+    return GestureDetector(
+      onTap: () => onDayTap(day),
+      child: Container(
+        decoration: BoxDecoration(
+          color: isSel
+              ? AppTheme.primaryColor
+              : isToday
+                  ? AppTheme.primaryColor.withValues(alpha: 0.1)
+                  : Colors.transparent,
+          borderRadius: BorderRadius.zero,
+        ),
+        padding: const EdgeInsets.symmetric(horizontal: 2, vertical: 3),
+        // FittedBox: bei großer System-Schriftgröße wächst die Tageszahl über die
+        // berechnete Zellhöhe hinaus — dann wird der Inhalt herunterskaliert
+        // statt überzulaufen.
+        child: FittedBox(
+          fit: BoxFit.scaleDown,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                '$dayNum',
+                maxLines: 1,
+                style: TextStyle(
+                  fontSize: numSize,
+                  height: 1.2,
+                  fontWeight: FontWeight.w700,
+                  color: isSel ? Colors.white : isToday ? const Color(0xFF918AFA) : null,
+                ),
+              ),
+              if (showDots) ...[
+                const SizedBox(height: 2),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: evts
+                      .take(maxDots)
+                      .map((e) => Container(
+                            width: dotSize,
+                            height: dotSize,
+                            margin: const EdgeInsets.symmetric(horizontal: 1),
+                            decoration: BoxDecoration(
+                              color: isSel
+                                  ? Colors.white.withValues(alpha: 0.8)
+                                  : (e.color != null ? e.colorObject : _typeColor(e.eventType)),
+                              shape: BoxShape.rectangle,
+                            ),
+                          ))
+                      .toList(),
+                ),
+              ],
+            ],
           ),
         ),
-        // Selected day events preview
-        if (cal.selectedDayEvents.isNotEmpty) ...[
-          Divider(height: 1, color: isDark ? const Color(0xFF2A2A38) : const Color(0xFFE8EAF0)),
-          SizedBox(
-            height: 180,
-            child: ListView.builder(
-              padding: const EdgeInsets.all(12),
-              itemCount: cal.selectedDayEvents.length,
-              itemBuilder: (_, i) => _EventListTile(event: cal.selectedDayEvents[i]),
-            ),
-          ),
-        ],
-      ],
+      ),
     );
   }
 }

@@ -32,6 +32,8 @@ Future<CalendarProvider> _pumpCalendar(
   // Tall enough that the 1536px timeline canvas fits entirely — tests that need the
   // timeline to actually scroll have to ask for a shorter surface.
   Size surface = const Size(1080, 2400),
+  // Systemweite Schriftvergrößerung ("große Schrift" in den Geräteeinstellungen).
+  double textScale = 1.0,
 }) async {
   tester.view.physicalSize = surface;
   tester.view.devicePixelRatio = 1.0;
@@ -54,7 +56,13 @@ Future<CalendarProvider> _pumpCalendar(
         ChangeNotifierProvider<CalendarProvider>.value(value: provider),
         ChangeNotifierProvider<TaskProvider>(create: (_) => TaskProvider()),
       ],
-      child: const MaterialApp(home: CalendarScreen()),
+      child: MaterialApp(
+        builder: (ctx, child) => MediaQuery(
+          data: MediaQuery.of(ctx).copyWith(textScaler: TextScaler.linear(textScale)),
+          child: child!,
+        ),
+        home: const CalendarScreen(),
+      ),
     ),
   );
   await tester.pumpAndSettle();
@@ -544,4 +552,131 @@ void main() {
       provider.dispose();
     });
   });
+
+  group('CalendarScreen month view', () {
+    // Von klein (kompaktes Handy) bis groß (Tablet) — das Raster darf auf keiner
+    // Größe scrollen und muss trotzdem jeden Tag des Monats zeigen.
+    for (final surface in const [Size(320, 480), Size(360, 640), Size(1080, 2400)]) {
+      testWidgets('the whole month fits without scrolling on ${surface.width.toInt()}x${surface.height.toInt()}',
+          (tester) async {
+        final fake = FakeCalendarService([
+          CalendarEvent(
+            id: 1,
+            title: 'Standup',
+            startTime: _at(0),
+            endTime: _at(60),
+            eventType: 'TASK',
+            isFixed: false,
+          ),
+        ]);
+        final provider = await _pumpCalendar(tester, fake: fake, surface: surface);
+        await _switchToMonth(tester);
+
+        final now = DateTime.now();
+        final daysInMonth = DateTime(now.year, now.month + 1, 0).day;
+        final screen = tester.getSize(find.byType(MaterialApp));
+
+        // Jeder Tag ist gerendert und liegt innerhalb des Bildschirms — bei einem
+        // scrollenden Raster wären die letzten Zeilen abgeschnitten.
+        for (var day = 1; day <= daysInMonth; day++) {
+          final cell = find.text('$day');
+          expect(cell, findsWidgets, reason: 'Tag $day fehlt im Raster');
+          final rect = tester.getRect(cell.first);
+          expect(rect.bottom, lessThanOrEqualTo(screen.height + 0.5),
+              reason: 'Tag $day liegt unterhalb des Bildschirms');
+        }
+
+        provider.dispose();
+      });
+    }
+  });
+
+  group('CalendarScreen overlapping events', () {
+    testWidgets('two simultaneous events with long titles do not overflow their cards',
+        (tester) async {
+      // Schmales Gerät + Wochenansicht: zwei parallele Termine teilen sich eine
+      // ohnehin schmale Spalte. Layout-Overflows lassen den Test scheitern.
+      final fake = FakeCalendarService([
+        CalendarEvent(
+          id: 1,
+          title: 'Sehr langer Termintitel der niemals in die Spalte passt',
+          startTime: _at(0),
+          endTime: _at(30),
+          eventType: 'PERSONAL_DEVELOPMENT',
+          isFixed: true,
+        ),
+        CalendarEvent(
+          id: 2,
+          title: 'Noch ein ausufernd langer paralleler Termintitel',
+          startTime: _at(0),
+          endTime: _at(45),
+          eventType: 'PERSONAL_DEVELOPMENT',
+          isFixed: false,
+        ),
+      ]);
+      final provider = await _pumpCalendar(tester, fake: fake, surface: const Size(320, 480));
+
+      expect(tester.takeException(), isNull);
+
+      // Beide Karten bleiben innerhalb ihrer zugewiesenen Fläche.
+      for (final id in ['Sehr langer Termintitel der niemals in die Spalte passt',
+        'Noch ein ausufernd langer paralleler Termintitel']) {
+        final text = find.text(id);
+        expect(text, findsOneWidget);
+        final textSize = tester.getSize(text);
+        final block = find.ancestor(of: text, matching: find.byType(LayoutBuilder)).first;
+        expect(textSize.width, lessThanOrEqualTo(tester.getSize(block).width));
+      }
+
+      provider.dispose();
+    });
+
+    // Layout-Overflows melden sich in Tests als Exception. Die Matrix deckt die
+    // Kombinationen ab, an denen die Karten real überliefen: schmale Displays,
+    // parallele Termine (schmale Spuren), kurze Termine (flache Karten) und eine
+    // hochgestellte System-Schriftgröße.
+    for (final surface in const [Size(320, 480), Size(360, 640), Size(1080, 2400)]) {
+      for (final scale in const [1.0, 1.6, 2.0]) {
+        testWidgets(
+            'no overflow at ${surface.width.toInt()}x${surface.height.toInt()}, textScale $scale',
+            (tester) async {
+          final fake = FakeCalendarService([
+            for (var i = 0; i < 3; i++)
+              CalendarEvent(
+                id: i + 1,
+                title: 'Sehr langer Termintitel der niemals in die Spalte passt $i',
+                startTime: _at(i * 2),
+                endTime: _at(i * 2 + (i == 0 ? 15 : 45)),
+                eventType: 'PERSONAL_DEVELOPMENT',
+                isFixed: i.isOdd,
+              ),
+          ]);
+          final provider = await _pumpCalendar(
+            tester,
+            fake: fake,
+            surface: surface,
+            textScale: scale,
+          );
+
+          expect(tester.takeException(), isNull, reason: 'Wochenansicht');
+          await _switchView(tester, 'Day');
+          expect(tester.takeException(), isNull, reason: 'Tagesansicht');
+          await _switchView(tester, 'Month');
+          expect(tester.takeException(), isNull, reason: 'Monatsansicht');
+
+          provider.dispose();
+        });
+      }
+    }
+  });
 }
+
+/// Öffnet das Ansichts-Dropdown und wechselt in die Ansicht [name] ('Day' / 'Month').
+Future<void> _switchView(WidgetTester tester, String name) async {
+  await tester.tap(find.byIcon(Icons.calendar_view_day_rounded));
+  await tester.pumpAndSettle();
+  await tester.tap(find.text(name).last);
+  await tester.pumpAndSettle();
+}
+
+Future<void> _switchToMonth(WidgetTester tester) => _switchView(tester, 'Month');
