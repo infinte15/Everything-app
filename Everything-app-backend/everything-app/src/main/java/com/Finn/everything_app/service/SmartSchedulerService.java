@@ -29,12 +29,18 @@ import java.util.stream.Collectors;
  *                  disjunkten Liste verschmolzen (siehe {@link #mergeBlocked}). Dadurch kann das
  *                  Modell nicht mehr INFEASIBLE werden, auch wenn sich zwei gepinnte Termine
  *                  überlappen.
+ *  - Vergangenheit: geplant wird erst ab {@link #replanCutoff}. Blöcke, die davor begonnen haben,
+ *                  werden weder gelöscht noch verschoben, sondern zählen wie gepinnte Termine
+ *                  (Zeit blockiert, Minuten auf den Task, Tag auf die Wochenquote der Habit).
  *  - Arbeitszeit : NICHT als Schlaf-Blöcke modelliert, sondern als Ober-/Untergrenze pro Tag an
  *                  jedem Item (siehe DayWindow). Das ist billiger und verhindert zusätzlich, dass
  *                  ein Item über Mitternacht läuft.
  *  - Items       : Tasks (in Chunks zerlegt), Habit-Slots und flexible Workouts sind jeweils
  *                  OPTIONALE Intervalle mit Präsenz-Literal. Was nicht passt, wird verworfen und
  *                  als {@link AtRiskItem} gemeldet — der Kalender wird nie leer.
+ *  - Einstellungen: bufferMinutes (Luft um Termine), breakDurationMinutes (Pause zwischen zwei
+ *                  automatisch geplanten Blöcken) und peakProductivityTime (Leistungshoch, weicher
+ *                  Zug auf Task-Blöcke) fließen direkt ins Modell ein.
  *  - Ziel        : zweistufig lexikografisch. Phase 1 minimiert die gewichtete Menge verworfener
  *                  Items, Phase 2 optimiert die Platzierungsqualität unter der Nebenbedingung,
  *                  Phase 1 nicht zu verschlechtern. Ein einzelner gewichteter Summenterm ist hier
@@ -75,6 +81,7 @@ public class SmartSchedulerService {
     private static final long W_URGENCY   = 1;
     private static final long W_HABIT_DEV = 2;
     private static final long W_MOVE      = 3;
+    private static final long W_PEAK      = 2;
 
     // Feld-Initialisierung, damit Mockito-Tests ohne Spring-Kontext einen sinnvollen Wert haben.
     @Value("${scheduler.solver-time-limit-seconds:10.0}")
@@ -108,15 +115,20 @@ public class SmartSchedulerService {
         UserPreferences prefs = userService.getOrCreatePreferences(userId);
         generateWorkoutPlaceholders(userId, startDate, endDate);
 
-        ScheduleInput input = collectScheduleInput(userId, startDate, endDate);
+        LocalDateTime cutoff = replanCutoff(startDate);
+        ScheduleInput input = collectScheduleInput(userId, startDate, endDate, cutoff);
 
         int totalDays = (int) ChronoUnit.DAYS.between(startDate, endDate) + 1;
         Axis axis = new Axis(startDate, totalDays);
 
-        Map<Long, Integer> pinnedMinutes = pinnedMinutesPerTask(input.getFixedEvents());
+        // Gepinnte und eingefrorene Blöcke sind für die Zerlegung dasselbe: beide belegen Zeit,
+        // die weder neu geplant noch doppelt verplant werden darf.
+        List<CalendarEvent> committed = concat(input.getFixedEvents(), input.getFrozenEvents());
+
+        Map<Long, Integer> pinnedMinutes = pinnedMinutesPerTask(committed);
         List<TaskChunk> chunks     = decomposeTasks(input.getTasks(), prefs, pinnedMinutes);
         List<HabitSlot> habitSlots = expandHabitSlots(input.getHabits(), prefs, startDate, endDate,
-                pinnedDatesPerHabit(input.getFixedEvents()));
+                pinnedDatesPerHabit(committed));
 
         SolveOutcome outcome = solveWithCpSat(chunks, habitSlots, input, axis, prefs, startDate, endDate);
 
@@ -131,9 +143,11 @@ public class SmartSchedulerService {
             return failed;
         }
 
-        calendarEventService.clearScheduledEvents(userId, startDate.atStartOfDay(), endDate.atTime(23, 59, 59));
+        // Erst ab dem Umplanzeitpunkt löschen: was bereits begonnen hat, ist Geschichte und
+        // bleibt im Kalender stehen.
+        calendarEventService.clearScheduledEvents(userId, cutoff, endDate.atTime(23, 59, 59));
         saveScheduleToDatabase(userId, outcome.getItems());
-        writeBackTaskSpans(outcome, input.getTasks());
+        writeBackTaskSpans(outcome, input.getTasks(), committed);
 
         List<ScheduledItem> scheduledTasks = outcome.getItems().stream()
                 .filter(i -> i.getType() == ScheduledItemType.TASK)
@@ -145,7 +159,7 @@ public class SmartSchedulerService {
         ScheduleResult result = new ScheduleResult();
         result.setScheduledTasks(scheduledTasks);
         result.setScheduledHabits(scheduledRest);
-        result.setUnscheduledTasks(findUnscheduledTasks(input.getTasks(), scheduledTasks));
+        result.setUnscheduledTasks(findUnscheduledTasks(input.getTasks(), scheduledTasks, committed));
         result.setTotalTasksScheduled(scheduledTasks.size());
         result.setTotalHoursScheduled(calculateTotalHours(scheduledTasks, scheduledRest));
         result.setAtRisk(outcome.getAtRisk());
@@ -184,14 +198,20 @@ public class SmartSchedulerService {
             this.horizonSlots = totalDays * SLOTS_PER_DAY;
         }
 
+        // In Sekunden gerechnet, nicht in Minuten: ChronoUnit.MINUTES schneidet die angebrochene
+        // Minute ab, womit ein Termin, der um 10:45:34 endet, als "endet 10:45:00" gälte — der
+        // Solver dürfte seine letzten Sekunden überplanen. Betrifft auch "jetzt", das immer
+        // Sekundenbruchteile hat.
+        private static final int SECONDS_PER_SLOT = GRID * 60;
+
         int floorSlot(LocalDateTime t) {
-            return (int) Math.floorDiv(ChronoUnit.MINUTES.between(origin, t), GRID);
+            return (int) Math.floorDiv(ChronoUnit.SECONDS.between(origin, t), SECONDS_PER_SLOT);
         }
 
         /** Aufrunden — für untere Schranken, damit nicht in einen angebrochenen Slot geplant wird. */
         int ceilSlot(LocalDateTime t) {
-            long m = ChronoUnit.MINUTES.between(origin, t);
-            return (int) -Math.floorDiv(-m, GRID);
+            long s = ChronoUnit.SECONDS.between(origin, t);
+            return (int) -Math.floorDiv(-s, SECONDS_PER_SLOT);
         }
 
         LocalDateTime timeOf(int slot) {
@@ -221,7 +241,7 @@ public class SmartSchedulerService {
     }
 
     private Placeable makePlaceable(CpModel model, String name, int sizeSlots, int realMinutes,
-                                    List<DayWindow> windows) {
+                                    List<DayWindow> windows, int gapSlots) {
         Placeable p = new Placeable();
         p.sizeSlots   = sizeSlots;
         p.realMinutes = realMinutes;
@@ -230,7 +250,11 @@ public class SmartSchedulerService {
         int ub = windows.stream().mapToInt(DayWindow::hi).max().orElse(lb);
         p.present = model.newBoolVar("p_" + name);
         p.start   = model.newIntVar(lb, Math.max(lb, ub), "s_" + name);
-        p.interval = model.newOptionalFixedSizeIntervalVar(p.start, sizeSlots, p.present, "iv_" + name);
+        // Die Pause hängt am Intervall, nicht an einer eigenen Constraint pro Paar: das wäre
+        // quadratisch in der Item-Anzahl. Das Tagesfenster oben rechnet weiterhin mit der echten
+        // Größe, sonst würde die Pause am Feierabend stillschweigend Arbeitszeit wegnehmen.
+        p.interval = model.newOptionalFixedSizeIntervalVar(
+                p.start, sizeSlots + gapSlots, p.present, "iv_" + name);
 
         // "Entweder verworfen, oder an genau einem erlaubten Tag." Diese eine Constraint liefert
         // Tageszuordnung, Tagesbeschränkung und Drop-Option gleichzeitig.
@@ -294,21 +318,35 @@ public class SmartSchedulerService {
      * nicht um flexible Items: sonst kollidiert der nachlaufende Puffer mit der Tagesgrenze und
      * verkürzt die nutzbare Arbeitszeit stillschweigend. Effekt: Blöcke am Stück bleiben eng
      * aneinander, aber um Meetings herum entsteht Luft — genau das macht Reclaim auch.
+     *
+     * Vor einem Termin wird der Puffer um die Pause gekürzt, die jeder flexible Block ohnehin
+     * hinter sich herzieht. Sonst addieren sich beide Einstellungen: bei 10 Minuten Puffer und
+     * 15 Minuten Pause lägen 25 Minuten Leerlauf vor jedem Meeting, obwohl der Nutzer nirgends
+     * mehr als 15 verlangt hat. Gemeint ist das Maximum der beiden, nicht ihre Summe.
      */
-    private List<int[]> collectBlockedSlots(Axis axis, ScheduleInput input,
-                                            LocalDate startDate, LocalDate endDate, int bufferSlots) {
+    private List<int[]> collectBlockedSlots(Axis axis, ScheduleInput input, LocalDate startDate,
+                                            LocalDate endDate, int bufferSlots, int gapSlots) {
         List<int[]> raw = new ArrayList<>();
+        int leadSlots = Math.max(0, bufferSlots - gapSlots);
 
         for (CalendarEvent ev : nz(input.getFixedEvents())) {
             if (ev.getStartTime() == null || ev.getEndTime() == null) continue;
-            addBlock(raw, axis, ev.getStartTime(), ev.getEndTime(), bufferSlots);
+            addBlock(raw, axis, ev.getStartTime(), ev.getEndTime(), leadSlots, bufferSlots);
+        }
+
+        // Eingefrorene Blöcke: vorne keine Luft — davor liegt die Vergangenheit, dort ist ohnehin
+        // nichts mehr zu holen. Hinten die Pause, denn auf einen gerade beendeten Block folgt
+        // genauso eine Pause wie zwischen zwei neu geplanten.
+        for (CalendarEvent ev : nz(input.getFrozenEvents())) {
+            if (ev.getStartTime() == null || ev.getEndTime() == null) continue;
+            addBlock(raw, axis, ev.getStartTime(), ev.getEndTime(), 0, gapSlots);
         }
 
         for (CourseSchedule cs : nz(input.getCourseSchedules())) {
             if (cs.getDayOfWeek() == null || cs.getStartTime() == null || cs.getEndTime() == null) continue;
             for (LocalDate d = startDate; !d.isAfter(endDate); d = d.plusDays(1)) {
                 if (d.getDayOfWeek() == cs.getDayOfWeek()) {
-                    addBlock(raw, axis, d.atTime(cs.getStartTime()), d.atTime(cs.getEndTime()), bufferSlots);
+                    addBlock(raw, axis, d.atTime(cs.getStartTime()), d.atTime(cs.getEndTime()), leadSlots, bufferSlots);
                 }
             }
         }
@@ -318,15 +356,16 @@ public class SmartSchedulerService {
             LocalDateTime end = w.getEndTime() != null
                     ? w.getEndTime()
                     : w.getStartTime().plusMinutes(nz(w.getDurationMinutes(), DEFAULT_WORKOUT_DURATION_MIN));
-            addBlock(raw, axis, w.getStartTime(), end, bufferSlots);
+            addBlock(raw, axis, w.getStartTime(), end, leadSlots, bufferSlots);
         }
 
         return mergeBlocked(raw, axis.horizonSlots);
     }
 
-    private void addBlock(List<int[]> out, Axis axis, LocalDateTime start, LocalDateTime end, int bufferSlots) {
-        int s = axis.floorSlot(start) - bufferSlots;
-        int e = axis.ceilSlot(end) + bufferSlots;
+    private void addBlock(List<int[]> out, Axis axis, LocalDateTime start, LocalDateTime end,
+                          int leadSlots, int trailSlots) {
+        int s = axis.floorSlot(start) - leadSlots;
+        int e = axis.ceilSlot(end) + trailSlots;
         if (e > s) out.add(new int[]{ s, e });
     }
 
@@ -427,6 +466,9 @@ public class SmartSchedulerService {
         LocalDate legacyDate;
         /** Nicht-null bei flexiblen Habits: alle Slots einer Habit-Woche teilen diesen Schlüssel. */
         String weekGroup;
+        /** Montag der Woche und laufende Nummer darin — nur bei flexiblen Habits gesetzt. */
+        LocalDate weekStart;
+        int indexInWeek;
         Placeable placeable;
     }
 
@@ -532,6 +574,8 @@ public class SmartSchedulerService {
                     s.windowStartMin  = window[0];
                     s.windowEndMin    = window[1];
                     s.weekGroup       = group;
+                    s.weekStart       = weekCursor;
+                    s.indexInWeek     = i;
                     s.allowedDays.addAll(days);
                     out.add(s);
                 }
@@ -604,12 +648,17 @@ public class SmartSchedulerService {
 
         int bufferSlots = Math.max(0, nz(prefs.getBufferMinutes(), 0) / GRID);
         int nowSlot     = Math.max(0, axis.ceilSlot(LocalDateTime.now()));
+        int[] peakWindow = peakWindow(prefs);
+
+        // Mindestpause zwischen zwei automatisch geplanten Blöcken. Ohne sie stapelt der Solver
+        // acht Stunden Arbeit lückenlos aufeinander — technisch optimal, menschlich unbrauchbar.
+        int gapSlots = Math.max(0, nz(prefs.getBreakDurationMinutes(), 0) / GRID);
 
         // Platzhalter-Zuordnung für flexible Workouts, bewusst lokal: ein Feld würde
         // zwischen zwei Läufen (auch verschiedener User) Zustand verschleppen.
         Map<Long, Placeable> workoutPlaceables = new HashMap<>();
 
-        List<int[]> blocked = collectBlockedSlots(axis, input, startDate, endDate, bufferSlots);
+        List<int[]> blocked = collectBlockedSlots(axis, input, startDate, endDate, bufferSlots, gapSlots);
 
         List<IntervalVar> allIntervals = new ArrayList<>();
         for (int i = 0; i < blocked.size(); i++) {
@@ -650,7 +699,7 @@ public class SmartSchedulerService {
                 String name = "task" + task.getId() + "_c" + ci;
 
                 List<DayWindow> windows = dayWindows(axis, workStartSlot, workEndSlot, sizeSlots, earliest, null);
-                Placeable p = makePlaceable(model, name, sizeSlots, c.durationMinutes, windows);
+                Placeable p = makePlaceable(model, name, sizeSlots, c.durationMinutes, windows, gapSlots);
                 c.placeable = p;
                 allPlaceables.add(p);
                 allIntervals.add(p.interval);
@@ -663,6 +712,15 @@ public class SmartSchedulerService {
                 // Dringlichkeit: früher ist besser.
                 qVars.add(gated(model, p, "urg_" + name, p.start, axis.horizonSlots));
                 qWeights.add(W_URGENCY * prio);
+
+                // Leistungshoch: die Einstellung war bislang reine Dekoration. Das Gewicht liegt
+                // über der Dringlichkeit, damit ein Block ins Hoch wandert, solange dort Platz
+                // ist — aber weit unter der Deadline-Strafe, damit nichts dafür zu spät wird.
+                if (peakWindow != null) {
+                    qVars.add(windowDeviation(model, p, sizeSlots, peakWindow[0], peakWindow[1],
+                            axis, "peak_" + name));
+                    qWeights.add(W_PEAK * prio);
+                }
 
                 // Deadline ist jetzt WEICH. Vorher wurde ein überfälliger Task hart ans
                 // Horizontende geklemmt; jetzt landet er so früh wie möglich und wird gemeldet.
@@ -701,7 +759,7 @@ public class SmartSchedulerService {
             String name = "habit" + s.habit.getId() + "_" + i;
 
             List<DayWindow> windows = dayWindows(axis, workStartSlot, workEndSlot, sizeSlots, nowSlot, s.allowedDays);
-            Placeable p = makePlaceable(model, name, sizeSlots, s.durationMinutes, windows);
+            Placeable p = makePlaceable(model, name, sizeSlots, s.durationMinutes, windows, gapSlots);
             s.placeable = p;
             allPlaceables.add(p);
             allIntervals.add(p.interval);
@@ -710,31 +768,20 @@ public class SmartSchedulerService {
             dropB.addTerm(p.present, -weight);
             dropConst += weight;
 
-            // Hinge-Loss: innerhalb des Fensters kostenfrei, außerhalb linear ansteigend.
             // Die harte Schranke bleibt die Arbeitszeit, nicht das Fenster — ein Habit, das nicht
             // in sein Wunschfenster passt, wird lieber daneben geplant als verworfen.
-            IntVar dev = model.newIntVar(0, axis.horizonSlots, "dev_" + name);
-            for (Map.Entry<Integer, BoolVar> de : p.inDay.entrySet()) {
-                int dayBase = de.getKey() * SLOTS_PER_DAY;
-                int wLo = dayBase + s.windowStartMin / GRID;
-                // Spätester Start, bei dem der Block noch im Fenster endet. Bei einem
-                // Punktwunsch (start == end) fallen wLo und wHi zusammen, womit die Abweichung
-                // exakt |start − preferredTime| ist — das alte Verhalten.
-                int wHi = s.windowEndMin > s.windowStartMin
-                        ? Math.max(wLo, dayBase + s.windowEndMin / GRID - sizeSlots)
-                        : wLo;
-                model.addGreaterOrEqual(
-                        LinearExpr.newBuilder().addTerm(dev, 1).addTerm(p.start, 1).build(), wLo)
-                     .onlyEnforceIf(de.getValue());
-                model.addGreaterOrEqual(
-                        LinearExpr.newBuilder().addTerm(dev, 1).addTerm(p.start, -1).build(), -wHi)
-                     .onlyEnforceIf(de.getValue());
-            }
-            model.addEquality(dev, 0).onlyEnforceIf(p.present.not());
+            IntVar dev = windowDeviation(model, p, sizeSlots, s.windowStartMin, s.windowEndMin,
+                    axis, "dev_" + name);
             qVars.add(dev);
             qWeights.add(W_HABIT_DEV * Math.max(1, nz(s.habit.getPriority(), 3)));
 
-            String key = "habit:" + s.habit.getId() + ":" + (s.legacyDate != null ? s.legacyDate : i);
+            // Flexible Slots sind untereinander austauschbar und haben deshalb kein Datum, an dem
+            // sich ein Anker festmachen ließe. Sie werden über ihre Position innerhalb der Woche
+            // zugeordnet — beide Seiten sind chronologisch sortiert (die Slots erzwungen durch die
+            // Symmetriebrechung weiter unten), also trifft der i-te Slot den i-ten Vorgänger.
+            String key = s.legacyDate != null
+                    ? "habit:" + s.habit.getId() + ":" + s.legacyDate
+                    : "habitweek:" + s.habit.getId() + ":" + s.weekStart + ":" + s.indexInWeek;
             addStabilityTerm(model, p, previousStarts.get(key), axis, qVars, qWeights, name);
         }
 
@@ -786,7 +833,7 @@ public class SmartSchedulerService {
             }
 
             List<DayWindow> windows = dayWindows(axis, workStartSlot, workEndSlot, sizeSlots, nowSlot, days);
-            Placeable p = makePlaceable(model, name, sizeSlots, duration, windows);
+            Placeable p = makePlaceable(model, name, sizeSlots, duration, windows, gapSlots);
             allPlaceables.add(p);
             allIntervals.add(p.interval);
             workoutPlaceables.put(w.getId(), p);
@@ -878,6 +925,35 @@ public class SmartSchedulerService {
         return out;
     }
 
+    /**
+     * Hinge-Loss auf ein Tagesfenster: innerhalb kostenfrei, außerhalb linear ansteigend.
+     *
+     * Das Fenster ist bewusst weich. Hart formuliert würde ein Item, das nirgends in sein Fenster
+     * passt, verworfen — ein Block am „falschen“ Tageszeitpunkt ist aber immer noch besser als
+     * gar keiner. Bei einem entarteten Fenster (start == end) fallen die beiden Schranken
+     * zusammen und die Abweichung ist exakt |start − Wunschzeit|.
+     */
+    private IntVar windowDeviation(CpModel model, Placeable p, int sizeSlots,
+                                   int windowStartMin, int windowEndMin, Axis axis, String name) {
+        IntVar dev = model.newIntVar(0, axis.horizonSlots, name);
+        for (Map.Entry<Integer, BoolVar> de : p.inDay.entrySet()) {
+            int dayBase = de.getKey() * SLOTS_PER_DAY;
+            int wLo = dayBase + windowStartMin / GRID;
+            // Spätester Start, bei dem der Block noch im Fenster endet.
+            int wHi = windowEndMin > windowStartMin
+                    ? Math.max(wLo, dayBase + windowEndMin / GRID - sizeSlots)
+                    : wLo;
+            model.addGreaterOrEqual(
+                    LinearExpr.newBuilder().addTerm(dev, 1).addTerm(p.start, 1).build(), wLo)
+                 .onlyEnforceIf(de.getValue());
+            model.addGreaterOrEqual(
+                    LinearExpr.newBuilder().addTerm(dev, 1).addTerm(p.start, -1).build(), -wHi)
+                 .onlyEnforceIf(de.getValue());
+        }
+        model.addEquality(dev, 0).onlyEnforceIf(p.present.not());
+        return dev;
+    }
+
     private void addStabilityTerm(CpModel model, Placeable p, Integer previousSlot, Axis axis,
                                   List<IntVar> qVars, List<Long> qWeights, String name) {
         if (previousSlot == null) return;
@@ -898,7 +974,8 @@ public class SmartSchedulerService {
     /** Bisherige Platzierungen, damit der Stabilitätsterm etwas hat, woran er sich festhalten kann. */
     private Map<String, Integer> previousStartSlots(ScheduleInput input, Axis axis) {
         Map<String, Integer> out = new HashMap<>();
-        Map<Long, List<CalendarEvent>> byTask = new HashMap<>();
+        Map<Long, List<CalendarEvent>> byTask  = new HashMap<>();
+        Map<String, List<CalendarEvent>> byHabitWeek = new HashMap<>();
 
         for (CalendarEvent ev : nz(input.getPreviousScheduledEvents())) {
             if (ev.getStartTime() == null) continue;
@@ -907,6 +984,10 @@ public class SmartSchedulerService {
             } else if (ev.getRelatedHabit() != null) {
                 out.put("habit:" + ev.getRelatedHabit().getId() + ":" + ev.getStartTime().toLocalDate(),
                         axis.floorSlot(ev.getStartTime()));
+                LocalDate week = ev.getStartTime().toLocalDate()
+                        .with(TemporalAdjusters.previousOrSame(DayOfWeek.MONDAY));
+                byHabitWeek.computeIfAbsent(ev.getRelatedHabit().getId() + ":" + week,
+                        k -> new ArrayList<>()).add(ev);
             } else if (ev.getRelatedWorkout() != null) {
                 out.put("workout:" + ev.getRelatedWorkout().getId(), axis.floorSlot(ev.getStartTime()));
             }
@@ -915,6 +996,13 @@ public class SmartSchedulerService {
             evs.sort(Comparator.comparing(CalendarEvent::getStartTime));
             for (int i = 0; i < evs.size(); i++) {
                 out.put("task:" + taskId + ":" + i, axis.floorSlot(evs.get(i).getStartTime()));
+            }
+        });
+        // Anker für flexible Habits: pro Habit und ISO-Woche chronologisch durchnummeriert.
+        byHabitWeek.forEach((groupKey, evs) -> {
+            evs.sort(Comparator.comparing(CalendarEvent::getStartTime));
+            for (int i = 0; i < evs.size(); i++) {
+                out.put("habitweek:" + groupKey + ":" + i, axis.floorSlot(evs.get(i).getStartTime()));
             }
         });
         return out;
@@ -1021,7 +1109,8 @@ public class SmartSchedulerService {
     // INPUT
     // =========================================================================
 
-    private ScheduleInput collectScheduleInput(Long userId, LocalDate startDate, LocalDate endDate) {
+    private ScheduleInput collectScheduleInput(Long userId, LocalDate startDate, LocalDate endDate,
+                                               LocalDateTime cutoff) {
         ScheduleInput input = new ScheduleInput();
         LocalDateTime start = startDate.atStartOfDay();
         LocalDateTime end   = endDate.atTime(23, 59, 59);
@@ -1032,15 +1121,25 @@ public class SmartSchedulerService {
         input.setCourseSchedules(courseScheduleRepository.findByUserId(userId));
 
         // Vor dem Löschen einsammeln: der Stabilitätsterm braucht die bisherigen Platzierungen.
-        input.setPreviousScheduledEvents(calendarEventRepository
+        List<CalendarEvent> previous = nz(calendarEventRepository
                 .findByUserIdAndEventTypeInAndIsFixedAndStartTimeBetween(
                         userId, List.of(EventType.TASK, EventType.HABIT, EventType.WORKOUT),
                         false, start, end));
 
+        // Bereits begonnene Blöcke werden eingefroren statt neu geplant. Sie taugen deshalb auch
+        // nicht als Stabilitätsanker — ein Anker in der Vergangenheit würde den zugehörigen neuen
+        // Block gegen die Jetzt-Grenze ziehen.
+        Map<Boolean, List<CalendarEvent>> split = previous.stream()
+                .filter(e -> e.getStartTime() != null)
+                .collect(Collectors.partitioningBy(e -> e.getStartTime().isBefore(cutoff)));
+        input.setFrozenEvents(split.get(true));
+        input.setPreviousScheduledEvents(split.get(false));
+
         // Ein manuell verschobenes Workout hat ein gepinntes Kalender-Event. Es bleibt in der
         // Datenbank zwar "flexibel", darf aber nicht mehr umgeplant werden — sonst zieht der
-        // Solver es sofort wieder weg und der Drag-and-Drop hätte keine Wirkung.
-        Set<Long> pinnedWorkoutIds = nz(input.getFixedEvents()).stream()
+        // Solver es sofort wieder weg und der Drag-and-Drop hätte keine Wirkung. Für ein bereits
+        // gelaufenes Workout gilt dasselbe.
+        Set<Long> pinnedWorkoutIds = concat(input.getFixedEvents(), input.getFrozenEvents()).stream()
                 .filter(e -> e.getRelatedWorkout() != null)
                 .map(e -> e.getRelatedWorkout().getId())
                 .collect(Collectors.toSet());
@@ -1133,22 +1232,52 @@ public class SmartSchedulerService {
      * Item-Schleife auf — mit mehreren Chunks blieben dort die Zeiten des LETZTEN Blocks stehen.
      * Tasks, die gar nicht platziert werden konnten, bekommen ihre Zeiten gelöscht, sonst bleiben
      * Geisterwerte aus einem früheren Lauf hängen.
+     *
+     * Mitgezählt werden auch gepinnte und eingefrorene Blöcke. Ein Task, dessen Zeit vollständig
+     * dadurch abgedeckt ist, erzeugt keine neuen Chunks mehr — ohne diese Quelle stünde er in der
+     * Task-Liste als "ungeplant", obwohl sein Block sichtbar im Kalender liegt.
      */
-    private void writeBackTaskSpans(SolveOutcome outcome, List<Task> allTasks) {
-        Map<Long, List<ScheduledItem>> byTask = outcome.getItems().stream()
-                .filter(i -> i.getTask() != null)
-                .collect(Collectors.groupingBy(i -> i.getTask().getId()));
+    private void writeBackTaskSpans(SolveOutcome outcome, List<Task> allTasks,
+                                    List<CalendarEvent> committed) {
+        Map<Long, LocalDateTime[]> spans = new LinkedHashMap<>();
+        for (ScheduledItem i : outcome.getItems()) {
+            if (i.getTask() == null) continue;
+            mergeSpan(spans, i.getTask().getId(), i.getStartTime(), i.getEndTime());
+        }
 
-        byTask.forEach((id, items) -> taskService.scheduleTask(id,
-                items.stream().map(ScheduledItem::getStartTime).min(Comparator.naturalOrder()).orElseThrow(),
-                items.stream().map(ScheduledItem::getEndTime).max(Comparator.naturalOrder()).orElseThrow()));
+        Set<Long> known = nz(allTasks).stream().map(Task::getId).collect(Collectors.toSet());
+        for (CalendarEvent ev : committedTaskEvents(committed)) {
+            // Nur Tasks aus diesem Lauf: für abgeschlossene Tasks mit altem Block wäre ein
+            // zurückgeschriebener Termin bestenfalls verwirrend.
+            if (known.contains(ev.getRelatedTask().getId())) {
+                mergeSpan(spans, ev.getRelatedTask().getId(), ev.getStartTime(), ev.getEndTime());
+            }
+        }
+
+        spans.forEach((id, span) -> taskService.scheduleTask(id, span[0], span[1]));
 
         for (Task t : nz(allTasks)) {
-            if (!byTask.containsKey(t.getId())
+            if (!spans.containsKey(t.getId())
                     && (t.getScheduledStartTime() != null || t.getScheduledEndTime() != null)) {
                 taskService.clearSchedule(t.getId());
             }
         }
+    }
+
+    private void mergeSpan(Map<Long, LocalDateTime[]> spans, Long taskId,
+                           LocalDateTime start, LocalDateTime end) {
+        if (start == null || end == null) return;
+        spans.merge(taskId, new LocalDateTime[]{ start, end }, (a, b) -> new LocalDateTime[]{
+                a[0].isBefore(b[0]) ? a[0] : b[0],
+                a[1].isAfter(b[1])  ? a[1] : b[1] });
+    }
+
+    /** Gepinnte und eingefrorene Blöcke, die an einem Task hängen. */
+    private List<CalendarEvent> committedTaskEvents(List<CalendarEvent> committed) {
+        return nz(committed).stream()
+                .filter(e -> e.getRelatedTask() != null && e.getRelatedTask().getId() != null)
+                .filter(e -> e.getStartTime() != null && e.getEndTime() != null)
+                .collect(Collectors.toList());
     }
 
     // =========================================================================
@@ -1176,11 +1305,17 @@ public class SmartSchedulerService {
         return (long) nz(habit.getPriority(), 3) * 100;
     }
 
-    private List<Task> findUnscheduledTasks(List<Task> all, List<ScheduledItem> scheduled) {
+    /**
+     * Ungeplant ist ein Task nur, wenn für ihn nirgends ein Block im Kalender steht — weder ein
+     * neu geplanter noch ein gepinnter oder bereits gelaufener.
+     */
+    private List<Task> findUnscheduledTasks(List<Task> all, List<ScheduledItem> scheduled,
+                                            List<CalendarEvent> committed) {
         Set<Long> ids = scheduled.stream()
                 .filter(i -> i.getTask() != null)
                 .map(i -> i.getTask().getId())
                 .collect(Collectors.toSet());
+        committedTaskEvents(committed).forEach(e -> ids.add(e.getRelatedTask().getId()));
         return nz(all).stream().filter(t -> !ids.contains(t.getId())).collect(Collectors.toList());
     }
 
@@ -1191,6 +1326,22 @@ public class SmartSchedulerService {
             for (ScheduledItem item : list)
                 total += ChronoUnit.MINUTES.between(item.getStartTime(), item.getEndTime());
         return total / 60.0;
+    }
+
+    /**
+     * Das Leistungshoch als Minutenfenster, oder null wenn nicht eingestellt.
+     * Die Grenzen entsprechen den gleichnamigen {@link HabitWindow}-Bereichen, damit
+     * "Vormittag" für Habits und für Tasks dasselbe bedeutet.
+     */
+    private int[] peakWindow(UserPreferences p) {
+        ProductivityPeakTime peak = p.getPeakProductivityTime();
+        if (peak == null) return null;
+        HabitWindow w = switch (peak) {
+            case MORNING   -> HabitWindow.MORNING;
+            case AFTERNOON -> HabitWindow.AFTERNOON;
+            case EVENING   -> HabitWindow.EVENING;
+        };
+        return new int[]{ minuteOfDay(w.defaultStart()), minuteOfDay(w.defaultEnd()) };
     }
 
     private LocalTime workStart(UserPreferences p) {
@@ -1211,6 +1362,23 @@ public class SmartSchedulerService {
 
     private static <T> List<T> nz(List<T> list) {
         return list != null ? list : List.of();
+    }
+
+    @SafeVarargs
+    private static <T> List<T> concat(List<T>... lists) {
+        List<T> out = new ArrayList<>();
+        for (List<T> l : lists) out.addAll(nz(l));
+        return out;
+    }
+
+    /**
+     * Ab wann neu geplant wird. Alles davor ist Geschichte und bleibt unangetastet; liegt der
+     * Horizont komplett in der Zukunft, gibt es nichts einzufrieren und der Schnitt ist sein Anfang.
+     */
+    private LocalDateTime replanCutoff(LocalDate startDate) {
+        LocalDateTime now = LocalDateTime.now();
+        LocalDateTime horizonStart = startDate.atStartOfDay();
+        return now.isAfter(horizonStart) ? now : horizonStart;
     }
 
     private String getColorForTask(Task task) {

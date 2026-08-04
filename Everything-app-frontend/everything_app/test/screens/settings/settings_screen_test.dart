@@ -83,6 +83,30 @@ void main() {
     calendar.dispose();
   });
 
+  testWidgets('the break between blocks can be set and reaches the backend', (tester) async {
+    final fake = FakePreferencesService(const UserPreferences(
+      workdayStart: TimeOfDay(hour: 8, minute: 0),
+      workdayEnd: TimeOfDay(hour: 22, minute: 0),
+      bufferMinutes: 0,
+      breakDurationMinutes: 0,
+    ));
+    final calendar = await _pumpSettings(tester, fake: fake);
+
+    expect(find.text('Break between blocks'), findsOneWidget);
+
+    // Zweite Stepper-Zeile: Puffer, dann Pause.
+    await tester.tap(find.byIcon(Icons.add_rounded).at(1));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Save'));
+    await tester.pumpAndSettle();
+
+    expect(fake.lastSaved?.breakDurationMinutes, 5);
+    expect(fake.lastSaved?.bufferMinutes, 0, reason: 'die Puffer-Zeile bleibt unberührt');
+
+    calendar.dispose();
+  });
+
   testWidgets('a failed save surfaces the error instead of pretending it worked',
       (tester) async {
     final fake = FakePreferencesService(const UserPreferences(

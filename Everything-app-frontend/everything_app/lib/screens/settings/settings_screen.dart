@@ -122,6 +122,15 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       onChanged: (v) => _patch((p) => p.copyWith(bufferMinutes: v)),
                     ),
                     _Stepper(
+                      label: 'Break between blocks',
+                      suffix: 'min',
+                      value: draft.breakDurationMinutes ?? 0,
+                      min: 0,
+                      max: 60,
+                      step: 5,
+                      onChanged: (v) => _patch((p) => p.copyWith(breakDurationMinutes: v)),
+                    ),
+                    _Stepper(
                       label: 'Max task time per day',
                       suffix: 'min',
                       value: draft.maxTaskMinutesPerDay ?? 480,

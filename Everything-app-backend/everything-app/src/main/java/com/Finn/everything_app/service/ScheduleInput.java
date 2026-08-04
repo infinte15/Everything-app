@@ -19,4 +19,13 @@ public class ScheduleInput {
      * komplette restliche Kalender.
      */
     private List<CalendarEvent> previousScheduledEvents;
+
+    /**
+     * Blöcke aus dem letzten Lauf, die vor dem Umplanzeitpunkt begonnen haben. Sie werden weder
+     * gelöscht noch neu geplant, sondern wie gepinnte Termine behandelt: sie blockieren ihre Zeit,
+     * ihre Minuten zählen auf den Task und ihr Tag zählt auf die Wochenquote der Habit. Ohne das
+     * verschwindet der bereits gelaufene Vormittag aus dem Kalender, sobald irgendeine Änderung
+     * eine Neuplanung auslöst.
+     */
+    private List<CalendarEvent> frozenEvents;
 }
