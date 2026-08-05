@@ -16,9 +16,12 @@ public class GradeDTO {
     private Long courseId;
     private String courseName;
 
+    // Uni-Skala. Die Validierung liegt nur hier, nicht auf der Entität und nicht als
+    // Check-Constraint — Bestandsnoten über 5,0 bleiben also lesbar, nur neue Schreibzugriffe
+    // werden abgewiesen.
     @NotNull(message = "Note erforderlich")
-    @DecimalMin(value = "1.0", message = "Note muss zwischen 1.0 und 6.0 liegen")
-    @DecimalMax(value = "6.0", message = "Note muss zwischen 1.0 und 6.0 liegen")
+    @DecimalMin(value = "1.0", message = "Note muss zwischen 1,0 und 5,0 liegen")
+    @DecimalMax(value = "5.0", message = "Note muss zwischen 1,0 und 5,0 liegen")
     private Double grade;
 
     @Min(value = 0, message = "Gewichtung muss positiv sein")
@@ -28,6 +31,9 @@ public class GradeDTO {
     private LocalDate examDate;
 
     private String examType;
+
+    /** false = Schein: wird angezeigt, zählt aber nicht in den Modulschnitt. */
+    private Boolean countsTowardGrade;
 
     private String notes;
 

@@ -7,6 +7,9 @@ import org.springframework.stereotype.Component;
 @Component
 public class FlashcardMapper {
 
+    /** EF wird als Ganzzahl x100 gespeichert; nach außen ist es der übliche Faktor (2.5). */
+    private static final double EASE_SCALE = 100.0;
+
     public FlashcardDTO toDTO(Flashcard card) {
         if (card == null) return null;
 
@@ -19,7 +22,12 @@ public class FlashcardMapper {
         dto.setCategory(card.getCategory());
         dto.setDifficulty(card.getDifficulty());
         dto.setRepetitionCount(card.getRepetitionCount());
-        dto.setEasinessFactor(card.getEasinessFactor());
+        dto.setEaseFactor(card.getEasinessFactor() != null
+                ? card.getEasinessFactor() / EASE_SCALE
+                : null);
+        dto.setIntervalDays(card.getIntervalDays());
+        dto.setLearningStep(card.getLearningStep());
+        dto.setLapses(card.getLapses());
         dto.setNextReviewDate(card.getNextReviewDate());
         dto.setLastReviewedAt(card.getLastReviewedAt());
         dto.setTags(card.getTags());
@@ -39,6 +47,8 @@ public class FlashcardMapper {
         card.setCategory(dto.getCategory());
         card.setDifficulty(dto.getDifficulty());
         card.setTags(dto.getTags());
+        // Der Wiederholungszustand wird bewusst NICHT aus dem DTO übernommen. Er gehört dem
+        // Server; sonst könnte ein Client sich seine Intervalle selbst setzen.
 
         return card;
     }

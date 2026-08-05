@@ -32,8 +32,24 @@ public class Flashcard {
     @Column(name = "repetition_count")
     private Integer repetitionCount = 0;
 
+    // EF mal 100 als Ganzzahl. Bleibt so — das ist ein Speicherdetail, nach außen liefert das
+    // DTO ein Double (siehe FlashcardMapper).
     @Column(name = "easiness_factor")
     private Integer easinessFactor = 250;
+
+    // Das TATSÄCHLICH zuletzt vergebene Intervall. Vorher wurde es aus repetitionCount
+    // rekursiv nachgerechnet, wodurch jede Ease-Änderung rückwirkend die ganze Historie
+    // umschrieb. Bestandszeilen haben hier NULL — Leser müssen das auf 0 abbilden.
+    @Column(name = "interval_days")
+    private Double intervalDays = 0.0;
+
+    // Position in den Lernschritten (1 Min / 6 Min), bevor die Karte in den Tagesrhythmus geht.
+    @Column(name = "learning_step")
+    private Integer learningStep = 0;
+
+    // Wie oft die Karte nach dem Lernen wieder vergessen wurde.
+    @Column(name = "lapses")
+    private Integer lapses = 0;
 
     @Column(name = "next_review_date")
     private LocalDateTime nextReviewDate;
@@ -63,6 +79,22 @@ public class Flashcard {
         if (nextReviewDate == null) {
             nextReviewDate = LocalDateTime.now();
         }
+        normalizeSrsDefaults();
+    }
+
+    /**
+     * Bestandskarten haben nach ddl-auto=update NULL in den neuen Spalten — der
+     * Feldinitialisierer greift nur bei frisch konstruierten Objekten, nicht bei geladenen
+     * Zeilen. Ohne diese Normalisierung fliegt beim ersten Review eine NPE beim Unboxing.
+     * Deshalb @PostLoad und nicht @PreUpdate: gebraucht wird der Wert beim LESEN.
+     */
+    @PostLoad
+    protected void normalizeSrsDefaults() {
+        if (intervalDays == null)  intervalDays  = 0.0;
+        if (learningStep == null)  learningStep  = 0;
+        if (lapses == null)        lapses        = 0;
+        if (repetitionCount == null) repetitionCount = 0;
+        if (easinessFactor == null)  easinessFactor  = 250;
     }
 
     @PreUpdate

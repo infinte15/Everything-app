@@ -16,10 +16,13 @@ public class CourseMapper {
         dto.setCode(course.getCode());
         dto.setInstructor(course.getInstructor());
         dto.setSemester(course.getSemester());
+        dto.setSemesterId(course.getSemesterRef() != null ? course.getSemesterRef().getId() : null);
+        dto.setSemesterLabel(course.getSemesterRef() != null ? course.getSemesterRef().getLabel() : null);
         dto.setDescription(course.getDescription());
         dto.setStartDate(course.getStartDate());
         dto.setEndDate(course.getEndDate());
         dto.setColor(course.getColor());
+        dto.setEctsCredits(course.getEctsCredits());
         dto.setTotalNotes(course.getTotalNotes());
         dto.setTotalFlashcards(course.getTotalFlashcards());
         dto.setTotalAssignments(course.getTotalAssignments());
@@ -42,6 +45,7 @@ public class CourseMapper {
         course.setStartDate(dto.getStartDate());
         course.setEndDate(dto.getEndDate());
         course.setColor(dto.getColor());
+        course.setEctsCredits(dto.getEctsCredits() != null ? dto.getEctsCredits() : 0);
 
         return course;
     }

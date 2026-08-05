@@ -30,6 +30,15 @@ public class Grade {
     @Column(name = "exam_type", length = 50)
     private String examType;
 
+    /**
+     * Zählt diese Teilleistung in den Modulschnitt? Ein Schein wird abgelegt und bestanden,
+     * verschiebt den Schnitt aber nicht. Bewusst ein Flag und keine nullable grade-Spalte:
+     * ddl-auto=update nimmt ein NOT NULL auf Postgres nicht wieder weg.
+     * Bestandszeilen haben hier NULL, siehe normalizeDefaults().
+     */
+    @Column(name = "counts_toward_grade")
+    private Boolean countsTowardGrade = true;
+
     @Column(length = 2000)
     private String notes;
 
@@ -52,6 +61,14 @@ public class Grade {
     protected void onCreate() {
         createdAt = LocalDateTime.now();
         updatedAt = LocalDateTime.now();
+        normalizeDefaults();
+    }
+
+    /** Alte Noten kennen countsTowardGrade nicht; sie haben immer gezählt. */
+    @PostLoad
+    protected void normalizeDefaults() {
+        if (countsTowardGrade == null) countsTowardGrade = true;
+        if (weight == null) weight = 100;
     }
 
     @PreUpdate

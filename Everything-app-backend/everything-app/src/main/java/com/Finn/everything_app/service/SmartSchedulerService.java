@@ -172,7 +172,14 @@ public class SmartSchedulerService {
         // bleibt im Kalender stehen.
         calendarEventService.clearScheduledEvents(userId, cutoff, endDate.atTime(23, 59, 59));
         saveScheduleToDatabase(userId, outcome.getItems());
+        log.info("Gespeichert: {} geplante Blöcke", outcome.getItems().size());
         writeBackTaskSpans(outcome, input.getTasks(), committed);
+
+        // Die Vorlesungen laufen getrennt und landen NICHT in outcome.getItems(): ScheduleResult
+        // zählt alles, was kein TASK ist, als "Habits/Workouts" und summiert es in
+        // totalHoursScheduled. Eingemischt bliese das die Kennzahl mit Stunden auf, die der
+        // Solver nie geplant hat.
+        syncClassEvents(userId, startDate, endDate);
 
         List<ScheduledItem> scheduledTasks = outcome.getItems().stream()
                 .filter(i -> i.getType() == ScheduledItemType.TASK)
@@ -367,13 +374,8 @@ public class SmartSchedulerService {
             addBlock(raw, axis, ev.getStartTime(), ev.getEndTime(), 0, gapSlots);
         }
 
-        for (CourseSchedule cs : nz(input.getCourseSchedules())) {
-            if (cs.getDayOfWeek() == null || cs.getStartTime() == null || cs.getEndTime() == null) continue;
-            for (LocalDate d = startDate; !d.isAfter(endDate); d = d.plusDays(1)) {
-                if (d.getDayOfWeek() == cs.getDayOfWeek()) {
-                    addBlock(raw, axis, d.atTime(cs.getStartTime()), d.atTime(cs.getEndTime()), leadSlots, bufferSlots);
-                }
-            }
+        for (LectureOccurrence o : expandCourseSchedules(input.getCourseSchedules(), startDate, endDate)) {
+            addBlock(raw, axis, o.start(), o.end(), leadSlots, bufferSlots);
         }
 
         for (WorkoutSession w : nz(input.getFixedWorkouts())) {
@@ -385,6 +387,89 @@ public class SmartSchedulerService {
         }
 
         return mergeBlocked(raw, axis.horizonSlots);
+    }
+
+    /** Ein konkreter Vorlesungstermin, den ein Stundenplan im betrachteten Zeitraum erzeugt. */
+    private record LectureOccurrence(CourseSchedule schedule, LocalDateTime start, LocalDateTime end) {}
+
+    /**
+     * Expandiert Stundenpläne zu konkreten Terminen.
+     *
+     * Einzige Stelle, an der die Semestergrenzen ausgewertet werden: die Sperrzeiten für den
+     * Solver und die Kalendereinträge müssen dieselbe Antwort bekommen. Liefen sie auseinander,
+     * blockierte eine Vorlesung Zeit, die im Kalender gar nicht steht — oder umgekehrt.
+     *
+     * Stundenpläne gelten nur innerhalb ihres Semesters. Ohne Semester (oder ohne Datumsgrenzen
+     * daran) gelten sie weiterhin unbegrenzt — Bestandsnutzer haben ihre Vorlesungen ohne
+     * Semesterbezug angelegt, und deren Kalender darf sich hier nicht still verändern.
+     */
+    private List<LectureOccurrence> expandCourseSchedules(List<CourseSchedule> schedules,
+                                                          LocalDate startDate, LocalDate endDate) {
+        List<LectureOccurrence> out = new ArrayList<>();
+        for (CourseSchedule cs : nz(schedules)) {
+            if (cs.getDayOfWeek() == null || cs.getStartTime() == null || cs.getEndTime() == null) continue;
+            LocalDate validFrom = semesterStart(cs);
+            LocalDate validTo   = semesterEnd(cs);
+
+            for (LocalDate d = startDate; !d.isAfter(endDate); d = d.plusDays(1)) {
+                if (d.getDayOfWeek() != cs.getDayOfWeek()) continue;
+                if (validFrom != null && d.isBefore(validFrom)) continue;
+                if (validTo   != null && d.isAfter(validTo))    continue;
+                out.add(new LectureOccurrence(cs, d.atTime(cs.getStartTime()), d.atTime(cs.getEndTime())));
+            }
+        }
+        return out;
+    }
+
+    /**
+     * Schreibt die Vorlesungen des Stundenplans als CLASS-Termine in den Kalender.
+     *
+     * Idempotent: gelöscht und neu angelegt wird ausschließlich ab dem Umplanzeitpunkt. Das
+     * Zeitfenster von {@link CalendarEventService#clearClassEvents} und der Filter unten MÜSSEN
+     * identisch bleiben — ist das Fenster zu klein, entstehen Duplikate; ist es zu groß, fehlen
+     * Termine.
+     *
+     * Bewusst eigenständig und nicht Teil des Solver-Ergebnisses: die Vorlesungen werden nicht
+     * geplant, sondern abgebildet, und müssen deshalb auch dann stimmen, wenn der Solver gar
+     * nicht läuft (siehe ScheduleRegenerationCoordinator bei abgeschalteter Autoplanung).
+     */
+    @Transactional
+    public int syncClassEvents(Long userId, LocalDate startDate, LocalDate endDate) {
+        LocalDateTime cutoff = replanCutoff(startDate);
+        calendarEventService.clearClassEvents(userId, cutoff, endDate.atTime(23, 59, 59));
+
+        List<ScheduledItem> items = expandCourseSchedules(
+                        courseScheduleRepository.findByUserId(userId), startDate, endDate).stream()
+                .filter(o -> !o.start().isBefore(cutoff))
+                .map(o -> {
+                    ScheduledItem item = new ScheduledItem();
+                    item.setCourseSchedule(o.schedule());
+                    item.setStartTime(o.start());
+                    item.setEndTime(o.end());
+                    item.setType(ScheduledItemType.CLASS);
+                    return item;
+                })
+                .collect(Collectors.toList());
+
+        saveScheduleToDatabase(userId, items);
+        log.info("Vorlesungen synchronisiert: {} Termine für User {}", items.size(), userId);
+        return items.size();
+    }
+
+    /** Beginn der Gültigkeit eines Stundenplans; {@code null} heißt „unbegrenzt". */
+    private static LocalDate semesterStart(CourseSchedule cs) {
+        Semester semester = semesterOf(cs);
+        return semester != null ? semester.getStartDate() : null;
+    }
+
+    /** Ende der Gültigkeit eines Stundenplans; {@code null} heißt „unbegrenzt". */
+    private static LocalDate semesterEnd(CourseSchedule cs) {
+        Semester semester = semesterOf(cs);
+        return semester != null ? semester.getEndDate() : null;
+    }
+
+    private static Semester semesterOf(CourseSchedule cs) {
+        return cs.getCourse() != null ? cs.getCourse().getSemesterRef() : null;
     }
 
     private void addBlock(List<int[]> out, Axis axis, LocalDateTime start, LocalDateTime end,
@@ -408,6 +493,12 @@ public class SmartSchedulerService {
     private Map<Long, Integer> pinnedMinutesPerTask(List<CalendarEvent> fixedEvents) {
         return nz(fixedEvents).stream()
                 .filter(e -> e.getRelatedTask() != null && e.getStartTime() != null && e.getEndTime() != null)
+                // Erledigte Blöcke zählen hier NICHT mit: ihre Minuten sind bereits
+                // gutgeschrieben — bei einem Lernziel über logHours (das
+                // estimatedDurationMinutes neu berechnet), sonst über Task.completedMinutes.
+                // Doppelt abgezogen schrumpfte ein Sechs-Stunden-Ziel nach zwei erledigten
+                // Blöcken auf drei statt viereinhalb Stunden Rest.
+                .filter(e -> e.getCompletedAt() == null)
                 .collect(Collectors.groupingBy(
                         e -> e.getRelatedTask().getId(),
                         Collectors.summingInt(e -> (int) ChronoUnit.MINUTES.between(e.getStartTime(), e.getEndTime()))));
@@ -760,6 +851,11 @@ public class SmartSchedulerService {
                     qWeights.add(W_LATE * prio);
                 }
 
+                // Bekannte Grenze: der Anker hängt am Chunk-INDEX. Ändert sich die Blockzahl
+                // (Stunden erfasst, Ziel geändert), verschieben sich die Anker um eine Position
+                // und die übrigen Blöcke werden auf fremde Vorgänger gezogen. Das korrigiert
+                // sich beim nächsten Lauf von selbst; nach Chunk-Identität zu schlüsseln wäre
+                // teurer als der Fehler.
                 addStabilityTerm(model, p, previousStarts.get("task:" + task.getId() + ":" + ci),
                         axis, qVars, qWeights, name);
             }
@@ -775,6 +871,29 @@ public class SmartSchedulerService {
                 // Präfix-Präsenz: passen nur 2 von 3 Chunks, bekommt man 1 und 2 — nie 1 und 3,
                 // sonst stünde im Kalender "(1/3)" und "(3/3)" ohne "(2/3)".
                 model.addImplication(cur.present, prev.present);
+            }
+
+            // Höchstens k Blöcke desselben Tasks an einem Tag.
+            //
+            // Bewusst HART und nicht als Strafterm: der Dringlichkeitsterm belohnt ausschließlich
+            // „früher ist besser", eine weiche Verteilung würde er jederzeit überbieten. Die
+            // Symmetriebrechung oben erlaubt ausdrücklich prev.end == cur.start — ohne diese
+            // Grenze klebt also alles am Anfang des ersten freien Tages aneinander.
+            //
+            // Unlösbar wird davon nichts: makePlaceable lässt jedem Chunk über addExactlyOne den
+            // Zweig present.not(). Passt die Verteilung nicht in den Horizont, fällt ein Block
+            // heraus und wird als NO_ROOM gemeldet, statt das Modell zu sprengen.
+            Integer perDay = task.getMaxChunksPerDay();
+            if (perDay != null && perDay > 0 && group.size() > perDay) {
+                for (int d = 0; d <= taskLastDay; d++) {
+                    LinearExprBuilder sameDay = LinearExpr.newBuilder();
+                    int candidates = 0;
+                    for (TaskChunk c : group) {
+                        BoolVar b = c.placeable != null ? c.placeable.inDay.get(d) : null;
+                        if (b != null) { sameDay.addTerm(b, 1); candidates++; }
+                    }
+                    if (candidates > perDay) model.addLessOrEqual(sameDay.build(), perDay);
+                }
             }
         }
 
@@ -1162,9 +1281,12 @@ public class SmartSchedulerService {
         // Bereits begonnene Blöcke werden eingefroren statt neu geplant. Sie taugen deshalb auch
         // nicht als Stabilitätsanker — ein Anker in der Vergangenheit würde den zugehörigen neuen
         // Block gegen die Jetzt-Grenze ziehen.
+        // Erledigte Blöcke gelten unabhängig vom Umplanzeitpunkt als eingefroren: sie sperren
+        // ihre Zeit weiter, taugen aber nicht als Stabilitätsanker für einen neuen Block.
         Map<Boolean, List<CalendarEvent>> split = previous.stream()
                 .filter(e -> e.getStartTime() != null)
-                .collect(Collectors.partitioningBy(e -> e.getStartTime().isBefore(cutoff)));
+                .collect(Collectors.partitioningBy(
+                        e -> e.getCompletedAt() != null || e.getStartTime().isBefore(cutoff)));
         input.setFrozenEvents(split.get(true));
         input.setPreviousScheduledEvents(split.get(false));
 
@@ -1243,13 +1365,21 @@ public class SmartSchedulerService {
                     ev.setRelatedWorkout(item.getWorkoutSession());
                     ev.setColor("#FF5722");
                 }
+                case CLASS -> {
+                    // Abgeleitet aus dem Stundenplan, deshalb kein relatedXy: die Identität ergibt
+                    // sich aus Typ, isFixed und Startzeit — genau das, worauf clearClassEvents filtert.
+                    Course course = item.getCourseSchedule().getCourse();
+                    ev.setTitle(course != null && course.getName() != null ? course.getName() : "Vorlesung");
+                    ev.setDescription(course != null ? course.getInstructor() : null);
+                    ev.setLocation(item.getCourseSchedule().getLocation());
+                    ev.setEventType(EventType.CLASS);
+                    ev.setColor(getColorForCourse(course));
+                }
                 default -> { continue; }
             }
 
             calendarEventRepository.save(ev);
         }
-
-        log.info("Gespeichert: {} Events", scheduled.size());
     }
 
     private String chunkTitle(ScheduledItem item) {
@@ -1412,6 +1542,18 @@ public class SmartSchedulerService {
         LocalDateTime now = LocalDateTime.now();
         LocalDateTime horizonStart = startDate.atStartOfDay();
         return now.isAfter(horizonStart) ? now : horizonStart;
+    }
+
+    /**
+     * Die Modulfarbe. Rückfall ist das Study-Lila der Oberfläche, nicht
+     * {@code getColorForSpaceType(STUDY)} — das liefert noch das alte Blau und passt nicht mehr
+     * zur Palette.
+     */
+    private String getColorForCourse(Course course) {
+        if (course != null && course.getColor() != null && !course.getColor().isBlank()) {
+            return course.getColor();
+        }
+        return "#C2C1FF";
     }
 
     private String getColorForTask(Task task) {

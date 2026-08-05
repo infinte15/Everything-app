@@ -17,6 +17,9 @@ class StudyDecksPage extends StatelessWidget {
     final provider = context.watch<StudyProvider>();
     final decks = provider.flashcardDecks;
     final totalDue = provider.dueFlashcards.length;
+    // Aus dem serverseitigen Review-Protokoll. Der Kartenzustand allein koennte das nicht
+    // beantworten: er kennt nur die letzte Bewertung, nicht ihre Anzahl.
+    final reviewedToday = provider.reviewCountSince();
 
     return Scaffold(
       backgroundColor: const Color(0xFF0E0E0E),
@@ -51,7 +54,9 @@ class StudyDecksPage extends StatelessWidget {
                 ),
               ),
             ),
-            if (totalDue > 0)
+            // Auch ohne faellige Karten sichtbar, sobald heute gelernt wurde — sonst
+            // verschwindet die Tagesleistung genau dann, wenn man fertig ist.
+            if (totalDue > 0 || reviewedToday > 0)
               SliverToBoxAdapter(
                 child: Padding(
                   padding: const EdgeInsets.fromLTRB(20, 8, 20, 16),
@@ -60,22 +65,25 @@ class StudyDecksPage extends StatelessWidget {
                     padding: const EdgeInsets.all(20),
                     child: Row(
                       children: [
-                        const Icon(Icons.school, color: Colors.white, size: 32),
+                        Icon(totalDue > 0 ? Icons.school : Icons.check_circle_outline,
+                            color: Colors.white, size: 32),
                         const SizedBox(width: 16),
                         Expanded(
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Text(
-                                '$totalDue Karten fällig',
+                                totalDue > 0 ? '$totalDue Karten fällig' : 'Alles erledigt',
                                 style: theme.textTheme.titleMedium?.copyWith(
                                   color: Colors.white,
                                   fontWeight: FontWeight.bold,
                                 ),
                               ),
-                              const Text(
-                                'Starte eine Lerneinheit in einem Deck',
-                                style: TextStyle(color: Colors.white70, fontSize: 12),
+                              Text(
+                                reviewedToday > 0
+                                    ? 'Heute schon $reviewedToday Karten bewertet'
+                                    : 'Starte eine Lerneinheit in einem Deck',
+                                style: const TextStyle(color: Colors.white70, fontSize: 12),
                               ),
                             ],
                           ),
@@ -103,7 +111,7 @@ class StudyDecksPage extends StatelessWidget {
                     (context, index) {
                       final deck = decks[index];
                       final stats = provider.deckStats(deck.id);
-                      final studyCount = stats.due + stats.newCards;
+                      final studyCount = stats.studyCount;
 
                       return Padding(
                         padding: const EdgeInsets.only(bottom: 12),

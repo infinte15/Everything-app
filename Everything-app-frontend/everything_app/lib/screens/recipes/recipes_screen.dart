@@ -16,12 +16,18 @@ class RecipesScreen extends StatefulWidget {
 class _RecipesScreenState extends State<RecipesScreen> {
   int _selectedIndex = 0;
 
-  static const _pages = [
-    RecipeDiscoverPage(),
-    RecipeCookbookPage(),
-    RecipePlanPage(),
-    RecipeShoppingPage(),
-  ];
+  static const _discoverIndex = 0;
+
+  /// Nicht mehr static const: das Kochbuch braucht einen Rückruf auf diesen Zustand, um vom
+  /// Leerzustand aus zum Entdecken-Reiter zu springen.
+  List<Widget> get _pages => [
+        const RecipeDiscoverPage(),
+        RecipeCookbookPage(
+          onDiscover: () => setState(() => _selectedIndex = _discoverIndex),
+        ),
+        const RecipePlanPage(),
+        const RecipeShoppingPage(),
+      ];
 
   @override
   Widget build(BuildContext context) {

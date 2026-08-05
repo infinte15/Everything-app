@@ -26,11 +26,20 @@ class StudyGpaSnapshot {
 }
 
 class StudyGradeCalculator {
+  /// Teilleistungen, die in den Modulschnitt eingehen.
+  ///
+  /// Ein Schein (`countsTowardGrade == false`) wird abgelegt und bestanden, verschiebt den
+  /// Schnitt aber nicht — und darf deshalb auch nicht in die Gewichtungssumme einfließen,
+  /// sonst gälte ein Modul fälschlich als vollständig bewertet.
+  static List<StudyGrade> _counting(List<StudyGrade> grades) =>
+      grades.where((g) => g.countsTowardGrade).toList();
+
   static double subjectAverage(List<StudyGrade> grades) {
-    if (grades.isEmpty) return 0;
+    final counting = _counting(grades);
+    if (counting.isEmpty) return 0;
     double weightedSum = 0;
     int totalWeight = 0;
-    for (final g in grades) {
+    for (final g in counting) {
       weightedSum += g.grade * g.weightPercent;
       totalWeight += g.weightPercent;
     }
@@ -38,19 +47,28 @@ class StudyGradeCalculator {
   }
 
   static int subjectWeightTotal(List<StudyGrade> grades) =>
-      grades.fold<int>(0, (sum, g) => sum + g.weightPercent);
+      _counting(grades).fold<int>(0, (sum, g) => sum + g.weightPercent);
 
   static bool subjectIsComplete(List<StudyGrade> grades) =>
-      grades.isNotEmpty && subjectWeightTotal(grades) >= 100;
+      _counting(grades).isNotEmpty && subjectWeightTotal(grades) >= 100;
 
+  /// ECTS-gewichteter Gesamtschnitt.
+  ///
+  /// [semesterId] filtert über die echte Verknüpfung und ist der Weg, den die Oberfläche
+  /// nimmt. [semesterFilter] (Freitext) bleibt für Module, die noch keinem Semester
+  /// zugeordnet sind, und für ältere Aufrufer erhalten.
   static StudyGpaSnapshot computeGpa({
     required List<StudySubject> subjects,
     required List<StudyGrade> grades,
     String? semesterFilter,
+    String? semesterId,
   }) {
-    final filtered = semesterFilter == null || semesterFilter == 'Alle'
-        ? subjects
-        : subjects.where((s) => s.semester == semesterFilter).toList();
+    List<StudySubject> filtered = subjects;
+    if (semesterId != null) {
+      filtered = subjects.where((s) => s.semesterId == semesterId).toList();
+    } else if (semesterFilter != null && semesterFilter != 'Alle') {
+      filtered = subjects.where((s) => s.semester == semesterFilter).toList();
+    }
 
     double totalEcts = 0;
     double completedEcts = 0;
@@ -125,13 +143,19 @@ class StudyGradeCalculator {
     );
     if (needed == null) return '';
 
+    // Die beiden Fälle waren vertauscht. In der deutschen Skala ist 1,0 die beste und 5,0
+    // die schlechteste Note, der nötige Schnitt ist also eine OBERGRENZE:
+    //   needed < 1,0  → selbst mit lauter 1,0 auf alle offenen ECTS reicht es nicht mehr.
+    //   needed > 5,0  → selbst im schlechtesten Fall wird das Ziel gehalten.
+    // Vorher meldete der Rechner „Ziel bereits erreicht — weiter so!" genau dann, wenn das
+    // Ziel gerade unerreichbar geworden war.
     if (needed < 1.0) {
-      return 'Ziel bereits erreicht — weiter so!';
+      return 'Ziel nicht mehr erreichbar — auch mit 1,0 auf alle offenen ECTS.';
     }
     if (needed > 5.0) {
-      return 'Ziel nicht mehr erreichbar (Ø ${formatGrade(needed)} nötig).';
+      return 'Ziel sicher — auch im schlechtesten Fall.';
     }
-    return 'Ø ${formatGrade(needed)} auf restliche ${remaining.toInt()} ECTS nötig';
+    return 'Höchstens Ø ${formatGrade(needed)} auf die restlichen ${remaining.toInt()} ECTS';
   }
 }
 

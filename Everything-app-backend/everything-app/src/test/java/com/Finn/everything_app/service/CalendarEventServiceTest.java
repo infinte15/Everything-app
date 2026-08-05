@@ -1,12 +1,11 @@
 package com.Finn.everything_app.service;
 
-import com.Finn.everything_app.model.CalendarEvent;
-import com.Finn.everything_app.model.EventType;
-import com.Finn.everything_app.model.User;
-import com.Finn.everything_app.model.WorkoutSession;
+import com.Finn.everything_app.exception.BadRequestException;
+import com.Finn.everything_app.model.*;
 import com.Finn.everything_app.repository.*;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -16,11 +15,8 @@ import java.util.List;
 import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.*;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.Mockito.never;
-import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.when;
+import static org.mockito.ArgumentMatchers.*;
+import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
 class CalendarEventServiceTest {
@@ -29,6 +25,9 @@ class CalendarEventServiceTest {
     @Mock UserRepository userRepository;
     @Mock TaskRepository taskRepository;
     @Mock WorkoutSessionRepository workoutSessionRepository;
+    @Mock StudyGoalRepository studyGoalRepository;
+    @Mock StudyGoalService studyGoalService;
+    @Mock TaskService taskService;
     @Mock org.springframework.context.ApplicationEventPublisher eventPublisher;
 
     @InjectMocks
@@ -124,6 +123,228 @@ class CalendarEventServiceTest {
                         LocalDateTime.of(2026, 8, 4, 10, 0)));
 
         assertFalse(moved.getIsFixed());
+    }
+
+    // ------------------------------------------------------------------
+    // Vorlesungen sind aus dem Stundenplan abgeleitet und im Kalender schreibgeschützt.
+    //
+    // Nicht nur Bequemlichkeit: eine Änderung hier wäre nach der entprellten Neuplanung
+    // ohnehin weg, und ein gepinnter CLASS-Termin überlebte clearClassEvents dauerhaft und
+    // verdoppelte sich bei jedem Lauf. Ein Fehler ist ehrlicher als stille Wirkungslosigkeit.
+    // ------------------------------------------------------------------
+
+    /** Ein gespeicherter Termin ohne save()-Stub — die Sperre darf gar nicht erst speichern. */
+    private CalendarEvent storedLecture() {
+        User owner = new User();
+        owner.setId(1L);
+
+        CalendarEvent event = new CalendarEvent();
+        event.setId(5L);
+        event.setUser(owner);
+        event.setTitle("Analysis I");
+        event.setEventType(EventType.CLASS);
+        event.setIsFixed(false);
+        event.setStartTime(LocalDateTime.of(2026, 8, 4, 8, 0));
+        event.setEndTime(LocalDateTime.of(2026, 8, 4, 10, 0));
+
+        when(calendarEventRepository.findById(5L)).thenReturn(Optional.of(event));
+        return event;
+    }
+
+    @Test
+    void eineVorlesungLaesstSichNichtVerschieben() {
+        storedLecture();
+
+        assertThrows(BadRequestException.class, () -> service.updateEvent(5L, 1L,
+                patch(EventType.CLASS, LocalDateTime.of(2026, 8, 4, 14, 0),
+                        LocalDateTime.of(2026, 8, 4, 16, 0))));
+
+        verify(calendarEventRepository, never()).save(any());
+    }
+
+    @Test
+    void eineVorlesungLaesstSichNichtPinnen() {
+        CalendarEvent lecture = storedLecture();
+
+        assertThrows(BadRequestException.class, () -> service.setPinned(5L, 1L, true));
+
+        assertFalse(lecture.getIsFixed(), "gepinnt entkäme sie dem Aufräumen und verdoppelte sich");
+        verify(calendarEventRepository, never()).save(any());
+    }
+
+    @Test
+    void eineVorlesungLaesstSichNichtLoeschen() {
+        storedLecture();
+
+        assertThrows(BadRequestException.class, () -> service.deleteEvent(5L, 1L));
+
+        verify(calendarEventRepository, never()).delete(any());
+    }
+
+    @Test
+    void clearClassEventsRaeumtNurAbgeleiteteTermineWeg() {
+        LocalDateTime start = LocalDateTime.of(2026, 8, 3, 0, 0);
+        LocalDateTime end = LocalDateTime.of(2026, 8, 9, 23, 59, 59);
+
+        when(calendarEventRepository.findByUserIdAndEventTypeInAndIsFixedAndStartTimeBetween(
+                1L, List.of(EventType.CLASS), false, start, end)).thenReturn(List.of());
+
+        service.clearClassEvents(1L, start, end);
+
+        // Getrennt von clearScheduledEvents: die Vorlesungen werden auch synchronisiert, wenn
+        // der Solver gar nicht läuft, und dürfen dessen Aufräumabfrage nicht mitbenutzen.
+        verify(calendarEventRepository).findByUserIdAndEventTypeInAndIsFixedAndStartTimeBetween(
+                1L, List.of(EventType.CLASS), false, start, end);
+        verify(calendarEventRepository).deleteAll(List.of());
+    }
+
+    // ------------------------------------------------------------------
+    // Abhaken: die Minuten eines Blocks werden GENAU EINMAL gutgeschrieben.
+    //
+    // Die Falle: pinnedMinutesPerTask summiert fixedEvents + frozenEvents. Wuerde ein
+    // erledigter Block dort mitzaehlen und gleichzeitig ueber logHours gutgeschrieben, zoege
+    // der Solver dieselben Minuten zweimal ab.
+    // ------------------------------------------------------------------
+
+    private static final long TASK_ID = 42L;
+
+    /** Ein 90-Minuten-Aufgabenblock in der Zukunft, mit verdrahtetem Lookup. */
+    private CalendarEvent taskBlock(Task task) {
+        User owner = new User();
+        owner.setId(1L);
+
+        CalendarEvent event = new CalendarEvent();
+        event.setId(9L);
+        event.setUser(owner);
+        event.setTitle("Lernen: Analysis I (1/4)");
+        event.setEventType(EventType.TASK);
+        event.setIsFixed(false);
+        event.setStartTime(LocalDateTime.of(2026, 8, 6, 9, 0));
+        event.setEndTime(LocalDateTime.of(2026, 8, 6, 10, 30));
+        event.setRelatedTask(task);
+
+        when(calendarEventRepository.findById(9L)).thenReturn(Optional.of(event));
+        lenient().when(calendarEventRepository.save(event)).thenReturn(event);
+        return event;
+    }
+
+    private Task task(int estimated, Integer done) {
+        Task t = new Task();
+        t.setId(TASK_ID);
+        t.setEstimatedDurationMinutes(estimated);
+        t.setCompletedMinutes(done);
+        return t;
+    }
+
+    private Task capturedTaskPatch() {
+        ArgumentCaptor<Task> captor = ArgumentCaptor.forClass(Task.class);
+        verify(taskService).updateTask(eq(TASK_ID), captor.capture());
+        return captor.getValue();
+    }
+
+    @Test
+    void einErledigterBlockUeberlebtDieNeuplanung() {
+        LocalDateTime start = LocalDateTime.of(2026, 8, 3, 0, 0);
+        LocalDateTime end = LocalDateTime.of(2026, 8, 9, 23, 59, 59);
+
+        CalendarEvent offen = new CalendarEvent();
+        offen.setId(1L);
+        CalendarEvent erledigt = new CalendarEvent();
+        erledigt.setId(2L);
+        erledigt.setCompletedAt(LocalDateTime.of(2026, 8, 5, 12, 0));
+
+        when(calendarEventRepository.findByUserIdAndEventTypeInAndIsFixedAndStartTimeBetween(
+                eq(1L), any(), eq(false), eq(start), eq(end)))
+                .thenReturn(List.of(offen, erledigt));
+
+        service.clearScheduledEvents(1L, start, end);
+
+        // Nur der offene Block faellt weg — der erledigte ist Protokoll, keine Planung.
+        verify(calendarEventRepository).deleteAll(List.of(offen));
+    }
+
+    @Test
+    void einErledigterBlockSchreibtCompletedMinutesFort() {
+        taskBlock(task(360, 60));
+
+        service.setCompleted(9L, 1L, true);
+
+        assertEquals(150, capturedTaskPatch().getCompletedMinutes(), "60 vorher plus 90 Minuten Block");
+        verifyNoInteractions(studyGoalService);
+    }
+
+    @Test
+    void einErledigterLernblockSchreibtAnsZielUndNichtAnDenTask() {
+        Task bridge = task(360, null);
+        taskBlock(bridge);
+
+        StudyGoal goal = new StudyGoal();
+        goal.setId(7L);
+        when(studyGoalRepository.findByTaskIdAndUserId(TASK_ID, 1L)).thenReturn(Optional.of(goal));
+
+        service.setCompleted(9L, 1L, true);
+
+        // 90 Minuten = 1,5 Stunden ans Ziel. logHours rechnet estimatedDurationMinutes neu —
+        // zusaetzlich completedMinutes zu setzen waere derselbe Abzug ein zweites Mal.
+        verify(studyGoalService).applyLoggedDelta(goal, 1.5);
+        verify(taskService, never()).updateTask(anyLong(), any());
+        verify(taskService, never()).completeTask(anyLong());
+    }
+
+    @Test
+    void derLetzteBlockSchliesstDenTaskAb() {
+        taskBlock(task(90, 0));
+
+        service.setCompleted(9L, 1L, true);
+
+        // Sonst liefert chunkSizes eine leere Liste: der Task haette keine Kalenderpraesenz
+        // mehr und stuende trotzdem auf offen.
+        verify(taskService).completeTask(TASK_ID);
+    }
+
+    @Test
+    void zweimalAbhakenBuchtNurEinmal() {
+        CalendarEvent event = taskBlock(task(360, 0));
+        event.setCompletedAt(LocalDateTime.of(2026, 8, 5, 12, 0));
+
+        CalendarEvent unveraendert = service.setCompleted(9L, 1L, true);
+
+        assertSame(event, unveraendert);
+        verifyNoInteractions(taskService);
+        verify(calendarEventRepository, never()).save(any());
+    }
+
+    @Test
+    void dasZuruecknehmenZiehtDieGutschriftAb() {
+        CalendarEvent event = taskBlock(task(360, 150));
+        event.setCompletedAt(LocalDateTime.of(2026, 8, 5, 12, 0));
+
+        CalendarEvent saved = service.setCompleted(9L, 1L, false);
+
+        assertEquals(60, capturedTaskPatch().getCompletedMinutes(), "150 minus 90 Minuten Block");
+        assertNull(saved.getCompletedAt());
+    }
+
+    @Test
+    void nurAufgabenbloeckeLassenSichAbhaken() {
+        User owner = new User();
+        owner.setId(1L);
+        CalendarEvent habit = new CalendarEvent();
+        habit.setId(9L);
+        habit.setUser(owner);
+        habit.setEventType(EventType.HABIT);
+        when(calendarEventRepository.findById(9L)).thenReturn(Optional.of(habit));
+
+        // Gewohnheiten haben ihren eigenen Abschlussweg; ein zweiter stritte darum.
+        assertThrows(BadRequestException.class, () -> service.setCompleted(9L, 1L, true));
+        verify(calendarEventRepository, never()).save(any());
+    }
+
+    @Test
+    void eineVorlesungLaesstSichNichtAbhaken() {
+        storedLecture();
+
+        assertThrows(BadRequestException.class, () -> service.setCompleted(5L, 1L, true));
     }
 
     // ------------------------------------------------------------------

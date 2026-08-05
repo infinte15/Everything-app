@@ -13,6 +13,21 @@ class FlashcardDeck {
     this.newCardsPerDay = 20,
   });
 
+  /// Das Backend nennt den Titel `name`. Vorher wurde `title` gelesen, weshalb jeder
+  /// Deck-Titel in der UI leer blieb.
+  factory FlashcardDeck.fromJson(Map<String, dynamic> json) => FlashcardDeck(
+        id: json['id'].toString(),
+        title: json['name'] ?? '',
+        subjectId: json['courseId']?.toString() ?? '',
+        description: json['description'] ?? '',
+      );
+
+  Map<String, dynamic> toJson() => {
+        'name': title,
+        'description': description,
+        'courseId': int.tryParse(subjectId),
+      };
+
   FlashcardDeck copyWith({
     String? id,
     String? title,
@@ -57,6 +72,33 @@ class Flashcard {
     DateTime? createdAt,
   }) : createdAt = createdAt ?? DateTime.now();
 
+  /// Das Backend nennt die Felder `question`/`answer`, den Zähler `repetitionCount` und den
+  /// Termin `nextReviewDate`. Gelesen wurde vorher `front`/`back`/`repetitions`/`nextReview` —
+  /// jede Karte rendete deshalb leer und galt als neu und sofort fällig.
+  factory Flashcard.fromJson(Map<String, dynamic> json) => Flashcard(
+        id: json['id'].toString(),
+        deckId: json['deckId'].toString(),
+        question: json['question'] ?? '',
+        answer: json['answer'] ?? '',
+        ease: (json['easeFactor'] as num?)?.toDouble() ?? 2.5,
+        repetitions: (json['repetitionCount'] as num?)?.toInt() ?? 0,
+        intervalDays: (json['intervalDays'] as num?)?.toDouble() ?? 0,
+        learningStep: (json['learningStep'] as num?)?.toInt() ?? 0,
+        nextReview: json['nextReviewDate'] != null
+            ? DateTime.parse(json['nextReviewDate'])
+            : DateTime.now(),
+        lastReviewed: json['lastReviewedAt'] != null
+            ? DateTime.parse(json['lastReviewedAt'])
+            : null,
+      );
+
+  /// Nur die inhaltlichen Felder. Der Wiederholungszustand gehört dem Server.
+  Map<String, dynamic> toJson() => {
+        'deckId': int.tryParse(deckId),
+        'question': question,
+        'answer': answer,
+      };
+
   Flashcard copyWith({
     String? id,
     String? deckId,
@@ -89,7 +131,9 @@ class Flashcard {
   int get srsLevel => repetitions;
 }
 
-/// Aggregated counts for deck list UI (computed from cards).
+/// Die Kennzahlen eines Decks. Kommen vom Server (`GET /study/decks/{id}/stats`), lassen sich
+/// aber auch aus den bereits geladenen Karten ableiten — beide Wege benutzen dieselbe
+/// Einteilung aus [AnkiScheduler].
 class FlashcardDeckStats {
   final int total;
   final int due;
@@ -105,6 +149,17 @@ class FlashcardDeckStats {
     required this.mature,
   });
 
+  factory FlashcardDeckStats.fromJson(Map<String, dynamic> json) => FlashcardDeckStats(
+        total: (json['total'] as num?)?.toInt() ?? 0,
+        due: (json['due'] as num?)?.toInt() ?? 0,
+        newCards: (json['newCards'] as num?)?.toInt() ?? 0,
+        learning: (json['learning'] as num?)?.toInt() ?? 0,
+        mature: (json['mature'] as num?)?.toInt() ?? 0,
+      );
+
   int get masteryPercent =>
       total == 0 ? 0 : ((mature / total) * 100).round();
+
+  /// Was in einer Lerneinheit drankommt: fällige plus neue Karten.
+  int get studyCount => due + newCards;
 }

@@ -4,6 +4,8 @@ import 'dart:math';
 import '../../../providers/study_provider.dart';
 import '../../../providers/task_provider.dart';
 import '../../../config/app_theme.dart';
+import '../../../models/study_subject.dart';
+import '../../../utils/study_grade_calculator.dart';
 import 'widgets/study_kinetic_card.dart';
 
 class StudyDashboardPage extends StatelessWidget {
@@ -15,11 +17,13 @@ class StudyDashboardPage extends StatelessWidget {
     final provider = context.watch<StudyProvider>();
     final taskProvider = context.watch<TaskProvider>();
 
-    // Determine current day index (0 = Monday, 6 = Sunday)
-    final weekday = DateTime.now().weekday;
-    final dayIndex = (weekday - 1).clamp(0, 4);
+    // Tagesindex (0 = Montag, 6 = Sonntag). Kein clamp auf 4: damit zeigte die Übersicht am
+    // Wochenende den Freitag als "heute". lessonsForDay liefert für Sa/So einfach nichts,
+    // und die Leerzustandskarte greift.
+    final dayIndex = DateTime.now().weekday - 1;
 
     final todayLessons = provider.lessonsForDay(dayIndex);
+    final dueCards = provider.dueFlashcards.length;
 
     final studiumTasks = taskProvider.tasks
         .where((t) => t.category == 'Studium' && t.status != 'COMPLETED')
@@ -62,6 +66,29 @@ class StudyDashboardPage extends StatelessWidget {
                       ),
                     ],
                   ),
+                  const SizedBox(height: 8),
+                  // Eine Zeile für alles, was heute ansteht — ohne dafür durch drei Reiter
+                  // laufen zu müssen. Die fälligen Karten führen direkt in die Lernzone.
+                  Row(
+                    children: [
+                      _TodayChip(
+                        icon: Icons.style,
+                        label: dueCards == 0
+                            ? 'keine Karten fällig'
+                            : '$dueCards ${dueCards == 1 ? 'Karte' : 'Karten'} fällig',
+                        highlighted: dueCards > 0,
+                        onTap: dueCards == 0 ? null : () => provider.setActiveTab(4),
+                      ),
+                      const SizedBox(width: 8),
+                      _TodayChip(
+                        icon: Icons.assignment_outlined,
+                        label: studiumTasks.isEmpty
+                            ? 'keine offenen Aufgaben'
+                            : '${studiumTasks.length} ${studiumTasks.length == 1 ? 'Aufgabe' : 'Aufgaben'} offen',
+                        highlighted: false,
+                      ),
+                    ],
+                  ),
                   const SizedBox(height: 12),
                   if (todayLessons.isEmpty)
                     StudyKineticCard(
@@ -81,8 +108,18 @@ class StudyDashboardPage extends StatelessWidget {
                       return Padding(
                         padding: const EdgeInsets.only(bottom: 12),
                         child: StudyKineticCard(
-                          backgroundColor: theme.colorScheme.surfaceContainerLow,
+                          // Rahmen und Tönung in der Modulfarbe: vorher war die Uhrzeit für
+                          // jedes Modul dasselbe Lila, genau deshalb wirkte der Abschnitt flach.
+                          // Alpha kleiner als im Stundenplan (kLessonTint) — die Karte ist
+                          // deutlich größer und der Untergrund dunkler, dieselbe Tönung läse
+                          // sich hier als farbige Fläche statt als Akzent.
+                          borderColor: lesson.color.withValues(alpha: 0.5),
+                          backgroundColor: Color.alphaBlend(
+                            lesson.color.withValues(alpha: 0.06),
+                            theme.colorScheme.surfaceContainerLow,
+                          ),
                           padding: const EdgeInsets.all(20),
+                          onTap: () => provider.setActiveTab(1),
                           child: Row(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
@@ -93,7 +130,7 @@ class StudyDashboardPage extends StatelessWidget {
                                     startStr,
                                     style: theme.textTheme.titleMedium?.copyWith(
                                       fontWeight: FontWeight.bold,
-                                      color: theme.colorScheme.primary,
+                                      color: lesson.color,
                                     ),
                                   ),
                                   const SizedBox(height: 4),
@@ -117,7 +154,7 @@ class StudyDashboardPage extends StatelessWidget {
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
                                     Text(
-                                      lesson.subject,
+                                      lesson.courseName,
                                       style: theme.textTheme.bodyLarge?.copyWith(
                                         fontWeight: FontWeight.bold,
                                         color: theme.colorScheme.onSurface,
@@ -125,7 +162,7 @@ class StudyDashboardPage extends StatelessWidget {
                                     ),
                                     const SizedBox(height: 4),
                                     Text(
-                                      '${lesson.professor ?? 'Unbekannt'} • ${lesson.room ?? 'Kein Raum'}',
+                                      '${lesson.courseInstructor ?? 'Unbekannt'} • ${lesson.location ?? 'Kein Raum'}',
                                       style: theme.textTheme.bodySmall?.copyWith(
                                         color: theme.colorScheme.onSurfaceVariant,
                                       ),
@@ -567,13 +604,16 @@ SliverToBoxAdapter(
                       : 0.0;
                   final pct = (subjectProgress * 100).round();
 
-                  final subjectColor = Color(goal.colorValue);
+                  // Die Farbe kommt jetzt aus dem Modul, nicht mehr aus einer eigenen
+                  // Palette am Ziel — sonst hätte dasselbe Modul hier und im Stundenplan
+                  // zwei verschiedene Farben.
+                  final subjectColor = goal.color;
 
                   return Padding(
                     padding: const EdgeInsets.only(left: 16),
                     child: _LernfortschrittCircle(
                       progress: subjectProgress,
-                      label: goal.subject,
+                      label: goal.courseName,
                       centerText: '$pct%',
                       color: subjectColor,
                       backgroundColor: theme.colorScheme.surfaceContainerLowest,
@@ -632,78 +672,20 @@ SliverToBoxAdapter(
             sliver: SliverLayoutBuilder(
               builder: (context, constraints) {
                 final width = constraints.crossAxisExtent;
-                final columns = width > 900 ? 8 : width > 600 ? 5 : 3;
+                final columns = width > 1100 ? 4 : width > 750 ? 3 : width > 450 ? 2 : 1;
                 return SliverGrid(
                   gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
                     crossAxisCount: columns,
-                    crossAxisSpacing: 10,
-                    mainAxisSpacing: 10,
-                    childAspectRatio: 1.1,
+                    crossAxisSpacing: 12,
+                    mainAxisSpacing: 12,
+                    mainAxisExtent: 132,
                   ),
                   delegate: SliverChildBuilderDelegate(
-                    (context, index) {
-                      // Subject cards
-                      if (index < provider.subjects.length) {
-                        final subject = provider.subjects[index];
-                        IconData subjectIcon = Icons.menu_book;
-                        if (subject.name.contains('Math') || subject.name.contains('Alge')) {
-                          subjectIcon = Icons.functions;
-                        } else if (subject.name.contains('Prog') || subject.name.contains('Info')) {
-                          subjectIcon = Icons.terminal;
-                        } else if (subject.name.contains('Phys')) {
-                          subjectIcon = Icons.architecture;
-                        }
-
-                        // Count of notes for this subject
-                        final noteCount = provider.notes.where((n) => n.courseName == subject.name).length;
-
-                        return StudyKineticCard(
-                          backgroundColor: theme.colorScheme.surfaceContainerLow,
-                          padding: const EdgeInsets.all(12),
-                          onTap: () {
-                            provider.selectSubject(subject.id);
-                            provider.setActiveTab(2); // Fächer
-                          },
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                            children: [
-                              Icon(
-                                subjectIcon,
-                                color: theme.colorScheme.primary,
-                                size: 22,
-                              ),
-                              Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(
-                                    subject.name,
-                                    style: theme.textTheme.bodySmall?.copyWith(
-                                      fontWeight: FontWeight.bold,
-                                      color: theme.colorScheme.onSurface,
-                                    ),
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
-                                  ),
-                                  const SizedBox(height: 4),
-                                  Text(
-                                    noteCount == 0 ? 'Neuigkeiten' : '$noteCount Dokumente',
-                                    style: theme.textTheme.labelSmall?.copyWith(
-                                      color: theme.colorScheme.onSurfaceVariant,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ],
-                          ),
-                        );
-                      }
-                      return const SizedBox.shrink();
-                    },
-                childCount: provider.subjects.length,
-              ),
-            );
-          },
+                    (context, index) => _SubjectTile(subject: provider.subjects[index]),
+                    childCount: provider.subjects.length,
+                  ),
+                );
+              },
             ),
         ), // subjects grid
         const SliverToBoxAdapter(
@@ -839,5 +821,169 @@ class _DashboardProgressPainter extends CustomPainter {
         oldDelegate.color != color ||
         oldDelegate.backgroundColor != backgroundColor ||
         oldDelegate.strokeWidth != strokeWidth;
+  }
+}
+
+/// Eine Modul-Kachel auf der Übersicht.
+///
+/// Zeigt die vier Zahlen, wegen derer man ein Modul überhaupt aufmacht: Schnitt, ECTS, was an
+/// Karten ansteht und wie viele Seiten es gibt. Tippen springt in genau dieses Modul im
+/// FÄCHER-Tab — dort liegen Seiten, Karten und Noten beieinander.
+///
+/// Vorher stand hier eine Kachel mit einem geratenen Symbol und dem Text „Neuigkeiten", und
+/// die Seitenzahl kam aus einem Namensvergleich (`note.courseName == subject.name`) statt aus
+/// der Verknüpfung — zwei gleichnamige Module hätten sich die Notizen geteilt.
+class _SubjectTile extends StatelessWidget {
+  final StudySubject subject;
+
+  const _SubjectTile({required this.subject});
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final provider = context.watch<StudyProvider>();
+
+    final grades = provider.gradesForSubject(subject.id);
+    final counting = grades.where((g) => g.countsTowardGrade).toList();
+    final average = counting.isEmpty ? null : StudyGradeCalculator.subjectAverage(grades);
+    final cards = provider.courseCardStats(subject.id);
+    final pages = provider.pageCountOfCourse(subject.id);
+    final color = _tileColor(subject.colorHex) ?? theme.colorScheme.primary;
+
+    return StudyKineticCard(
+      backgroundColor: theme.colorScheme.surfaceContainerLow,
+      padding: EdgeInsets.zero,
+      onTap: () {
+        provider.selectSubject(subject.id);
+        provider.setActiveTab(2);   // FÄCHER
+      },
+      child: Row(
+        children: [
+          Container(width: 4, color: color),
+          Expanded(
+            child: Padding(
+              padding: const EdgeInsets.all(14),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Expanded(
+                        child: Text(
+                          subject.name,
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                          style: theme.textTheme.titleSmall?.copyWith(
+                            fontWeight: FontWeight.bold,
+                            color: theme.colorScheme.onSurface,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Text(
+                        average == null ? '—' : StudyGradeCalculator.formatGrade(average),
+                        style: theme.textTheme.titleMedium?.copyWith(
+                          fontWeight: FontWeight.w900,
+                          color: average == null
+                              ? theme.colorScheme.outline
+                              : gradeColor(average, theme.colorScheme),
+                        ),
+                      ),
+                    ],
+                  ),
+                  Text(
+                    '${subject.creditPoints} ECTS · $pages ${pages == 1 ? 'Seite' : 'Seiten'}',
+                    style: theme.textTheme.labelSmall
+                        ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
+                  ),
+                  Row(
+                    children: [
+                      Icon(
+                        cards.studyCount > 0 ? Icons.style : Icons.style_outlined,
+                        size: 13,
+                        color: cards.studyCount > 0
+                            ? const Color(0xFFFF9F0A)
+                            : theme.colorScheme.outline,
+                      ),
+                      const SizedBox(width: 6),
+                      Text(
+                        cards.total == 0
+                            ? 'keine Karten'
+                            : cards.studyCount == 0
+                                ? '${cards.total} Karten · nichts fällig'
+                                : '${cards.studyCount} zu lernen',
+                        style: theme.textTheme.labelSmall?.copyWith(
+                          color: cards.studyCount > 0
+                              ? const Color(0xFFFF9F0A)
+                              : theme.colorScheme.onSurfaceVariant,
+                          fontWeight:
+                              cards.studyCount > 0 ? FontWeight.bold : FontWeight.normal,
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// „#FF9F0A" oder „FF9F0A"; ohne brauchbare Angabe null, dann greift die Themenfarbe.
+  static Color? _tileColor(String? hex) {
+    final value = hex?.replaceAll('#', '');
+    if (value == null || (value.length != 6 && value.length != 8)) return null;
+    final parsed = int.tryParse(value.length == 6 ? 'FF$value' : value, radix: 16);
+    return parsed == null ? null : Color(parsed);
+  }
+}
+
+/// Eine Kennzahl in der HEUTE-Zeile. Angetippt springt sie in den zugehoerigen Reiter —
+/// „3 Karten faellig" ohne Weg dorthin waere nur eine Feststellung.
+class _TodayChip extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final bool highlighted;
+  final VoidCallback? onTap;
+
+  const _TodayChip({
+    required this.icon,
+    required this.label,
+    required this.highlighted,
+    this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final color = highlighted ? const Color(0xFFFF9F0A) : theme.colorScheme.onSurfaceVariant;
+
+    return Material(
+      color: theme.colorScheme.surfaceContainerLow,
+      child: InkWell(
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(icon, size: 13, color: color),
+              const SizedBox(width: 6),
+              Text(
+                label,
+                style: theme.textTheme.labelSmall?.copyWith(
+                  color: color,
+                  fontWeight: highlighted ? FontWeight.bold : FontWeight.normal,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 }

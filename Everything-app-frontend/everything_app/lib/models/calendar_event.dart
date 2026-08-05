@@ -17,6 +17,10 @@ class CalendarEvent {
   final int? relatedHabitId;
   final int? relatedWorkoutId;
 
+  /// Vom Nutzer abgehakt; null heisst offen. Wird ausschliesslich ueber
+  /// PUT /events/{id}/complete gesetzt — dort werden auch die Minuten gutgeschrieben.
+  final DateTime? completedAt;
+
   CalendarEvent({
     this.id,
     required this.title,
@@ -31,6 +35,7 @@ class CalendarEvent {
     this.relatedTaskId,
     this.relatedHabitId,
     this.relatedWorkoutId,
+    this.completedAt,
   });
 
   // JSON zu CalendarEvent
@@ -49,6 +54,9 @@ class CalendarEvent {
       relatedTaskId: json['relatedTaskId'],
       relatedHabitId: json['relatedHabitId'],
       relatedWorkoutId: json['relatedWorkoutId'],
+      completedAt: json['completedAt'] != null
+          ? DateTime.parse(json['completedAt'])
+          : null,
     );
   }
 
@@ -68,6 +76,7 @@ class CalendarEvent {
       'relatedTaskId': relatedTaskId,
       'relatedHabitId': relatedHabitId,
       'relatedWorkoutId': relatedWorkoutId,
+      'completedAt': completedAt?.toIso8601String(),
     };
   }
 
@@ -124,6 +133,20 @@ class CalendarEvent {
   }
 
  
+  /// Eine Vorlesung aus dem Stundenplan. Sie wird bei jeder Neuplanung neu erzeugt und
+  /// deshalb im Kalender nur angezeigt, nicht bearbeitet — das Backend weist Ändern, Pinnen
+  /// und Löschen mit 400 ab.
+  bool get isClass => eventType.toUpperCase() == 'CLASS';
+
+  /// Nicht verschiebbar: entweder vom Nutzer gepinnt oder aus dem Stundenplan abgeleitet.
+  bool get isLocked => isFixed || isClass;
+
+  /// Ein Aufgabenblock — nur diese lassen sich im Kalender abhaken. Gewohnheiten und Workouts
+  /// haben ihre eigenen Abschlusswege.
+  bool get isTask => eventType.toUpperCase() == 'TASK';
+
+  bool get isCompleted => completedAt != null;
+
   bool get isToday {
     final now = DateTime.now();
     return startTime.year == now.year &&

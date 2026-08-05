@@ -108,6 +108,9 @@ public class TaskService {
         if (updatedTask.getSplittable() != null) {
             existing.setSplittable(updatedTask.getSplittable());
         }
+        if (updatedTask.getMaxChunksPerDay() != null) {
+            existing.setMaxChunksPerDay(updatedTask.getMaxChunksPerDay());
+        }
         if (updatedTask.getCompletedMinutes() != null) {
             existing.setCompletedMinutes(updatedTask.getCompletedMinutes());
         }

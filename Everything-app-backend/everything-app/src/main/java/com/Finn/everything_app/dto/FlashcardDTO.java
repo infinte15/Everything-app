@@ -22,9 +22,14 @@ public class FlashcardDTO {
 
     private String category;
     private String difficulty;
-    // Spaced Repetition Daten
+    // Spaced Repetition Daten.
+    // easeFactor ist bewusst ein Double (2.5), nicht die intern gespeicherte Ganzzahl 250:
+    // die x100-Kodierung ist ein Speicherdetail und hatte in der API nie etwas zu suchen.
     private Integer repetitionCount;
-    private Integer easinessFactor; // 0-100
+    private Double easeFactor;
+    private Double intervalDays;
+    private Integer learningStep;
+    private Integer lapses;
     private LocalDateTime nextReviewDate;
     private LocalDateTime lastReviewedAt;
 

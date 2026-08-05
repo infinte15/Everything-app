@@ -20,6 +20,7 @@ public class GradeMapper {
         dto.setWeight(grade.getWeight());
         dto.setExamDate(grade.getExamDate());
         dto.setExamType(grade.getExamType());
+        dto.setCountsTowardGrade(grade.getCountsTowardGrade());
         dto.setNotes(grade.getNotes());
         dto.setCreatedAt(grade.getCreatedAt());
         dto.setUpdatedAt(grade.getUpdatedAt());
@@ -37,6 +38,8 @@ public class GradeMapper {
         grade.setWeight(dto.getWeight());
         grade.setExamDate(dto.getExamDate());
         grade.setExamType(dto.getExamType());
+        // Weglassen heißt "zählt" — so verhalten sich alle Bestandsnoten.
+        grade.setCountsTowardGrade(dto.getCountsTowardGrade() == null || dto.getCountsTowardGrade());
         grade.setNotes(dto.getNotes());
 
         return grade;

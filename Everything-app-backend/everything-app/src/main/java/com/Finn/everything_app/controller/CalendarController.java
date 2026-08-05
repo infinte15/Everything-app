@@ -85,6 +85,19 @@ public class CalendarController {
         return ResponseEntity.ok(calendarEventMapper.toDTO(saved));
     }
 
+    // Eigener Endpunkt statt eines Feldes im normalen Payload: das Abhaken schreibt Minuten
+    // gut (ans Lernziel oder an den Task) und darf nicht versehentlich durch ein gewöhnliches
+    // PUT ausgelöst werden — der Mapper überträgt completedAt deshalb nur nach außen.
+    @PutMapping("/events/{id}/complete")
+    public ResponseEntity<CalendarEventDTO> setCompleted(
+            @CurrentUser Long userId,
+            @PathVariable Long id,
+            @Valid @RequestBody CompletionRequest request) {
+
+        CalendarEvent saved = calendarEventService.setCompleted(id, userId, request.getCompleted());
+        return ResponseEntity.ok(calendarEventMapper.toDTO(saved));
+    }
+
     // POST /api/calendar/generate-schedule --> Schedule
     @PostMapping("/generate-schedule")
     public ResponseEntity<ScheduleResultDTO> generateSchedule(

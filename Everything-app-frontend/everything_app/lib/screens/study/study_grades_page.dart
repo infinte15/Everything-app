@@ -4,11 +4,13 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../../../models/study_grade.dart';
+import '../../../models/study_semester.dart';
 import '../../../models/study_subject.dart';
 import '../../../providers/study_provider.dart';
 import '../../../utils/study_grade_calculator.dart';
 import 'widgets/study_grade_sheet.dart';
 import 'widgets/study_kinetic_card.dart';
+import 'widgets/study_semester_sheet.dart';
 
 class StudyGradesPage extends StatefulWidget {
   const StudyGradesPage({super.key});
@@ -19,22 +21,23 @@ class StudyGradesPage extends StatefulWidget {
 
 class _StudyGradesPageState extends State<StudyGradesPage> {
   String? _expandedSubjectId;
-  String _semesterFilter = 'Alle';
+
+  /// null = alle Semester. Sonst die ID des gewaehlten Semesters — die Auswahl arbeitet auf
+  /// den echten Semestern, nicht mehr auf den distinkten Freitexten der Module.
+  String? _semesterFilterId;
   double _targetGpa = 2.0;
 
-  List<String> _semesterOptions(List<StudySubject> subjects) {
-    final set = <String>{};
-    for (final s in subjects) {
-      final sem = s.semester?.trim();
-      if (sem != null && sem.isNotEmpty) set.add(sem);
-    }
-    final list = set.toList()..sort();
-    return ['Alle', ...list];
+  List<StudySubject> _filteredSubjects(List<StudySubject> subjects) {
+    if (_semesterFilterId == null) return subjects;
+    return subjects.where((s) => s.semesterId == _semesterFilterId).toList();
   }
 
-  List<StudySubject> _filteredSubjects(List<StudySubject> subjects) {
-    if (_semesterFilter == 'Alle') return subjects;
-    return subjects.where((s) => s.semester == _semesterFilter).toList();
+  String _filterLabel(List<StudySemester> semesters) {
+    if (_semesterFilterId == null) return 'Alle Semester';
+    for (final s in semesters) {
+      if (s.id == _semesterFilterId) return s.label;
+    }
+    return 'Alle Semester';
   }
 
   Color? _subjectColor(StudySubject subject) {
@@ -57,12 +60,19 @@ class _StudyGradesPageState extends State<StudyGradesPage> {
     final allSubjects = provider.subjects;
     final grades = provider.grades;
     final subjects = _filteredSubjects(allSubjects);
-    final semesters = _semesterOptions(allSubjects);
+    final semesters = provider.semesters;
+
+    // Sobald das gewaehlte Semester weg ist (geloescht oder nach dem Neuladen nicht mehr da),
+    // faellt die Auswahl auf "Alle" zurueck — sonst zeigte die Liste dauerhaft nichts an.
+    if (_semesterFilterId != null &&
+        !semesters.any((s) => s.id == _semesterFilterId)) {
+      _semesterFilterId = null;
+    }
 
     final snapshot = StudyGradeCalculator.computeGpa(
       subjects: allSubjects,
       grades: grades,
-      semesterFilter: _semesterFilter,
+      semesterId: _semesterFilterId,
     );
 
     final wunschMsg = StudyGradeCalculator.wunschnoteMessage(
@@ -96,32 +106,58 @@ class _StudyGradesPageState extends State<StudyGradesPage> {
               theme: theme,
             ),
           ),
-          if (semesters.length > 1)
-            SliverToBoxAdapter(
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(20, 0, 20, 8),
-                child: SingleChildScrollView(
-                  scrollDirection: Axis.horizontal,
-                  child: Row(
-                    children: semesters.map((sem) {
-                      final selected = _semesterFilter == sem;
+          SliverToBoxAdapter(
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(20, 0, 20, 8),
+              child: SingleChildScrollView(
+                scrollDirection: Axis.horizontal,
+                child: Row(
+                  children: [
+                    Padding(
+                      padding: const EdgeInsets.only(right: 8),
+                      child: FilterChip(
+                        label: const Text('Alle'),
+                        selected: _semesterFilterId == null,
+                        onSelected: (_) => setState(() => _semesterFilterId = null),
+                        shape: const RoundedRectangleBorder(
+                          borderRadius: BorderRadius.zero,
+                        ),
+                      ),
+                    ),
+                    ...semesters.map((sem) {
+                      final selected = _semesterFilterId == sem.id;
                       return Padding(
                         padding: const EdgeInsets.only(right: 8),
                         child: FilterChip(
-                          label: Text(sem),
+                          // Das laufende Semester bekommt einen Punkt, damit man es in einer
+                          // langen Liste wiederfindet.
+                          avatar: sem.isCurrent
+                              ? Icon(Icons.circle,
+                                  size: 8, color: theme.colorScheme.primary)
+                              : null,
+                          label: Text(sem.label),
                           selected: selected,
                           onSelected: (_) =>
-                              setState(() => _semesterFilter = sem),
+                              setState(() => _semesterFilterId = sem.id),
                           shape: const RoundedRectangleBorder(
                             borderRadius: BorderRadius.zero,
                           ),
                         ),
                       );
-                    }).toList(),
-                  ),
+                    }),
+                    ActionChip(
+                      avatar: const Icon(Icons.tune, size: 16),
+                      label: const Text('Semester'),
+                      onPressed: () => StudySemesterSheet.show(context),
+                      shape: const RoundedRectangleBorder(
+                        borderRadius: BorderRadius.zero,
+                      ),
+                    ),
+                  ],
                 ),
               ),
             ),
+          ),
           SliverToBoxAdapter(
             child: Padding(
               padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
@@ -164,7 +200,7 @@ class _StudyGradesPageState extends State<StudyGradesPage> {
                 child: StudyKineticCard(
                   backgroundColor: theme.colorScheme.surfaceContainerLow,
                   child: Text(
-                    'Keine Module in „$_semesterFilter“.',
+                    'Keine Module in „${_filterLabel(semesters)}".',
                     style: theme.textTheme.bodyMedium?.copyWith(
                       color: theme.colorScheme.onSurfaceVariant,
                     ),

@@ -30,8 +30,9 @@ class _StudyScreenState extends State<StudyScreen> {
     final provider = context.watch<StudyProvider>();
     final selectedIndex = provider.activeTab;
 
-    // Matches the order and casing of the Stitch top navigation:
-    // Übersicht, Stundenplan, Fächer, Lernplan, Flashcards, Notenrechner
+    // Kein eigener NOTIZEN-Reiter mehr: der Seitenbaum lebt im FÄCHER-Tab, wo auch die
+    // Karteikarten und Noten desselben Moduls stehen. Getrennt lag die Seite eines Fachs zwei
+    // Reiter neben seinen Karten, und keine der beiden Ansichten wusste vom Modul.
     final tabs = [
       'ÜBERSICHT',
       'STUNDENPLAN',

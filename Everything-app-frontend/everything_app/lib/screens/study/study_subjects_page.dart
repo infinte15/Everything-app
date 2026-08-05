@@ -2,10 +2,16 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../../providers/study_provider.dart';
 import '../../../models/study_subject.dart';
-import '../../../models/study_note.dart';
-import '../../../models/study_folder.dart';
+import '../../../models/study_grade.dart';
+import '../../../models/flashcard_deck.dart';
+import '../../../utils/study_grade_calculator.dart';
+import 'flashcards/flashcard_deck_page.dart';
 import 'flashcards/flashcard_study_page.dart';
+import 'flashcards/widgets/add_deck_sheet.dart';
+import 'widgets/study_grade_sheet.dart';
 import 'widgets/study_kinetic_card.dart';
+import 'widgets/study_page_tree.dart';
+import 'study_note_editor_page.dart';
 
 class StudySubjectsPage extends StatefulWidget {
   const StudySubjectsPage({super.key});
@@ -16,10 +22,6 @@ class StudySubjectsPage extends StatefulWidget {
 
 class _StudySubjectsPageState extends State<StudySubjectsPage> {
   // Lokaler Navigations- & Filter-State
-  String _activeTab = 'Skripte'; // Skripte, Übungen, Projekte
-  String? _currentFolderId; // null bedeutet Root-Ebene des aktiven Tabs
-  bool _isGridView = true;
-  String _sortBy = 'name'; // name, date
   String _searchQuery = '';
   final Map<String, bool> _expandedSubjects = {};
   final TextEditingController _searchCtrl = TextEditingController();
@@ -30,10 +32,6 @@ class _StudySubjectsPageState extends State<StudySubjectsPage> {
     super.dispose();
   }
 
-  // Hilfsmethode zur Ermittlung der aktuellen Datei-Pfad-ID
-  String _getCurrentPathId(String subjectId) {
-    return _currentFolderId ?? '${subjectId}_$_activeTab';
-  }
 
   @override
   Widget build(BuildContext context) {
@@ -86,36 +84,31 @@ class _StudySubjectsPageState extends State<StudySubjectsPage> {
             Container(
               width: 260,
               decoration: BoxDecoration(
-                color: theme.colorScheme.surfaceContainerLow,
                 border: Border(
                   right: BorderSide(
                     color: theme.colorScheme.outlineVariant.withValues(alpha: 0.15),
                   ),
                 ),
               ),
-              child: _buildLeftSidebar(context, subjects, selectedSubject),
+              // Die Hintergrundfarbe traegt ein Material, kein DecoratedBox: ListTile malt
+              // Auswahl und Tinteneffekt auf das naechste Material darueber. Lag die Farbe im
+              // DecoratedBox, verdeckte sie beides — Flutter warf dafuer im Debug-Modus bei
+              // jedem Oeffnen des Reiters eine Assertion.
+              child: Material(
+                color: theme.colorScheme.surfaceContainerLow,
+                child: _buildLeftSidebar(context, subjects, selectedSubject),
+              ),
             ),
 
-            // Center Pane: Datei-Explorer / Browser
+            // Mittelteil: alles zum ausgewaehlten Modul.
+            // Material statt Container: die Deck- und Notenzeilen sind ListTiles, und die malen
+            // ihren Tinteneffekt auf das naechste Material — hinter einer blossen Hintergrund-
+            // farbe waere er unsichtbar, was Flutter im Debug-Modus als Assertion meldet.
             Expanded(
-              child: Container(
+              child: Material(
                 color: const Color(0xFF0E0E0E),
                 child: _buildCenterContent(context, provider, selectedSubject),
               ),
-            ),
-
-            // Rechte Sidebar: Quick Info & Flashcards
-            Container(
-              width: 300,
-              decoration: BoxDecoration(
-                color: theme.colorScheme.surfaceContainerLowest,
-                border: Border(
-                  left: BorderSide(
-                    color: theme.colorScheme.outlineVariant.withValues(alpha: 0.15),
-                  ),
-                ),
-              ),
-              child: _buildRightSidebar(context, provider, selectedSubject),
             ),
           ],
         ),
@@ -144,9 +137,6 @@ class _StudySubjectsPageState extends State<StudySubjectsPage> {
           backgroundColor: theme.colorScheme.surfaceContainerLow,
           onTap: () {
             provider.selectSubject(subject.id);
-            setState(() {
-              _currentFolderId = null;
-            });
             Navigator.push(
               context,
               MaterialPageRoute(
@@ -156,21 +146,6 @@ class _StudySubjectsPageState extends State<StudySubjectsPage> {
                     title: Text(subject.name.toUpperCase(), style: const TextStyle(letterSpacing: 1.0, fontSize: 16)),
                     backgroundColor: const Color(0xFF0E0E0E),
                     scrolledUnderElevation: 0,
-                    actions: [
-                      IconButton(
-                        icon: const Icon(Icons.info_outline),
-                        onPressed: () {
-                          showModalBottomSheet(
-                            context: context,
-                            backgroundColor: theme.colorScheme.surfaceContainerLowest,
-                            shape: const RoundedRectangleBorder(borderRadius: BorderRadius.zero),
-                            builder: (ctx) => SingleChildScrollView(
-                              child: _buildRightSidebar(context, provider, subject),
-                            ),
-                          );
-                        },
-                      ),
-                    ],
                   ),
                   body: _buildCenterContent(context, provider, subject),
                 ),
@@ -266,44 +241,42 @@ class _StudySubjectsPageState extends State<StudySubjectsPage> {
                       ),
                       onTap: () {
                         provider.selectSubject(subject.id);
-                        setState(() {
-                          _currentFolderId = null;
-                          _expandedSubjects[subject.id] = true;
-                        });
+                        setState(() => _expandedSubjects[subject.id] = true);
                       },
                     ),
                   ),
+                  // Aufgeklappt: die obersten Seiten des Moduls als Sprungmarken. Hier standen
+                  // vorher die festen Reiter "Skripte/Übungen/Projekte" — die waren Teil der
+                  // erfundenen Pfade in note.category und filterten nichts Echtes.
                   if (isExpanded)
                     Padding(
-                      padding: const EdgeInsets.only(left: 36, right: 12),
+                      padding: const EdgeInsets.only(left: 36, right: 12, bottom: 4),
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
-                        children: ['Skripte', 'Übungen', 'Projekte'].map((tab) {
-                          final isTabActive = isSelected && _activeTab == tab;
+                        children: provider.rootPagesOfCourse(subject.id).map((page) {
                           return InkWell(
                             onTap: () {
                               provider.selectSubject(subject.id);
-                              setState(() {
-                                _activeTab = tab;
-                                _currentFolderId = null;
-                              });
+                              Navigator.of(context).push(MaterialPageRoute(
+                                builder: (_) => StudyNoteEditorPage(noteId: page.id!),
+                              ));
                             },
                             child: Padding(
-                              padding: const EdgeInsets.symmetric(vertical: 8),
+                              padding: const EdgeInsets.symmetric(vertical: 6),
                               child: Row(
                                 children: [
-                                  Container(
-                                    width: 4,
-                                    height: 4,
-                                    color: isTabActive ? theme.colorScheme.primary : Colors.transparent,
-                                  ),
+                                  Text(page.icon?.isNotEmpty == true ? page.icon! : '📄',
+                                      style: const TextStyle(fontSize: 12)),
                                   const SizedBox(width: 8),
-                                  Text(
-                                    tab,
-                                    style: TextStyle(
-                                      color: isTabActive ? theme.colorScheme.primary : theme.colorScheme.onSurfaceVariant,
-                                      fontWeight: isTabActive ? FontWeight.bold : FontWeight.normal,
-                                      fontSize: 13,
+                                  Expanded(
+                                    child: Text(
+                                      page.title,
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: TextStyle(
+                                        color: theme.colorScheme.onSurfaceVariant,
+                                        fontSize: 13,
+                                      ),
                                     ),
                                   ),
                                 ],
@@ -335,187 +308,378 @@ class _StudySubjectsPageState extends State<StudySubjectsPage> {
     );
   }
 
-  // ── Center Pane: Explorer-Dateibrowser ─────────────────────────────────────
+  // ── Center Pane ────────────────────────────────────────────────────────────
+  //
+  // Hier stand einmal ein Dateibrowser über einer erfundenen Hierarchie: Ordner aus einer
+  // RAM-Liste, Pfade als „${subjectId}_$tab" in `note.category`, dazu ausgedachte Dateigrößen
+  // („1.2 MB") und ein PDF-Symbol, das an `index % 2 == 0` hing. Nichts davon existierte
+  // serverseitig.
+  //
+  // Und darunter ein Abschnitt „OHNE MODUL", der jede Seite ohne Modul zur Zuordnung
+  // aufforderte. Auch der ist entfallen: eine Notiz ohne Modul ist keine Waise, sondern eine
+  // freie Notiz aus dem Notizen-Space. Dieser Tab zeigt ausschließlich Modulseiten.
+
+  /// Alles zu einem Modul auf einer Seite: Kopfzeile mit den Kennzahlen, darunter Seitenbaum,
+  /// Karteikarten und Noten. Der Seitenbaum hatte bis hierher einen eigenen Reiter — dort stand
+  /// er aber ohne Bezug zum Modul, und die Karten und Noten desselben Fachs lagen zwei Reiter
+  /// weiter. Zusammengehörendes gehört zusammen.
   Widget _buildCenterContent(BuildContext context, StudyProvider provider, StudySubject subject) {
-    final theme = Theme.of(context);
-    final currentPathId = _getCurrentPathId(subject.id);
-
-    List<StudyFolder> currentFolders = provider.folders.where((f) => f.parentId == currentPathId).toList();
-    List<StudyNote> currentNotes = provider.notes.where((n) => n.category == currentPathId).toList();
-
-    if (_searchQuery.isNotEmpty) {
-      currentFolders = currentFolders.where((f) => f.name.toLowerCase().contains(_searchQuery.toLowerCase())).toList();
-      currentNotes = currentNotes.where((n) => n.title.toLowerCase().contains(_searchQuery.toLowerCase())).toList();
-    }
-
-    if (_sortBy == 'name') {
-      currentFolders.sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
-      currentNotes.sort((a, b) => a.title.toLowerCase().compareTo(b.title.toLowerCase()));
-    } else if (_sortBy == 'date') {
-      currentNotes.sort((a, b) => (b.createdAt ?? DateTime.now()).compareTo(a.createdAt ?? DateTime.now()));
-    }
-
-    return Padding(
+    return ListView(
       padding: const EdgeInsets.all(24),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          _buildBreadcrumbs(subject, provider.folders),
-          const SizedBox(height: 16),
-          const Divider(height: 1, color: Colors.white10),
-          const SizedBox(height: 16),
+      children: [
+        _buildSubjectHeader(context, provider, subject),
+        const SizedBox(height: 24),
+        _buildPagesSection(context, provider, subject),
+        const SizedBox(height: 32),
+        _buildCardsSection(context, provider, subject),
+        const SizedBox(height: 32),
+        _buildGradesSection(context, provider, subject),
+        const SizedBox(height: 40),
+      ],
+    );
+  }
 
-          Row(
-            children: [
-              Expanded(
-                child: SizedBox(
-                  height: 40,
-                  child: TextField(
-                    controller: _searchCtrl,
-                    onChanged: (val) => setState(() => _searchQuery = val),
-                    decoration: InputDecoration(
-                      prefixIcon: const Icon(Icons.search, size: 16),
-                      hintText: 'SUCHE IN DATEIEN...',
-                      hintStyle: theme.textTheme.labelSmall?.copyWith(
-                        color: theme.colorScheme.onSurfaceVariant,
-                        letterSpacing: 1.0,
-                      ),
-                      contentPadding: const EdgeInsets.symmetric(vertical: 8),
-                      border: const OutlineInputBorder(borderRadius: BorderRadius.zero),
+  /// Modulname, Dozent und die vier Kennzahlen, die man beim Draufschauen wissen will.
+  Widget _buildSubjectHeader(
+      BuildContext context, StudyProvider provider, StudySubject subject) {
+    final theme = Theme.of(context);
+    final moduleGrades = provider.gradesForSubject(subject.id);
+    final average = _averageOrNull(moduleGrades);
+    final color = _parseColor(subject.colorHex) ?? theme.colorScheme.primary;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Container(width: 4, height: 34, color: color),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    subject.name.toUpperCase(),
+                    style: theme.textTheme.titleLarge?.copyWith(
+                      fontWeight: FontWeight.w900,
+                      letterSpacing: 0.5,
                     ),
                   ),
-                ),
-              ),
-              const SizedBox(width: 12),
-              DropdownButton<String>(
-                value: _sortBy,
-                underline: const SizedBox(),
-                icon: const Icon(Icons.sort, size: 18),
-                style: theme.textTheme.bodyMedium?.copyWith(color: theme.colorScheme.onSurface),
-                borderRadius: BorderRadius.zero,
-                items: const [
-                  DropdownMenuItem(value: 'name', child: Text('NAME')),
-                  DropdownMenuItem(value: 'date', child: Text('DATUM')),
+                  if (subject.professor?.isNotEmpty == true)
+                    Text(
+                      subject.professor!,
+                      style: theme.textTheme.bodySmall
+                          ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
+                    ),
                 ],
-                onChanged: (val) {
-                  if (val != null) setState(() => _sortBy = val);
-                },
               ),
-              const SizedBox(width: 8),
-              IconButton(
-                icon: Icon(_isGridView ? Icons.view_list : Icons.grid_view, size: 18),
-                onPressed: () => setState(() => _isGridView = !_isGridView),
+            ),
+            IconButton(
+              icon: const Icon(Icons.more_horiz),
+              onPressed: () => _showSubjectContextMenu(context, provider, subject),
+            ),
+          ],
+        ),
+        const SizedBox(height: 12),
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: [
+            _metric(context, 'NOTE',
+                average == null ? '—' : StudyGradeCalculator.formatGrade(average),
+                highlight: true),
+            _metric(context, 'ECTS', '${subject.creditPoints}'),
+            _metric(context, 'SEMESTER', subject.semester ?? 'keins',
+                onTap: () => _showSemesterPicker(context, provider, subject)),
+            _metric(context, 'ZU LERNEN', '${provider.courseCardStats(subject.id).studyCount}'),
+          ],
+        ),
+      ],
+    );
+  }
+
+  /// Der Rechner liefert 0 zurueck, wenn nichts zaehlt — hier soll dann ein Strich stehen und
+  /// keine 0,0, die wie eine Bestnote aussieht.
+  double? _averageOrNull(List<StudyGrade> moduleGrades) {
+    if (moduleGrades.where((g) => g.countsTowardGrade).isEmpty) return null;
+    return StudyGradeCalculator.subjectAverage(moduleGrades);
+  }
+
+  Widget _metric(BuildContext context, String label, String value,
+      {bool highlight = false, VoidCallback? onTap}) {
+    final theme = Theme.of(context);
+    return Material(
+      color: theme.colorScheme.surfaceContainerHighest,
+      child: InkWell(
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Text(label,
+                      style: theme.textTheme.labelSmall?.copyWith(
+                          fontSize: 9,
+                          letterSpacing: 1.2,
+                          color: theme.colorScheme.outline)),
+                  if (onTap != null) ...[
+                    const SizedBox(width: 4),
+                    Icon(Icons.edit, size: 9, color: theme.colorScheme.outline),
+                  ],
+                ],
               ),
-              const SizedBox(width: 8),
-              ElevatedButton.icon(
-                onPressed: () => _showAddFolderDialog(context, provider, currentPathId),
-                icon: const Icon(Icons.create_new_folder, size: 16),
-                label: const Text('ORDNER'),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: theme.colorScheme.surfaceContainerHighest,
-                  foregroundColor: theme.colorScheme.onSurface,
-                  shape: const RoundedRectangleBorder(borderRadius: BorderRadius.zero),
-                ),
-              ),
-              const SizedBox(width: 8),
-              ElevatedButton.icon(
-                onPressed: () => _showAddNoteDialog(context, provider, subject, currentPathId),
-                icon: const Icon(Icons.note_add, size: 16),
-                label: const Text('DATEI'),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFF5856D6),
-                  foregroundColor: Colors.white,
-                  shape: const RoundedRectangleBorder(borderRadius: BorderRadius.zero),
+              const SizedBox(height: 2),
+              Text(
+                value,
+                style: theme.textTheme.titleSmall?.copyWith(
+                  fontWeight: FontWeight.bold,
+                  color: highlight ? theme.colorScheme.primary : theme.colorScheme.onSurface,
                 ),
               ),
             ],
           ),
-          const SizedBox(height: 24),
-
-          Expanded(
-            child: (currentFolders.isEmpty && currentNotes.isEmpty)
-                ? _buildEmptyState(context)
-                : _isGridView
-                    ? _buildGridView(context, provider, currentFolders, currentNotes)
-                    : _buildListView(context, provider, currentFolders, currentNotes),
-          ),
-        ],
+        ),
       ),
     );
   }
 
-  // ── Datei-Browser Komponenten ──────────────────────────────────────────────
-  Widget _buildBreadcrumbs(StudySubject subject, List<StudyFolder> allFolders) {
+  Widget _sectionHeader(BuildContext context, String title, String subtitle,
+      {required List<Widget> actions}) {
     final theme = Theme.of(context);
-    List<Widget> crumbs = [];
-
-    crumbs.add(
-      InkWell(
-        onTap: () => setState(() => _currentFolderId = null),
-        child: Text(
-          subject.name.toUpperCase(),
-          style: TextStyle(fontWeight: FontWeight.bold, color: theme.colorScheme.primary, letterSpacing: 1.0),
+    return Row(
+      children: [
+        Text(title,
+            style: theme.textTheme.titleSmall
+                ?.copyWith(fontWeight: FontWeight.w900, letterSpacing: 1.2)),
+        const SizedBox(width: 10),
+        Expanded(
+          child: Text(subtitle,
+              style: theme.textTheme.labelSmall
+                  ?.copyWith(color: theme.colorScheme.onSurfaceVariant)),
         ),
-      ),
-    );
-
-    crumbs.add(const Padding(
-      padding: EdgeInsets.symmetric(horizontal: 8),
-      child: Icon(Icons.chevron_right, size: 14, color: Colors.white30),
-    ));
-    crumbs.add(
-      InkWell(
-        onTap: () => setState(() => _currentFolderId = null),
-        child: Text(
-          _activeTab.toUpperCase(),
-          style: TextStyle(
-            fontWeight: _currentFolderId == null ? FontWeight.bold : FontWeight.normal,
-            color: _currentFolderId == null ? theme.colorScheme.onSurface : theme.colorScheme.onSurfaceVariant,
-            letterSpacing: 1.0,
-          ),
-        ),
-      ),
-    );
-
-    if (_currentFolderId != null) {
-      List<StudyFolder> pathChain = [];
-      String? lookupId = _currentFolderId;
-
-      while (lookupId != null && !lookupId.contains('_')) {
-        final matches = allFolders.where((f) => f.id == lookupId);
-        if (matches.isEmpty) break;
-        final folder = matches.first;
-        pathChain.insert(0, folder);
-        lookupId = folder.parentId;
-      }
-
-      for (var folder in pathChain) {
-        crumbs.add(const Padding(
-          padding: EdgeInsets.symmetric(horizontal: 8),
-          child: Icon(Icons.chevron_right, size: 14, color: Colors.white30),
-        ));
-        final isLast = folder.id == _currentFolderId;
-        crumbs.add(
-          InkWell(
-            onTap: isLast ? null : () => setState(() => _currentFolderId = folder.id),
-            child: Text(
-              folder.name.toUpperCase(),
-              style: TextStyle(
-                fontWeight: isLast ? FontWeight.bold : FontWeight.normal,
-                color: isLast ? theme.colorScheme.onSurface : theme.colorScheme.onSurfaceVariant,
-                letterSpacing: 1.0,
-              ),
-            ),
-          ),
-        );
-      }
-    }
-
-    return SingleChildScrollView(
-      scrollDirection: Axis.horizontal,
-      child: Row(children: crumbs),
+        ...actions,
+      ],
     );
   }
+
+  // ── Abschnitt: Seiten ──────────────────────────────────────────────────────
+  Widget _buildPagesSection(
+      BuildContext context, StudyProvider provider, StudySubject subject) {
+    final theme = Theme.of(context);
+    final roots = provider.rootPagesOfCourse(subject.id);
+    final visible = _searchQuery.isEmpty
+        ? roots
+        : roots
+            .where((n) => n.title.toLowerCase().contains(_searchQuery.toLowerCase()))
+            .toList();
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _sectionHeader(context, 'SEITEN', '${provider.pageCountOfCourse(subject.id)} insgesamt',
+            actions: [
+              SizedBox(
+                width: 180,
+                height: 34,
+                child: TextField(
+                  controller: _searchCtrl,
+                  onChanged: (val) => setState(() => _searchQuery = val),
+                  style: theme.textTheme.bodySmall,
+                  decoration: InputDecoration(
+                    prefixIcon: const Icon(Icons.search, size: 14),
+                    hintText: 'Suchen...',
+                    hintStyle: theme.textTheme.labelSmall
+                        ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
+                    contentPadding: EdgeInsets.zero,
+                    border: const OutlineInputBorder(borderRadius: BorderRadius.zero),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 8),
+              TextButton.icon(
+                onPressed: () => _showAddNoteDialog(context, provider, subject),
+                icon: const Icon(Icons.add, size: 16),
+                label: const Text('SEITE'),
+              ),
+            ]),
+        const SizedBox(height: 8),
+        const Divider(height: 1, color: Colors.white10),
+        const SizedBox(height: 8),
+        if (visible.isEmpty)
+          _buildEmptyState(context)
+        else
+          StudyPageTree(roots: visible),
+      ],
+    );
+  }
+
+  // ── Abschnitt: Karteikarten ────────────────────────────────────────────────
+  Widget _buildCardsSection(
+      BuildContext context, StudyProvider provider, StudySubject subject) {
+    final theme = Theme.of(context);
+    final decks = provider.decksForCourse(subject.id);
+    final stats = provider.courseCardStats(subject.id);
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _sectionHeader(context, 'KARTEIKARTEN',
+            decks.isEmpty
+                ? 'noch kein Deck'
+                : '${decks.length} ${decks.length == 1 ? 'Deck' : 'Decks'} · '
+                    '${stats.total} Karten · ${stats.studyCount} zu lernen',
+            actions: [
+              if (stats.studyCount > 0 && decks.isNotEmpty)
+                TextButton.icon(
+                  onPressed: () => _startLearning(context, provider, decks),
+                  icon: const Icon(Icons.play_arrow, size: 16),
+                  label: Text('LERNEN (${stats.studyCount})'),
+                ),
+              TextButton.icon(
+                onPressed: () => AddDeckSheet.show(context, subjectId: subject.id),
+                icon: const Icon(Icons.add, size: 16),
+                label: const Text('DECK'),
+              ),
+            ]),
+        const SizedBox(height: 8),
+        const Divider(height: 1, color: Colors.white10),
+        const SizedBox(height: 8),
+        if (decks.isEmpty)
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: 12),
+            child: Text('Noch keine Karteikarten in diesem Modul.',
+                style: theme.textTheme.bodySmall
+                    ?.copyWith(color: theme.colorScheme.onSurfaceVariant)),
+          )
+        else
+          ...decks.map((deck) {
+            final s = provider.deckStats(deck.id);
+            return ListTile(
+              contentPadding: EdgeInsets.zero,
+              shape: const RoundedRectangleBorder(borderRadius: BorderRadius.zero),
+              leading: const Icon(Icons.style_outlined, size: 20),
+              title: Text(deck.title,
+                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+              subtitle: Text(
+                '${s.newCards} neu · ${s.due} fällig · ${s.total} gesamt · ${s.masteryPercent} % gereift',
+                style: theme.textTheme.labelSmall
+                    ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
+              ),
+              trailing: s.studyCount == 0
+                  ? null
+                  : IconButton(
+                      icon: Icon(Icons.play_circle_fill,
+                          color: theme.colorScheme.primary, size: 26),
+                      onPressed: () => Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => FlashcardStudyPage(
+                              deckId: deck.id, deckTitle: deck.title),
+                        ),
+                      ),
+                    ),
+              onTap: () => Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => FlashcardDeckPage(deckId: deck.id)),
+              ),
+            );
+          }),
+      ],
+    );
+  }
+
+  /// Startet die Lerneinheit im ersten Deck, in dem etwas ansteht.
+  void _startLearning(
+      BuildContext context, StudyProvider provider, List<FlashcardDeck> decks) {
+    final deck = decks.firstWhere(
+      (d) => provider.deckStats(d.id).studyCount > 0,
+      orElse: () => decks.first,
+    );
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => FlashcardStudyPage(deckId: deck.id, deckTitle: deck.title),
+      ),
+    );
+  }
+
+  // ── Abschnitt: Noten ───────────────────────────────────────────────────────
+  Widget _buildGradesSection(
+      BuildContext context, StudyProvider provider, StudySubject subject) {
+    final theme = Theme.of(context);
+    final grades = provider.gradesForSubject(subject.id);
+    final average = _averageOrNull(grades);
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _sectionHeader(
+            context,
+            'NOTEN',
+            average == null
+                ? '${grades.length} Leistungen'
+                : 'Modul-Ø ${StudyGradeCalculator.formatGrade(average)} · ${grades.length} Leistungen',
+            actions: [
+              TextButton.icon(
+                onPressed: () => StudyGradeSheet.show(context, subject: subject),
+                icon: const Icon(Icons.add, size: 16),
+                label: const Text('NOTE'),
+              ),
+            ]),
+        const SizedBox(height: 8),
+        const Divider(height: 1, color: Colors.white10),
+        const SizedBox(height: 8),
+        if (grades.isEmpty)
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: 12),
+            child: Text('Noch keine Leistung eingetragen.',
+                style: theme.textTheme.bodySmall
+                    ?.copyWith(color: theme.colorScheme.onSurfaceVariant)),
+          )
+        else
+          ...grades.map((grade) => ListTile(
+                contentPadding: EdgeInsets.zero,
+                shape: const RoundedRectangleBorder(borderRadius: BorderRadius.zero),
+                leading: const Icon(Icons.school_outlined, size: 20),
+                title: Row(
+                  children: [
+                    Flexible(
+                      child: Text(grade.examName,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+                    ),
+                    if (!grade.countsTowardGrade) ...[
+                      const SizedBox(width: 8),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                        color: theme.colorScheme.surfaceContainerHighest,
+                        child: Text('SCHEIN',
+                            style: theme.textTheme.labelSmall?.copyWith(
+                                fontSize: 8,
+                                letterSpacing: 1.0,
+                                color: theme.colorScheme.onSurfaceVariant)),
+                      ),
+                    ],
+                  ],
+                ),
+                subtitle: Text('Gewichtung ${grade.weightPercent} %',
+                    style: theme.textTheme.labelSmall
+                        ?.copyWith(color: theme.colorScheme.onSurfaceVariant)),
+                trailing: Text(
+                  StudyGradeCalculator.formatGrade(grade.grade),
+                  style: theme.textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.bold,
+                    color: gradeColor(grade.grade, theme.colorScheme),
+                  ),
+                ),
+                onTap: () => StudyGradeSheet.show(context, subject: subject, existing: grade),
+              )),
+      ],
+    );
+  }
+
 
   Widget _buildEmptyState(BuildContext context) {
     final theme = Theme.of(context);
@@ -523,15 +687,15 @@ class _StudySubjectsPageState extends State<StudySubjectsPage> {
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Icon(Icons.folder_open, size: 48, color: theme.colorScheme.outlineVariant),
+          Icon(Icons.description_outlined, size: 48, color: theme.colorScheme.outlineVariant),
           const SizedBox(height: 16),
           Text(
-            'KEINE DATEIEN ODER ORDNER VORHANDEN',
+            'KEINE SEITEN VORHANDEN',
             style: theme.textTheme.labelMedium?.copyWith(color: theme.colorScheme.onSurfaceVariant, letterSpacing: 1.5),
           ),
           const SizedBox(height: 8),
           Text(
-            'Erstelle oben ein neues Dokument oder einen Ordner, um die Ansicht zu füllen.',
+            'Lege oben eine Seite an. Unterseiten entstehen im Baum selbst.',
             style: theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.outline),
           ),
         ],
@@ -539,311 +703,63 @@ class _StudySubjectsPageState extends State<StudySubjectsPage> {
     );
   }
 
-  Widget _buildGridView(BuildContext context, StudyProvider provider, List<StudyFolder> folders, List<StudyNote> notes) {
+
+
+
+
+  Future<void> _showSemesterPicker(
+    BuildContext context,
+    StudyProvider provider,
+    StudySubject subject,
+  ) async {
     final theme = Theme.of(context);
-    final totalCount = folders.length + notes.length;
-
-    return GridView.builder(
-      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-        crossAxisCount: 3,
-        crossAxisSpacing: 16,
-        mainAxisSpacing: 16,
-        childAspectRatio: 1.4,
-      ),
-      itemCount: totalCount,
-      itemBuilder: (context, index) {
-        if (index < folders.length) {
-          final folder = folders[index];
-          return StudyKineticCard(
-            backgroundColor: theme.colorScheme.surfaceContainerHighest,
-            padding: const EdgeInsets.all(16),
-            onTap: () => setState(() => _currentFolderId = folder.id),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Icon(Icons.folder, color: theme.colorScheme.primary, size: 28),
-                    IconButton(
-                      icon: const Icon(Icons.delete_outline, size: 18),
-                      onPressed: () => provider.deleteFolder(folder.id),
-                    ),
-                  ],
-                ),
-                Text(
-                  folder.name,
-                  style: theme.textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.bold),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                ),
-                Text(
-                  'Ordner',
-                  style: theme.textTheme.labelSmall?.copyWith(color: theme.colorScheme.onSurfaceVariant, fontSize: 9),
-                ),
-              ],
-            ),
-          );
-        } else {
-          final note = notes[index - folders.length];
-          final isPdf = note.title.toLowerCase().contains('.pdf') || index % 2 == 0;
-
-          return StudyKineticCard(
-            backgroundColor: theme.colorScheme.surfaceContainerHighest,
-            padding: const EdgeInsets.all(16),
-            onTap: () => _showNoteDialog(context, note),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Container(
-                      padding: const EdgeInsets.all(6),
-                      color: isPdf ? Colors.red.withValues(alpha: 0.1) : Colors.blue.withValues(alpha: 0.1),
-                      child: Icon(
-                        isPdf ? Icons.picture_as_pdf : Icons.description,
-                        color: isPdf ? Colors.red : Colors.blue,
-                        size: 18,
-                      ),
-                    ),
-                    IconButton(
-                      icon: const Icon(Icons.delete_outline, size: 18),
-                      onPressed: () => provider.deleteNote(note.id ?? 0),
-                    ),
-                  ],
-                ),
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      note.title,
-                      style: theme.textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.bold),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                    const SizedBox(height: 2),
-                    Text(
-                      _activeTab,
-                      style: theme.textTheme.labelSmall?.copyWith(color: theme.colorScheme.onSurfaceVariant),
-                    ),
-                  ],
-                ),
-                Text(
-                  '1.2 MB • ${_formatDate(note.createdAt)}',
-                  style: theme.textTheme.labelSmall?.copyWith(color: theme.colorScheme.outline, fontSize: 9),
-                ),
-              ],
-            ),
-          );
-        }
-      },
-    );
-  }
-
-  Widget _buildListView(BuildContext context, StudyProvider provider, List<StudyFolder> folders, List<StudyNote> notes) {
-    final theme = Theme.of(context);
-    final totalCount = folders.length + notes.length;
-
-    return ListView.builder(
-      itemCount: totalCount,
-      itemBuilder: (context, index) {
-        if (index < folders.length) {
-          final folder = folders[index];
-          return ListTile(
-            shape: const RoundedRectangleBorder(borderRadius: BorderRadius.zero),
-            leading: Icon(Icons.folder, color: theme.colorScheme.primary),
-            title: Text(folder.name, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
-            subtitle: const Text('Ordner', style: TextStyle(fontSize: 11)),
-            trailing: IconButton(
-              icon: const Icon(Icons.delete_outline, size: 18),
-              onPressed: () => provider.deleteFolder(folder.id),
-            ),
-            onTap: () => setState(() => _currentFolderId = folder.id),
-          );
-        } else {
-          final note = notes[index - folders.length];
-          final isPdf = note.title.toLowerCase().contains('.pdf') || index % 2 == 0;
-          return ListTile(
-            shape: const RoundedRectangleBorder(borderRadius: BorderRadius.zero),
-            leading: Icon(isPdf ? Icons.picture_as_pdf : Icons.description, color: isPdf ? Colors.red : Colors.blue),
-            title: Text(note.title, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
-            subtitle: Text('Datei • ${_formatDate(note.createdAt)} • 1.2 MB', style: const TextStyle(fontSize: 11)),
-            trailing: IconButton(
-              icon: const Icon(Icons.delete_outline, size: 18),
-              onPressed: () => provider.deleteNote(note.id ?? 0),
-            ),
-            onTap: () => _showNoteDialog(context, note),
-          );
-        }
-      },
-    );
-  }
-
-  // ── Rechte Sidebar: Quick Info & Flashcards ────────────────────────────────
-  Widget _buildRightSidebar(BuildContext context, StudyProvider provider, StudySubject subject) {
-    final theme = Theme.of(context);
-
-    final deck = provider.flashcardDecks.isEmpty
-        ? null
-        : provider.flashcardDecks.firstWhere(
-            (d) => d.subjectId == subject.id,
-            orElse: () => provider.flashcardDecks.first,
-          );
-    final deckStats = deck != null ? provider.deckStats(deck.id) : null;
-
-    final grades = provider.grades.where((g) => g.subjectId == subject.id).toList();
-    final avgGrade = grades.isEmpty ? 0.0 : grades.fold<double>(0, (s, g) => s + g.grade) / grades.length;
-
-    return Padding(
-      padding: const EdgeInsets.all(24),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text(
-                'QUICK-INFO (FACH)',
-                style: theme.textTheme.labelSmall?.copyWith(
-                  fontWeight: FontWeight.w900,
-                  color: theme.colorScheme.onSurfaceVariant,
-                  letterSpacing: 1.5,
-                ),
-              ),
-              IconButton(
-                icon: Icon(Icons.delete_outline, color: theme.colorScheme.error, size: 18),
-                padding: EdgeInsets.zero,
-                constraints: const BoxConstraints(),
-                onPressed: () {
-                  _showDeleteSubjectConfirm(context, provider, subject);
-                },
-                tooltip: 'Fach löschen',
-              ),
-            ],
-          ),
-          const SizedBox(height: 16),
-          _buildInfoRow('Modul', subject.name.split(' ').first),
-          _buildInfoRow('Note', avgGrade == 0.0 ? '--' : avgGrade.toStringAsFixed(1), valueColor: theme.colorScheme.primary),
-          _buildInfoRow('ECTS', '${subject.creditPoints} / 180'),
-          _buildInfoRow('Status', 'Bestanden', isBadge: true),
-
-          const SizedBox(height: 40),
-
-          Container(
-            color: theme.colorScheme.surfaceContainer,
-            padding: const EdgeInsets.all(20),
-            child: deck == null || deckStats == null
-                ? Text(
-                    'Kein Flashcard-Deck für dieses Fach.',
-                    style: theme.textTheme.bodySmall?.copyWith(
-                      color: theme.colorScheme.onSurfaceVariant,
-                    ),
-                  )
-                : Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'FLASHCARD STATUS',
-                        style: theme.textTheme.labelSmall?.copyWith(
-                          fontWeight: FontWeight.w900,
-                          color: theme.colorScheme.onSurfaceVariant,
-                          letterSpacing: 1.5,
-                        ),
-                      ),
-                      const SizedBox(height: 16),
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          Text(
-                            '${deckStats.masteryPercent}%',
-                            style: theme.textTheme.headlineMedium?.copyWith(fontWeight: FontWeight.bold),
-                          ),
-                          Text(
-                            'Mastery',
-                            style: theme.textTheme.labelSmall?.copyWith(
-                              color: theme.colorScheme.onSurfaceVariant,
-                            ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 8),
-                      LinearProgressIndicator(
-                        value: deckStats.masteryPercent / 100,
-                        backgroundColor: theme.colorScheme.outlineVariant,
-                        valueColor: AlwaysStoppedAnimation(theme.colorScheme.primary),
-                        minHeight: 2,
-                      ),
-                      const SizedBox(height: 16),
-                      Text(
-                        '${deckStats.due + deckStats.newCards} Karten zum Lernen',
-                        style: theme.textTheme.bodySmall?.copyWith(
-                          color: theme.colorScheme.onSurfaceVariant,
-                        ),
-                      ),
-                      const SizedBox(height: 24),
-                      ElevatedButton.icon(
-                        onPressed: deckStats.due + deckStats.newCards == 0
-                            ? null
-                            : () => Navigator.push(
-                                  context,
-                                  MaterialPageRoute(
-                                    builder: (_) => FlashcardStudyPage(
-                                      deckId: deck.id,
-                                      deckTitle: deck.title,
-                                    ),
-                                  ),
-                                ),
-                        icon: const Icon(Icons.school, size: 16),
-                        label: const Text('LERNEN STARTEN'),
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: const Color(0xFF5856D6),
-                          foregroundColor: const Color(0xFFE2DFFF),
-                          shape: const RoundedRectangleBorder(borderRadius: BorderRadius.zero),
-                          padding: const EdgeInsets.symmetric(vertical: 16),
-                          minimumSize: const Size.fromHeight(50),
-                        ),
-                      ),
-                    ],
-                  ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildInfoRow(String label, String value, {Color? valueColor, bool isBadge = false}) {
-    final theme = Theme.of(context);
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 8),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          Text(label, style: TextStyle(color: theme.colorScheme.onSurfaceVariant, fontSize: 13)),
-          if (isBadge)
-            Container(
-              color: Colors.green.withValues(alpha: 0.1),
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-              child: const Text(
-                'BESTANDEN',
-                style: TextStyle(color: Colors.green, fontWeight: FontWeight.bold, fontSize: 10, letterSpacing: 0.5),
-              ),
-            )
-          else
+    final selected = await showModalBottomSheet<String?>(
+      context: context,
+      backgroundColor: const Color(0xFF1A1A1A),
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.zero),
+      builder: (ctx) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const SizedBox(height: 12),
             Text(
-              value,
-              style: TextStyle(
-                fontWeight: FontWeight.bold,
-                color: valueColor ?? theme.colorScheme.onSurface,
-                fontSize: valueColor != null ? 18 : 14,
+              'SEMESTER WÄHLEN',
+              style: theme.textTheme.titleSmall
+                  ?.copyWith(fontWeight: FontWeight.w900, letterSpacing: 0.5),
+            ),
+            const SizedBox(height: 8),
+            ListTile(
+              title: const Text('Keinem zugeordnet'),
+              trailing: subject.semesterId == null
+                  ? Icon(Icons.check, color: theme.colorScheme.primary)
+                  : null,
+              // Ein leerer String heisst hier "abwaehlen"; null waere von "Dialog
+              // abgebrochen" nicht zu unterscheiden.
+              onTap: () => Navigator.pop(ctx, ''),
+            ),
+            ...provider.semesters.map(
+              (sem) => ListTile(
+                title: Text(sem.label),
+                subtitle: Text('${sem.moduleCount} Module · ${sem.totalEcts} ECTS'),
+                trailing: subject.semesterId == sem.id
+                    ? Icon(Icons.check, color: theme.colorScheme.primary)
+                    : null,
+                onTap: () => Navigator.pop(ctx, sem.id),
               ),
             ),
-        ],
+            const SizedBox(height: 12),
+          ],
+        ),
       ),
     );
+
+    if (selected == null) return;
+    await provider.assignSubjectToSemester(
+      subject.id,
+      selected.isEmpty ? null : selected,
+    );
   }
+
 
   // ── Dialog & Kontext Helpers ───────────────────────────────────────────────
   void _showSubjectContextMenu(BuildContext context, StudyProvider provider, StudySubject subject) {
@@ -867,39 +783,9 @@ class _StudySubjectsPageState extends State<StudySubjectsPage> {
     );
   }
 
-  void _showAddFolderDialog(BuildContext context, StudyProvider provider, String currentPathId) {
-    final folderCtrl = TextEditingController();
-    showDialog(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        shape: const RoundedRectangleBorder(borderRadius: BorderRadius.zero),
-        title: const Text('NEUER ORDNER'),
-        content: TextField(
-          controller: folderCtrl,
-          autofocus: true,
-          decoration: const InputDecoration(labelText: 'Ordnername', border: OutlineInputBorder(borderRadius: BorderRadius.zero)),
-        ),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('ABBRECHEN')),
-          FilledButton(
-            style: FilledButton.styleFrom(
-              shape: const RoundedRectangleBorder(borderRadius: BorderRadius.zero),
-            ),
-            onPressed: () {
-              if (folderCtrl.text.trim().isNotEmpty) {
-                provider.addFolder(name: folderCtrl.text.trim(), parentId: currentPathId);
-                Navigator.pop(ctx);
-                setState(() {});
-              }
-            },
-            child: const Text('ERSTELLEN'),
-          ),
-        ],
-      ),
-    );
-  }
 
-  void _showAddNoteDialog(BuildContext context, StudyProvider provider, StudySubject subject, String currentPathId) {
+  /// Legt eine Wurzelseite dieses Moduls an. Unterseiten entstehen im Baum selbst.
+  void _showAddNoteDialog(BuildContext context, StudyProvider provider, StudySubject subject) {
     final titleCtrl = TextEditingController();
     final contentCtrl = TextEditingController();
 
@@ -907,13 +793,13 @@ class _StudySubjectsPageState extends State<StudySubjectsPage> {
       context: context,
       builder: (ctx) => AlertDialog(
         shape: const RoundedRectangleBorder(borderRadius: BorderRadius.zero),
-        title: const Text('NEUES DOKUMENT'),
+        title: const Text('NEUE SEITE'),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            TextField(controller: titleCtrl, decoration: const InputDecoration(labelText: 'Titel (z.B. Kapitel 1.pdf)', border: OutlineInputBorder(borderRadius: BorderRadius.zero))),
+            TextField(controller: titleCtrl, decoration: const InputDecoration(labelText: 'Titel (z.B. Kapitel 1)', border: OutlineInputBorder(borderRadius: BorderRadius.zero))),
             const SizedBox(height: 12),
-            TextField(controller: contentCtrl, maxLines: 4, decoration: const InputDecoration(labelText: 'Inhalt / Notizen', border: OutlineInputBorder(borderRadius: BorderRadius.zero))),
+            TextField(controller: contentCtrl, maxLines: 4, decoration: const InputDecoration(labelText: 'Inhalt (Markdown)', border: OutlineInputBorder(borderRadius: BorderRadius.zero))),
           ],
         ),
         actions: [
@@ -927,11 +813,9 @@ class _StudySubjectsPageState extends State<StudySubjectsPage> {
                 provider.addNote(
                   title: titleCtrl.text.trim(),
                   content: contentCtrl.text.trim(),
-                  folderId: currentPathId,
-                  courseName: subject.name,
+                  courseId: int.tryParse(subject.id),
                 );
                 Navigator.pop(ctx);
-                setState(() {});
               }
             },
             child: const Text('SPEICHERN'),
@@ -941,23 +825,6 @@ class _StudySubjectsPageState extends State<StudySubjectsPage> {
     );
   }
 
-  void _showNoteDialog(BuildContext context, StudyNote note) {
-    showDialog(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        shape: const RoundedRectangleBorder(borderRadius: BorderRadius.zero),
-        title: Text(note.title),
-        content: SingleChildScrollView(
-          child: Text(
-            note.content.isEmpty ? 'Kein Inhalt vorhanden.' : note.content,
-          ),
-        ),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('SCHLIESSEN')),
-        ],
-      ),
-    );
-  }
 
   void _showDeleteSubjectConfirm(BuildContext context, StudyProvider provider, StudySubject subject) {
     showDialog(
@@ -989,8 +856,9 @@ class _StudySubjectsPageState extends State<StudySubjectsPage> {
     final nameCtrl = TextEditingController();
     final profCtrl = TextEditingController();
     final cpCtrl = TextEditingController();
-    final semCtrl = TextEditingController();
     String selectedColor = '#3B82F6';
+    // Vorbelegt mit dem laufenden Semester - das ist fast immer das gemeinte.
+    String? selectedSemesterId = provider.currentSemester?.id;
 
     showDialog(
       context: context,
@@ -1010,7 +878,31 @@ class _StudySubjectsPageState extends State<StudySubjectsPage> {
                   children: [
                     Expanded(child: TextField(controller: cpCtrl, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: 'ECTS', border: OutlineInputBorder(borderRadius: BorderRadius.zero)))),
                     const SizedBox(width: 12),
-                    Expanded(child: TextField(controller: semCtrl, decoration: const InputDecoration(labelText: 'Semester', border: OutlineInputBorder(borderRadius: BorderRadius.zero)))),
+                    // Auswahl statt Freitext: getippte Semesternamen erzeugten bei jedem
+                    // Tippfehler still eine weitere Gruppe.
+                    Expanded(
+                      child: DropdownButtonFormField<String?>(
+                        initialValue: selectedSemesterId,
+                        isExpanded: true,
+                        decoration: const InputDecoration(
+                          labelText: 'Semester',
+                          border: OutlineInputBorder(borderRadius: BorderRadius.zero),
+                        ),
+                        items: [
+                          const DropdownMenuItem<String?>(
+                            value: null,
+                            child: Text('Keines'),
+                          ),
+                          ...provider.semesters.map(
+                            (sem) => DropdownMenuItem<String?>(
+                              value: sem.id,
+                              child: Text(sem.label, overflow: TextOverflow.ellipsis),
+                            ),
+                          ),
+                        ],
+                        onChanged: (v) => setState(() => selectedSemesterId = v),
+                      ),
+                    ),
                   ],
                 ),
                 const SizedBox(height: 16),
@@ -1047,7 +939,7 @@ class _StudySubjectsPageState extends State<StudySubjectsPage> {
                     name: nameCtrl.text.trim(),
                     professor: profCtrl.text.trim(),
                     creditPoints: int.tryParse(cpCtrl.text.trim()) ?? 0,
-                    semester: semCtrl.text.trim(),
+                    semesterId: selectedSemesterId,
                     colorHex: selectedColor,
                   );
                   Navigator.pop(ctx);
@@ -1061,12 +953,7 @@ class _StudySubjectsPageState extends State<StudySubjectsPage> {
     );
   }
 
-  String _formatDate(DateTime? dt) {
-    if (dt == null) return 'Heute';
-    return '${dt.day}. ${_monthNames[dt.month - 1]}';
-  }
 
-  static const _monthNames = ['Jan', 'Feb', 'Mär', 'Apr', 'Mai', 'Jun', 'Jul', 'Aug', 'Sep', 'Okt', 'Nov', 'Dez'];
 
   Color? _parseColor(String? hex) {
     if (hex == null) return null;

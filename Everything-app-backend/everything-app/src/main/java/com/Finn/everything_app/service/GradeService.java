@@ -1,5 +1,6 @@
 package com.Finn.everything_app.service;
 
+import com.Finn.everything_app.exception.ResourceNotFoundException;
 import com.Finn.everything_app.model.*;
 import com.Finn.everything_app.repository.*;
 import lombok.RequiredArgsConstructor;
@@ -7,6 +8,15 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import java.util.List;
 
+/**
+ * Hier wird bewusst NICHT gerechnet.
+ *
+ * Der gewichtete Schnitt lebt ausschließlich in lib/utils/study_grade_calculator.dart: der
+ * Zielschnitt-Slider im Notenrechner rechnet bei jeder Bewegung neu, das verträgt keinen
+ * Roundtrip. Die frühere Serverkopie (calculateAverageGrade / calculateCourseAverageGrade und
+ * die Aggregat-Queries im Repository) war ohnehin toter Code — kein Client hat sie je
+ * aufgerufen. Zwei Implementierungen derselben Formel wären irgendwann uneinig geworden.
+ */
 @Service
 @RequiredArgsConstructor
 public class GradeService {
@@ -18,37 +28,45 @@ public class GradeService {
     @Transactional
     public Grade createGrade(Long userId, Grade grade, Long courseId) {
         User user = userRepository.findById(userId)
-                .orElseThrow(() -> new RuntimeException("User nicht gefunden"));
+                .orElseThrow(() -> new ResourceNotFoundException("User nicht gefunden"));
 
-        Course course = courseRepository.findById(courseId)
-                .orElseThrow(() -> new RuntimeException("Kurs nicht gefunden"));
+        // findByIdAndUserId: sonst ließe sich eine Note an einen fremden Kurs hängen.
+        Course course = courseRepository.findByIdAndUserId(courseId, userId)
+                .orElseThrow(() -> new ResourceNotFoundException("Kurs nicht gefunden"));
 
         grade.setUser(user);
         grade.setCourse(course);
 
         if (grade.getWeight() == null) {
-            grade.setWeight(100); // Default: volle Gewichtung
+            grade.setWeight(100);
+        }
+        if (grade.getCountsTowardGrade() == null) {
+            grade.setCountsTowardGrade(true);
         }
 
         return gradeRepository.save(grade);
     }
 
+    @Transactional(readOnly = true)
     public List<Grade> getUserGrades(Long userId) {
         return gradeRepository.findByUserId(userId);
     }
 
-    public Grade getGradeById(Long id) {
-        return gradeRepository.findById(id)
-                .orElseThrow(() -> new RuntimeException("Note nicht gefunden"));
+    /** Einziges Eingangstor für Einzelzugriffe — userId in der Query. */
+    @Transactional(readOnly = true)
+    public Grade getGrade(Long userId, Long id) {
+        return gradeRepository.findByIdAndUserId(id, userId)
+                .orElseThrow(() -> new ResourceNotFoundException("Note nicht gefunden"));
     }
 
+    @Transactional(readOnly = true)
     public List<Grade> getGradesByCourse(Long userId, Long courseId) {
         return gradeRepository.findByUserIdAndCourseId(userId, courseId);
     }
 
     @Transactional
-    public Grade updateGrade(Long id, Grade updatedGrade) {
-        Grade grade = getGradeById(id);
+    public Grade updateGrade(Long userId, Long id, Grade updatedGrade) {
+        Grade grade = getGrade(userId, id);
 
         if (updatedGrade.getExamName() != null) {
             grade.setExamName(updatedGrade.getExamName());
@@ -65,6 +83,9 @@ public class GradeService {
         if (updatedGrade.getExamType() != null) {
             grade.setExamType(updatedGrade.getExamType());
         }
+        if (updatedGrade.getCountsTowardGrade() != null) {
+            grade.setCountsTowardGrade(updatedGrade.getCountsTowardGrade());
+        }
         if (updatedGrade.getNotes() != null) {
             grade.setNotes(updatedGrade.getNotes());
         }
@@ -73,58 +94,8 @@ public class GradeService {
     }
 
     @Transactional
-    public void deleteGrade(Long id) {
-        Grade grade = getGradeById(id);
+    public void deleteGrade(Long userId, Long id) {
+        Grade grade = getGrade(userId, id);
         gradeRepository.delete(grade);
-    }
-
-
-    public Double calculateAverageGrade(Long userId) {
-        List<Grade> grades = getUserGrades(userId);
-
-        if (grades.isEmpty()) {
-            return null;
-        }
-
-        double weightedSum = 0.0;
-        int totalWeight = 0;
-
-        for (Grade grade : grades) {
-            weightedSum += grade.getGrade() * grade.getWeight();
-            totalWeight += grade.getWeight();
-        }
-
-        if (totalWeight == 0) {
-            return null;
-        }
-
-        double average = weightedSum / totalWeight;
-
-        // Runde auf 2 Nachkommastellen
-        return Math.round(average * 100.0) / 100.0;
-    }
-
-
-    public Double calculateCourseAverageGrade(Long userId, Long courseId) {
-        List<Grade> grades = getGradesByCourse(userId, courseId);
-
-        if (grades.isEmpty()) {
-            return null;
-        }
-
-        double weightedSum = 0.0;
-        int totalWeight = 0;
-
-        for (Grade grade : grades) {
-            weightedSum += grade.getGrade() * grade.getWeight();
-            totalWeight += grade.getWeight();
-        }
-
-        if (totalWeight == 0) {
-            return null;
-        }
-
-        double average = weightedSum / totalWeight;
-        return Math.round(average * 100.0) / 100.0;
     }
 }

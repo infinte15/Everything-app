@@ -100,6 +100,27 @@ class CalendarService {
     }
   }
 
+  /// Hakt einen Aufgabenblock ab oder nimmt das zurück.
+  ///
+  /// Eigener Endpunkt, weil das Abhaken Minuten gutschreibt — ans Lernziel oder an die
+  /// Aufgabe. Über ein gewöhnliches Update dürfte das nicht auslösbar sein.
+  Future<CalendarEvent?> setCompleted(int id, bool completed) async {
+    try {
+      final response = await _apiService.put(
+        ApiConfig.calendarEventComplete(id),
+        {'completed': completed},
+      );
+
+      if (_apiService.isSuccess(response)) {
+        return CalendarEvent.fromJson(_apiService.parseResponse(response));
+      }
+      throw Exception(_apiService.getErrorMessage(response));
+    } catch (e) {
+      debugPrint('Error completing event: $e');
+      return null;
+    }
+  }
+
   Future<bool> deleteEvent(int id) async {
     try {
       final response = await _apiService.delete(

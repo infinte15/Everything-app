@@ -79,14 +79,19 @@ public class ScheduleRegenerationCoordinator {
         pending.remove(userId);
         firstRequestedAt.remove(userId);
         try {
-            if (Boolean.FALSE.equals(userService.getOrCreatePreferences(userId).getAutoScheduleEnabled())) {
-                log.debug("Automatische Neuplanung für User {} ist deaktiviert", userId);
-                return;
-            }
             // Der Horizont kommt bewusst vom Scheduler und nicht aus einem eigenen Feld: sonst
             // stünde derselbe Wert an zwei Stellen und der manuelle Lauf über den Controller
             // könnte einen anderen Zeitraum abdecken als die automatische Neuplanung.
             LocalDate today = LocalDate.now();
+
+            if (Boolean.FALSE.equals(userService.getOrCreatePreferences(userId).getAutoScheduleEnabled())) {
+                // Der Stundenplan wird nicht geplant, sondern abgebildet — er muss auch dann
+                // stimmen, wenn der Nutzer die automatische Neuplanung abgeschaltet hat. Ohne
+                // diesen Aufruf verschwände eine gelöschte Vorlesung nie aus dem Kalender.
+                log.debug("Automatische Neuplanung für User {} ist deaktiviert, nur Vorlesungen", userId);
+                scheduler.syncClassEvents(userId, today, scheduler.defaultHorizonEnd(today));
+                return;
+            }
             scheduler.generateOptimalSchedule(userId, today, scheduler.defaultHorizonEnd(today));
         } catch (Exception e) {
             // Ohne dieses catch verschwindet jede Exception im ScheduledExecutor spurlos.

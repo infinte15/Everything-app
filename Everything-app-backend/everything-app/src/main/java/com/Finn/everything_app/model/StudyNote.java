@@ -20,6 +20,9 @@ public class StudyNote {
     @Column(nullable = false, columnDefinition = "TEXT")
     private String content;
 
+    // Die alte, gefälschte Hierarchie: hier stand eine Ordner-ID, die serverseitig nie
+    // existierte. Die Spalte bleibt stehen (ddl-auto=update nimmt nichts weg), wird aber nicht
+    // mehr beschrieben — der Baum hängt jetzt an parent.
     @Column(length = 100)
     private String category;
 
@@ -51,10 +54,43 @@ public class StudyNote {
     @JoinColumn(name = "course_id")
     private Course course;
 
+    /**
+     * Die Elternseite; {@code null} heißt Wurzel.
+     *
+     * Kein {@code isFolder}, kein Typ-Enum: jeder Knoten ist eine Seite, eine Seite mit Kindern
+     * bekommt in der UI ein Aufklapp-Dreieck. Genau die Ordner/Notiz-Dualität hatte den
+     * category-Hack erzwungen.
+     *
+     * Bewusst OHNE {@code cascade}: das Löschen eines Teilbaums läuft explizit über den Service
+     * (siehe StudyNoteService.deleteNote), damit die Kurszähler stimmen.
+     */
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "parent_id")
+    private StudyNote parent;
+
+    /** Position unter den Geschwistern. */
+    @Column(name = "order_index")
+    private Integer orderIndex = 0;
+
+    /** Ein Emoji vor dem Titel. Acht Zeichen, weil ein Emoji mehrere Codepoints haben kann. */
+    @Column(length = 8)
+    private String icon;
+
     @PrePersist
     protected void onCreate() {
         createdAt = LocalDateTime.now();
         updatedAt = LocalDateTime.now();
+        normalizeDefaults();
+    }
+
+    /**
+     * Bestandszeilen haben nach ddl-auto=update NULL in order_index — der Feldinitialisierer
+     * greift nur bei frisch konstruierten Objekten, nicht bei geladenen. Ohne das fliegt beim
+     * ersten Sortieren eine NPE beim Unboxing.
+     */
+    @PostLoad
+    protected void normalizeDefaults() {
+        if (orderIndex == null) orderIndex = 0;
     }
 
     @PreUpdate

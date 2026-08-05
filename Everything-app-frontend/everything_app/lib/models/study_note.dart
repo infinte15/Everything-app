@@ -8,6 +8,13 @@ class StudyNote {
   final String? category;
   final String? tags;
   final bool isFavorite;
+
+  /// Seitenbaum: `null` heisst Wurzelseite. Es gibt keinen Ordner-Typ — jeder Knoten ist eine
+  /// Seite, eine Seite mit Kindern bekommt ein Aufklapp-Dreieck.
+  final int? parentId;
+  final int orderIndex;
+  final String? icon;
+
   final DateTime? createdAt;
   final DateTime? updatedAt;
   final DateTime? lastReviewedAt;
@@ -21,6 +28,9 @@ class StudyNote {
     this.category,
     this.tags,
     this.isFavorite = false,
+    this.parentId,
+    this.orderIndex = 0,
+    this.icon,
     this.createdAt,
     this.updatedAt,
     this.lastReviewedAt,
@@ -37,6 +47,9 @@ class StudyNote {
       category: json['category'],
       tags: json['tags'],
       isFavorite: json['isFavorite'] ?? false,
+      parentId: json['parentId'],
+      orderIndex: json['orderIndex'] ?? 0,
+      icon: json['icon'],
       createdAt: json['createdAt'] != null
           ? DateTime.parse(json['createdAt'])
           : null,
@@ -49,7 +62,8 @@ class StudyNote {
     );
   }
 
-  // StudyNote zu JSON
+  /// Ohne parentId und orderIndex: die Baumstruktur gehoert dem Server und aendert sich nur
+  /// ueber /move und /reorder. Beim ANLEGEN wird parentId separat mitgegeben.
   Map<String, dynamic> toJson() {
     return {
       'id': id,
@@ -58,6 +72,7 @@ class StudyNote {
       'courseId': courseId,
       'category': category,
       'tags': tags,
+      'icon': icon,
       'isFavorite': isFavorite,
     };
   }
@@ -72,6 +87,9 @@ class StudyNote {
     String? category,
     String? tags,
     bool? isFavorite,
+    int? parentId,
+    int? orderIndex,
+    String? icon,
     DateTime? createdAt,
     DateTime? updatedAt,
     DateTime? lastReviewedAt,
@@ -85,6 +103,9 @@ class StudyNote {
       category: category ?? this.category,
       tags: tags ?? this.tags,
       isFavorite: isFavorite ?? this.isFavorite,
+      parentId: parentId ?? this.parentId,
+      orderIndex: orderIndex ?? this.orderIndex,
+      icon: icon ?? this.icon,
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
       lastReviewedAt: lastReviewedAt ?? this.lastReviewedAt,

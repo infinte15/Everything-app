@@ -79,6 +79,7 @@ class ScheduleRegenerationCoordinatorTest {
         UserPreferences off = new UserPreferences();
         off.setAutoScheduleEnabled(false);
         when(userService.getOrCreatePreferences(1L)).thenReturn(off);
+        when(scheduler.defaultHorizonEnd(any())).thenAnswer(i -> i.<LocalDate>getArgument(0).plusDays(84));
         ScheduleRegenerationCoordinator coord =
                 new ScheduleRegenerationCoordinator(scheduler, userService, 50L, 5000L);
 
@@ -86,6 +87,11 @@ class ScheduleRegenerationCoordinatorTest {
 
         verify(userService, timeout(2000)).getOrCreatePreferences(1L);
         verify(scheduler, never()).generateOptimalSchedule(any(), any(), any());
+
+        // Der Stundenplan wird nicht geplant, sondern abgebildet: er muss auch bei
+        // abgeschalteter Autoplanung stimmen, sonst verschwände eine gelöschte Vorlesung
+        // nie aus dem Kalender.
+        verify(scheduler, timeout(2000)).syncClassEvents(eq(1L), any(), any());
     }
 
     @Test

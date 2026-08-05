@@ -69,6 +69,17 @@ public class Task {
     @Column(name = "splittable")
     private Boolean splittable;
 
+    /**
+     * Höchstzahl der Blöcke desselben Tasks an einem Tag; {@code null} heißt unbegrenzt.
+     *
+     * Ohne diese Grenze legt der Solver alle Blöcke direkt hintereinander an den Anfang des
+     * ersten freien Tages — der Dringlichkeitsterm belohnt ausschließlich „früher ist besser",
+     * und die Symmetriebrechung erlaubt ausdrücklich {@code prev.end == cur.start}. Aus vier
+     * Blöcken à 90 Minuten wird dann optisch ein Sechs-Stunden-Balken.
+     */
+    @Column(name = "max_chunks_per_day")
+    private Integer maxChunksPerDay;
+
     /** Bereits erledigte Minuten; nur der Rest wird noch verplant. */
     @Column(name = "completed_minutes")
     private Integer completedMinutes;

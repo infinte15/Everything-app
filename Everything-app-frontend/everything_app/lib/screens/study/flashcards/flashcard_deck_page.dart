@@ -8,10 +8,27 @@ import '../widgets/study_kinetic_card.dart';
 import 'flashcard_study_page.dart';
 import 'widgets/add_card_sheet.dart';
 
-class FlashcardDeckPage extends StatelessWidget {
+class FlashcardDeckPage extends StatefulWidget {
   final String deckId;
 
   const FlashcardDeckPage({super.key, required this.deckId});
+
+  @override
+  State<FlashcardDeckPage> createState() => _FlashcardDeckPageState();
+}
+
+class _FlashcardDeckPageState extends State<FlashcardDeckPage> {
+  String get deckId => widget.deckId;
+
+  @override
+  void initState() {
+    super.initState();
+    // Genau ein Request fuer genau dieses Deck: die Zaehlerspalten am Deck werden nur beim
+    // Bewerten fortgeschrieben, eine gerade angelegte Karte taucht dort noch nicht auf.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) context.read<StudyProvider>().refreshDeckStats(deckId);
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -28,6 +45,11 @@ class FlashcardDeckPage extends StatelessWidget {
 
     final stats = provider.deckStats(deckId);
     final cards = provider.cardsForDeck(deckId);
+    // Aus dem Review-Protokoll, nicht aus dem Kartenzustand: die Karte selbst weiss nur, wann
+    // sie zuletzt dran war, nicht wie oft heute.
+    final reviewedToday = provider.reviews
+        .where((r) => r.deckId == deckId && _isToday(r.reviewedAt))
+        .length;
     final subject = provider.subjects
         .where((s) => s.id == deck.subjectId)
         .map((s) => s.name)
@@ -70,11 +92,20 @@ class FlashcardDeckPage extends StatelessWidget {
               _StatChip(label: 'Gesamt', value: '${stats.total}', color: theme.colorScheme.primary),
             ],
           ),
+          const SizedBox(height: 10),
+          Text(
+            reviewedToday > 0
+                ? '$reviewedToday heute bewertet · ${stats.masteryPercent} % gereift'
+                : '${stats.masteryPercent} % gereift',
+            style: theme.textTheme.labelSmall?.copyWith(
+              color: theme.colorScheme.onSurfaceVariant,
+            ),
+          ),
           const SizedBox(height: 20),
           SizedBox(
             width: double.infinity,
             child: FilledButton.icon(
-              onPressed: stats.due + stats.newCards > 0
+              onPressed: stats.studyCount > 0
                   ? () => Navigator.push(
                         context,
                         MaterialPageRoute(
@@ -87,9 +118,7 @@ class FlashcardDeckPage extends StatelessWidget {
                   : null,
               icon: const Icon(Icons.play_arrow),
               label: Text(
-                stats.due + stats.newCards > 0
-                    ? 'LERNEN (${stats.due + stats.newCards})'
-                    : 'NICHTS FÄLLIG',
+                stats.studyCount > 0 ? 'LERNEN (${stats.studyCount})' : 'NICHTS FÄLLIG',
               ),
             ),
           ),
@@ -127,6 +156,11 @@ class FlashcardDeckPage extends StatelessWidget {
         ],
       ),
     );
+  }
+
+  static bool _isToday(DateTime when) {
+    final now = DateTime.now();
+    return when.year == now.year && when.month == now.month && when.day == now.day;
   }
 
   void _confirmDeleteDeck(

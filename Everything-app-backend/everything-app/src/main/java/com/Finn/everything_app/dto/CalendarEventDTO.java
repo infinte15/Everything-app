@@ -31,4 +31,7 @@ public class CalendarEventDTO {
 
     private String color;
     private String notes;
+
+    /** Nur lesend: gesetzt wird das ausschließlich über PUT /events/{id}/complete. */
+    private LocalDateTime completedAt;
 }

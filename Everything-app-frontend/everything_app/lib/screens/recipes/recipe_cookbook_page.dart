@@ -5,7 +5,11 @@ import '../../config/app_theme.dart';
 import 'recipe_detail_page.dart';
 
 class RecipeCookbookPage extends StatelessWidget {
-  const RecipeCookbookPage({super.key});
+  /// Wechselt zum Entdecken-Reiter. Der Reiterindex liegt im privaten Zustand von
+  /// [RecipesScreen], deshalb als Rückruf statt als Navigation.
+  final VoidCallback? onDiscover;
+
+  const RecipeCookbookPage({super.key, this.onDiscover});
 
   @override
   Widget build(BuildContext context) {
@@ -55,9 +59,7 @@ class RecipeCookbookPage extends StatelessWidget {
                         style: TextStyle(color: Colors.grey, fontSize: 18)),
                     const SizedBox(height: 24),
                     FilledButton(
-                      onPressed: () {
-                        // TODO: Navigate to discover
-                      },
+                      onPressed: onDiscover,
                       style: FilledButton.styleFrom(
                         backgroundColor: AppTheme.recipesColor,
                       ),

@@ -17,6 +17,8 @@ class FakeCalendarService extends CalendarService {
   int getEventsInRangeCallCount = 0;
   int setPinnedCallCount = 0;
   bool? lastPinned;
+  int setCompletedCallCount = 0;
+  bool? lastCompleted;
 
   @override
   Future<List<CalendarEvent>> getEventsInRange(DateTime startDate, DateTime endDate) async {
@@ -51,6 +53,33 @@ class FakeCalendarService extends CalendarService {
     final idx = events.indexWhere((e) => e.id == id);
     if (idx == -1) return null;
     events[idx] = events[idx].copyWith(isFixed: pinned);
+    return events[idx];
+  }
+
+  @override
+  Future<CalendarEvent?> setCompleted(int id, bool completed) async {
+    setCompletedCallCount++;
+    lastCompleted = completed;
+    final idx = events.indexWhere((e) => e.id == id);
+    if (idx == -1) return null;
+    // copyWith kann completedAt nicht auf null zuruecksetzen, deshalb hier neu gebaut.
+    final e = events[idx];
+    events[idx] = CalendarEvent(
+      id: e.id,
+      title: e.title,
+      description: e.description,
+      startTime: e.startTime,
+      endTime: e.endTime,
+      location: e.location,
+      eventType: e.eventType,
+      isFixed: e.isFixed,
+      color: e.color,
+      notes: e.notes,
+      relatedTaskId: e.relatedTaskId,
+      relatedHabitId: e.relatedHabitId,
+      relatedWorkoutId: e.relatedWorkoutId,
+      completedAt: completed ? DateTime.now() : null,
+    );
     return events[idx];
   }
 

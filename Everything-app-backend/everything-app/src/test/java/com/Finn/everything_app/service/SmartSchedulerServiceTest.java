@@ -5,6 +5,7 @@ import com.Finn.everything_app.repository.*;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -17,6 +18,7 @@ import java.time.temporal.ChronoUnit;
 import java.time.temporal.TemporalAdjusters;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.stream.Collectors;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.*;
@@ -427,6 +429,96 @@ class SmartSchedulerServiceTest {
     }
 
     // ------------------------------------------------------------------
+    // maxChunksPerDay — Bloecke ueber mehrere Tage verteilen
+    //
+    // Zerlegt wurde schon vorher richtig, aber nichts hielt die Bloecke auseinander: die
+    // Symmetriebrechung erlaubt prev.end == cur.start, und der Dringlichkeitsterm belohnt
+    // ausschliesslich "frueher ist besser". Vier Bloecke landeten deshalb hintereinander am
+    // Anfang des ersten freien Tages — im Kalender ein einziger langer Balken.
+    // ------------------------------------------------------------------
+
+    /** Wie viele Bloecke je Kalendertag geplant wurden. */
+    private java.util.Map<LocalDate, Integer> blocksPerDay(ScheduleResult result) {
+        java.util.Map<LocalDate, Integer> perDay = new java.util.HashMap<>();
+        for (ScheduledItem i : result.getScheduledTasks()) {
+            perDay.merge(i.getStartTime().toLocalDate(), 1, Integer::sum);
+        }
+        return perDay;
+    }
+
+    @Test
+    void chunksSpreadAcrossDaysWhenMaxChunksPerDayIsSet() {
+        LocalDate tomorrow = TODAY.plusDays(1);
+        Task task = makeTask(115L, "Lernen: Analysis I", 360, 3, tomorrow.plusDays(6).atTime(23, 59));
+        task.setMaxChunkMinutes(90);
+        task.setMaxChunksPerDay(2);
+        when(taskService.getSchedulableTasks(1L)).thenReturn(List.of(task));
+        when(calendarEventService.getFixedEvents(eq(1L), any(), any())).thenReturn(new ArrayList<>());
+
+        ScheduleResult result = service.generateOptimalSchedule(1L, tomorrow, tomorrow.plusDays(6));
+
+        assertEquals(4, result.getScheduledTasks().size(), "360 Minuten zu je 90 sind vier Bloecke");
+        java.util.Map<LocalDate, Integer> perDay = blocksPerDay(result);
+        perDay.forEach((day, count) ->
+                assertTrue(count <= 2, "Tag " + day + " hat " + count + " Bloecke statt hoechstens 2"));
+        assertTrue(perDay.size() >= 2,
+                "vier Bloecke bei zwei pro Tag muessen auf mindestens zwei Tage fallen, waren aber "
+                        + perDay.size());
+    }
+
+    @Test
+    void einErledigterBlockBlocktSeineZeitZaehltAberNichtAlsGepinnt() {
+        // Die Buchhaltungsfalle: pinnedMinutesPerTask summiert fixedEvents + frozenEvents.
+        // Zaehlte ein erledigter Block dort mit, waeren seine 90 Minuten zweimal abgezogen —
+        // einmal hier und einmal ueber die Gutschrift, die estimatedDurationMinutes neu setzt.
+        LocalDate tomorrow = TODAY.plusDays(1);
+        Task task = makeTask(117L, "Lernen", 360, 3, tomorrow.plusDays(6).atTime(23, 59));
+        task.setMaxChunkMinutes(90);
+
+        CalendarEvent erledigt = new CalendarEvent();
+        erledigt.setId(500L);
+        erledigt.setEventType(EventType.TASK);
+        erledigt.setIsFixed(false);
+        erledigt.setRelatedTask(task);
+        erledigt.setStartTime(tomorrow.atTime(9, 0));
+        erledigt.setEndTime(tomorrow.atTime(10, 30));
+        erledigt.setCompletedAt(LocalDateTime.now());
+
+        when(taskService.getSchedulableTasks(1L)).thenReturn(List.of(task));
+        when(calendarEventService.getFixedEvents(eq(1L), any(), any())).thenReturn(new ArrayList<>());
+        when(calendarEventRepository.findByUserIdAndEventTypeInAndIsFixedAndStartTimeBetween(
+                eq(1L), any(), eq(false), any(), any())).thenReturn(List.of(erledigt));
+
+        ScheduleResult result = service.generateOptimalSchedule(1L, tomorrow, tomorrow.plusDays(6));
+
+        assertEquals(4, result.getScheduledTasks().size(),
+                "die vollen 360 Minuten bleiben zu verplanen — der erledigte Block darf sie nicht kuerzen");
+        for (ScheduledItem i : result.getScheduledTasks()) {
+            assertFalse(i.getStartTime().isBefore(erledigt.getEndTime())
+                            && i.getEndTime().isAfter(erledigt.getStartTime()),
+                    "kein neuer Block darf ueber dem erledigten liegen, er sperrt seine Zeit weiter");
+        }
+    }
+
+    @Test
+    void maxChunksPerDayNullBleibtUnbegrenzt() {
+        // Rueckwaertskompatibilitaet: Bestandstasks haben NULL in der Spalte und duerfen sich
+        // weiterhin an einem Tag stapeln.
+        LocalDate tomorrow = TODAY.plusDays(1);
+        Task task = makeTask(116L, "Ohne Grenze", 360, 3, tomorrow.plusDays(6).atTime(23, 59));
+        task.setMaxChunkMinutes(90);
+        task.setMaxChunksPerDay(null);
+        when(taskService.getSchedulableTasks(1L)).thenReturn(List.of(task));
+        when(calendarEventService.getFixedEvents(eq(1L), any(), any())).thenReturn(new ArrayList<>());
+
+        ScheduleResult result = service.generateOptimalSchedule(1L, tomorrow, tomorrow.plusDays(6));
+
+        assertEquals(4, result.getScheduledTasks().size());
+        assertEquals(1, blocksPerDay(result).size(),
+                "ohne Grenze zieht die Dringlichkeit alle Bloecke auf denselben Tag");
+    }
+
+    // ------------------------------------------------------------------
     // Test 12 – Ein Task mit bereits gepinntem Block plant nur den Rest
     // ------------------------------------------------------------------
     @Test
@@ -701,6 +793,188 @@ class SmartSchedulerServiceTest {
         assertFalse(item.getStartTime().isBefore(monday.atTime(12, 0)),
                 "die Vorlesung von 08:00–12:00 muss den Vormittag belegen, lag aber bei "
                         + item.getStartTime());
+    }
+
+    // ------------------------------------------------------------------
+    // Test 20a/b/c – Semestergrenzen
+    //
+    // Ein Stundenplan wurde bis hierher UNBEGRENZT in jede Woche expandiert. Mit dem
+    // Stundenplan-CRUD bekommt er die Datumsgrenzen seines Semesters — und das ändert die
+    // Kalender bestehender Nutzer. Deshalb steht die Rückwärtskompatibilität (ohne Semester
+    // blockiert weiter) hier gleichberechtigt neben dem neuen Verhalten.
+    //
+    // Der Arbeitstag ist 08:00–17:00 (siehe setUp); eine Vorlesung über genau dieses Fenster
+    // macht den Tag also entweder ganz dicht oder gar nicht. Das ist die Assertion, die nicht
+    // davon abhängt, wohin der Solver eine Aufgabe sonst legen würde.
+    // ------------------------------------------------------------------
+
+    /** Vorlesung über den kompletten Arbeitstag; [semester] darf null sein. */
+    private CourseSchedule fullDayLecture(DayOfWeek day, Semester semester) {
+        Course course = new Course();
+        course.setId(700L);
+        course.setName("Analysis I");
+        course.setSemesterRef(semester);
+
+        CourseSchedule lecture = new CourseSchedule();
+        lecture.setId(701L);
+        lecture.setCourse(course);
+        lecture.setDayOfWeek(day);
+        lecture.setStartTime(LocalTime.of(8, 0));
+        lecture.setEndTime(LocalTime.of(17, 0));
+        return lecture;
+    }
+
+    private Semester semester(LocalDate start, LocalDate end) {
+        Semester s = new Semester();
+        s.setId(710L);
+        s.setLabel("WS 2025/26");
+        s.setStartDate(start);
+        s.setEndDate(end);
+        return s;
+    }
+
+    @Test
+    void aScheduleWithoutASemesterKeepsBlockingForever() {
+        LocalDate monday = TODAY.plusDays(1).with(TemporalAdjusters.next(DayOfWeek.MONDAY));
+
+        when(courseScheduleRepository.findByUserId(1L))
+                .thenReturn(List.of(fullDayLecture(DayOfWeek.MONDAY, null)));
+        when(taskService.getSchedulableTasks(1L))
+                .thenReturn(List.of(makeTask(720L, "Übungsblatt", 60, 3, monday.atTime(23, 59))));
+        when(calendarEventService.getFixedEvents(eq(1L), any(), any())).thenReturn(new ArrayList<>());
+
+        ScheduleResult result = service.generateOptimalSchedule(1L, monday, monday);
+
+        assertTrue(result.getScheduledTasks().isEmpty(),
+                "ohne Semester gilt der Stundenplan unbegrenzt - der Tag bleibt dicht");
+    }
+
+    @Test
+    void aScheduleOfAFinishedSemesterNoLongerBlocks() {
+        LocalDate monday = TODAY.plusDays(1).with(TemporalAdjusters.next(DayOfWeek.MONDAY));
+        Semester lastTerm = semester(TODAY.minusMonths(6), TODAY.minusMonths(1));
+
+        when(courseScheduleRepository.findByUserId(1L))
+                .thenReturn(List.of(fullDayLecture(DayOfWeek.MONDAY, lastTerm)));
+        when(taskService.getSchedulableTasks(1L))
+                .thenReturn(List.of(makeTask(721L, "Übungsblatt", 60, 3, monday.atTime(23, 59))));
+        when(calendarEventService.getFixedEvents(eq(1L), any(), any())).thenReturn(new ArrayList<>());
+
+        ScheduleResult result = service.generateOptimalSchedule(1L, monday, monday);
+
+        assertEquals(1, result.getScheduledTasks().size(),
+                "das Semester endete vor einem Monat, die Vorlesung findet nicht mehr statt");
+    }
+
+    @Test
+    void aScheduleOfTheRunningSemesterStillBlocks() {
+        LocalDate monday = TODAY.plusDays(1).with(TemporalAdjusters.next(DayOfWeek.MONDAY));
+        Semester running = semester(TODAY.minusMonths(2), TODAY.plusMonths(2));
+
+        when(courseScheduleRepository.findByUserId(1L))
+                .thenReturn(List.of(fullDayLecture(DayOfWeek.MONDAY, running)));
+        when(taskService.getSchedulableTasks(1L))
+                .thenReturn(List.of(makeTask(722L, "Übungsblatt", 60, 3, monday.atTime(23, 59))));
+        when(calendarEventService.getFixedEvents(eq(1L), any(), any())).thenReturn(new ArrayList<>());
+
+        ScheduleResult result = service.generateOptimalSchedule(1L, monday, monday);
+
+        assertTrue(result.getScheduledTasks().isEmpty(),
+                "das Semester läuft, die Vorlesung blockiert den Tag");
+    }
+
+    // ------------------------------------------------------------------
+    // Test 20d/e/f – Vorlesungen im Kalender
+    //
+    // Der Stundenplan sperrte bisher nur Zeit für den Solver, war im Kalender aber unsichtbar.
+    // Jetzt wird er zusätzlich als CLASS-Termin abgebildet. Entscheidend ist dabei nicht das
+    // Anlegen, sondern die Idempotenz: die Neuplanung läuft entprellt nach jeder Änderung, und
+    // ein Fehler beim Aufräumen brächte bei jedem Lauf einen weiteren Satz Duplikate.
+    // ------------------------------------------------------------------
+
+    /** Alle gespeicherten Events vom Typ CLASS. */
+    private List<CalendarEvent> savedLectures() {
+        ArgumentCaptor<CalendarEvent> captor = ArgumentCaptor.forClass(CalendarEvent.class);
+        verify(calendarEventRepository, atLeastOnce()).save(captor.capture());
+        return captor.getAllValues().stream()
+                .filter(e -> e.getEventType() == EventType.CLASS)
+                .collect(Collectors.toList());
+    }
+
+    @Test
+    void vorlesungenLandenAlsKalendereintraege() {
+        LocalDate monday = TODAY.plusDays(1).with(TemporalAdjusters.next(DayOfWeek.MONDAY));
+        CourseSchedule lecture = fullDayLecture(DayOfWeek.MONDAY, semester(TODAY.minusMonths(2), TODAY.plusMonths(2)));
+        lecture.setLocation("HS 1");
+        lecture.getCourse().setColor("#3B82F6");
+        lecture.getCourse().setInstructor("Prof. Meier");
+
+        when(courseScheduleRepository.findByUserId(1L)).thenReturn(List.of(lecture));
+        when(calendarEventService.getFixedEvents(eq(1L), any(), any())).thenReturn(new ArrayList<>());
+
+        service.generateOptimalSchedule(1L, monday, monday);
+
+        List<CalendarEvent> lectures = savedLectures();
+        assertEquals(1, lectures.size(), "genau ein Termin für den einen Montag im Zeitraum");
+        CalendarEvent ev = lectures.get(0);
+        assertEquals("Analysis I", ev.getTitle(), "der Titel ist der Modulname");
+        assertEquals("HS 1", ev.getLocation());
+        assertEquals("Prof. Meier", ev.getDescription());
+        assertEquals("#3B82F6", ev.getColor(), "die Modulfarbe, nicht die Space-Farbe");
+        assertEquals(monday.atTime(8, 0), ev.getStartTime());
+        assertEquals(monday.atTime(17, 0), ev.getEndTime());
+        assertFalse(ev.getIsFixed(),
+                "abgeleitet, nicht gepinnt: isFixed=true überlebte clearClassEvents und würde sich verdoppeln");
+    }
+
+    @Test
+    void einZweiterLaufErzeugtKeineDoppelten() {
+        LocalDate monday = TODAY.plusDays(1).with(TemporalAdjusters.next(DayOfWeek.MONDAY));
+
+        when(courseScheduleRepository.findByUserId(1L))
+                .thenReturn(List.of(fullDayLecture(DayOfWeek.MONDAY,
+                        semester(TODAY.minusMonths(2), TODAY.plusMonths(2)))));
+        when(calendarEventService.getFixedEvents(eq(1L), any(), any())).thenReturn(new ArrayList<>());
+
+        service.generateOptimalSchedule(1L, monday, monday);
+        service.generateOptimalSchedule(1L, monday, monday);
+
+        assertEquals(2, savedLectures().size(),
+                "zwei Läufe, zwei Termine — je Lauf einer, nicht einer plus zwei");
+        verify(calendarEventService, times(2)).clearClassEvents(eq(1L), any(), any());
+    }
+
+    @Test
+    void vorlesungenAusserhalbDesSemestersErzeugenKeinenEintrag() {
+        LocalDate monday = TODAY.plusDays(1).with(TemporalAdjusters.next(DayOfWeek.MONDAY));
+        Semester lastTerm = semester(TODAY.minusMonths(8), TODAY.minusMonths(2));
+
+        when(courseScheduleRepository.findByUserId(1L))
+                .thenReturn(List.of(fullDayLecture(DayOfWeek.MONDAY, lastTerm)));
+        when(calendarEventService.getFixedEvents(eq(1L), any(), any())).thenReturn(new ArrayList<>());
+
+        service.generateOptimalSchedule(1L, monday, monday);
+
+        verify(calendarEventRepository, never()).save(argThat(
+                e -> e != null && e.getEventType() == EventType.CLASS));
+    }
+
+    @Test
+    void vorlesungenVorDemUmplanzeitpunktWerdenNichtNeuAngelegt() {
+        // Der Zeitraum beginnt heute, der Umplanzeitpunkt ist also "jetzt". Eine Vorlesung, die
+        // um 00:00 begonnen hat, liegt davor und bleibt unangetastet — sonst löschte die
+        // Neuplanung einen bereits laufenden Termin und legte ihn neu an.
+        CourseSchedule lecture = fullDayLecture(TODAY.getDayOfWeek(), null);
+        lecture.setStartTime(LocalTime.MIDNIGHT);
+        lecture.setEndTime(LocalTime.of(0, 30));
+
+        when(courseScheduleRepository.findByUserId(1L)).thenReturn(List.of(lecture));
+        when(calendarEventService.getFixedEvents(eq(1L), any(), any())).thenReturn(new ArrayList<>());
+
+        service.generateOptimalSchedule(1L, TODAY, TODAY);
+
+        verify(calendarEventRepository, never()).save(argThat(
+                e -> e != null && e.getEventType() == EventType.CLASS));
     }
 
     // ------------------------------------------------------------------

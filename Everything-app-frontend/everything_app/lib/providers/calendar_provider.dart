@@ -222,6 +222,32 @@ class CalendarProvider with ChangeNotifier {
     }
   }
 
+  /// Hakt einen Aufgabenblock ab oder nimmt das zurück.
+  ///
+  /// Anders als [setPinned] bewusst NICHT optimistisch: der Server schreibt die Minuten gut
+  /// (ans Lernziel oder an die Aufgabe), schließt die Aufgabe womöglich ab und plant die
+  /// restlichen Blöcke neu. Nichts davon lässt sich hier vorhersagen — also gilt, was
+  /// zurückkommt.
+  Future<bool> setCompleted(int id, bool completed) async {
+    try {
+      final updated = await _calendarService.setCompleted(id, completed);
+      if (updated == null) return false;
+
+      final idx = _events.indexWhere((e) => e.id == id);
+      if (idx != -1) {
+        _events[idx] = updated;
+        notifyListeners();
+      }
+      // Die Neuplanung läuft entprellt; das Nachladen holt die verschobenen Blöcke.
+      scheduleReconcile();
+      return true;
+    } catch (e) {
+      _error = 'Fehler beim Abhaken des Blocks: $e';
+      notifyListeners();
+      return false;
+    }
+  }
+
   /// Pinnt ein Event fest oder gibt es wieder für den Scheduler frei.
   /// Optimistisch wie updateEvent, damit das Schloss-Symbol sofort umspringt.
   Future<bool> setPinned(int id, bool pinned) async {

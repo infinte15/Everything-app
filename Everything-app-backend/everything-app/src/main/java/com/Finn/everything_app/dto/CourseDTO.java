@@ -15,7 +15,15 @@ public class CourseDTO {
 
     private String code;
     private String instructor;
+
+    /** Freitext-Bezeichnung. Wird serverseitig aus dem verknüpften Semester gepflegt. */
     private String semester;
+
+    /** Verknüpftes Semester; null = keinem zugeordnet. */
+    private Long semesterId;
+
+    /** Nur lesend — die Bezeichnung des verknüpften Semesters. */
+    private String semesterLabel;
 
     private String description;
 
@@ -25,6 +33,9 @@ public class CourseDTO {
     @Size(max = 100, message = "Farbe darf maximal 100 Zeichen lang sein")
     private String color;
 
+    /** ECTS des Moduls. Gewichtet den Modulschnitt im Gesamtschnitt. */
+    @Min(value = 0, message = "ECTS müssen positiv sein")
+    private Integer ectsCredits;
 
     private Integer totalNotes;
     private Integer totalFlashcards;

@@ -4,6 +4,7 @@ import 'package:google_fonts/google_fonts.dart';
 import '../../providers/study_provider.dart';
 import '../../models/study_note.dart';
 import '../../widgets/create_note_sheet.dart';
+import '../study/study_note_editor_page.dart';
 
 class NotesScreen extends StatefulWidget {
   const NotesScreen({super.key});
@@ -118,8 +119,12 @@ class _NotesScreenState extends State<NotesScreen> {
   Widget build(BuildContext context) {
     final studyProvider = context.watch<StudyProvider>();
     
-    // Such- und Kategorie-Pipeline
-    final notes = studyProvider.notes.where((n) {
+    // Such- und Kategorie-Pipeline.
+    //
+    // Quelle ist freeNotes, nicht notes: die Seiten des Seitenbaums gehoeren zu einem Modul und
+    // leben im FAECHER-Tab des Study Space. Ueber `notes` stuenden sie hier mit drin — und
+    // zwar ohne Kategorie, also unter jedem Filter ausser „All" unsichtbar.
+    final notes = studyProvider.freeNotes.where((n) {
       final matchesSearch = n.title.toLowerCase().contains(_searchQuery.toLowerCase()) || 
                             n.content.toLowerCase().contains(_searchQuery.toLowerCase());
       
@@ -206,6 +211,14 @@ class _NotesScreenState extends State<NotesScreen> {
                 return _NoteCard(
                   note: note,
                   onDelete: () => _confirmDelete(context, note),
+                  // Derselbe Editor wie fuer die Modulseiten — eine freie Notiz ist ein
+                  // Lernzettel wie jeder andere, sie haengt nur an keinem Modul.
+                  onTap: () => Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => StudyNoteEditorPage(noteId: note.id!),
+                    ),
+                  ),
                 );
               },
             ),
@@ -255,11 +268,19 @@ class _NotesScreenState extends State<NotesScreen> {
 class _NoteCard extends StatelessWidget {
   final StudyNote note;
   final VoidCallback onDelete;
+  final VoidCallback onTap;
 
-  const _NoteCard({required this.note, required this.onDelete});
+  const _NoteCard({required this.note, required this.onDelete, required this.onTap});
 
   @override
   Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: _card(context),
+    );
+  }
+
+  Widget _card(BuildContext context) {
     return Container(
       margin: const EdgeInsets.only(bottom: 8), // Kompakterer Außenabstand
       padding: const EdgeInsets.all(10), // Reduziertes Innen-Padding von 14 auf 10

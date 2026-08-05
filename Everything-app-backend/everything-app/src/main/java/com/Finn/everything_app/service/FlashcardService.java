@@ -1,5 +1,6 @@
 package com.Finn.everything_app.service;
 
+import com.Finn.everything_app.exception.ResourceNotFoundException;
 import com.Finn.everything_app.model.*;
 import com.Finn.everything_app.repository.*;
 import lombok.RequiredArgsConstructor;
@@ -14,44 +15,68 @@ public class FlashcardService {
 
     private final FlashcardRepository flashcardRepository;
     private final FlashcardDeckRepository deckRepository;
+    private final FlashcardReviewRepository reviewRepository;
     private final FlashcardDeckService deckService;
+    private final CourseService courseService;
+    private final AnkiSchedulerService scheduler;
+
+    /** Der Ease-Faktor liegt in der Spalte als Ganzzahl ×100 (250 = 2.5). */
+    private static final double EASE_SCALE = 100.0;
 
     @Transactional
     public Flashcard createCard(Long userId, Flashcard card, Long deckId) {
-        FlashcardDeck deck = deckRepository.findById(deckId)
-                .orElseThrow(() -> new RuntimeException("Deck nicht gefunden"));
+        FlashcardDeck deck = deckRepository.findByIdAndUserId(deckId, userId)
+                .orElseThrow(() -> new ResourceNotFoundException("Deck nicht gefunden"));
 
         card.setDeck(deck);
         card.setRepetitionCount(0);
-        card.setEasinessFactor(250); // Start: 2.5
-        card.setNextReviewDate(LocalDateTime.now()); // Sofort verfügbar
+        card.setEasinessFactor(250);        // 2.5
+        card.setIntervalDays(0.0);
+        card.setLearningStep(0);
+        card.setLapses(0);
+        card.setNextReviewDate(LocalDateTime.now());   // sofort verfügbar
 
         Flashcard saved = flashcardRepository.save(card);
 
-        // Update Deck Statistics
         deckService.incrementCardCount(deckId);
+        // Course.totalFlashcards stand dauerhaft auf 0, weil dieser Aufruf fehlte.
+        if (deck.getCourse() != null) {
+            courseService.incrementFlashcardCount(deck.getCourse().getId(), 1);
+        }
 
         return saved;
     }
 
-    public List<Flashcard> getCardsByDeck(Long deckId) {
-        return flashcardRepository.findByStudyNoteId(deckId);
+    /**
+     * Karten eines Decks. Rief vorher findByStudyNoteId(deckId) auf — eine komplett andere
+     * Spalte, der Endpunkt lieferte deshalb praktisch immer eine leere Liste.
+     */
+    @Transactional(readOnly = true)
+    public List<Flashcard> getCardsByDeck(Long userId, Long deckId) {
+        return flashcardRepository.findByDeckIdAndDeckUserId(deckId, userId);
     }
 
+    /** Alle Karten des Nutzers in einer Abfrage — Gegenstück zum N+1 im Frontend-Provider. */
+    @Transactional(readOnly = true)
+    public List<Flashcard> getAllCards(Long userId) {
+        return flashcardRepository.findAllByUserId(userId);
+    }
+
+    @Transactional(readOnly = true)
     public List<Flashcard> getDueCards(Long userId) {
-        return flashcardRepository.findDueCards(
-                userId, LocalDateTime.now()
-        );
+        return flashcardRepository.findDueCards(userId, LocalDateTime.now());
     }
 
-    public Flashcard getCardById(Long id) {
-        return flashcardRepository.findById(id)
-                .orElseThrow(() -> new RuntimeException("Flashcard nicht gefunden"));
+    /** Besitz hängt am Deck — Flashcard hat bewusst keine eigene user-Spalte. */
+    @Transactional(readOnly = true)
+    public Flashcard getCard(Long userId, Long id) {
+        return flashcardRepository.findByIdAndDeckUserId(id, userId)
+                .orElseThrow(() -> new ResourceNotFoundException("Flashcard nicht gefunden"));
     }
 
     @Transactional
-    public Flashcard updateCard(Long id, Flashcard updatedCard) {
-        Flashcard card = getCardById(id);
+    public Flashcard updateCard(Long userId, Long id, Flashcard updatedCard) {
+        Flashcard card = getCard(userId, id);
 
         if (updatedCard.getQuestion() != null) {
             card.setQuestion(updatedCard.getQuestion());
@@ -73,89 +98,81 @@ public class FlashcardService {
     }
 
     /**
-     * SPACED REPETITION ALGORITHMUS (SM-2)
+     * Bewertet eine Karte und schreibt das Ergebnis fort.
      *
-     * @param id Card ID
-     * @param quality Qualität: "AGAIN" (0), "HARD" (1), "MEDIUM" (2), "EASY" (3)
-     * @return Updated Flashcard
+     * Gerechnet wird in {@link AnkiSchedulerService} — hier stehen nur Besitzprüfung,
+     * Persistenz und das Protokoll. Der frühere SM-2 an dieser Stelle ist ersatzlos entfallen:
+     * er rechnete die Intervallkette rekursiv aus repetitionCount nach, statt das tatsächlich
+     * zuletzt vergebene Intervall zu benutzen, wodurch jede Ease-Änderung die gesamte Historie
+     * rückwirkend umschrieb.
      */
     @Transactional
-    public Flashcard reviewCard(Long id, String quality) {
-        Flashcard card = getCardById(id);
+    public Flashcard reviewCard(Long userId, Long id, ReviewRating rating) {
+        Flashcard card = getCard(userId, id);
 
-        int q = convertQualityToNumber(quality);
+        double intervalBefore = card.getIntervalDays();
+        AnkiSchedulerService.ScheduledReview scheduled = scheduler.schedule(
+                new AnkiSchedulerService.CardState(
+                        card.getRepetitionCount(),
+                        intervalBefore,
+                        card.getLearningStep(),
+                        card.getEasinessFactor() / EASE_SCALE,
+                        card.getLapses()),
+                rating);
 
-        // SM-2 Algorithmus
-        int repetitions = card.getRepetitionCount();
-        double ef = card.getEasinessFactor() / 100.0; // Convert to 0-4 scale
+        AnkiSchedulerService.CardState next = scheduled.state();
+        LocalDateTime now = LocalDateTime.now();
 
-        // Neue Easiness Factor berechnen
-        ef = ef + (0.1 - (5 - q) * (0.08 + (5 - q) * 0.02));
-
-        if (ef < 1.3) ef = 1.3;
-        if (ef > 2.5) ef = 2.5;
-
-        // Interval berechnen
-        int interval; // in Tagen
-
-        if (q < 3) {
-            // Falsch beantwortet - zurück auf Start
-            repetitions = 0;
-            interval = 0; // Sofort wieder
-        } else {
-            // Richtig beantwortet
-            repetitions++;
-
-            if (repetitions == 1) {
-                interval = 1;
-            } else if (repetitions == 2) {
-                interval = 6;
-            } else {
-                // interval(n) = interval(n-1) * EF
-                interval = (int) Math.round(getPreviousInterval(repetitions - 1, ef) * ef);
-            }
-        }
-
-        // Update Card
-        card.setRepetitionCount(repetitions);
-        card.setEasinessFactor((int) (ef * 100));
-        card.setLastReviewedAt(LocalDateTime.now());
-        card.setNextReviewDate(LocalDateTime.now().plusDays(interval));
+        card.setRepetitionCount(next.repetitions());
+        card.setIntervalDays(next.intervalDays());
+        card.setLearningStep(next.learningStep());
+        card.setLapses(next.lapses());
+        card.setEasinessFactor((int) Math.round(next.ease() * EASE_SCALE));
+        card.setLastReviewedAt(now);
+        card.setNextReviewDate(now.plus(scheduled.nextInterval()));
 
         Flashcard updated = flashcardRepository.save(card);
 
-        // Update Deck Statistics
+        logReview(card, rating, intervalBefore, next, now);
         deckService.updateDeckStatistics(card.getDeck().getId());
 
         return updated;
     }
 
-    private int convertQualityToNumber(String quality) {
-        switch (quality.toUpperCase()) {
-            case "AGAIN": return 0;
-            case "HARD": return 1;
-            case "MEDIUM": return 2;
-            case "EASY": return 3;
-            default: return 2;
-        }
+    /** Ein Insert pro Bewertung — die Grundlage jeder Lernstatistik. */
+    private void logReview(Flashcard card, ReviewRating rating, double intervalBefore,
+                           AnkiSchedulerService.CardState next, LocalDateTime reviewedAt) {
+        FlashcardReview review = new FlashcardReview();
+        review.setFlashcard(card);
+        // Der Besitz hängt am Deck; einen eigenen user_id-Weg gibt es auf der Karte bewusst nicht.
+        review.setUser(card.getDeck().getUser());
+        review.setRating(rating);
+        review.setReviewedAt(reviewedAt);
+        review.setIntervalDaysBefore(intervalBefore);
+        review.setIntervalDaysAfter(next.intervalDays());
+        review.setEaseAfter(next.ease());
+
+        reviewRepository.save(review);
     }
 
-    private int getPreviousInterval(int repetition, double ef) {
-        if (repetition == 1) return 1;
-        if (repetition == 2) return 6;
-
-        // Rekursive Berechnung
-        return (int) Math.round(getPreviousInterval(repetition - 1, ef) * ef);
+    /** Das Protokoll des Nutzers ab einem Zeitpunkt, neueste zuerst. */
+    @Transactional(readOnly = true)
+    public List<FlashcardReview> getReviewsSince(Long userId, LocalDateTime since) {
+        return reviewRepository.findByUserIdAndReviewedAtAfterOrderByReviewedAtDesc(userId, since);
     }
 
     @Transactional
-    public void deleteCard(Long id) {
-        Flashcard card = getCardById(id);
-        Long deckId = card.getDeck().getId();
+    public void deleteCard(Long userId, Long id) {
+        Flashcard card = getCard(userId, id);
+        FlashcardDeck deck = card.getDeck();
 
+        // Zuerst das Protokoll: es hängt per Fremdschlüssel an der Karte.
+        reviewRepository.deleteByFlashcardId(id);
         flashcardRepository.delete(card);
 
-        // Update Deck Statistics
-        deckService.decrementCardCount(deckId);
+        deckService.decrementCardCount(deck.getId());
+        if (deck.getCourse() != null) {
+            courseService.incrementFlashcardCount(deck.getCourse().getId(), -1);
+        }
     }
 }

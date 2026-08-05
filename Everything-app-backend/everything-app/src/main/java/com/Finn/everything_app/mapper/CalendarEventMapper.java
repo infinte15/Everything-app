@@ -21,6 +21,7 @@ public class CalendarEventMapper {
         dto.setIsFixed(event.getIsFixed());
         dto.setColor(event.getColor());
         dto.setNotes(event.getNotes());
+        dto.setCompletedAt(event.getCompletedAt());
 
 
         if (event.getRelatedTask() != null) {
@@ -36,6 +37,11 @@ public class CalendarEventMapper {
         return dto;
     }
 
+    /**
+     * Bewusst OHNE {@code completedAt}: sonst könnte ein gewöhnliches {@code PUT /events/{id}}
+     * einen Block als erledigt markieren und damit eine Gutschrift auslösen, die nur
+     * {@code setCompleted} vergeben darf.
+     */
     public CalendarEvent toEntity(CalendarEventDTO dto) {
         if (dto == null) return null;
 

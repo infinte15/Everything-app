@@ -2,13 +2,20 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../../providers/study_provider.dart';
-import '../../../models/lesson_plan_entry.dart';
+import '../../../models/course_schedule.dart';
 
 // Constants matching calendar screen styling
 const double kHourHeight = 64.0;
 const double kTimeGutterWidth = 52.0;
 const int kDayStart = 0;
 const int kDayEnd = 24;
+
+/// Anteil der Modulfarbe an der Blockfläche.
+///
+/// Unter etwa 0.10 wirkt die Tönung wie ein Renderfehler, über 0.20 waschen Amber und Pink
+/// die Beschriftung aus. Bei 0.14 bleiben alle sechs Modulfarben klar von der neutralen
+/// Blockfläche unterscheidbar, und weißer Text behält reichlich Kontrast.
+const double kLessonTint = 0.14;
 
 class StudyTimetablePage extends StatefulWidget {
   const StudyTimetablePage({super.key});
@@ -257,28 +264,38 @@ class _StudyTimetablePageState extends State<StudyTimetablePage> {
     );
   }
 
-  void _showLessonDetails(BuildContext context, LessonPlanEntry lesson) {
+  void _showLessonDetails(BuildContext context, CourseSchedule lesson) {
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: Text(lesson.subject),
+        title: Text(lesson.courseName),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('Dozent: ${lesson.professor ?? 'Unbekannt'}'),
+            Text('Zeit: ${lesson.startTimeLabel}–${lesson.endTimeLabel} '
+                '(${lesson.durationMinutes} Minuten)'),
             const SizedBox(height: 8),
-            Text('Raum: ${lesson.room ?? 'Kein Raum'}'),
+            Text('Ort: ${lesson.location?.isNotEmpty == true ? lesson.location : 'kein Ort'}'),
+            if (lesson.courseInstructor?.isNotEmpty == true) ...[
+              const SizedBox(height: 8),
+              Text('Dozent: ${lesson.courseInstructor}'),
+            ],
             const SizedBox(height: 8),
-            Text('Typ: ${lesson.type.isEmpty ? 'Vorlesung' : lesson.type}'),
-            const SizedBox(height: 8),
-            Text('Dauer: ${lesson.durationMinutes} Minuten'),
+            // Das Semester entscheidet, ob dieser Termin im Kalender noch blockiert: ohne
+            // Semester gilt er unbegrenzt, mit Semester nur innerhalb dessen Datumsgrenzen.
+            Text(
+              lesson.semesterLabel != null
+                  ? 'Semester: ${lesson.semesterLabel}'
+                  : 'Keinem Semester zugeordnet — gilt unbegrenzt',
+              style: TextStyle(color: Theme.of(ctx).colorScheme.onSurfaceVariant, fontSize: 12),
+            ),
           ],
         ),
         actions: [
           TextButton(
             onPressed: () {
-              context.read<StudyProvider>().deleteLesson(lesson.id);
+              context.read<StudyProvider>().deleteSchedule(lesson);
               Navigator.pop(ctx);
             },
             child: const Text('Löschen', style: TextStyle(color: Colors.red)),
@@ -292,14 +309,22 @@ class _StudyTimetablePageState extends State<StudyTimetablePage> {
     );
   }
 
+  /// Eine Veranstaltung haengt immer an einem Modul: Name, Farbe und Dozent kommen von dort
+  /// und werden hier nicht noch einmal eingetippt. Ohne Modul gibt es nichts anzulegen.
   void _showAddLessonDialog(BuildContext context) {
-    final nameCtrl = TextEditingController();
-    final profCtrl = TextEditingController();
+    final subjects = context.read<StudyProvider>().subjects;
+    if (subjects.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Lege zuerst ein Modul im Tab FÄCHER an.')),
+      );
+      return;
+    }
+
     final roomCtrl = TextEditingController();
+    String selectedCourseId = subjects.first.id;
     int selectedDay = 0;
     TimeOfDay selectedStartTime = const TimeOfDay(hour: 8, minute: 0);
     TimeOfDay selectedEndTime = const TimeOfDay(hour: 9, minute: 30);
-    int selectedColorValue = 0xFFC2C1FF;
 
     showDialog(
       context: context,
@@ -308,7 +333,7 @@ class _StudyTimetablePageState extends State<StudyTimetablePage> {
           final startMinutes = selectedStartTime.hour * 60 + selectedStartTime.minute;
           final endMinutes = selectedEndTime.hour * 60 + selectedEndTime.minute;
           final duration = endMinutes - startMinutes;
-          final isValid = nameCtrl.text.trim().isNotEmpty && duration > 0;
+          final isValid = duration > 0;
 
           return AlertDialog(
             title: const Text('Veranstaltung hinzufügen'),
@@ -317,12 +342,15 @@ class _StudyTimetablePageState extends State<StudyTimetablePage> {
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  TextField(
-                    controller: nameCtrl,
-                    decoration: const InputDecoration(labelText: 'Fachname'),
-                    onChanged: (_) => setSt(() {}),
+                  DropdownButtonFormField<String>(
+                    initialValue: selectedCourseId,
+                    decoration: const InputDecoration(labelText: 'Modul'),
+                    items: subjects
+                        .map((s) => DropdownMenuItem(value: s.id, child: Text(s.name)))
+                        .toList(),
+                    onChanged: (v) => setSt(() => selectedCourseId = v!),
                   ),
-                  TextField(controller: profCtrl, decoration: const InputDecoration(labelText: 'Dozent')),
+                  const SizedBox(height: 12),
                   TextField(controller: roomCtrl, decoration: const InputDecoration(labelText: 'Raum')),
                   const SizedBox(height: 12),
                   DropdownButtonFormField<int>(
@@ -426,32 +454,15 @@ class _StudyTimetablePageState extends State<StudyTimetablePage> {
                       style: TextStyle(color: Colors.red, fontSize: 11),
                     ),
                   ],
-                  const SizedBox(height: 20),
-                  const Text('Farbe wählen', style: TextStyle(fontWeight: FontWeight.bold)),
-                  const SizedBox(height: 8),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                    children: [0xFF3B82F6, 0xFF10B981, 0xFFF59E0B, 0xFFEF4444, 0xFF8B5CF6, 0xFFC2C1FF].map((colorVal) {
-                      final isSel = selectedColorValue == colorVal;
-                      return InkWell(
-                        onTap: () {
-                          setSt(() {
-                            selectedColorValue = colorVal;
-                          });
-                        },
-                        child: Container(
-                          width: 32,
-                          height: 32,
-                          decoration: BoxDecoration(
-                            color: Color(colorVal),
-                            shape: BoxShape.circle,
-                            border: isSel
-                                ? Border.all(color: Colors.white, width: 2)
-                                : null,
-                          ),
-                        ),
-                      );
-                    }).toList(),
+                  const SizedBox(height: 16),
+                  // Die Farbe kommt vom Modul — hier eine zweite zu waehlen hiesse, zwei
+                  // Quellen fuer dieselbe Aussage zu haben.
+                  Text(
+                    'Farbe und Dozent kommen aus dem Modul.',
+                    style: TextStyle(
+                      color: Theme.of(ctx).colorScheme.onSurfaceVariant,
+                      fontSize: 11,
+                    ),
                   ),
                 ],
               ),
@@ -461,18 +472,16 @@ class _StudyTimetablePageState extends State<StudyTimetablePage> {
               FilledButton(
                 onPressed: isValid
                     ? () {
-                        final lesson = LessonPlanEntry(
-                          id: 'lp${DateTime.now().millisecondsSinceEpoch}',
-                          subject: nameCtrl.text.trim(),
-                          professor: profCtrl.text.trim(),
-                          room: roomCtrl.text.trim(),
-                          dayIndex: selectedDay,
-                          startHour: selectedStartTime.hour,
-                          startMinute: selectedStartTime.minute,
-                          durationMinutes: duration,
-                          colorValue: selectedColorValue,
-                        );
-                        context.read<StudyProvider>().addLesson(lesson);
+                        final room = roomCtrl.text.trim();
+                        context.read<StudyProvider>().addSchedule(
+                              courseId: int.parse(selectedCourseId),
+                              weekday: selectedDay + 1,   // 0-basierte Spalte -> ISO-Wochentag
+                              startHour: selectedStartTime.hour,
+                              startMinute: selectedStartTime.minute,
+                              endHour: selectedEndTime.hour,
+                              endMinute: selectedEndTime.minute,
+                              location: room.isEmpty ? null : room,
+                            );
                         Navigator.pop(ctx);
                       }
                     : null,
@@ -513,7 +522,7 @@ class _StudyWeekView extends StatefulWidget {
   final List<DateTime> days;
   final int totalDaysToShow;
   final bool isWide;
-  final ValueChanged<LessonPlanEntry> onLessonTap;
+  final ValueChanged<CourseSchedule> onLessonTap;
 
   const _StudyWeekView({
     required this.provider,
@@ -640,18 +649,27 @@ class _StudyWeekViewState extends State<_StudyWeekView> {
                     }),
 
                   // Today highlight in the grid
+                  //
+                  // Das Positioned MUSS in einem Stack stecken — der LayoutBuilder dazwischen
+                  // zaehlt nicht. Vorher gab dieser Builder das Positioned nackt zurueck und
+                  // Flutter warf "Incorrect use of ParentDataWidget", sobald die angezeigte
+                  // Woche den heutigen Tag enthielt, also praktisch bei jedem Oeffnen.
                   LayoutBuilder(builder: (ctx, constraints) {
                     final colW = constraints.maxWidth / widget.totalDaysToShow;
                     for (int c = 0; c < widget.days.length; c++) {
                       if (_isSameDay(widget.days[c], DateTime.now())) {
-                        return Positioned(
-                          left: c * colW,
-                          top: 0,
-                          width: colW,
-                          height: totalHeight,
-                          child: Container(
-                            color: const Color(0xFFC2C1FF).withValues(alpha: 0.04),
-                          ),
+                        return Stack(
+                          children: [
+                            Positioned(
+                              left: c * colW,
+                              top: 0,
+                              width: colW,
+                              height: totalHeight,
+                              child: Container(
+                                color: const Color(0xFFC2C1FF).withValues(alpha: 0.04),
+                              ),
+                            ),
+                          ],
                         );
                       }
                     }
@@ -678,12 +696,16 @@ class _StudyWeekViewState extends State<_StudyWeekView> {
                                 onTap: () => widget.onLessonTap(lesson),
                                 child: Container(
                                   decoration: BoxDecoration(
-                                    color: lesson.colorValue == 0xFF3B82F6
-                                        ? theme.colorScheme.primaryContainer.withValues(alpha: 0.4)
-                                        : theme.colorScheme.surfaceContainerHighest,
+                                    // Deckend eingerechnet statt als transparente Schicht: der
+                                    // Block liegt über dem Stundenraster, eine durchscheinende
+                                    // Fläche ließe die Stundenlinien durch den Block laufen.
+                                    color: Color.alphaBlend(
+                                      lesson.color.withValues(alpha: kLessonTint),
+                                      theme.colorScheme.surfaceContainerHighest,
+                                    ),
                                     border: Border(
                                       left: BorderSide(
-                                        color: Color(lesson.colorValue),
+                                        color: lesson.color,
                                         width: 3,
                                       ),
                                     ),
@@ -693,7 +715,7 @@ class _StudyWeekViewState extends State<_StudyWeekView> {
                                     crossAxisAlignment: CrossAxisAlignment.start,
                                     children: [
                                       Text(
-                                        lesson.subject,
+                                        lesson.courseName,
                                         style: theme.textTheme.labelSmall?.copyWith(
                                           fontWeight: FontWeight.bold,
                                           color: theme.colorScheme.onSurface,
@@ -704,16 +726,16 @@ class _StudyWeekViewState extends State<_StudyWeekView> {
                                       ),
                                       const SizedBox(height: 2),
                                       Text(
-                                        '${lesson.startHour}:${lesson.startMinute.toString().padLeft(2, '0')}',
+                                        lesson.startTimeLabel,
                                         style: theme.textTheme.labelSmall?.copyWith(
-                                          color: theme.colorScheme.onSurfaceVariant,
+                                          color: lesson.color.withValues(alpha: 0.85),
                                           fontSize: 9,
                                         ),
                                       ),
-                                      if (widget.isWide && lesson.professor != null && lesson.professor!.isNotEmpty) ...[
+                                      if (widget.isWide && lesson.location != null && lesson.location!.isNotEmpty) ...[
                                         const SizedBox(height: 4),
                                         Text(
-                                          lesson.professor!,
+                                          lesson.location!,
                                           style: theme.textTheme.labelSmall?.copyWith(
                                             color: theme.colorScheme.onSurfaceVariant.withValues(alpha: 0.7),
                                             fontSize: 8,

@@ -45,6 +45,18 @@ public class CalendarEvent {
     @Column(length = 2000)
     private String notes;
 
+    /**
+     * Vom Nutzer als erledigt abgehakt; {@code null} heißt offen.
+     *
+     * Trägt drei Dinge auf einmal: die Anzeige, den Ausschluss aus
+     * {@code CalendarEventService.clearScheduledEvents} (ein erledigter Block ist Protokoll,
+     * keine Planung, und darf von der nächsten Neuplanung nicht weggeräumt werden) und die
+     * Einordnung als eingefrorener Block — er sperrt seine Zeit weiter, zählt aber nicht mehr
+     * als gepinnte Minuten, weil seine Minuten bereits gutgeschrieben sind.
+     */
+    @Column(name = "completed_at")
+    private LocalDateTime completedAt;
+
     @Column(name = "created_at")
     private LocalDateTime createdAt;
 

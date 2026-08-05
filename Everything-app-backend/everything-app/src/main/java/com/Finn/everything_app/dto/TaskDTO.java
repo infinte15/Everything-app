@@ -51,6 +51,9 @@ public class TaskDTO {
 
     private Boolean splittable;
 
+    @Min(value = 1, message = "Es muss mindestens ein Block pro Tag erlaubt sein")
+    private Integer maxChunksPerDay;
+
     @Min(value = 0, message = "Erledigte Minuten dürfen nicht negativ sein")
     private Integer completedMinutes;
 

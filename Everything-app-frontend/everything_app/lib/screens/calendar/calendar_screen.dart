@@ -30,6 +30,9 @@ Color _typeColor(String type) {
     case 'GYM':
       return AppTheme.sportsColor;
     case 'STUDY':
+    case 'CLASS':
+      // Nur der Rückfall: das Backend setzt bei Vorlesungen immer die Modulfarbe,
+      // und event.color schlägt _typeColor.
       return AppTheme.studyColor;
     default:
       return AppTheme.primaryColor;
@@ -46,6 +49,8 @@ IconData _typeIcon(String type) {
       return Icons.fitness_center_rounded;
     case 'STUDY':
       return Icons.menu_book_rounded;
+    case 'CLASS':
+      return Icons.school_rounded;
     default:
       return Icons.event_rounded;
   }
@@ -1180,13 +1185,17 @@ class _EventBlock extends StatelessWidget {
           // 8px Typ-Label (Zeilenhöhe 1.2) bzw. das 10px Schloss-Icon, + 1px Abstand
           final typeRowH = math.max(scaler.scale(8) * 1.2, 10.0) + 1;
 
-          final showLock = event.isFixed && availW >= 34;
+          final showLock = event.isLocked && availW >= 34;
           final showType = !narrow && availH >= typeRowH + titleLineH;
           final titleBudget = availH - (showType ? typeRowH : 0);
           final titleLines =
               titleBudget.isFinite ? (titleBudget / titleLineH).floor().clamp(1, 2) : 2;
 
-          return Container(
+          // Erledigt: zurueckgenommen, aber sichtbar — der Block bleibt als Protokoll
+          // stehen und soll den offenen Rest des Tages nicht ueberstrahlen.
+          return Opacity(
+            opacity: event.isCompleted ? 0.55 : 1.0,
+            child: Container(
             decoration: BoxDecoration(
               color: bg,
               borderRadius: BorderRadius.zero,
@@ -1221,7 +1230,10 @@ class _EventBlock extends StatelessWidget {
                                   color: color.withValues(alpha: 0.8)),
                             ),
                           ),
-                          if (showLock)
+                          if (event.isCompleted)
+                            Icon(Icons.check_circle_rounded, size: 10,
+                                color: color.withValues(alpha: 0.7))
+                          else if (showLock)
                             Icon(Icons.lock_rounded, size: 10, color: color.withValues(alpha: 0.7)),
                         ],
                       ),
@@ -1244,6 +1256,9 @@ class _EventBlock extends StatelessWidget {
                                 fontSize: titleSize,
                                 fontWeight: FontWeight.w800,
                                 color: color,
+                                decoration: event.isCompleted
+                                    ? TextDecoration.lineThrough
+                                    : null,
                                 height: titleHeightFactor),
                           ),
                         ),
@@ -1255,7 +1270,7 @@ class _EventBlock extends StatelessWidget {
                 ],
               ),
             ),
-          );
+          ));
         },
       ),
     );
@@ -1275,8 +1290,9 @@ class _EventBlock extends StatelessWidget {
     );
 
     // Fixed (pinned) events cannot be dragged — matches the backend, which
-    // never lets the scheduler move isFixed events either.
-    if (event.isFixed) return card;
+    // never lets the scheduler move isFixed events either. Vorlesungen ebenso: sie stammen
+    // aus dem Stundenplan, und das Backend weist ein Verschieben mit 400 ab.
+    if (event.isLocked) return card;
 
     // PointerAwareDraggable statt LongPressDraggable: mit der Maus wäre der Drag sonst
     // gar nicht auslösbar — siehe die Erklärung in pointer_aware_draggable.dart.
@@ -1636,8 +1652,49 @@ class _EventDetailSheet extends StatelessWidget {
                 // Umformuliert, seit das Pinnen über den Button unten reversibel ist.
                 if (event.isFixed)
                   _SheetRow(icon: Icons.lock_rounded, text: 'Pinned — the scheduler will not move this'),
+                if (event.isClass)
+                  const _SheetRow(
+                    icon: Icons.school_rounded,
+                    text: 'Vorlesung — wird im Stundenplan verwaltet',
+                    sub: 'Sie wird bei jeder Neuplanung neu erzeugt; Änderungen hier wären wieder weg.',
+                  ),
+                if (event.isCompleted)
+                  const _SheetRow(
+                    icon: Icons.check_circle_rounded,
+                    text: 'Erledigt',
+                    sub: 'Die Zeit ist gutgeschrieben; der Block bleibt als Protokoll stehen.',
+                  ),
                 const SizedBox(height: 12),
-                if (event.id != null) ...[
+                // Nur Aufgabenblöcke: Gewohnheiten und Workouts haben ihre eigenen
+                // Abschlusswege, das Backend weist alles andere mit 400 ab.
+                if (event.id != null && event.isTask) ...[
+                  SizedBox(
+                    width: double.infinity,
+                    child: FilledButton.icon(
+                      icon: Icon(
+                        event.isCompleted ? Icons.undo_rounded : Icons.check_rounded,
+                        size: 16,
+                      ),
+                      label: Text(event.isCompleted ? 'Doch nicht erledigt' : 'Erledigt'),
+                      style: FilledButton.styleFrom(
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.zero),
+                      ),
+                      onPressed: () async {
+                        final provider = context.read<CalendarProvider>();
+                        final messenger = ScaffoldMessenger.of(context);
+                        Navigator.pop(context);
+                        if (!await provider.setCompleted(event.id!, !event.isCompleted)) {
+                          messenger.showSnackBar(const SnackBar(
+                              content: Text('Konnte nicht gespeichert werden.')));
+                        }
+                      },
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                ],
+                // Pinnen, Bearbeiten und Löschen fehlen bei Vorlesungen bewusst: das Backend
+                // weist sie mit 400 ab, ein Knopf wäre also nur ein Weg in eine Fehlermeldung.
+                if (event.id != null && !event.isClass) ...[
                   SizedBox(
                     width: double.infinity,
                     child: OutlinedButton.icon(
@@ -1658,6 +1715,7 @@ class _EventDetailSheet extends StatelessWidget {
                   ),
                   const SizedBox(height: 10),
                 ],
+                if (!event.isClass)
                 Row(
                   children: [
                     Expanded(

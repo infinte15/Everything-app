@@ -53,6 +53,7 @@ class _StudyGradeSheetState extends State<StudyGradeSheet> {
   late String _examType;
   String? _subjectId;
   DateTime _date = DateTime.now();
+  bool _countsTowardGrade = true;
 
   bool get _isEdit => widget.existing != null;
 
@@ -71,6 +72,7 @@ class _StudyGradeSheetState extends State<StudyGradeSheet> {
     _examType = e?.examType ?? _examTypes.first;
     _subjectId = widget.subject?.id ?? e?.subjectId;
     _date = e?.date ?? DateTime.now();
+    _countsTowardGrade = e?.countsTowardGrade ?? true;
   }
 
   @override
@@ -113,6 +115,7 @@ class _StudyGradeSheetState extends State<StudyGradeSheet> {
       examType: _examType,
       grade: grade,
       weightPercent: _parseWeight(),
+      countsTowardGrade: _countsTowardGrade,
       date: _date,
       notes: _notesCtrl.text.trim().isEmpty ? null : _notesCtrl.text.trim(),
     );
@@ -255,7 +258,30 @@ class _StudyGradeSheetState extends State<StudyGradeSheet> {
                 );
               }).toList(),
             ),
-            const SizedBox(height: 12),
+            const SizedBox(height: 4),
+            // Ein Schein wird abgelegt und bestanden, verschiebt den Modulschnitt aber nicht.
+            // Deshalb ein Schalter statt einer Note ohne Wert: die grade-Spalte bleibt
+            // NOT NULL, und die Leistung soll trotzdem in der Liste stehen.
+            SwitchListTile(
+              value: _countsTowardGrade,
+              onChanged: (v) => setState(() => _countsTowardGrade = v),
+              contentPadding: EdgeInsets.zero,
+              dense: true,
+              activeThumbColor: theme.colorScheme.primary,
+              title: Text(
+                'Zählt in den Modulschnitt',
+                style: theme.textTheme.bodyMedium,
+              ),
+              subtitle: Text(
+                _countsTowardGrade
+                    ? 'Die Note geht gewichtet in den Schnitt ein.'
+                    : 'Schein — wird angezeigt, verschiebt den Schnitt aber nicht.',
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: theme.colorScheme.onSurfaceVariant,
+                ),
+              ),
+            ),
+            const SizedBox(height: 8),
             _FieldLabel(
               label: 'Datum',
               child: InkWell(

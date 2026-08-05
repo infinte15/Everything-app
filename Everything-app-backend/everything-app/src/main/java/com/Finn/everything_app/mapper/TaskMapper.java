@@ -30,6 +30,7 @@ public class TaskMapper {
         dto.setMinChunkMinutes(task.getMinChunkMinutes());
         dto.setMaxChunkMinutes(task.getMaxChunkMinutes());
         dto.setSplittable(task.getSplittable());
+        dto.setMaxChunksPerDay(task.getMaxChunksPerDay());
         dto.setCompletedMinutes(task.getCompletedMinutes());
         dto.setNotBefore(task.getNotBefore());
 
@@ -60,6 +61,7 @@ public class TaskMapper {
         task.setMinChunkMinutes(dto.getMinChunkMinutes());
         task.setMaxChunkMinutes(dto.getMaxChunkMinutes());
         task.setSplittable(dto.getSplittable());
+        task.setMaxChunksPerDay(dto.getMaxChunksPerDay());
         task.setCompletedMinutes(dto.getCompletedMinutes());
         task.setNotBefore(dto.getNotBefore());
 

@@ -6,9 +6,13 @@ import '../../../../providers/study_provider.dart';
 import '../flashcard_deck_page.dart';
 
 class AddDeckSheet extends StatefulWidget {
-  const AddDeckSheet({super.key});
+  /// Vorbelegtes Modul. Aus der Modulansicht heraus ist es bereits klar; die Auswahl bleibt
+  /// trotzdem sichtbar, damit man sie noch aendern kann.
+  final String? initialSubjectId;
 
-  static Future<void> show(BuildContext context) {
+  const AddDeckSheet({super.key, this.initialSubjectId});
+
+  static Future<void> show(BuildContext context, {String? subjectId}) {
     return showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
@@ -16,7 +20,7 @@ class AddDeckSheet extends StatefulWidget {
       shape: const RoundedRectangleBorder(borderRadius: BorderRadius.zero),
       builder: (_) => Padding(
         padding: EdgeInsets.only(bottom: MediaQuery.viewInsetsOf(context).bottom),
-        child: const AddDeckSheet(),
+        child: AddDeckSheet(initialSubjectId: subjectId),
       ),
     );
   }
@@ -63,7 +67,8 @@ class _AddDeckSheetState extends State<AddDeckSheet> {
   @override
   Widget build(BuildContext context) {
     final provider = context.watch<StudyProvider>();
-    _subjectId ??= provider.subjects.isNotEmpty ? provider.subjects.first.id : null;
+    _subjectId ??= widget.initialSubjectId ??
+        (provider.subjects.isNotEmpty ? provider.subjects.first.id : null);
 
     return SafeArea(
       child: Padding(

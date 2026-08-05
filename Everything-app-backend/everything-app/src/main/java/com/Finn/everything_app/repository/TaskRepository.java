@@ -54,4 +54,7 @@ public interface TaskRepository extends JpaRepository<Task, Long> {
     // Anzahl offener Tasks
     @Query("SELECT COUNT(t) FROM Task t WHERE t.user.id = :userId AND t.status = 'OPEN'")
     Long countOpenTasksByUserId(@Param("userId") Long userId);
+
+    /** Für den einmaligen Aufräumer der alten Lernziel-Brücke (siehe StudyGoalLegacyTaskCleanup). */
+    List<Task> findByCategoryStartingWith(String prefix);
 }

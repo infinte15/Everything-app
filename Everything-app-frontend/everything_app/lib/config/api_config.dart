@@ -24,18 +24,73 @@ class ApiConfig {
   static const String calendarEvents = '$baseUrl/calendar/events';
   static String calendarEventById(int id) => '$baseUrl/calendar/events/$id';
   static String calendarEventPin(int id) => '$baseUrl/calendar/events/$id/pin';
+  static String calendarEventComplete(int id) => '$baseUrl/calendar/events/$id/complete';
   static const String generateSchedule = '$baseUrl/calendar/generate-schedule';
 
   //USER / PREFERENCES ENDPOINTS
   static const String userPreferences = '$baseUrl/user/preferences';
   
   //STUDY ENDPOINTS
+  // Notizen
   static const String studyNotes = '$baseUrl/study/notes';
   static String studyNoteById(int id) => '$baseUrl/study/notes/$id';
+  static String studyNotesByCourse(int courseId) =>
+      '$baseUrl/study/notes/course/$courseId';
+  static String studyNoteSearch(String query) =>
+      '$baseUrl/study/notes/search?query=${Uri.encodeQueryComponent(query)}';
+  // Seitenbaum: verschieben (eine Seite an eine andere Stelle) und umsortieren (eine Ebene).
+  static String studyNoteMove(int id) => '$baseUrl/study/notes/$id/move';
+  static String studyNoteCourse(int id) => '$baseUrl/study/notes/$id/course';
+  static const String studyNotesReorder = '$baseUrl/study/notes/reorder';
+
+  // Karteikarten
   static const String flashcards = '$baseUrl/study/flashcards';
+  static String flashcardById(int id) => '$baseUrl/study/flashcards/$id';
+  static String flashcardsByDeck(int deckId) =>
+      '$baseUrl/study/flashcards/deck/$deckId';
+  static const String dueFlashcards = '$baseUrl/study/flashcards/due';
+  static String reviewFlashcard(int id) =>
+      '$baseUrl/study/flashcards/$id/review';
+
+  /// Das Review-Protokoll. Ohne [since] liefert der Server die letzten 30 Tage.
+  static String flashcardReviews({DateTime? since}) => since == null
+      ? '$baseUrl/study/flashcards/reviews'
+      : '$baseUrl/study/flashcards/reviews'
+          '?since=${Uri.encodeQueryComponent(since.toIso8601String())}';
+
+  // Decks
   static const String flashcardDecks = '$baseUrl/study/decks';
+  static String flashcardDeckById(int id) => '$baseUrl/study/decks/$id';
+  static String flashcardDeckStats(int id) => '$baseUrl/study/decks/$id/stats';
+
+  // Kurse / Module
   static const String courses = '$baseUrl/study/courses';
+  static String courseById(int id) => '$baseUrl/study/courses/$id';
+  static String courseSemester(int id) => '$baseUrl/study/courses/$id/semester';
+
+  // Stundenplan. Der ganze Plan auf einmal; angelegt und geändert wird unter dem Modul.
+  static const String courseSchedules = '$baseUrl/study/schedules';
+  static String schedulesOfCourse(int courseId) =>
+      '$baseUrl/study/courses/$courseId/schedules';
+  static String scheduleById(int courseId, int id) =>
+      '$baseUrl/study/courses/$courseId/schedules/$id';
+
+  // Semester
+  static const String semesters = '$baseUrl/study/semesters';
+  static String semesterById(int id) => '$baseUrl/study/semesters/$id';
+  static String semesterCurrent(int id) => '$baseUrl/study/semesters/$id/current';
+  static const String semesterReorder = '$baseUrl/study/semesters/reorder';
+
+  // Lernziele
+  static const String studyGoals = '$baseUrl/study/goals';
+  static String studyGoalById(int id) => '$baseUrl/study/goals/$id';
+  static String studyGoalLog(int id) => '$baseUrl/study/goals/$id/log';
+
+  // Noten
   static const String grades = '$baseUrl/study/grades';
+  static String gradeById(int id) => '$baseUrl/study/grades/$id';
+  static String gradesByCourse(int courseId) =>
+      '$baseUrl/study/grades/course/$courseId';
   
   //SPORTS ENDPOINTS
   static const String workoutPlans = '$baseUrl/sports/plans';

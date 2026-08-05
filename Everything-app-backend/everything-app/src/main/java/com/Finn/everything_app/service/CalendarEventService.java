@@ -2,6 +2,7 @@ package com.Finn.everything_app.service;
 
 import com.Finn.everything_app.model.*;
 import com.Finn.everything_app.repository.*;
+import com.Finn.everything_app.exception.BadRequestException;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -9,6 +10,7 @@ import org.springframework.context.ApplicationEventPublisher;
 import com.Finn.everything_app.event.ScheduleChangedEvent;
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Optional;
 
 @Service
 @RequiredArgsConstructor
@@ -18,6 +20,9 @@ public class CalendarEventService {
     private final UserRepository userRepository;
     private final TaskRepository taskRepository;
     private final WorkoutSessionRepository workoutSessionRepository;
+    private final StudyGoalRepository studyGoalRepository;
+    private final StudyGoalService studyGoalService;
+    private final TaskService taskService;
 
     private final ApplicationEventPublisher eventPublisher;
 
@@ -88,6 +93,18 @@ public class CalendarEventService {
         return type == EventType.TASK || type == EventType.HABIT || type == EventType.WORKOUT;
     }
 
+    /**
+     * Abgeleitete Termine: sie entstehen aus dem Stundenplan und werden bei jeder Neuplanung neu
+     * erzeugt. Eine Änderung hier wäre spätestens nach zwei Sekunden wieder weg, und ein
+     * gepinnter CLASS-Termin überlebte sogar {@link #clearClassEvents} dauerhaft und verdoppelte
+     * sich bei jedem Lauf. Deshalb ein klarer Fehler statt stiller Wirkungslosigkeit.
+     */
+    private void requireEditableFromCalendar(CalendarEvent event) {
+        if (event.getEventType() == EventType.CLASS) {
+            throw new BadRequestException("Vorlesungen werden im Stundenplan bearbeitet.");
+        }
+    }
+
     /** Stellt sicher, dass ein Event dem anfragenden Nutzer gehört. */
     private void requireOwner(CalendarEvent event, Long userId) {
         if (userId == null || event.getUser() == null || !userId.equals(event.getUser().getId())) {
@@ -99,6 +116,7 @@ public class CalendarEventService {
     public CalendarEvent updateEvent(Long id, Long userId, CalendarEvent updatedEvent) {
         CalendarEvent event = getEventById(id);
         requireOwner(event, userId);
+        requireEditableFromCalendar(event);
 
         // Vor dem Patchen merken, damit unten unterschieden werden kann zwischen
         // "verschoben" (pinnen) und "nur umbenannt" (nicht pinnen).
@@ -171,6 +189,7 @@ public class CalendarEventService {
     public CalendarEvent setPinned(Long id, Long userId, boolean pinned) {
         CalendarEvent event = getEventById(id);
         requireOwner(event, userId);
+        requireEditableFromCalendar(event);
 
         event.setIsFixed(pinned);
         CalendarEvent saved = calendarEventRepository.save(event);
@@ -178,10 +197,86 @@ public class CalendarEventService {
         return saved;
     }
 
+    /**
+     * Hakt einen Block ab oder nimmt das zurück und schreibt seine Minuten gut.
+     *
+     * <p>Genau <b>eine</b> Gutschrift je Block: gehört der Task zu einem Lernziel, wandern die
+     * Minuten über {@link StudyGoalService#applyLoggedDelta} dorthin — dessen {@code syncTask}
+     * rechnet {@code estimatedDurationMinutes} aus den Reststunden neu. Sonst wachsen
+     * {@link Task#getCompletedMinutes()}. Beides zusammen wäre eine Doppelbuchung.
+     *
+     * <p>Der Block selbst zählt danach nirgends mehr als gepinnte Zeit (siehe
+     * {@code SmartSchedulerService.pinnedMinutesPerTask}) — sonst wäre der Abzug wieder doppelt.
+     * Er sperrt seine Zeit aber weiter, damit kein neuer Block darüber gelegt wird.
+     *
+     * <p>Angenehme Folge: einen bereits begonnenen Block abzuhaken ist für den Planer neutral
+     * (er zählte vorher als eingefrorene Minuten, danach als Gutschrift derselben Höhe). Einen
+     * künftigen Block abzuhaken verkleinert das Restbudget und hält die Zeit trotzdem belegt.
+     */
+    @Transactional
+    public CalendarEvent setCompleted(Long id, Long userId, boolean completed) {
+        CalendarEvent event = getEventById(id);
+        requireOwner(event, userId);
+        requireEditableFromCalendar(event);
+
+        if (event.getEventType() != EventType.TASK) {
+            // Gewohnheiten und Workouts haben eigene Abschlusswege
+            // (POST /habits/{id}/complete bzw. PUT /sports/sessions/{id}/complete).
+            // Ein zweiter Weg über den Kalender stritte mit ihnen um denselben Zustand.
+            throw new BadRequestException("Nur Aufgabenblöcke lassen sich abhaken.");
+        }
+
+        // Ohne diesen Wächter bucht ein Doppeltipp zweimal.
+        if ((event.getCompletedAt() != null) == completed) {
+            return event;
+        }
+
+        creditBlock(event, userId, completed);
+
+        event.setCompletedAt(completed ? LocalDateTime.now() : null);
+        CalendarEvent saved = calendarEventRepository.save(event);
+        eventPublisher.publishEvent(new ScheduleChangedEvent(this, userId));
+        return saved;
+    }
+
+    /** Schreibt die Minuten des Blocks gut ({@code completed}) oder zieht sie wieder ab. */
+    private void creditBlock(CalendarEvent event, Long userId, boolean completed) {
+        Task task = event.getRelatedTask();
+        if (task == null || event.getStartTime() == null || event.getEndTime() == null) return;
+
+        int minutes = (int) java.time.temporal.ChronoUnit.MINUTES
+                .between(event.getStartTime(), event.getEndTime());
+        int delta = completed ? minutes : -minutes;
+
+        Optional<StudyGoal> goal = studyGoalRepository.findByTaskIdAndUserId(task.getId(), userId);
+        if (goal.isPresent()) {
+            studyGoalService.applyLoggedDelta(goal.get(), delta / 60.0);
+            return;
+        }
+
+        int done = task.getCompletedMinutes() != null ? task.getCompletedMinutes() : 0;
+        int updated = Math.max(0, done + delta);
+
+        Task patch = new Task();
+        patch.setCompletedMinutes(updated);
+        // Ist alles abgehakt, liefert chunkSizes eine leere Liste: der Task haette dann gar
+        // keine Kalenderpraesenz mehr und stuende trotzdem auf offen. Also gleich abschliessen.
+        int estimated = task.getEstimatedDurationMinutes() != null
+                ? task.getEstimatedDurationMinutes() : 0;
+        if (completed && estimated > 0 && updated >= estimated) {
+            taskService.updateTask(task.getId(), patch);
+            taskService.completeTask(task.getId());
+        } else {
+            patch.setStatus(TaskStatus.TODO);
+            taskService.updateTask(task.getId(), patch);
+        }
+    }
+
     @Transactional
     public void deleteEvent(Long id, Long userId) {
         CalendarEvent event = getEventById(id);
         requireOwner(event, userId);
+        requireEditableFromCalendar(event);
         calendarEventRepository.delete(event);
         eventPublisher.publishEvent(new ScheduleChangedEvent(this, userId));
     }
@@ -251,6 +346,27 @@ public class CalendarEventService {
                 false,
                 start,
                 end);
-        calendarEventRepository.deleteAll(events);
+        // Erledigte Blöcke bleiben stehen. Sie sind Protokoll, keine Planung — die entprellte
+        // Neuplanung soll sie nicht zwei Sekunden nach dem Haken wieder wegräumen.
+        //
+        // Gefiltert in eine neue Liste statt removeIf: was das Repository zurückgibt, muss
+        // nicht veränderbar sein.
+        calendarEventRepository.deleteAll(events.stream()
+                .filter(e -> e.getCompletedAt() == null)
+                .toList());
+    }
+
+    /**
+     * Räumt die aus dem Stundenplan abgeleiteten Termine weg.
+     *
+     * Bewusst getrennt von {@link #clearScheduledEvents}: die Vorlesungen werden auch dann
+     * synchronisiert, wenn der Solver gar nicht läuft, und dürfen die Aufräumabfrage der
+     * geplanten Blöcke nicht mitbenutzen.
+     */
+    @Transactional
+    public void clearClassEvents(Long userId, LocalDateTime start, LocalDateTime end) {
+        calendarEventRepository.deleteAll(
+                calendarEventRepository.findByUserIdAndEventTypeInAndIsFixedAndStartTimeBetween(
+                        userId, List.of(EventType.CLASS), false, start, end));
     }
 }

@@ -1,8 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../../providers/study_provider.dart';
-import '../../../models/study_plan.dart';
+import '../../../models/study_goal.dart';
 import '../../../models/study_note.dart';
+import '../../../widgets/pointer_aware_draggable.dart';
 import 'widgets/study_kinetic_card.dart';
 
 class StudyPlanPage extends StatelessWidget {
@@ -18,6 +19,10 @@ class StudyPlanPage extends StatelessWidget {
     final totalGoal = goals.fold<double>(0, (s, g) => s + g.weeklyGoalHours);
     final totalLogged = goals.fold<double>(0, (s, g) => s + g.loggedHours);
     final progress = totalGoal > 0 ? (totalLogged / totalGoal).clamp(0.0, 1.0) : 0.0;
+
+    // Einmal hier statt inline im Baum: die Seite ist stateless und wird bei jedem
+    // notifyListeners neu gebaut, und die Berechnung laeuft ueber alle Decks und Karten.
+    final dueByCourse = provider.coursesWithDueCards;
 
     final isWide = MediaQuery.of(context).size.width > 700;
 
@@ -131,7 +136,7 @@ class StudyPlanPage extends StatelessWidget {
               Column(
                 children: List.generate(goals.length, (index) {
                   final goal = goals[index];
-                  final color = Color(goal.colorValue);
+                  final color = goal.color;
                   final goalProgress = goal.weeklyGoalHours > 0
                       ? (goal.loggedHours / goal.weeklyGoalHours).clamp(0.0, 1.0)
                       : 0.0;
@@ -140,6 +145,8 @@ class StudyPlanPage extends StatelessWidget {
                     padding: const EdgeInsets.only(bottom: 16),
                     child: StudyKineticCard(
                       backgroundColor: theme.colorScheme.surfaceContainerLow,
+                      borderColor: color.withValues(alpha: 0.55),
+                      borderWidth: 2,
                       padding: const EdgeInsets.all(16),
                       onTap: () => _showLogHoursDialog(context, goal),
                       child: Column(
@@ -155,7 +162,7 @@ class StudyPlanPage extends StatelessWidget {
                                     const SizedBox(width: 8),
                                     Expanded(
                                       child: Text(
-                                        goal.subject,
+                                        goal.courseName,
                                         style: theme.textTheme.titleMedium?.copyWith(
                                           fontWeight: FontWeight.bold,
                                         ),
@@ -197,7 +204,7 @@ class StudyPlanPage extends StatelessWidget {
                                 padding: EdgeInsets.zero,
                                 constraints: const BoxConstraints(),
                                 onPressed: () {
-                                  provider.deleteStudyGoal(goal.id);
+                                  provider.deleteStudyGoal(goal.id!);
                                 },
                               ),
                             ],
@@ -212,27 +219,36 @@ class StudyPlanPage extends StatelessWidget {
               GridView.builder(
                 shrinkWrap: true,
                 physics: const NeverScrollableScrollPhysics(),
-                gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                  crossAxisCount: isWide ? 3 : 1,
+                // Feste Kachelhöhe statt childAspectRatio: die Höhe hing sonst an der
+                // Fensterbreite, und bei 1200 px wurden aus ~90 px Inhalt 269 px hohe Kacheln.
+                // (Die beiden isWide-Ternäre hier waren tot — dieser Zweig läuft nur bei isWide.)
+                //
+                // Mit der Systemschrift mitskaliert: eine starre Höhe läuft bei vergrößerter
+                // Schrift über, weil der Inhalt wächst und die Kachel nicht.
+                gridDelegate: SliverGridDelegateWithMaxCrossAxisExtent(
+                  maxCrossAxisExtent: 300,
+                  mainAxisExtent: MediaQuery.textScalerOf(context).scale(128),
                   crossAxisSpacing: 16,
                   mainAxisSpacing: 16,
-                  childAspectRatio: isWide ? 1.4 : 3.0,
                 ),
                 itemCount: goals.length,
                 itemBuilder: (context, index) {
                   final goal = goals[index];
-                  final color = Color(goal.colorValue);
+                  final color = goal.color;
                   final goalProgress = goal.weeklyGoalHours > 0
                       ? (goal.loggedHours / goal.weeklyGoalHours).clamp(0.0, 1.0)
                       : 0.0;
 
                   return StudyKineticCard(
                     backgroundColor: theme.colorScheme.surfaceContainerLow,
-                    padding: const EdgeInsets.all(16),
+                    borderColor: color.withValues(alpha: 0.55),
+                    borderWidth: 2,
+                    padding: const EdgeInsets.all(14),
                     onTap: () => _showLogHoursDialog(context, goal),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      // Kein spaceBetween mehr: das streckte den Inhalt nur in die viel zu
+                      // hohe Kachel. Die Höhe ist jetzt am Inhalt bemessen.
                       children: [
                         Row(
                           mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -244,7 +260,7 @@ class StudyPlanPage extends StatelessWidget {
                                   const SizedBox(width: 8),
                                   Expanded(
                                     child: Text(
-                                      goal.subject,
+                                      goal.courseName,
                                       style: theme.textTheme.titleMedium?.copyWith(
                                         fontWeight: FontWeight.bold,
                                       ),
@@ -264,27 +280,39 @@ class StudyPlanPage extends StatelessWidget {
                             ),
                           ],
                         ),
-                        const SizedBox(height: 12),
+                        const SizedBox(height: 8),
                         LinearProgressIndicator(
                           value: goalProgress,
                           backgroundColor: theme.colorScheme.surfaceContainerLowest,
                           valueColor: AlwaysStoppedAnimation(color),
                           minHeight: 2,
                         ),
-                        const SizedBox(height: 12),
+                        const SizedBox(height: 8),
                         Row(
                           mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
-                            Text(
-                              '${goal.loggedHours.toStringAsFixed(1)} / ${goal.weeklyGoalHours.toStringAsFixed(0)} Std',
-                              style: theme.textTheme.bodySmall?.copyWith(
-                                color: theme.colorScheme.onSurfaceVariant,
+                            // Expanded, damit die Zeile bei großer Systemschrift nicht seitlich
+                            // ausbricht — der Löschknopf hat Vorrang.
+                            Expanded(
+                              child: Text(
+                                '${goal.loggedHours.toStringAsFixed(1)} / ${goal.weeklyGoalHours.toStringAsFixed(0)} Std',
+                                style: theme.textTheme.bodySmall?.copyWith(
+                                  color: theme.colorScheme.onSurfaceVariant,
+                                ),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
                               ),
                             ),
+                            // Ohne diese Verdichtung beansprucht der Knopf seine 48px
+                            // Vorgabegröße — das war der eigentliche Grund, warum die
+                            // Kachel so hoch sein musste.
                             IconButton(
                               icon: const Icon(Icons.delete_outline, size: 18),
+                              padding: EdgeInsets.zero,
+                              constraints: const BoxConstraints(),
+                              visualDensity: VisualDensity.compact,
                               onPressed: () {
-                                provider.deleteStudyGoal(goal.id);
+                                provider.deleteStudyGoal(goal.id!);
                               },
                             ),
                           ],
@@ -294,6 +322,57 @@ class StudyPlanPage extends StatelessWidget {
                   );
                 },
               ),
+
+            // Section: Wiederholen (faellige Karteikarten je Modul)
+            if (dueByCourse.isNotEmpty) ...[
+              const SizedBox(height: 48),
+              Text(
+                'WIEDERHOLEN',
+                style: theme.textTheme.labelSmall?.copyWith(
+                  fontWeight: FontWeight.w900,
+                  color: theme.colorScheme.onSurfaceVariant,
+                  letterSpacing: 1.5,
+                ),
+              ),
+              const SizedBox(height: 12),
+              ...dueByCourse.map((entry) {
+                final color = entry.subject.color;
+                return Padding(
+                  padding: const EdgeInsets.only(bottom: 12),
+                  child: StudyKineticCard(
+                    backgroundColor: theme.colorScheme.surfaceContainerLow,
+                    borderColor: color.withValues(alpha: 0.5),
+                    padding: const EdgeInsets.all(16),
+                    onTap: () => provider.setActiveTab(4),
+                    child: Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            entry.subject.name,
+                            style: theme.textTheme.titleSmall?.copyWith(
+                              fontWeight: FontWeight.bold,
+                            ),
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Text(
+                          entry.stats.studyCount == 1
+                              ? '1 Karte zu lernen'
+                              : '${entry.stats.studyCount} Karten zu lernen',
+                          style: theme.textTheme.bodySmall?.copyWith(
+                            fontWeight: FontWeight.bold,
+                            color: color,
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Icon(Icons.chevron_right, size: 18, color: color),
+                      ],
+                    ),
+                  ),
+                );
+              }),
+            ],
 
             const SizedBox(height: 48),
 
@@ -337,135 +416,12 @@ class StudyPlanPage extends StatelessWidget {
     );
   }
 
-  // ── Kanban Column Widget ──────────────────────────────────────────────────
   Widget _buildKanbanColumn(BuildContext context, String title, List<StudyNote> notes, String status) {
-    final theme = Theme.of(context);
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        // Column Header
-        Container(
-          padding: const EdgeInsets.only(bottom: 8),
-          decoration: BoxDecoration(
-            border: Border(
-              bottom: BorderSide(
-                color: theme.colorScheme.outlineVariant.withValues(alpha: 0.15),
-                width: 1,
-              ),
-            ),
-          ),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text(
-                title,
-                style: theme.textTheme.labelSmall?.copyWith(
-                  fontWeight: FontWeight.bold,
-                  letterSpacing: 1.0,
-                  color: theme.colorScheme.onSurfaceVariant,
-                ),
-              ),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                color: theme.colorScheme.surfaceContainerLow,
-                child: Text(
-                  '${notes.length}',
-                  style: theme.textTheme.labelSmall?.copyWith(
-                    fontWeight: FontWeight.bold,
-                    color: theme.colorScheme.onSurface,
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ),
-        const SizedBox(height: 12),
-
-        // List of cards in column
-        if (notes.isEmpty)
-          Container(
-            height: 80,
-            width: double.infinity,
-            decoration: BoxDecoration(
-              border: Border.all(
-                color: theme.colorScheme.outlineVariant.withValues(alpha: 0.1),
-                style: BorderStyle.solid,
-              ),
-            ),
-            child: Center(
-              child: Text(
-                'Keine Aufgaben',
-                style: theme.textTheme.bodySmall?.copyWith(
-                  color: theme.colorScheme.onSurfaceVariant.withValues(alpha: 0.5),
-                ),
-              ),
-            ),
-          )
-        else
-          Column(
-            children: notes.map((note) {
-              final isDone = status == 'done';
-              return Padding(
-                padding: const EdgeInsets.only(bottom: 8),
-                child: StudyKineticCard(
-                  backgroundColor: isDone
-                      ? theme.colorScheme.surfaceContainerLow
-                      : theme.colorScheme.surfaceContainerHighest,
-                  padding: const EdgeInsets.all(16),
-                  onTap: () => _showStatusSwitcher(context, note, status),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        note.title,
-                        style: theme.textTheme.bodyMedium?.copyWith(
-                          fontWeight: FontWeight.bold,
-                          color: isDone ? theme.colorScheme.onSurfaceVariant : theme.colorScheme.onSurface,
-                          decoration: isDone ? TextDecoration.lineThrough : null,
-                        ),
-                      ),
-                      const SizedBox(height: 8),
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          Row(
-                            children: [
-                              Icon(
-                                status == 'todo'
-                                    ? Icons.menu_book
-                                    : status == 'in_progress'
-                                        ? Icons.calculate
-                                        : Icons.check_circle,
-                                size: 12,
-                                color: status == 'in_progress' ? theme.colorScheme.primary : theme.colorScheme.onSurfaceVariant,
-                              ),
-                              const SizedBox(width: 4),
-                              Text(
-                                note.courseName ?? 'Notiz',
-                                style: theme.textTheme.labelSmall?.copyWith(
-                                  color: theme.colorScheme.onSurfaceVariant,
-                                  fontSize: 9,
-                                ),
-                              ),
-                            ],
-                          ),
-                          Text(
-                            'Heute',
-                            style: theme.textTheme.labelSmall?.copyWith(
-                              color: theme.colorScheme.outline,
-                              fontSize: 9,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ],
-                  ),
-                ),
-              );
-            }).toList(),
-          ),
-      ],
+    return _KanbanColumn(
+      title: title,
+      notes: notes,
+      status: status,
+      onTapNote: (note) => _showStatusSwitcher(context, note, status),
     );
   }
 
@@ -523,14 +479,14 @@ class StudyPlanPage extends StatelessWidget {
   }
 
   // ── Dialogs ────────────────────────────────────────────────────────────────
-  void _showLogHoursDialog(BuildContext context, StudyPlanGoal goal) {
+  void _showLogHoursDialog(BuildContext context, StudyGoal goal) {
     final ctrl = TextEditingController(text: '1.0');
     final provider = context.read<StudyProvider>();
 
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: Text('${goal.emoji} ${goal.subject}'),
+        title: Text('${goal.emoji} ${goal.courseName}'),
         content: TextField(
           controller: ctrl,
           autofocus: true,
@@ -540,12 +496,18 @@ class StudyPlanPage extends StatelessWidget {
         actions: [
           TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Abbrechen')),
           FilledButton(
-            onPressed: () {
+            onPressed: () async {
               final hrs = double.tryParse(ctrl.text) ?? 0.0;
-              if (hrs > 0.0) {
-                provider.logStudyHours(goal.id, hrs);
-              }
+              final messenger = ScaffoldMessenger.of(context);
               Navigator.pop(ctx);
+              if (hrs <= 0.0 || goal.id == null) return;
+              // Der Server rechnet die Stunden auf und passt den Brücken-Task an; scheitert
+              // das, bliebe die Anzeige sonst mit einem Fortschritt stehen, den es nicht gibt.
+              if (!await provider.logStudyHours(goal.id!, hrs)) {
+                messenger.showSnackBar(
+                  const SnackBar(content: Text('Lernzeit konnte nicht gespeichert werden.')),
+                );
+              }
             },
             child: const Text('Erfassen'),
           ),
@@ -555,16 +517,14 @@ class StudyPlanPage extends StatelessWidget {
   }
 
   void _showAddGoalDialog(BuildContext context) {
-    final nameCtrl = TextEditingController();
+    final provider = context.read<StudyProvider>();
+    // Ein Ziel je Modul — der Server weist ein zweites ab, also gar nicht erst anbieten.
+    final available = provider.subjectsWithoutGoal;
     final hoursCtrl = TextEditingController(text: '5');
     String emoji = '📚';
-    int colorVal = 0xFFC2C1FF;
+    String? courseId = available.isNotEmpty ? available.first.id : null;
 
     final emojiOptions = ['📚', '📐', '💻', '⚛️', '🗄️', '🔬', '🎯', '📖'];
-    final colorOptions = [
-      0xFFC2C1FF, 0xFFEF7C8A, 0xFF8BD17B, 0xFFF59E0B,
-      0xFF8B5CF6, 0xFFEC4899, 0xFF14B8A6,
-    ];
 
     showDialog(
       context: context,
@@ -577,7 +537,26 @@ class StudyPlanPage extends StatelessWidget {
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  TextField(controller: nameCtrl, decoration: const InputDecoration(labelText: 'Fach')),
+                  // Kein Freitextfeld und kein Farbwähler mehr: das Ziel hängt an einem Modul
+                  // und erbt dessen Namen und Farbe. Sonst wären "Analysis" und "Analysis I"
+                  // zwei Ziele, und dasselbe Modul hätte hier eine andere Farbe als im
+                  // Stundenplan.
+                  if (available.isEmpty)
+                    Text(
+                      provider.subjects.isEmpty
+                          ? 'Lege zuerst ein Modul an.'
+                          : 'Für jedes Modul gibt es bereits ein Lernziel.',
+                      style: Theme.of(ctx).textTheme.bodyMedium,
+                    )
+                  else
+                    DropdownButtonFormField<String>(
+                      initialValue: courseId,
+                      decoration: const InputDecoration(labelText: 'Modul'),
+                      items: available
+                          .map((s) => DropdownMenuItem(value: s.id, child: Text(s.name)))
+                          .toList(),
+                      onChanged: (v) => setSt(() => courseId = v),
+                    ),
                   const SizedBox(height: 12),
                   TextField(
                     controller: hoursCtrl,
@@ -601,47 +580,271 @@ class StudyPlanPage extends StatelessWidget {
                       );
                     }).toList(),
                   ),
-                  const SizedBox(height: 16),
-                  const Text('Farbe wählen:'),
-                  const SizedBox(height: 8),
-                  Wrap(
-                    spacing: 8,
-                    children: colorOptions.map((c) {
-                      final sel = c == colorVal;
-                      return GestureDetector(
-                        onTap: () => setSt(() => colorVal = c),
-                        child: Container(
-                          width: 24,
-                          height: 24,
-                          color: Color(c),
-                          child: sel ? const Icon(Icons.check, size: 16, color: Colors.black) : null,
-                        ),
-                      );
-                    }).toList(),
-                  ),
                 ],
               ),
             ),
             actions: [
               TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Abbrechen')),
               FilledButton(
-                onPressed: () {
-                  final hrs = double.tryParse(hoursCtrl.text) ?? 5.0;
-                  if (nameCtrl.text.trim().isNotEmpty) {
-                    context.read<StudyProvider>().addStudyGoal(
-                      subject: nameCtrl.text.trim(),
-                      goalHours: hrs,
-                      emoji: emoji,
-                      colorValue: colorVal,
-                    );
-                    Navigator.pop(ctx);
-                  }
-                },
+                onPressed: courseId == null
+                    ? null
+                    : () async {
+                        final hrs = double.tryParse(hoursCtrl.text) ?? 5.0;
+                        final messenger = ScaffoldMessenger.of(context);
+                        Navigator.pop(ctx);
+                        final ok = await provider.addStudyGoal(
+                          courseId: int.parse(courseId!),
+                          goalHours: hrs,
+                          emoji: emoji,
+                        );
+                        if (!ok) {
+                          messenger.showSnackBar(
+                            const SnackBar(content: Text('Lernziel konnte nicht angelegt werden.')),
+                          );
+                        }
+                      },
                 child: const Text('Hinzufügen'),
               ),
             ],
           );
         },
+      ),
+    );
+  }
+}
+
+/// Eine Kanban-Spalte mit Ablagefläche.
+///
+/// Anders als in `projects_screen.dart` hängt das [DragTarget] hier um die GANZE Spalte
+/// (Kopf, Karten und Leerzustand) statt um eine ListView: die Spalten stehen als einfache
+/// Columns in einem SingleChildScrollView und haben deshalb keine begrenzte Höhe, in die
+/// sich ein Expanded/ListView setzen ließe.
+///
+/// Zwei bewusste Grenzen:
+///  * Kein Auto-Scroll am Rand während des Ziehens — der äußere SingleChildScrollView weiß
+///    nichts vom Drag. In der schmalen Ansicht stehen die drei Spalten untereinander, ein
+///    Weg von TO DO nach DONE braucht dort ggf. zwei Gesten. Deshalb bleibt das
+///    Tippen → Bottom-Sheet als gleichwertiger Weg bestehen.
+///  * Keine Reihenfolge innerhalb einer Spalte. `StudyNote.orderIndex` ist die Ordnung des
+///    Seitenbaums und darf dafür nicht mitbenutzt werden; ein Drop setzt nur den Status.
+class _KanbanColumn extends StatefulWidget {
+  const _KanbanColumn({
+    required this.title,
+    required this.notes,
+    required this.status,
+    required this.onTapNote,
+  });
+
+  final String title;
+  final List<StudyNote> notes;
+
+  /// 'todo' | 'in_progress' | 'done'
+  final String status;
+
+  final void Function(StudyNote note) onTapNote;
+
+  @override
+  State<_KanbanColumn> createState() => _KanbanColumnState();
+}
+
+class _KanbanColumnState extends State<_KanbanColumn> {
+  bool _hovered = false;
+
+  Future<void> _accept(StudyNote note) async {
+    if (note.id == null) return;
+    final provider = context.read<StudyProvider>();
+    final messenger = ScaffoldMessenger.of(context);
+
+    // updateNoteStatus setzt optimistisch und rollt bei Fehlschlag zurück — die Karte
+    // springt also sofort, und nur wenn der Server ablehnt, wieder an ihren Platz.
+    if (!await provider.updateNoteStatus(note.id!, widget.status)) {
+      messenger.showSnackBar(
+        const SnackBar(content: Text('Status konnte nicht gespeichert werden.')),
+      );
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final accent = theme.colorScheme.primary;
+
+    return DragTarget<StudyNote>(
+      // Der EFFEKTIVE Status: eine Seite ohne status:-Tag steht in TO DO, ein Drop dorthin
+      // wäre also ein Schreibvorgang ohne Wirkung.
+      onWillAcceptWithDetails: (d) {
+        final from = StudyProvider.statusOf(d.data) ?? 'todo';
+        if (from == widget.status) return false;
+        setState(() => _hovered = true);
+        return true;
+      },
+      onLeave: (_) => setState(() => _hovered = false),
+      onAcceptWithDetails: (d) {
+        setState(() => _hovered = false);
+        _accept(d.data);
+      },
+      builder: (context, candidates, rejected) {
+        return AnimatedContainer(
+          duration: const Duration(milliseconds: 150),
+          padding: const EdgeInsets.all(4),
+          decoration: BoxDecoration(
+            color: _hovered ? accent.withValues(alpha: 0.07) : Colors.transparent,
+            // Eckig: der 10px-Radius aus projects_screen.dart ist das Einzige, was hier
+            // nicht übernommen wird — Kinetic Mono kennt keine runden Ecken.
+            borderRadius: BorderRadius.zero,
+            border: Border.all(
+              color: _hovered ? accent.withValues(alpha: 0.5) : Colors.transparent,
+              width: 1.5,
+            ),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              _header(theme),
+              const SizedBox(height: 12),
+              ConstrainedBox(
+                // Auch eine Spalte mit einer einzigen kurzen Karte bleibt gut treffbar.
+                constraints: const BoxConstraints(minHeight: 80),
+                child: widget.notes.isEmpty ? _emptyState(theme) : _cards(theme),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _header(ThemeData theme) {
+    return Container(
+      padding: const EdgeInsets.only(bottom: 8),
+      decoration: BoxDecoration(
+        border: Border(
+          bottom: BorderSide(
+            color: theme.colorScheme.outlineVariant.withValues(alpha: 0.15),
+            width: 1,
+          ),
+        ),
+      ),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Text(
+            widget.title,
+            style: theme.textTheme.labelSmall?.copyWith(
+              fontWeight: FontWeight.bold,
+              letterSpacing: 1.0,
+              color: theme.colorScheme.onSurfaceVariant,
+            ),
+          ),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+            color: theme.colorScheme.surfaceContainerLow,
+            child: Text(
+              '${widget.notes.length}',
+              style: theme.textTheme.labelSmall?.copyWith(
+                fontWeight: FontWeight.bold,
+                color: theme.colorScheme.onSurface,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _emptyState(ThemeData theme) {
+    return Container(
+      width: double.infinity,
+      decoration: BoxDecoration(
+        border: Border.all(
+          color: theme.colorScheme.outlineVariant.withValues(alpha: 0.1),
+        ),
+      ),
+      child: Center(
+        child: Text(
+          'Karte hierher ziehen',
+          style: theme.textTheme.bodySmall?.copyWith(
+            color: theme.colorScheme.onSurfaceVariant.withValues(alpha: 0.5),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _cards(ThemeData theme) {
+    return Column(
+      children: widget.notes.map((note) {
+        final card = _card(theme, note);
+        return Padding(
+          padding: const EdgeInsets.only(bottom: 8),
+          // PointerAwareDraggable statt LongPressDraggable: mit der Maus wäre der Drag
+          // sonst kaum auslösbar (1px Hit-Slop), und der Finger braucht den langen Druck,
+          // damit das Scrollen im SingleChildScrollView erhalten bleibt.
+          child: PointerAwareDraggable<StudyNote>(
+            data: note,
+            feedback: Material(
+              color: Colors.transparent,
+              child: Opacity(
+                opacity: 0.85,
+                child: SizedBox(width: 260, child: card),
+              ),
+            ),
+            childWhenDragging: Opacity(opacity: 0.3, child: card),
+            child: card,
+          ),
+        );
+      }).toList(),
+    );
+  }
+
+  Widget _card(ThemeData theme, StudyNote note) {
+    final isDone = widget.status == 'done';
+
+    return StudyKineticCard(
+      backgroundColor: isDone
+          ? theme.colorScheme.surfaceContainerLow
+          : theme.colorScheme.surfaceContainerHighest,
+      padding: const EdgeInsets.all(16),
+      onTap: () => widget.onTapNote(note),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            note.title,
+            style: theme.textTheme.bodyMedium?.copyWith(
+              fontWeight: FontWeight.bold,
+              color: isDone ? theme.colorScheme.onSurfaceVariant : theme.colorScheme.onSurface,
+              decoration: isDone ? TextDecoration.lineThrough : null,
+            ),
+          ),
+          const SizedBox(height: 8),
+          Row(
+            children: [
+              Icon(
+                widget.status == 'todo'
+                    ? Icons.menu_book
+                    : widget.status == 'in_progress'
+                        ? Icons.calculate
+                        : Icons.check_circle,
+                size: 12,
+                color: widget.status == 'in_progress'
+                    ? theme.colorScheme.primary
+                    : theme.colorScheme.onSurfaceVariant,
+              ),
+              const SizedBox(width: 4),
+              Expanded(
+                child: Text(
+                  note.courseName ?? 'Notiz',
+                  style: theme.textTheme.labelSmall?.copyWith(
+                    color: theme.colorScheme.onSurfaceVariant,
+                    fontSize: 9,
+                  ),
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+            ],
+          ),
+        ],
       ),
     );
   }

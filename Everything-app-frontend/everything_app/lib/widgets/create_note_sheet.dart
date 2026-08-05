@@ -30,10 +30,14 @@ class _CreateNoteSheetState extends State<CreateNoteSheet> {
     final title = _titleController.text.trim();
     if (title.isEmpty) return;
 
+    // Eine freie Notiz: keine Modulauswahl, dafuer eine Kategorie. Modulseiten entstehen
+    // ausschliesslich im Seitenbaum des FAECHER-Tabs — deshalb steht hier bewusst kein
+    // Modul-Dropdown. Es gab eines, und damit liess sich ohne angelegtes Fach ueberhaupt
+    // keine Notiz mehr speichern.
     context.read<StudyProvider>().addNote(
       title: title,
       content: _contentController.text.trim(),
-      folderId: _selectedCategory,
+      category: _selectedCategory,
     );
     Navigator.pop(context);
   }

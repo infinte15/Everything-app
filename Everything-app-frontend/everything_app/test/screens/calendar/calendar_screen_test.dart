@@ -333,6 +333,135 @@ void main() {
       provider.dispose();
     });
 
+    testWidgets('eine Vorlesung kann nicht gezogen werden, obwohl isFixed false ist', (tester) async {
+      // isFixed=false ist Absicht: nur so raeumt clearClassEvents die Vorlesung bei der
+      // naechsten Neuplanung wieder weg. Die Unverschiebbarkeit haengt deshalb am Typ,
+      // nicht am Pin-Flag — genau das prueft dieser Test.
+      final lecture = CalendarEvent(
+        id: 4,
+        title: 'Analysis I',
+        startTime: _at(0),
+        endTime: _at(60),
+        eventType: 'CLASS',
+        isFixed: false,
+      );
+      final fake = FakeCalendarService([lecture]);
+      final provider = await _pumpCalendar(tester, fake: fake);
+
+      final eventFinder = find.text('Analysis I');
+      expect(eventFinder, findsOneWidget);
+
+      expect(
+        find.ancestor(
+          of: eventFinder,
+          matching: find.byType(PointerAwareDraggable<CalendarEvent>),
+        ),
+        findsNothing,
+        reason: 'eine Vorlesung wird im Stundenplan bearbeitet, nicht im Kalender gezogen',
+      );
+
+      provider.dispose();
+    });
+
+    testWidgets('das Detail-Sheet einer Vorlesung bietet weder Pin noch Loeschen', (tester) async {
+      final lecture = CalendarEvent(
+        id: 5,
+        title: 'Lineare Algebra',
+        startTime: _at(0),
+        endTime: _at(60),
+        eventType: 'CLASS',
+        isFixed: false,
+      );
+      final fake = FakeCalendarService([lecture]);
+      final provider = await _pumpCalendar(tester, fake: fake);
+
+      await tester.tap(find.text('Lineare Algebra'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Vorlesung — wird im Stundenplan verwaltet'), findsOneWidget);
+      // Alle drei wuerden serverseitig mit 400 abgewiesen; ein Knopf dafuer waere nur
+      // ein Weg in eine Fehlermeldung.
+      expect(find.text('Pin to this time'), findsNothing);
+      expect(find.text('Edit'), findsNothing);
+      expect(find.text('Delete'), findsNothing);
+
+      provider.dispose();
+    });
+
+    testWidgets('Erledigt ruft setCompleted(true) und streicht den Block durch', (tester) async {
+      final block = CalendarEvent(
+        id: 6,
+        title: 'Lernen: Analysis I (1/4)',
+        startTime: _at(0),
+        endTime: _at(90),
+        eventType: 'TASK',
+        isFixed: false,
+        relatedTaskId: 42,
+      );
+      final fake = FakeCalendarService([block]);
+      final provider = await _pumpCalendar(tester, fake: fake);
+
+      await tester.tap(find.text('Lernen: Analysis I (1/4)'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Erledigt'));
+      await tester.pumpAndSettle();
+
+      expect(fake.setCompletedCallCount, 1);
+      expect(fake.lastCompleted, isTrue);
+      // Der Block bleibt stehen — er ist Protokoll, keine Planung.
+      final title = tester.widget<Text>(find.text('Lernen: Analysis I (1/4)').first);
+      expect(title.style?.decoration, TextDecoration.lineThrough);
+
+      provider.dispose();
+    });
+
+    testWidgets('ein erledigter Block bietet das Zuruecknehmen an', (tester) async {
+      final block = CalendarEvent(
+        id: 7,
+        title: 'Bericht',
+        startTime: _at(0),
+        endTime: _at(60),
+        eventType: 'TASK',
+        isFixed: false,
+        completedAt: DateTime.now(),
+      );
+      final fake = FakeCalendarService([block]);
+      final provider = await _pumpCalendar(tester, fake: fake);
+
+      await tester.tap(find.text('Bericht'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Doch nicht erledigt'), findsOneWidget);
+      await tester.tap(find.text('Doch nicht erledigt'));
+      await tester.pumpAndSettle();
+
+      expect(fake.lastCompleted, isFalse);
+
+      provider.dispose();
+    });
+
+    testWidgets('ein HABIT-Block bietet kein Erledigt', (tester) async {
+      // Gewohnheiten haben ihren eigenen Abschlussweg; ein zweiter stritte darum.
+      final habit = CalendarEvent(
+        id: 8,
+        title: 'Joggen',
+        startTime: _at(0),
+        endTime: _at(30),
+        eventType: 'HABIT',
+        isFixed: false,
+      );
+      final fake = FakeCalendarService([habit]);
+      final provider = await _pumpCalendar(tester, fake: fake);
+
+      await tester.tap(find.text('Joggen'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Erledigt'), findsNothing);
+      expect(find.text('Pin to this time'), findsOneWidget, reason: 'Pinnen bleibt moeglich');
+
+      provider.dispose();
+    });
+
     testWidgets('a movable (non-fixed) event is wrapped in a draggable', (tester) async {
       final movable = CalendarEvent(
         id: 3,

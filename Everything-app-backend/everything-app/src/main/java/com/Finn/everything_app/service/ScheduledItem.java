@@ -9,6 +9,8 @@ public class ScheduledItem {
     private Task task;
     private Habit habit;
     private WorkoutSession workoutSession;
+    /** Nur für CLASS: der Stundenplaneintrag, aus dem dieser Termin entstanden ist. */
+    private CourseSchedule courseSchedule;
 
     private LocalDateTime startTime;
     private LocalDateTime endTime;
