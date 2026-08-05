@@ -149,7 +149,14 @@ public class SmartSchedulerService {
         // die weder neu geplant noch doppelt verplant werden darf.
         List<CalendarEvent> committed = concat(input.getFixedEvents(), input.getFrozenEvents());
 
-        Map<Long, Integer> pinnedMinutes = pinnedMinutesPerTask(committed);
+        // Verpasste Blöcke überfälliger Tasks sind davon ausgenommen: sie sperren ihre Zeit in der
+        // Vergangenheit zwar weiter, dürfen dem Task aber weder Minuten gutschreiben noch ihm einen
+        // Termin zurückschreiben (siehe isMissedBlock).
+        List<CalendarEvent> credited = committed.stream()
+                .filter(e -> !isMissedBlock(e, cutoff))
+                .collect(Collectors.toList());
+
+        Map<Long, Integer> pinnedMinutes = pinnedMinutesPerTask(credited);
         List<TaskChunk> chunks     = decomposeTasks(input.getTasks(), prefs, pinnedMinutes);
         List<HabitSlot> habitSlots = expandHabitSlots(input.getHabits(), prefs, startDate, endDate,
                 pinnedDatesPerHabit(committed));
@@ -173,7 +180,7 @@ public class SmartSchedulerService {
         calendarEventService.clearScheduledEvents(userId, cutoff, endDate.atTime(23, 59, 59));
         saveScheduleToDatabase(userId, outcome.getItems());
         log.info("Gespeichert: {} geplante Blöcke", outcome.getItems().size());
-        writeBackTaskSpans(outcome, input.getTasks(), committed);
+        writeBackTaskSpans(outcome, input.getTasks(), credited);
 
         // Die Vorlesungen laufen getrennt und landen NICHT in outcome.getItems(): ScheduleResult
         // zählt alles, was kein TASK ist, als "Habits/Workouts" und summiert es in
@@ -191,7 +198,7 @@ public class SmartSchedulerService {
         ScheduleResult result = new ScheduleResult();
         result.setScheduledTasks(scheduledTasks);
         result.setScheduledHabits(scheduledRest);
-        result.setUnscheduledTasks(findUnscheduledTasks(input.getTasks(), scheduledTasks, committed));
+        result.setUnscheduledTasks(findUnscheduledTasks(input.getTasks(), scheduledTasks, credited));
         result.setTotalTasksScheduled(scheduledTasks.size());
         result.setTotalHoursScheduled(calculateTotalHours(scheduledTasks, scheduledRest));
         result.setAtRisk(outcome.getAtRisk());
@@ -488,6 +495,27 @@ public class SmartSchedulerService {
         Task task;
         int  durationMinutes;
         Placeable placeable;
+    }
+
+    /**
+     * Ein Block gilt als VERPASST, wenn er vor dem Umplanzeitpunkt lag, nicht abgehakt wurde und zu
+     * einem Task mit abgelaufener Deadline gehört. Die Deadline ist verstrichen und der Task steht
+     * immer noch offen — die Zeit ist offensichtlich nicht genutzt worden.
+     *
+     * Seine Minuten dürfen deshalb nicht als geleistet zählen: sonst bleibt in {@link #chunkSizes}
+     * nichts mehr übrig ({@code remaining <= 0}), der Task erzeugt keinen einzigen Chunk, erreicht
+     * den Solver nie und {@link #writeBackTaskSpans} schreibt ihm seinen alten Termin von gestern
+     * zurück — er verharrt für immer auf TODO mit einem Block in der Vergangenheit.
+     *
+     * Bewusst NUR bei abgelaufener Deadline: solange sie in der Zukunft liegt, bleibt es bei der
+     * bisherigen Annahme "vergangener Block = gelaufene Zeit". Der Task-Status muss nicht geprüft
+     * werden, findSchedulableTasks liefert ohnehin nur TODO.
+     */
+    private boolean isMissedBlock(CalendarEvent e, LocalDateTime cutoff) {
+        if (e.getRelatedTask() == null || e.getCompletedAt() != null) return false;
+        if (e.getStartTime() == null || !e.getStartTime().isBefore(cutoff)) return false;
+        LocalDateTime deadline = e.getRelatedTask().getDeadline();
+        return deadline != null && deadline.isBefore(LocalDateTime.now());
     }
 
     private Map<Long, Integer> pinnedMinutesPerTask(List<CalendarEvent> fixedEvents) {
@@ -842,7 +870,15 @@ public class SmartSchedulerService {
                 // Deadline ist jetzt WEICH. Vorher wurde ein überfälliger Task hart ans
                 // Horizontende geklemmt; jetzt landet er so früh wie möglich und wird gemeldet.
                 if (deadlineSlot != null) {
-                    IntVar late = model.newIntVar(0, axis.horizonSlots, "late_" + name);
+                    // Bei abgelaufener Deadline ist deadlineSlot negativ, die geforderte Verspätung
+                    // also größer als der Horizont. Mit der alten Obergrenze horizonSlots war die
+                    // Bedingung unten für einen Task, der länger als der Horizont überfällig ist,
+                    // unerfüllbar — CP-SAT musste den Block verwerfen und writeBackTaskSpans hat ihm
+                    // anschließend den Termin gelöscht. Der konstante Anteil |deadlineSlot| ist für
+                    // alle Chunks des Tasks gleich und verschiebt das Optimum nicht: minimiert wird
+                    // weiterhin W_LATE * prio * start, also "so früh wie möglich".
+                    long lateMax = (long) axis.horizonSlots + sizeSlots + Math.max(0, -deadlineSlot);
+                    IntVar late = model.newIntVar(0, lateMax, "late_" + name);
                     model.addGreaterOrEqual(
                             LinearExpr.newBuilder().addTerm(late, 1).addTerm(p.start, -1).build(),
                             (long) sizeSlots - deadlineSlot).onlyEnforceIf(p.present);

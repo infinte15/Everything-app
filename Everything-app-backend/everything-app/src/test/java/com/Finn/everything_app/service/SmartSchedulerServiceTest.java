@@ -1230,6 +1230,140 @@ class SmartSchedulerServiceTest {
     }
 
     // ------------------------------------------------------------------
+    // Test 27d – Überfälliger Task wird trotz verpasstem Block neu geplant
+    //
+    // Gegenstück zu 27b: dort deckt der vergangene Block den Task ab und alles bleibt stehen.
+    // Ist die Deadline aber abgelaufen und der Task immer noch offen, gilt der Block als
+    // verpasst — die volle Restdauer muss nach vorne wandern.
+    // ------------------------------------------------------------------
+    @Test
+    void ueberfaelligerTaskWirdTrotzVerpasstemBlockNeuGeplant() {
+        LocalDate yesterday = TODAY.minusDays(1);
+
+        Task task = makeTask(1240L, "Steuererklärung", 60, 3, yesterday.atTime(23, 59));
+        task.setScheduledStartTime(yesterday.atTime(9, 0));
+        task.setScheduledEndTime(yesterday.atTime(10, 0));
+        when(taskService.getSchedulableTasks(1L)).thenReturn(List.of(task));
+        when(calendarEventService.getFixedEvents(eq(1L), any(), any())).thenReturn(new ArrayList<>());
+
+        // Der Block lag gestern und wurde nie abgehakt.
+        CalendarEvent missed = new CalendarEvent();
+        missed.setId(1241L);
+        missed.setIsFixed(false);
+        missed.setEventType(EventType.TASK);
+        missed.setRelatedTask(task);
+        missed.setStartTime(yesterday.atTime(9, 0));
+        missed.setEndTime(yesterday.atTime(10, 0));
+        when(calendarEventRepository.findByUserIdAndEventTypeInAndIsFixedAndStartTimeBetween(
+                eq(1L), anyList(), eq(false), any(), any())).thenReturn(List.of(missed));
+
+        ScheduleResult result = service.generateOptimalSchedule(1L, yesterday, TODAY.plusDays(2));
+
+        long planned = result.getScheduledTasks().stream()
+                .mapToLong(i -> ChronoUnit.MINUTES.between(i.getStartTime(), i.getEndTime()))
+                .sum();
+        assertEquals(60, planned,
+                "der verpasste Block zählt nicht als geleistet — die vollen 60 Minuten werden neu geplant");
+
+        ArgumentCaptor<LocalDateTime> start = ArgumentCaptor.forClass(LocalDateTime.class);
+        verify(taskService).scheduleTask(eq(1240L), start.capture(), any());
+        assertFalse(start.getValue().isBefore(LocalDateTime.now().toLocalDate().atStartOfDay()),
+                "der Task muss auf den nächstmöglichen Termin rücken, stand aber auf "
+                        + start.getValue());
+    }
+
+    // ------------------------------------------------------------------
+    // Test 27e – Ein abgehakter Block zählt auch bei abgelaufener Deadline
+    // ------------------------------------------------------------------
+    @Test
+    void abgehakterBlockZaehltAuchBeiAbgelaufenerDeadline() {
+        LocalDate yesterday = TODAY.minusDays(1);
+
+        // Deadline abgelaufen, aber die Zeit ist nachweislich gelaufen: 60 von 60 Minuten sind
+        // gutgeschrieben. Es gibt nichts neu zu planen, und der Block bleibt der Termin des Tasks.
+        Task task = makeTask(1250L, "War erledigt", 60, 3, yesterday.atTime(23, 59));
+        task.setCompletedMinutes(60);
+        task.setScheduledStartTime(yesterday.atTime(9, 0));
+        task.setScheduledEndTime(yesterday.atTime(10, 0));
+        when(taskService.getSchedulableTasks(1L)).thenReturn(List.of(task));
+        when(calendarEventService.getFixedEvents(eq(1L), any(), any())).thenReturn(new ArrayList<>());
+
+        CalendarEvent done = new CalendarEvent();
+        done.setId(1251L);
+        done.setIsFixed(false);
+        done.setEventType(EventType.TASK);
+        done.setRelatedTask(task);
+        done.setStartTime(yesterday.atTime(9, 0));
+        done.setEndTime(yesterday.atTime(10, 0));
+        done.setCompletedAt(yesterday.atTime(10, 0));
+        when(calendarEventRepository.findByUserIdAndEventTypeInAndIsFixedAndStartTimeBetween(
+                eq(1L), anyList(), eq(false), any(), any())).thenReturn(List.of(done));
+
+        ScheduleResult result = service.generateOptimalSchedule(1L, yesterday, TODAY.plusDays(2));
+
+        assertTrue(result.getScheduledTasks().isEmpty(),
+                "ein abgehakter Block ist geleistete Zeit — es darf nichts neu geplant werden");
+        verify(taskService, never()).clearSchedule(1250L);
+        verify(taskService).scheduleTask(1250L, yesterday.atTime(9, 0), yesterday.atTime(10, 0));
+    }
+
+    // ------------------------------------------------------------------
+    // Test 27f – Der überfällige Task kommt vor den entspannten
+    // ------------------------------------------------------------------
+    @Test
+    void ueberfaelligerTaskLandetVorEinemEntspanntenTask() {
+        LocalDate tomorrow = TODAY.plusDays(1);
+
+        Task overdue = makeTask(1260L, "Längst fällig", 60, 3, TODAY.minusDays(1).atTime(23, 59));
+        Task relaxed = makeTask(1261L, "Hat noch Zeit", 60, 3, TODAY.plusDays(10).atTime(23, 59));
+        when(taskService.getSchedulableTasks(1L)).thenReturn(List.of(relaxed, overdue));
+        when(calendarEventService.getFixedEvents(eq(1L), any(), any())).thenReturn(new ArrayList<>());
+
+        ScheduleResult result = service.generateOptimalSchedule(1L, tomorrow, tomorrow.plusDays(2));
+
+        LocalDateTime overdueStart = startOf(result, 1260L);
+        LocalDateTime relaxedStart = startOf(result, 1261L);
+        assertNotNull(overdueStart, "der überfällige Task muss geplant werden");
+        assertNotNull(relaxedStart, "der entspannte Task muss geplant werden");
+        assertTrue(overdueStart.isBefore(relaxedStart),
+                "der überfällige Task gehört nach vorne: " + overdueStart + " vs. " + relaxedStart);
+    }
+
+    // ------------------------------------------------------------------
+    // Test 27g – Auch ein lange überfälliger Task wird noch geplant
+    //
+    // Die Verspätung ist hier größer als der gesamte Horizont. Mit der alten Obergrenze von
+    // late war die Deadline-Bedingung damit unerfüllbar und CP-SAT musste den Block verwerfen.
+    // ------------------------------------------------------------------
+    @Test
+    void langeUeberfaelligerTaskWirdNichtVerworfen() {
+        LocalDate tomorrow = TODAY.plusDays(1);
+
+        Task ancient = makeTask(1270L, "Seit Ewigkeiten offen", 60, 3,
+                TODAY.minusDays(200).atTime(23, 59));
+        ancient.setScheduledStartTime(tomorrow.atTime(9, 0));
+        ancient.setScheduledEndTime(tomorrow.atTime(10, 0));
+        when(taskService.getSchedulableTasks(1L)).thenReturn(List.of(ancient));
+        when(calendarEventService.getFixedEvents(eq(1L), any(), any())).thenReturn(new ArrayList<>());
+
+        ScheduleResult result = service.generateOptimalSchedule(1L, tomorrow, tomorrow.plusDays(2));
+
+        assertNotNull(startOf(result, 1270L),
+                "eine 200 Tage alte Deadline darf den Task nicht aus dem Plan werfen");
+        assertTrue(result.getUnscheduledTasks().stream().noneMatch(t -> t.getId().equals(1270L)));
+        verify(taskService, never()).clearSchedule(1270L);
+    }
+
+    /** Startzeit des ersten Blocks eines Tasks, oder {@code null}, wenn er nicht geplant wurde. */
+    private LocalDateTime startOf(ScheduleResult result, Long taskId) {
+        return result.getScheduledTasks().stream()
+                .filter(i -> i.getTask() != null && taskId.equals(i.getTask().getId()))
+                .map(ScheduledItem::getStartTime)
+                .min(LocalDateTime::compareTo)
+                .orElse(null);
+    }
+
+    // ------------------------------------------------------------------
     // Test 28 – Flexible Habits bleiben an ihren Tagen
     // ------------------------------------------------------------------
     @Test
