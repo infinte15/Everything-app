@@ -14,6 +14,12 @@ public class ScheduleInput {
     private List<CourseSchedule> courseSchedules;
 
     /**
+     * Projekte, die Wochenpensum bekommen sollen. Ihre Sessions haben keine eigene Entität —
+     * die Slots werden bei jedem Lauf aus weeklySessionCount/sessionDurationMinutes abgeleitet.
+     */
+    private List<Project> projects;
+
+    /**
      * Die vom letzten Lauf erzeugten (nicht gepinnten) Events, eingesammelt BEVOR sie gelöscht
      * werden. Speist den Stabilitätsterm: ohne ihn springt bei jeder kleinen Änderung der
      * komplette restliche Kalender.

@@ -28,6 +28,7 @@ public class CalendarEventDTO {
     private Long relatedTaskId;
     private Long relatedHabitId;
     private Long relatedWorkoutId;
+    private Long relatedProjectId;
 
     private String color;
     private String notes;

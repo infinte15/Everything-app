@@ -15,6 +15,7 @@ import '../screens/finance/finance_screen.dart';
 import '../screens/notes/notes_screen.dart';
 import '../widgets/bottom_nav.dart';
 import '../screens/habits/habits_screen.dart';
+import '../screens/projects/project_detail_screen.dart';
 import '../screens/projects/projects_screen.dart';
 import '../screens/settings/settings_screen.dart';
 
@@ -106,6 +107,16 @@ final router = GoRouter(
     GoRoute(
       path: '/projects',
       builder: (_, _) => const ProjectsScreen(),
+      routes: [
+        // Eigene Route statt Navigator.push: der Detail-Screen ist damit verlinkbar und
+        // ueberlebt einen Neuaufbau des Navigators.
+        GoRoute(
+          path: ':id',
+          builder: (_, state) => ProjectDetailScreen(
+            projectId: int.parse(state.pathParameters['id']!),
+          ),
+        ),
+      ],
     ),
   ],
 );

@@ -58,6 +58,10 @@ public class SmartSchedulerService {
     private final HabitCompletionRepository  habitCompletionRepository;
     private final WorkoutSessionRepository   workoutSessionRepository;
     private final CourseScheduleRepository   courseScheduleRepository;
+    // Bewusst das Repository und nicht ProjectService: es gibt keine Platzhalter zu erzeugen
+    // (Projekt-Sessions haben keine eigene Entität), und ProjectService publiziert selbst
+    // ScheduleChangedEvent — eine Service-zu-Service-Kante wäre ein Zyklus in Wartung.
+    private final ProjectRepository          projectRepository;
     private final UserService                userService;
     private final CalendarEventService       calendarEventService;
     private final TaskService                taskService;
@@ -73,6 +77,16 @@ public class SmartSchedulerService {
     private static final int FALLBACK_MIN_CHUNK_MIN        = 30;
     private static final int FALLBACK_MAX_CHUNK_MIN        = 120;
     private static final int FALLBACK_MAX_TASK_MIN_PER_DAY = 480;
+    private static final int DEFAULT_PROJECT_SESSION_MIN    = 60;
+    /** Deckel gegen ein explodierendes Modell, falls jemand eine absurde Wochenzahl schickt. */
+    private static final int MAX_PROJECT_SESSIONS_PER_WEEK  = 14;
+
+    /**
+     * Status, die Projektzeit verdienen. PLANNING ist bewusst dabei: das ist der Status, den
+     * ProjectService.createProject vergibt — ohne ihn bekäme ein frisches Projekt nie einen Block.
+     */
+    private static final Set<ProjectStatus> SCHEDULABLE_PROJECT_STATUS =
+            EnumSet.of(ProjectStatus.PLANNING, ProjectStatus.IN_PROGRESS, ProjectStatus.ACTIVE);
 
     // Phase-2-Gewichte. Alle Terme sind in Slots, damit sie vergleichbar sind.
     // Eine Deadline um einen Tag zu reißen kostet 40*prio*288; einen Tag später zu liegen 1*prio*288.
@@ -82,6 +96,11 @@ public class SmartSchedulerService {
     private static final long W_HABIT_DEV = 2;
     private static final long W_MOVE      = 3;
     private static final long W_PEAK      = 2;
+
+    // Drop-Gewicht der Projektzeit. Liegt unter dem Workout (300) und unter einem Prio-3-Habit
+    // (300): Projektzeit ist der am ehesten verzichtbare wiederkehrende Block — deadlinefrei,
+    // quotenbasiert und nächste Woche wieder da.
+    private static final long W_DROP_PROJECT = 200;
 
     // Feld-Initialisierung, damit Mockito-Tests ohne Spring-Kontext einen sinnvollen Wert haben.
     @Value("${scheduler.solver-time-limit-seconds:10.0}")
@@ -160,9 +179,11 @@ public class SmartSchedulerService {
         List<TaskChunk> chunks     = decomposeTasks(input.getTasks(), prefs, pinnedMinutes);
         List<HabitSlot> habitSlots = expandHabitSlots(input.getHabits(), prefs, startDate, endDate,
                 pinnedDatesPerHabit(committed));
+        List<ProjectSlot> projectSlots = expandProjectSlots(input.getProjects(), startDate, endDate,
+                committedDatesPerProject(committed));
 
-        SolveOutcome outcome = solveWithCpSat(chunks, habitSlots, input, axis, prefs, startDate, endDate,
-                taskLastDay);
+        SolveOutcome outcome = solveWithCpSat(chunks, habitSlots, projectSlots, input, axis, prefs,
+                startDate, endDate, taskLastDay);
 
         // Der entscheidende Unterschied zur alten Implementierung: gelöscht wird ERST, wenn eine
         // verwertbare Lösung vorliegt. Ein leerer Kalender ist schlechter als ein veralteter.
@@ -191,6 +212,8 @@ public class SmartSchedulerService {
         List<ScheduledItem> scheduledTasks = outcome.getItems().stream()
                 .filter(i -> i.getType() == ScheduledItemType.TASK)
                 .collect(Collectors.toList());
+        // Alles, was kein TASK ist — Habits, Workouts und Projekt-Sessions. Sie gehören in
+        // denselben Topf: wiederkehrende, quotenbasierte Blöcke ohne Deadline.
         List<ScheduledItem> scheduledRest = outcome.getItems().stream()
                 .filter(i -> i.getType() != ScheduledItemType.TASK)
                 .collect(Collectors.toList());
@@ -204,7 +227,7 @@ public class SmartSchedulerService {
         result.setAtRisk(outcome.getAtRisk());
         result.setSolverStatus(outcome.getStatus().name());
 
-        log.info("Schedule fertig: {} Task-Blöcke, {} Habits/Workouts, {} at risk",
+        log.info("Schedule fertig: {} Task-Blöcke, {} Habits/Workouts/Projekte, {} at risk",
                 scheduledTasks.size(), scheduledRest.size(), outcome.getAtRisk().size());
         return result;
     }
@@ -541,6 +564,20 @@ public class SmartSchedulerService {
                         Collectors.mapping(e -> e.getStartTime().toLocalDate(), Collectors.toSet())));
     }
 
+    /**
+     * Tage, an denen je Projekt bereits ein gepinnter oder eingefrorener Block liegt.
+     *
+     * Ein Set genügt für beide Aufgaben — Tagesausschluss und Kürzen der Wochenquote —, weil pro
+     * Projekt und Tag ohnehin höchstens eine Session erlaubt ist (siehe Wochengruppen-Constraint).
+     */
+    private Map<Long, Set<LocalDate>> committedDatesPerProject(List<CalendarEvent> committed) {
+        return nz(committed).stream()
+                .filter(e -> e.getRelatedProject() != null && e.getStartTime() != null)
+                .collect(Collectors.groupingBy(
+                        e -> e.getRelatedProject().getId(),
+                        Collectors.mapping(e -> e.getStartTime().toLocalDate(), Collectors.toSet())));
+    }
+
     private List<TaskChunk> decomposeTasks(List<Task> tasks, UserPreferences prefs,
                                            Map<Long, Integer> pinnedMinutes) {
         List<TaskChunk> out = new ArrayList<>();
@@ -772,15 +809,116 @@ public class SmartSchedulerService {
     }
 
     // =========================================================================
+    // ZERLEGUNG: PROJEKTE -> SESSIONS
+    // =========================================================================
+
+    /**
+     * Eine zu planende Projekt-Session.
+     *
+     * Bewusst OHNE eigene Entität — anders als beim Workout gibt es keinen Session-Zustand
+     * (abhaken, Notizen, Ist-Dauer), der eine Zeile rechtfertigen würde. Die Wochenquote wird bei
+     * jedem Lauf neu aus {@code Project.weeklySessionCount} gerechnet, der Kalenderblock ist die
+     * einzige Kopie seiner Zeit. Das erspart Platzhalter-Aufstockung, Waisen-Zeilen beim
+     * Verkleinern der Quote und das Zurückschreiben verschobener Zeiten.
+     */
+    private static final class ProjectSlot {
+        Project project;
+        int     durationMinutes;
+        /** Tage (Index im Horizont), an denen dieser Slot liegen darf. */
+        final List<Integer> allowedDays = new ArrayList<>();
+        /** Alle Slots einer Projekt-Woche teilen diesen Schlüssel. */
+        String    weekGroup;
+        LocalDate weekStart;
+        int       indexInWeek;
+        Placeable placeable;
+    }
+
+    /**
+     * Erzeugt pro ISO-Woche k austauschbare Projekt-Sessions — dieselbe Form wie flexible Habits
+     * ("N mal pro Woche"), weshalb auch dieselben Wochengruppen-Constraints und derselbe
+     * Stabilitätsanker greifen.
+     */
+    private List<ProjectSlot> expandProjectSlots(List<Project> projects, LocalDate startDate,
+                                                 LocalDate endDate,
+                                                 Map<Long, Set<LocalDate>> committedDates) {
+        List<ProjectSlot> slots = new ArrayList<>();
+
+        for (Project project : nz(projects)) {
+            Integer weekly = project.getWeeklySessionCount();
+            if (weekly == null || weekly <= 0) continue;   // 0 ist der Opt-out
+            int perWeek = Math.min(MAX_PROJECT_SESSIONS_PER_WEEK, weekly);
+            int duration = nz(project.getSessionDurationMinutes(), DEFAULT_PROJECT_SESSION_MIN);
+            if (duration <= 0) continue;
+
+            LocalDate rangeStart = (project.getStartDate() != null && project.getStartDate().isAfter(startDate))
+                    ? project.getStartDate() : startDate;
+            LocalDate rangeEnd = endDate;
+            if (project.getTargetEndDate() != null && project.getTargetEndDate().isBefore(rangeEnd)) {
+                rangeEnd = project.getTargetEndDate();
+            }
+            // Ein tatsächlich beendetes Projekt bekommt keine Zeit mehr, egal was der Status sagt.
+            if (project.getActualEndDate() != null && project.getActualEndDate().isBefore(rangeEnd)) {
+                rangeEnd = project.getActualEndDate();
+            }
+            if (rangeStart.isAfter(rangeEnd)) continue;
+
+            Set<LocalDate> committed = committedDates.getOrDefault(project.getId(), Set.of());
+
+            LocalDate cursor = rangeStart.with(TemporalAdjusters.previousOrSame(DayOfWeek.MONDAY));
+            while (!cursor.isAfter(rangeEnd)) {
+                final LocalDate weekStart = cursor;
+                LocalDate weekEnd = weekStart.plusDays(6);
+
+                List<Integer> days = new ArrayList<>();
+                int daysInRange = 0;
+                for (LocalDate d = weekStart; !d.isAfter(weekEnd); d = d.plusDays(1)) {
+                    if (d.isBefore(rangeStart) || d.isAfter(rangeEnd)) continue;
+                    daysInRange++;
+                    // Tag mit gepinntem/eingefrorenem Block ist belegt — sonst legt der Solver
+                    // nach einem Drag-and-Drop eine zweite Session am selben Tag an.
+                    if (committed.contains(d)) continue;
+                    days.add((int) ChronoUnit.DAYS.between(startDate, d));
+                }
+
+                if (!days.isEmpty()) {
+                    int target = perWeek;
+                    // Angebrochene Woche am Rand des Horizonts anteilig planen.
+                    if (daysInRange < 7) target = (int) Math.ceil(target * daysInRange / 7.0);
+                    long done = committed.stream()
+                            .filter(d -> !d.isBefore(weekStart) && !d.isAfter(weekEnd))
+                            .count();
+                    int k = Math.min(days.size(), (int) Math.max(0, target - done));
+
+                    String group = "p" + project.getId() + "w" + weekStart;
+                    for (int i = 0; i < k; i++) {
+                        ProjectSlot s = new ProjectSlot();
+                        s.project         = project;
+                        s.durationMinutes = duration;
+                        s.weekGroup       = group;
+                        s.weekStart       = weekStart;
+                        s.indexInWeek     = i;
+                        s.allowedDays.addAll(days);
+                        slots.add(s);
+                    }
+                }
+                cursor = cursor.plusWeeks(1);
+            }
+        }
+        return slots;
+    }
+
+    // =========================================================================
     // CP-SAT
     // =========================================================================
 
     private SolveOutcome solveWithCpSat(List<TaskChunk> chunks, List<HabitSlot> habitSlots,
+                                        List<ProjectSlot> projectSlots,
                                         ScheduleInput input, Axis axis, UserPreferences prefs,
                                         LocalDate startDate, LocalDate endDate, int taskLastDay) {
 
         List<WorkoutSession> flexibleWorkouts = nz(input.getFlexibleWorkouts());
-        if (chunks.isEmpty() && habitSlots.isEmpty() && flexibleWorkouts.isEmpty()) {
+        if (chunks.isEmpty() && habitSlots.isEmpty() && flexibleWorkouts.isEmpty()
+                && projectSlots.isEmpty()) {
             return SolveOutcome.empty();
         }
 
@@ -979,22 +1117,7 @@ public class SmartSchedulerService {
         for (List<HabitSlot> group : weekGroups.values()) {
             Set<Integer> days = new LinkedHashSet<>();
             group.forEach(s -> days.addAll(s.allowedDays));
-
-            for (int day : days) {
-                List<Literal> sameDay = new ArrayList<>();
-                for (HabitSlot s : group) {
-                    BoolVar b = s.placeable.inDay.get(day);
-                    if (b != null) sameDay.add(b);
-                }
-                if (sameDay.size() > 1) model.addAtMostOne(sameDay);
-            }
-
-            for (int i = 1; i < group.size(); i++) {
-                Placeable a = group.get(i - 1).placeable;
-                Placeable b = group.get(i).placeable;
-                model.addLessThan(a.start, b.start).onlyEnforceIf(new Literal[]{ a.present, b.present });
-                model.addImplication(b.present, a.present);   // Slots der Reihe nach füllen
-            }
+            addWeekGroupConstraints(model, group.stream().map(s -> s.placeable).toList(), days);
         }
 
         // --- Flexible Workouts ---
@@ -1028,6 +1151,45 @@ public class SmartSchedulerService {
             qWeights.add(W_URGENCY * 3);
 
             addStabilityTerm(model, p, previousStarts.get("workout:" + w.getId()), axis, qVars, qWeights, name);
+        }
+
+        // --- Projekt-Sessions ---
+        for (int i = 0; i < projectSlots.size(); i++) {
+            ProjectSlot s = projectSlots.get(i);
+            int sizeSlots = Axis.slotsFor(s.durationMinutes);
+            String name = "proj" + s.project.getId() + "_" + i;
+
+            // Voller Horizont wie Habits und Workouts: Projektzeit ist wiederkehrend und soll in
+            // JEDER Woche im Kalender stehen, nicht nur im 14-Tage-Task-Fenster.
+            List<DayWindow> windows = dayWindows(axis, workStartSlot, workEndSlot, sizeSlots, nowSlot,
+                    s.allowedDays, axis.totalDays - 1);
+            Placeable p = makePlaceable(model, name, sizeSlots, s.durationMinutes, windows, gapSlots);
+            s.placeable = p;
+            allPlaceables.add(p);
+            allIntervals.add(p.interval);
+
+            dropB.addTerm(p.present, -W_DROP_PROJECT);
+            dropConst += W_DROP_PROJECT;
+
+            // Kein windowDeviation: ein Projekt hat kein Wunschfenster, die Session darf überall
+            // in der Arbeitszeit liegen.
+            qVars.add(gated(model, p, "urg_" + name, p.start, axis.horizonSlots));
+            qWeights.add(W_URGENCY * 2);
+
+            addStabilityTerm(model, p,
+                    previousStarts.get("projectweek:" + s.project.getId() + ":" + s.weekStart + ":" + s.indexInWeek),
+                    axis, qVars, qWeights, name);
+        }
+
+        // --- Gruppen-Constraints für Projekt-Sessions (je Projekt und ISO-Woche) ---
+        Map<String, List<ProjectSlot>> projectWeeks = projectSlots.stream()
+                .filter(s -> s.weekGroup != null && s.placeable != null)
+                .collect(Collectors.groupingBy(s -> s.weekGroup, LinkedHashMap::new, Collectors.toList()));
+
+        for (List<ProjectSlot> group : projectWeeks.values()) {
+            Set<Integer> days = new LinkedHashSet<>();
+            group.forEach(s -> days.addAll(s.allowedDays));
+            addWeekGroupConstraints(model, group.stream().map(s -> s.placeable).toList(), days);
         }
 
         // --- Kernconstraint: nichts überlappt ---
@@ -1087,11 +1249,43 @@ public class SmartSchedulerService {
             }
         }
 
-        log.info("CP-SAT {} | Intervalle: {} | Chunks: {} Habits: {} Workouts: {} | drop={}",
+        log.info("CP-SAT {} | Intervalle: {} | Chunks: {} Habits: {} Workouts: {} Projekte: {} | drop={}",
                 effective, allIntervals.size(), chunks.size(), habitSlots.size(),
-                flexibleWorkouts.size(), bestDrop);
+                flexibleWorkouts.size(), projectSlots.size(), bestDrop);
 
-        return extract(solver, effective, chunks, habitSlots, flexibleWorkouts, workoutPlaceables, axis);
+        return extract(solver, effective, chunks, habitSlots, flexibleWorkouts, workoutPlaceables,
+                projectSlots, axis);
+    }
+
+    /**
+     * Constraints für eine Gruppe austauschbarer Slots derselben Woche (flexible Habits,
+     * Projekt-Sessions).
+     *
+     * Die Anzahl "höchstens k mal pro Woche" ergibt sich bereits daraus, dass genau k Slots
+     * erzeugt wurden und jeder höchstens einmal platziert wird. Nötig sind hier nur noch die
+     * Verteilung über verschiedene Tage und das Brechen der Symmetrie zwischen den k
+     * austauschbaren Slots — ohne Letzteres durchsucht CP-SAT k! gleichwertige Zuordnungen.
+     *
+     * Die chronologische Ordnung ist zugleich das, was den Stabilitätsanker treffsicher macht:
+     * previousStartSlots nummeriert die Vorgängertermine ebenfalls chronologisch, also trifft
+     * der i-te Slot den i-ten Vorgänger.
+     */
+    private void addWeekGroupConstraints(CpModel model, List<Placeable> group, Collection<Integer> days) {
+        for (int day : days) {
+            List<Literal> sameDay = new ArrayList<>();
+            for (Placeable p : group) {
+                BoolVar b = p.inDay.get(day);
+                if (b != null) sameDay.add(b);
+            }
+            if (sameDay.size() > 1) model.addAtMostOne(sameDay);
+        }
+
+        for (int i = 1; i < group.size(); i++) {
+            Placeable a = group.get(i - 1);
+            Placeable b = group.get(i);
+            model.addLessThan(a.start, b.start).onlyEnforceIf(new Literal[]{ a.present, b.present });
+            model.addImplication(b.present, a.present);   // Slots der Reihe nach füllen
+        }
     }
 
     /**
@@ -1164,11 +1358,17 @@ public class SmartSchedulerService {
         Map<String, Integer> out = new HashMap<>();
         Map<Long, List<CalendarEvent>> byTask  = new HashMap<>();
         Map<String, List<CalendarEvent>> byHabitWeek = new HashMap<>();
+        Map<String, List<CalendarEvent>> byProjectWeek = new HashMap<>();
 
         for (CalendarEvent ev : nz(input.getPreviousScheduledEvents())) {
             if (ev.getStartTime() == null) continue;
             if (ev.getRelatedTask() != null) {
                 byTask.computeIfAbsent(ev.getRelatedTask().getId(), k -> new ArrayList<>()).add(ev);
+            } else if (ev.getRelatedProject() != null) {
+                LocalDate week = ev.getStartTime().toLocalDate()
+                        .with(TemporalAdjusters.previousOrSame(DayOfWeek.MONDAY));
+                byProjectWeek.computeIfAbsent(ev.getRelatedProject().getId() + ":" + week,
+                        k -> new ArrayList<>()).add(ev);
             } else if (ev.getRelatedHabit() != null) {
                 out.put("habit:" + ev.getRelatedHabit().getId() + ":" + ev.getStartTime().toLocalDate(),
                         axis.floorSlot(ev.getStartTime()));
@@ -1193,6 +1393,13 @@ public class SmartSchedulerService {
                 out.put("habitweek:" + groupKey + ":" + i, axis.floorSlot(evs.get(i).getStartTime()));
             }
         });
+        // Anker für Projekt-Sessions: identisches Schema, pro Projekt und ISO-Woche.
+        byProjectWeek.forEach((groupKey, evs) -> {
+            evs.sort(Comparator.comparing(CalendarEvent::getStartTime));
+            for (int i = 0; i < evs.size(); i++) {
+                out.put("projectweek:" + groupKey + ":" + i, axis.floorSlot(evs.get(i).getStartTime()));
+            }
+        });
         return out;
     }
 
@@ -1202,7 +1409,8 @@ public class SmartSchedulerService {
 
     private SolveOutcome extract(CpSolver solver, CpSolverStatus status, List<TaskChunk> chunks,
                                  List<HabitSlot> habitSlots, List<WorkoutSession> flexibleWorkouts,
-                                 Map<Long, Placeable> workoutPlaceables, Axis axis) {
+                                 Map<Long, Placeable> workoutPlaceables,
+                                 List<ProjectSlot> projectSlots, Axis axis) {
         List<ScheduledItem> items  = new ArrayList<>();
         List<AtRiskItem>    atRisk = new ArrayList<>();
 
@@ -1290,6 +1498,21 @@ public class SmartSchedulerService {
             items.add(item);
         }
 
+        // --- Projekt-Sessions ---
+        // Kein AtRiskItem: eine nicht platzierbare Session fällt still weg — sie ist Wochenquote,
+        // keine Zusage, und steht nächste Woche wieder zur Verfügung (wie beim flexiblen Workout).
+        for (ProjectSlot s : projectSlots) {
+            if (s.placeable == null || !Boolean.TRUE.equals(solver.booleanValue(s.placeable.present))) continue;
+
+            LocalDateTime start = axis.timeOf((int) solver.value(s.placeable.start));
+            ScheduledItem item = new ScheduledItem();
+            item.setProject(s.project);
+            item.setStartTime(start);
+            item.setEndTime(start.plusMinutes(s.durationMinutes));   // echte Dauer, nicht die aufgerundete
+            item.setType(ScheduledItemType.PROJECT);
+            items.add(item);
+        }
+
         return new SolveOutcome(status, items, atRisk);
     }
 
@@ -1307,11 +1530,16 @@ public class SmartSchedulerService {
         input.setFixedEvents(calendarEventService.getFixedEvents(userId, start, end));
         input.setHabits(habitRepository.findHabitsActiveInRange(userId, startDate, endDate));
         input.setCourseSchedules(courseScheduleRepository.findByUserId(userId));
+        input.setProjects(projectRepository.findByUserIdAndStatusIn(userId, SCHEDULABLE_PROJECT_STATUS));
 
         // Vor dem Löschen einsammeln: der Stabilitätsterm braucht die bisherigen Platzierungen.
+        // PROJECT muss hier mit drin sein — sonst sind eingefrorene Projektblöcke weder in
+        // fixedEvents (sie sind isFixed=false) noch in frozenEvents, ihre Zeit würde nicht
+        // blockiert und der Stabilitätsanker fehlte.
         List<CalendarEvent> previous = nz(calendarEventRepository
                 .findByUserIdAndEventTypeInAndIsFixedAndStartTimeBetween(
-                        userId, List.of(EventType.TASK, EventType.HABIT, EventType.WORKOUT),
+                        userId,
+                        List.of(EventType.TASK, EventType.HABIT, EventType.WORKOUT, EventType.PROJECT),
                         false, start, end));
 
         // Bereits begonnene Blöcke werden eingefroren statt neu geplant. Sie taugen deshalb auch
@@ -1400,6 +1628,13 @@ public class SmartSchedulerService {
                     ev.setEventType(EventType.WORKOUT);
                     ev.setRelatedWorkout(item.getWorkoutSession());
                     ev.setColor("#FF5722");
+                }
+                case PROJECT -> {
+                    ev.setTitle(item.getProject().getName());
+                    ev.setDescription(item.getProject().getDescription());
+                    ev.setEventType(EventType.PROJECT);
+                    ev.setRelatedProject(item.getProject());
+                    ev.setColor(getColorForSpaceType(SpaceType.PROJECTS));
                 }
                 case CLASS -> {
                     // Abgeleitet aus dem Stundenplan, deshalb kein relatedXy: die Identität ergibt
@@ -1608,7 +1843,9 @@ public class SmartSchedulerService {
         return switch (spaceType) {
             case SPORTS   -> "#9C27B0";
             case STUDY    -> "#2196F3";
-            case PROJECTS -> "#00BCD4";
+            // Gleiches Pink wie die Projekte-Kachel im Spaces-Grid des Frontends — Kalender und
+            // Space sollen dieselbe Farbe sprechen.
+            case PROJECTS -> "#EC4899";
             case TASKS    -> "#FF5722";
             case RECIPES  -> "#4CAF50";
             default       -> "#2196F3";

@@ -34,6 +34,8 @@ Color _typeColor(String type) {
       // Nur der Rückfall: das Backend setzt bei Vorlesungen immer die Modulfarbe,
       // und event.color schlägt _typeColor.
       return AppTheme.studyColor;
+    case 'PROJECT':
+      return AppTheme.projectsColor;
     default:
       return AppTheme.primaryColor;
   }
@@ -51,6 +53,8 @@ IconData _typeIcon(String type) {
       return Icons.menu_book_rounded;
     case 'CLASS':
       return Icons.school_rounded;
+    case 'PROJECT':
+      return Icons.folder_special_outlined;
     default:
       return Icons.event_rounded;
   }

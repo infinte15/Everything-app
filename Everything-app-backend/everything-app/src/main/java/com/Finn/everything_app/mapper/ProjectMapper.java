@@ -39,8 +39,12 @@ public class ProjectMapper {
         project.setActualEndDate(dto.getActualEndDate());
         project.setStatus(dto.getStatus());
         project.setCompletionPercentage(dto.getCompletionPercentage());
-        if (dto.getWeeklySessionCount() != null) project.setWeeklySessionCount(dto.getWeeklySessionCount());
-        if (dto.getSessionDurationMinutes() != null) project.setSessionDurationMinutes(dto.getSessionDurationMinutes());
+        // Bewusst UNBEDINGT, damit null durchkommt: die Entity-Felder haben Defaults (1x pro
+        // Woche, 60 Minuten), und mit einem "nur wenn gesetzt"-Guard erreichten genau diese
+        // Defaults den Service. Ein PUT ohne die beiden Felder haette das Wochenpensum eines
+        // Projekts still auf 1x60 zurueckgesetzt. Die Defaults vergibt jetzt createProject.
+        project.setWeeklySessionCount(dto.getWeeklySessionCount());
+        project.setSessionDurationMinutes(dto.getSessionDurationMinutes());
 
         return project;
     }

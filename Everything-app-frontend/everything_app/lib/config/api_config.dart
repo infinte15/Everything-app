@@ -144,4 +144,9 @@ class ApiConfig {
   //PROJECT ENDPOINTS
   static const String projects = '$baseUrl/projects';
   static String projectById(int id) => '$baseUrl/projects/$id';
+  static String projectTasks(int id) => '$baseUrl/projects/$id/tasks';
+  /// Die vom Scheduler platzierten Projektbloecke als CalendarEvents.
+  static String projectSessions(int id) => '$baseUrl/projects/$id/sessions';
+  /// Aufgabe einem Projekt zuordnen oder entkoppeln (Body: {"projectId": null}).
+  static String taskProject(int id) => '$baseUrl/tasks/$id/project';
 }

@@ -36,18 +36,19 @@ class CalendarEventServiceTest {
     // Guards the bug fix: repeated schedule regeneration must not duplicate HABIT/WORKOUT
     // calendar events, since the old query only ever cleared TASK-typed events.
     @Test
-    void clearScheduledEventsCoversTaskHabitAndWorkoutWithinBounds() {
+    void clearScheduledEventsCoversTaskHabitWorkoutAndProjectWithinBounds() {
         LocalDateTime start = LocalDateTime.of(2026, 8, 3, 0, 0);
         LocalDateTime end = LocalDateTime.of(2026, 8, 9, 23, 59, 59);
+        List<EventType> owned = List.of(EventType.TASK, EventType.HABIT, EventType.WORKOUT, EventType.PROJECT);
 
         when(calendarEventRepository.findByUserIdAndEventTypeInAndIsFixedAndStartTimeBetween(
-                eq(1L), eq(List.of(EventType.TASK, EventType.HABIT, EventType.WORKOUT)), eq(false), eq(start), eq(end)))
+                eq(1L), eq(owned), eq(false), eq(start), eq(end)))
                 .thenReturn(List.of());
 
         service.clearScheduledEvents(1L, start, end);
 
         verify(calendarEventRepository).findByUserIdAndEventTypeInAndIsFixedAndStartTimeBetween(
-                1L, List.of(EventType.TASK, EventType.HABIT, EventType.WORKOUT), false, start, end);
+                1L, owned, false, start, end);
         verify(calendarEventRepository).deleteAll(List.of());
     }
 
@@ -67,6 +68,21 @@ class CalendarEventServiceTest {
         assertTrue(moved.getIsFixed(),
                 "ohne Pin löscht die nächste Neuplanung das Event und legt es woanders neu an");
         assertEquals(LocalDateTime.of(2026, 8, 4, 18, 0), moved.getStartTime());
+        assertSame(stored, moved);
+    }
+
+    @Test
+    void movingAProjectEventPinsIt() {
+        CalendarEvent stored = existingEvent(EventType.PROJECT, LocalDateTime.of(2026, 8, 4, 9, 0),
+                LocalDateTime.of(2026, 8, 4, 10, 0));
+
+        CalendarEvent moved = service.updateEvent(5L, 1L,
+                patch(EventType.PROJECT, LocalDateTime.of(2026, 8, 4, 17, 0),
+                        LocalDateTime.of(2026, 8, 4, 18, 0)));
+
+        assertTrue(moved.getIsFixed(),
+                "ohne Pin zieht der Solver die Projektzeit sofort wieder an ihren alten Platz");
+        assertEquals(LocalDateTime.of(2026, 8, 4, 17, 0), moved.getStartTime());
         assertSame(stored, moved);
     }
 

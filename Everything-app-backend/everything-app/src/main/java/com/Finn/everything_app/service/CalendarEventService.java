@@ -90,7 +90,8 @@ public class CalendarEventService {
      * gepinnt werden, damit die Änderung den nächsten Solver-Lauf überlebt.
      */
     private boolean isSchedulerOwned(EventType type) {
-        return type == EventType.TASK || type == EventType.HABIT || type == EventType.WORKOUT;
+        return type == EventType.TASK || type == EventType.HABIT || type == EventType.WORKOUT
+                || type == EventType.PROJECT;
     }
 
     /**
@@ -172,6 +173,10 @@ public class CalendarEventService {
             session.setEndTime(event.getEndTime());
             workoutSessionRepository.save(session);
         }
+
+        // Für PROJECT gibt es hier bewusst KEINEN Abgleich: Projekt-Sessions haben keine eigene
+        // Entität, dieser Block ist die einzige Kopie seiner Zeit. Der Scheduler leitet die
+        // Wochenquote bei jedem Lauf neu aus dem Projekt ab und zieht gepinnte Blöcke ab.
 
         CalendarEvent savedEvent = calendarEventRepository.save(event);
         eventPublisher.publishEvent(new ScheduleChangedEvent(this, event.getUser().getId()));
@@ -342,7 +347,7 @@ public class CalendarEventService {
     public void clearScheduledEvents(Long userId, LocalDateTime start, LocalDateTime end) {
         List<CalendarEvent> events = calendarEventRepository.findByUserIdAndEventTypeInAndIsFixedAndStartTimeBetween(
                 userId,
-                List.of(EventType.TASK, EventType.HABIT, EventType.WORKOUT),
+                List.of(EventType.TASK, EventType.HABIT, EventType.WORKOUT, EventType.PROJECT),
                 false,
                 start,
                 end);

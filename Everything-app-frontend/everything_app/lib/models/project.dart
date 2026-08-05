@@ -4,7 +4,8 @@ class Project {
   final int? id;
   final String name;
   final String? description;
-  final String status; // PLANNING, ACTIVE, ON_HOLD, COMPLETED, CANCELLED
+  final String status; // PLANNING, IN_PROGRESS, ACTIVE, ON_HOLD, COMPLETED, CANCELLED
+  /// Abgeleitet aus den verknuepften Aufgaben — der Server ist die Quelle, nie das Formular.
   final int completionPercentage;
   final int tasksTotal;
   final int tasksCompleted;
@@ -46,6 +47,8 @@ class Project {
     );
   }
 
+  /// Ohne die abgeleiteten Felder: der Server rechnet Fortschritt und Zaehler aus den
+  /// verknuepften Aufgaben und ignoriert, was der Client dazu schickt.
   Map<String, dynamic> toJson() {
     final fmt = DateFormat('yyyy-MM-dd');
     return {
@@ -53,7 +56,6 @@ class Project {
       'name': name,
       'description': description,
       'status': status,
-      'completionPercentage': completionPercentage,
       'startDate': startDate != null ? fmt.format(startDate!) : null,
       'targetEndDate': targetEndDate != null ? fmt.format(targetEndDate!) : null,
       'actualEndDate': actualEndDate != null ? fmt.format(actualEndDate!) : null,
@@ -70,6 +72,11 @@ class Project {
     int? completionPercentage,
     int? tasksTotal,
     int? tasksCompleted,
+    // Die drei Datumsfelder waren frueher gar nicht deklariert und wurden im Rumpf mit sich
+    // selbst belegt — copyWith konnte kein Datum aendern.
+    DateTime? startDate,
+    DateTime? targetEndDate,
+    DateTime? actualEndDate,
     int? weeklySessionCount,
     int? sessionDurationMinutes,
   }) {
@@ -81,9 +88,9 @@ class Project {
       completionPercentage: completionPercentage ?? this.completionPercentage,
       tasksTotal: tasksTotal ?? this.tasksTotal,
       tasksCompleted: tasksCompleted ?? this.tasksCompleted,
-      startDate: startDate ?? startDate,
-      targetEndDate: targetEndDate ?? targetEndDate,
-      actualEndDate: actualEndDate ?? actualEndDate,
+      startDate: startDate ?? this.startDate,
+      targetEndDate: targetEndDate ?? this.targetEndDate,
+      actualEndDate: actualEndDate ?? this.actualEndDate,
       weeklySessionCount: weeklySessionCount ?? this.weeklySessionCount,
       sessionDurationMinutes: sessionDurationMinutes ?? this.sessionDurationMinutes,
     );
@@ -91,10 +98,11 @@ class Project {
 
   String get statusLabel {
     switch (status) {
-      case 'PLANNING': return 'Planung';
+      case 'PLANNING': return 'Geplant';
+      case 'IN_PROGRESS':
       case 'ACTIVE': return 'Aktiv';
       case 'ON_HOLD': return 'Pausiert';
-      case 'COMPLETED': return 'Abgeschlossen';
+      case 'COMPLETED': return 'Fertig';
       case 'CANCELLED': return 'Abgebrochen';
       default: return status;
     }
@@ -103,5 +111,20 @@ class Project {
   bool get isOverdue {
     if (targetEndDate == null) return false;
     return targetEndDate!.isBefore(DateTime.now()) && status != 'COMPLETED';
+  }
+
+  bool get isDone => status == 'COMPLETED' || status == 'CANCELLED';
+
+  int get openTasks => (tasksTotal - tasksCompleted).clamp(0, tasksTotal);
+
+  /// Wochenpensum in Minuten — 0 heisst "keine Projektzeit einplanen".
+  int get weeklyMinutes => weeklySessionCount * sessionDurationMinutes;
+
+  /// Verbleibende Tage bis zum Zieldatum; negativ bedeutet ueberfaellig.
+  int? get daysUntilTarget {
+    if (targetEndDate == null) return null;
+    final today = DateTime.now();
+    final target = DateTime(targetEndDate!.year, targetEndDate!.month, targetEndDate!.day);
+    return target.difference(DateTime(today.year, today.month, today.day)).inDays;
   }
 }

@@ -16,6 +16,8 @@ class CalendarEvent {
   final int? relatedTaskId;
   final int? relatedHabitId;
   final int? relatedWorkoutId;
+  /// Gesetzt bei automatisch geplanter Projektzeit (eventType == 'PROJECT').
+  final int? relatedProjectId;
 
   /// Vom Nutzer abgehakt; null heisst offen. Wird ausschliesslich ueber
   /// PUT /events/{id}/complete gesetzt — dort werden auch die Minuten gutgeschrieben.
@@ -35,6 +37,7 @@ class CalendarEvent {
     this.relatedTaskId,
     this.relatedHabitId,
     this.relatedWorkoutId,
+    this.relatedProjectId,
     this.completedAt,
   });
 
@@ -54,6 +57,7 @@ class CalendarEvent {
       relatedTaskId: json['relatedTaskId'],
       relatedHabitId: json['relatedHabitId'],
       relatedWorkoutId: json['relatedWorkoutId'],
+      relatedProjectId: json['relatedProjectId'],
       completedAt: json['completedAt'] != null
           ? DateTime.parse(json['completedAt'])
           : null,
@@ -76,6 +80,7 @@ class CalendarEvent {
       'relatedTaskId': relatedTaskId,
       'relatedHabitId': relatedHabitId,
       'relatedWorkoutId': relatedWorkoutId,
+      'relatedProjectId': relatedProjectId,
       'completedAt': completedAt?.toIso8601String(),
     };
   }
@@ -95,6 +100,7 @@ class CalendarEvent {
     int? relatedTaskId,
     int? relatedHabitId,
     int? relatedWorkoutId,
+    int? relatedProjectId,
   }) {
     return CalendarEvent(
       id: id ?? this.id,
@@ -110,6 +116,7 @@ class CalendarEvent {
       relatedTaskId: relatedTaskId ?? this.relatedTaskId,
       relatedHabitId: relatedHabitId ?? this.relatedHabitId,
       relatedWorkoutId: relatedWorkoutId ?? this.relatedWorkoutId,
+      relatedProjectId: relatedProjectId ?? this.relatedProjectId,
     );
   }
 

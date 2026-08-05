@@ -80,6 +80,13 @@ public class CalendarEvent {
     @JoinColumn(name = "related_workout_id")
     private WorkoutSession relatedWorkout;
 
+    // Projekt-Sessions haben bewusst keine eigene Entitaet: die Wochenquote wird bei jedem Lauf
+    // neu aus Project.weeklySessionCount gerechnet, der Block hier ist die einzige Kopie seiner
+    // Zeit. Deshalb zeigt der Fremdschluessel direkt aufs Projekt.
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "related_project_id")
+    private Project relatedProject;
+
     // Getter und Setter werden von Lombok @Data automatisch generiert
 
     @PrePersist

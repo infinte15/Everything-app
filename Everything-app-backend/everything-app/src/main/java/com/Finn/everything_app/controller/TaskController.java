@@ -82,6 +82,28 @@ public class TaskController {
         return ResponseEntity.ok(taskMapper.toDTO(updated));
     }
 
+    /**
+     * PUT /api/tasks/{id}/project --> Aufgabe einem Projekt zuordnen oder entkoppeln.
+     *
+     * Eigener Endpunkt, weil die Patch-Semantik von PUT /api/tasks/{id} "null = unveraendert"
+     * bedeutet und damit kein Entkoppeln ausdruecken kann.
+     */
+    @PutMapping("/{id}/project")
+    public ResponseEntity<TaskDTO> assignProject(
+            @CurrentUser Long userId,
+            @PathVariable Long id,
+            @RequestBody ProjectAssignmentRequest request) {
+
+        Task updated = taskService.assignToProject(id, userId, request.getProjectId());
+        return ResponseEntity.ok(taskMapper.toDTO(updated));
+    }
+
+    /** {@code null} bedeutet hier ausdruecklich "keinem Projekt mehr zugeordnet". */
+    @lombok.Data
+    public static class ProjectAssignmentRequest {
+        private Long projectId;
+    }
+
     //PUT /api/tasks/{id}/complete
     @PutMapping("/{id}/complete")
     public ResponseEntity<TaskDTO> completeTask(@PathVariable Long id){

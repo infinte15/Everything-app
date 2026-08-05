@@ -40,6 +40,7 @@ class SmartSchedulerServiceTest {
     @Mock HabitCompletionRepository habitCompletionRepository;
     @Mock WorkoutSessionRepository  workoutSessionRepository;
     @Mock CourseScheduleRepository  courseScheduleRepository;
+    @Mock ProjectRepository         projectRepository;
     @Mock UserService               userService;
     @Mock CalendarEventService      calendarEventService;
     @Mock TaskService               taskService;
@@ -71,6 +72,7 @@ class SmartSchedulerServiceTest {
                  .thenReturn(new ArrayList<>());
         lenient().when(courseScheduleRepository.findByUserId(1L)).thenReturn(new ArrayList<>());
         lenient().when(workoutPlanService.getActivePlan(1L)).thenReturn(null);
+        lenient().when(projectRepository.findByUserIdAndStatusIn(eq(1L), any())).thenReturn(new ArrayList<>());
     }
 
     // ------------------------------------------------------------------
@@ -1663,6 +1665,251 @@ class SmartSchedulerServiceTest {
         }
         java.util.Collections.sort(out);
         return out;
+    }
+
+    // ==================================================================
+    // Projekt-Sessions: wöchentliche Projektzeit in den Kalenderlücken
+    // ==================================================================
+
+    // ------------------------------------------------------------------
+    // Ein Projekt mit 3x/Woche bekommt drei Blöcke an drei verschiedenen Tagen
+    // ------------------------------------------------------------------
+    @Test
+    void projektBekommtDreiBloeckeProWoche() {
+        LocalDate monday = TODAY.plusDays(1).with(TemporalAdjusters.next(DayOfWeek.MONDAY));
+        Project project = makeProject(500L, "Hausbau", 3, 60);
+
+        when(projectRepository.findByUserIdAndStatusIn(eq(1L), any())).thenReturn(List.of(project));
+        when(taskService.getSchedulableTasks(1L)).thenReturn(new ArrayList<>());
+        when(calendarEventService.getFixedEvents(eq(1L), any(), any())).thenReturn(new ArrayList<>());
+
+        ScheduleResult result = service.generateOptimalSchedule(1L, monday, monday.plusDays(6));
+
+        List<ScheduledItem> sessions = projectItems(result);
+        assertEquals(3, sessions.size(), "weeklySessionCount=3 ergibt drei Blöcke");
+
+        List<LocalDate> days = sessions.stream().map(i -> i.getStartTime().toLocalDate()).toList();
+        assertEquals(3, new java.util.HashSet<>(days).size(),
+                "höchstens eine Projekt-Session pro Tag");
+
+        for (ScheduledItem s : sessions) {
+            assertEquals(60, ChronoUnit.MINUTES.between(s.getStartTime(), s.getEndTime()));
+            assertEquals(project, s.getProject());
+        }
+    }
+
+    // ------------------------------------------------------------------
+    // Projektzeit läuft über den vollen Horizont, nicht nur über das Task-Fenster
+    // ------------------------------------------------------------------
+    @Test
+    void projektSessionsInJederWocheDesHorizonts() {
+        LocalDate monday = TODAY.plusDays(1).with(TemporalAdjusters.next(DayOfWeek.MONDAY));
+        Project project = makeProject(510L, "Roman schreiben", 2, 90);
+
+        when(projectRepository.findByUserIdAndStatusIn(eq(1L), any())).thenReturn(List.of(project));
+        when(taskService.getSchedulableTasks(1L)).thenReturn(new ArrayList<>());
+        when(calendarEventService.getFixedEvents(eq(1L), any(), any())).thenReturn(new ArrayList<>());
+
+        // Sechs volle Wochen — deutlich mehr als der Task-Horizont von 14 Tagen.
+        LocalDate end = monday.plusWeeks(6).minusDays(1);
+        ScheduleResult result = service.generateOptimalSchedule(1L, monday, end);
+
+        for (int week = 0; week < 6; week++) {
+            LocalDate weekStart = monday.plusWeeks(week);
+            LocalDate weekEnd = weekStart.plusDays(6);
+            long inWeek = projectItems(result).stream()
+                    .map(i -> i.getStartTime().toLocalDate())
+                    .filter(d -> !d.isBefore(weekStart) && !d.isAfter(weekEnd))
+                    .count();
+            assertEquals(2, inWeek, "Woche ab " + weekStart + " braucht zwei Projekt-Blöcke");
+        }
+    }
+
+    // ------------------------------------------------------------------
+    // Nur planbare Status fragen wir überhaupt ab
+    // ------------------------------------------------------------------
+    @Test
+    void abgeschlosseneUndPausierteProjekteWerdenNichtGeladen() {
+        LocalDate tomorrow = TODAY.plusDays(1);
+        when(taskService.getSchedulableTasks(1L)).thenReturn(new ArrayList<>());
+        when(calendarEventService.getFixedEvents(eq(1L), any(), any())).thenReturn(new ArrayList<>());
+
+        service.generateOptimalSchedule(1L, tomorrow, tomorrow);
+
+        @SuppressWarnings("unchecked")
+        ArgumentCaptor<java.util.Collection<ProjectStatus>> captor =
+                ArgumentCaptor.forClass(java.util.Collection.class);
+        verify(projectRepository).findByUserIdAndStatusIn(eq(1L), captor.capture());
+
+        java.util.Collection<ProjectStatus> asked = captor.getValue();
+        assertTrue(asked.contains(ProjectStatus.PLANNING), "ein frisches Projekt braucht Projektzeit");
+        assertTrue(asked.contains(ProjectStatus.ACTIVE));
+        assertTrue(asked.contains(ProjectStatus.IN_PROGRESS));
+        assertFalse(asked.contains(ProjectStatus.COMPLETED));
+        assertFalse(asked.contains(ProjectStatus.CANCELLED));
+        assertFalse(asked.contains(ProjectStatus.ON_HOLD));
+    }
+
+    // ------------------------------------------------------------------
+    // Start- und Zieldatum schneiden den Bereich zu
+    // ------------------------------------------------------------------
+    @Test
+    void projektSessionsRespektierenStartUndZieldatum() {
+        LocalDate monday = TODAY.plusDays(1).with(TemporalAdjusters.next(DayOfWeek.MONDAY));
+        Project project = makeProject(520L, "Umzug", 3, 60);
+        project.setStartDate(monday.plusDays(1));
+        project.setTargetEndDate(monday.plusDays(3));
+
+        when(projectRepository.findByUserIdAndStatusIn(eq(1L), any())).thenReturn(List.of(project));
+        when(taskService.getSchedulableTasks(1L)).thenReturn(new ArrayList<>());
+        when(calendarEventService.getFixedEvents(eq(1L), any(), any())).thenReturn(new ArrayList<>());
+
+        ScheduleResult result = service.generateOptimalSchedule(1L, monday, monday.plusDays(13));
+
+        List<LocalDate> days = projectItems(result).stream()
+                .map(i -> i.getStartTime().toLocalDate()).toList();
+        assertFalse(days.isEmpty(), "im erlaubten Fenster muss Projektzeit liegen");
+        for (LocalDate d : days) {
+            assertFalse(d.isBefore(project.getStartDate()), "nichts vor dem Startdatum: " + d);
+            assertFalse(d.isAfter(project.getTargetEndDate()), "nichts nach dem Zieldatum: " + d);
+        }
+    }
+
+    // ------------------------------------------------------------------
+    // Gepinnter Projektblock verbraucht seinen Tag und seine Wochenquote
+    // ------------------------------------------------------------------
+    @Test
+    void gepinnterProjektblockVerbrauchtSeineWochenquote() {
+        LocalDate monday = TODAY.plusDays(1).with(TemporalAdjusters.next(DayOfWeek.MONDAY));
+        Project project = makeProject(530L, "Garten", 3, 60);
+        project.setStartDate(monday);
+
+        LocalDate wednesday = monday.plusDays(2);
+        CalendarEvent pinned = makeFixedEvent(531L, wednesday.atTime(16, 0), wednesday.atTime(17, 0));
+        pinned.setEventType(EventType.PROJECT);
+        pinned.setRelatedProject(project);
+
+        when(projectRepository.findByUserIdAndStatusIn(eq(1L), any())).thenReturn(List.of(project));
+        when(taskService.getSchedulableTasks(1L)).thenReturn(new ArrayList<>());
+        when(calendarEventService.getFixedEvents(eq(1L), any(), any())).thenReturn(List.of(pinned));
+
+        ScheduleResult result = service.generateOptimalSchedule(1L, monday, monday.plusDays(6));
+
+        List<ScheduledItem> sessions = projectItems(result);
+        assertEquals(2, sessions.size(),
+                "3x pro Woche minus der eine gepinnte Block ergibt 2 neu zu planende");
+
+        List<LocalDate> days = sessions.stream().map(i -> i.getStartTime().toLocalDate()).toList();
+        assertFalse(days.contains(wednesday),
+                "am gepinnten Tag darf keine zweite Session desselben Projekts entstehen");
+    }
+
+    // ------------------------------------------------------------------
+    // Zweiter Lauf: gleiche Anzahl, gleiche Zeiten (Stabilitätsanker)
+    // ------------------------------------------------------------------
+    @Test
+    void zweiterLaufErzeugtKeineDoppeltenProjektbloecke() {
+        LocalDate monday = TODAY.plusDays(1).with(TemporalAdjusters.next(DayOfWeek.MONDAY));
+        Project project = makeProject(540L, "Podcast", 2, 60);
+        project.setStartDate(monday);
+
+        when(projectRepository.findByUserIdAndStatusIn(eq(1L), any())).thenReturn(List.of(project));
+        when(taskService.getSchedulableTasks(1L)).thenReturn(new ArrayList<>());
+        when(calendarEventService.getFixedEvents(eq(1L), any(), any())).thenReturn(new ArrayList<>());
+
+        ScheduleResult first = service.generateOptimalSchedule(1L, monday, monday.plusDays(6));
+        List<ScheduledItem> firstSessions = projectItems(first);
+        assertEquals(2, firstSessions.size());
+
+        // Der zweite Lauf sieht die Blöcke des ersten als "previousScheduledEvents".
+        List<CalendarEvent> previous = new ArrayList<>();
+        long id = 5400L;
+        for (ScheduledItem s : firstSessions) {
+            CalendarEvent ev = new CalendarEvent();
+            ev.setId(id++);
+            ev.setIsFixed(false);
+            ev.setEventType(EventType.PROJECT);
+            ev.setRelatedProject(project);
+            ev.setStartTime(s.getStartTime());
+            ev.setEndTime(s.getEndTime());
+            previous.add(ev);
+        }
+        when(calendarEventRepository.findByUserIdAndEventTypeInAndIsFixedAndStartTimeBetween(
+                eq(1L), anyList(), eq(false), any(), any())).thenReturn(previous);
+
+        ScheduleResult second = service.generateOptimalSchedule(1L, monday, monday.plusDays(6));
+        List<ScheduledItem> secondSessions = projectItems(second);
+
+        assertEquals(2, secondSessions.size(), "der zweite Lauf darf nichts verdoppeln");
+        assertEquals(
+                firstSessions.stream().map(ScheduledItem::getStartTime).sorted().toList(),
+                secondSessions.stream().map(ScheduledItem::getStartTime).sorted().toList(),
+                "ohne Grund zu verschieben müssen die Blöcke liegen bleiben");
+    }
+
+    // ------------------------------------------------------------------
+    // Opt-out: 0 oder null Sessions ergeben keine Blöcke
+    // ------------------------------------------------------------------
+    @Test
+    void ohneWochenpensumEntstehtKeineProjektzeit() {
+        LocalDate monday = TODAY.plusDays(1).with(TemporalAdjusters.next(DayOfWeek.MONDAY));
+        Project keine = makeProject(550L, "Ideensammlung", 0, 60);
+        Project unbestimmt = makeProject(551L, "Archiv", 3, 60);
+        unbestimmt.setWeeklySessionCount(null);
+
+        when(projectRepository.findByUserIdAndStatusIn(eq(1L), any()))
+                .thenReturn(List.of(keine, unbestimmt));
+        when(taskService.getSchedulableTasks(1L)).thenReturn(new ArrayList<>());
+        when(calendarEventService.getFixedEvents(eq(1L), any(), any())).thenReturn(new ArrayList<>());
+
+        ScheduleResult result = service.generateOptimalSchedule(1L, monday, monday.plusDays(6));
+
+        assertTrue(projectItems(result).isEmpty(),
+                "weeklySessionCount 0/null ist der Opt-out und darf nichts erzeugen");
+    }
+
+    // ------------------------------------------------------------------
+    // Der Projektblock wird als CalendarEvent mit Projekt-FK gespeichert
+    // ------------------------------------------------------------------
+    @Test
+    void projektblockWirdMitProjektFremdschluesselGespeichert() {
+        LocalDate monday = TODAY.plusDays(1).with(TemporalAdjusters.next(DayOfWeek.MONDAY));
+        Project project = makeProject(560L, "Website", 1, 60);
+        project.setStartDate(monday);
+
+        when(projectRepository.findByUserIdAndStatusIn(eq(1L), any())).thenReturn(List.of(project));
+        when(taskService.getSchedulableTasks(1L)).thenReturn(new ArrayList<>());
+        when(calendarEventService.getFixedEvents(eq(1L), any(), any())).thenReturn(new ArrayList<>());
+
+        service.generateOptimalSchedule(1L, monday, monday.plusDays(6));
+
+        ArgumentCaptor<CalendarEvent> captor = ArgumentCaptor.forClass(CalendarEvent.class);
+        verify(calendarEventRepository, atLeastOnce()).save(captor.capture());
+
+        List<CalendarEvent> projectEvents = captor.getAllValues().stream()
+                .filter(e -> e.getEventType() == EventType.PROJECT)
+                .toList();
+        assertEquals(1, projectEvents.size());
+        CalendarEvent ev = projectEvents.get(0);
+        assertEquals(project, ev.getRelatedProject(), "ohne FK findet der Detail-Screen den Block nicht");
+        assertEquals("Website", ev.getTitle());
+        assertFalse(ev.getIsFixed(), "vom Scheduler erzeugte Blöcke sind beweglich");
+    }
+
+    private List<ScheduledItem> projectItems(ScheduleResult result) {
+        return result.getScheduledHabits().stream()
+                .filter(i -> i.getProject() != null)
+                .collect(Collectors.toList());
+    }
+
+    private Project makeProject(Long id, String name, Integer weekly, Integer durationMinutes) {
+        Project p = new Project();
+        p.setId(id);
+        p.setName(name);
+        p.setStatus(ProjectStatus.ACTIVE);
+        p.setWeeklySessionCount(weekly);
+        p.setSessionDurationMinutes(durationMinutes);
+        return p;
     }
 
     // ------------------------------------------------------------------

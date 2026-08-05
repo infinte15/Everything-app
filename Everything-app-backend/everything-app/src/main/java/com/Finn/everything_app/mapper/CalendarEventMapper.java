@@ -33,6 +33,9 @@ public class CalendarEventMapper {
         if (event.getRelatedWorkout() != null) {
             dto.setRelatedWorkoutId(event.getRelatedWorkout().getId());
         }
+        if (event.getRelatedProject() != null) {
+            dto.setRelatedProjectId(event.getRelatedProject().getId());
+        }
 
         return dto;
     }

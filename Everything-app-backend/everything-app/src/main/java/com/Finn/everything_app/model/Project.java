@@ -59,7 +59,11 @@ public class Project {
     @JoinColumn(name = "user_id", nullable = false)
     private User user;
 
-    @OneToMany(mappedBy = "project", cascade = CascadeType.ALL)
+    // Bewusst OHNE cascade: Tasks sind gewoehnliche Aufgaben mit einer Zuordnung und ueberleben
+    // ihr Projekt. cascade = ALL wuerde sie beim Loeschen des Projekts mitreissen und dabei in die
+    // calendar_events.related_task_id-Constraint laufen (vgl. TaskService.deleteTask, das die
+    // Kalenderbloecke vorher aufraeumt). ProjectService.deleteProject entkoppelt stattdessen.
+    @OneToMany(mappedBy = "project")
     private List<Task> tasks;
 
     @PrePersist

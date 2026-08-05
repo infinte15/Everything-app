@@ -52,4 +52,9 @@ public interface CalendarEventRepository extends JpaRepository<CalendarEvent, Lo
     List<CalendarEvent> findByRelatedTaskId(Long taskId);
     List<CalendarEvent> findByRelatedHabitId(Long habitId);
     List<CalendarEvent> findByRelatedWorkoutId(Long workoutSessionId);
+    List<CalendarEvent> findByRelatedProjectId(Long projectId);
+
+    /** Kommende Projektbloecke fuer den Detail-Screen. */
+    List<CalendarEvent> findByUserIdAndRelatedProjectIdAndStartTimeBetweenOrderByStartTimeAsc(
+            Long userId, Long projectId, LocalDateTime start, LocalDateTime end);
 }

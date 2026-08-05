@@ -1,9 +1,12 @@
 package com.Finn.everything_app.service;
 
+import com.Finn.everything_app.exception.ResourceNotFoundException;
+import com.Finn.everything_app.model.Project;
 import com.Finn.everything_app.model.Task;
 import com.Finn.everything_app.model.TaskStatus;
 import com.Finn.everything_app.model.User;
 import com.Finn.everything_app.repository.CalendarEventRepository;
+import com.Finn.everything_app.repository.ProjectRepository;
 import com.Finn.everything_app.repository.TaskRepository;
 import lombok.RequiredArgsConstructor;
 
@@ -21,6 +24,8 @@ public class TaskService {
     private final UserService userService;
     private final CalendarEventRepository calendarEventRepository;
     private final ApplicationEventPublisher eventPublisher;
+    private final ProjectRepository projectRepository;
+    private final ProjectService projectService;
 
     public List<Task> getAllUserTasks(Long userId) {
         return taskRepository.findByUserId(userId);
@@ -69,14 +74,38 @@ public class TaskService {
             task.setEstimatedDurationMinutes(60); // Standard
         }
 
+        task.setProject(resolveProject(userId, task.getProject()));
+
         Task savedTask = taskRepository.save(task);
+        recalcProject(savedTask.getProject());
         eventPublisher.publishEvent(new ScheduleChangedEvent(this, userId));
         return savedTask;
+    }
+
+    /**
+     * Loest den vom Mapper gesetzten Id-Stub in ein echtes Projekt auf — besitzgeprueft, damit
+     * eine fremde projectId im Request-Body keine Aufgabe ueber Nutzergrenzen hinweg verknuepfen
+     * kann. {@code null} bedeutet "keine Zuordnung".
+     */
+    private Project resolveProject(Long userId, Project stub) {
+        if (stub == null || stub.getId() == null) return null;
+        return projectRepository.findByIdAndUserId(stub.getId(), userId)
+                .orElseThrow(() -> new ResourceNotFoundException("Projekt", "id", stub.getId()));
+    }
+
+    private void recalcProject(Project project) {
+        if (project != null && project.getId() != null) {
+            projectService.recalculateProjectStats(project.getId());
+        }
     }
 
     @Transactional
     public Task updateTask(Long taskId, Task updatedTask) {
         Task existing = getTaskById(taskId);
+        Long ownerId = existing.getUser().getId();
+        // Vor dem Patchen merken: wandert die Aufgabe in ein anderes Projekt, muessen BEIDE
+        // Fortschrittszaehler neu gerechnet werden.
+        Long oldProjectId = existing.getProject() != null ? existing.getProject().getId() : null;
 
         if (updatedTask.getTitle() != null) {
             existing.setTitle(updatedTask.getTitle());
@@ -117,12 +146,54 @@ public class TaskService {
         if (updatedTask.getNotBefore() != null) {
             existing.setNotBefore(updatedTask.getNotBefore());
         }
+        // "null = unveraendert" gilt auch hier: CalendarEventService.creditBlock patcht mit einem
+        // nackten new Task(), das nur Minuten und Status traegt — die Projektzuordnung darf dabei
+        // nicht verloren gehen. Zum Entkoppeln gibt es assignToProject(..., null).
+        if (updatedTask.getProject() != null && updatedTask.getProject().getId() != null) {
+            existing.setProject(resolveProject(ownerId, updatedTask.getProject()));
+        }
 
         existing.setUpdatedAt(LocalDateTime.now());
 
         Task savedTask = taskRepository.save(existing);
-        eventPublisher.publishEvent(new ScheduleChangedEvent(this, existing.getUser().getId()));
+        recalcProjects(oldProjectId, savedTask.getProject());
+        eventPublisher.publishEvent(new ScheduleChangedEvent(this, ownerId));
         return savedTask;
+    }
+
+    /** Rechnet altes und neues Projekt neu — beim Wechsel verlieren beide Seiten eine Aufgabe. */
+    private void recalcProjects(Long oldProjectId, Project newProject) {
+        Long newProjectId = newProject != null ? newProject.getId() : null;
+        if (oldProjectId != null && !oldProjectId.equals(newProjectId)) {
+            projectService.recalculateProjectStats(oldProjectId);
+        }
+        if (newProjectId != null) {
+            projectService.recalculateProjectStats(newProjectId);
+        }
+    }
+
+    /**
+     * Ordnet eine Aufgabe einem Projekt zu oder entkoppelt sie ({@code projectId == null}).
+     * Eigener Endpunkt, weil die Patch-Konvention von {@link #updateTask} "leeren" nicht
+     * ausdruecken kann — dort bedeutet null "unveraendert".
+     */
+    @Transactional
+    public Task assignToProject(Long taskId, Long userId, Long projectId) {
+        Task task = getTaskById(taskId);
+        Long oldProjectId = task.getProject() != null ? task.getProject().getId() : null;
+
+        Project target = null;
+        if (projectId != null) {
+            target = projectRepository.findByIdAndUserId(projectId, userId)
+                    .orElseThrow(() -> new ResourceNotFoundException("Projekt", "id", projectId));
+        }
+        task.setProject(target);
+        task.setUpdatedAt(LocalDateTime.now());
+
+        Task saved = taskRepository.save(task);
+        recalcProjects(oldProjectId, saved.getProject());
+        eventPublisher.publishEvent(new ScheduleChangedEvent(this, userId));
+        return saved;
     }
 
     @Transactional
@@ -131,6 +202,8 @@ public class TaskService {
         task.setStatus(TaskStatus.COMPLETED);
         task.setCompletedAt(LocalDateTime.now());
         Task savedTask = taskRepository.save(task);
+        // Der wichtigste Treiber des Projektfortschritts.
+        recalcProject(savedTask.getProject());
         eventPublisher.publishEvent(new ScheduleChangedEvent(this, task.getUser().getId()));
         return savedTask;
     }
@@ -140,11 +213,15 @@ public class TaskService {
         Task task = taskRepository.findById(taskId)
                 .orElseThrow(() -> new RuntimeException("Task nicht gefunden"));
         Long userId = task.getUser().getId();
+        Long projectId = task.getProject() != null ? task.getProject().getId() : null;
         // Any CalendarEvent generated from this task (scheduler-placed or manually created)
         // must go first — otherwise deleting the task violates the related_task_id foreign
         // key and the whole delete 500s, leaving the task (and its calendar event) in place.
         calendarEventRepository.deleteAll(calendarEventRepository.findByRelatedTaskId(taskId));
         taskRepository.deleteById(taskId);
+        if (projectId != null) {
+            projectService.recalculateProjectStats(projectId);
+        }
         eventPublisher.publishEvent(new ScheduleChangedEvent(this, userId));
     }
 

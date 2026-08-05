@@ -11,6 +11,8 @@ public class ScheduledItem {
     private WorkoutSession workoutSession;
     /** Nur für CLASS: der Stundenplaneintrag, aus dem dieser Termin entstanden ist. */
     private CourseSchedule courseSchedule;
+    /** Nur für PROJECT: das Projekt, dessen Wochenpensum dieser Block abdeckt. */
+    private Project project;
 
     private LocalDateTime startTime;
     private LocalDateTime endTime;
@@ -24,5 +26,5 @@ public class ScheduledItem {
 }
 
 enum ScheduledItemType {
-    TASK, HABIT, WORKOUT, CLASS
+    TASK, HABIT, WORKOUT, PROJECT, CLASS
 }

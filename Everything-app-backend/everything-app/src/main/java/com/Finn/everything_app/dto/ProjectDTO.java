@@ -17,9 +17,15 @@ public class ProjectDTO {
     private LocalDate targetEndDate;
     private LocalDate actualEndDate;
     private ProjectStatus status;
+
+    // Abgeleitet aus den verknuepften Aufgaben — nur lesend, der Server ist die Quelle.
     private Integer completionPercentage;
     private Integer tasksTotal;
     private Integer tasksCompleted;
+
+    @Min(0) @Max(14)
     private Integer weeklySessionCount;
+
+    @Min(15) @Max(480)
     private Integer sessionDurationMinutes;
 }

@@ -4,6 +4,7 @@ import com.Finn.everything_app.model.Task;
 import com.Finn.everything_app.model.TaskStatus;
 import com.Finn.everything_app.model.SpaceType;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import java.time.LocalDateTime;
@@ -50,6 +51,17 @@ public interface TaskRepository extends JpaRepository<Task, Long> {
 
     // Tasks nach Projekt
     List<Task> findByProjectId(Long projectId);
+
+    /** Aufgabenliste im Projekt-Detail — besitzgeprueft ueber den Task, nicht ueber das Projekt. */
+    List<Task> findByProjectIdAndUserIdOrderByStatusAscDeadlineAsc(Long projectId, Long userId);
+
+    /**
+     * Loest die Projekt-Zuordnung, bevor ein Projekt geloescht wird. Tasks sind gewoehnliche
+     * Aufgaben und ueberleben ihr Projekt (vgl. RoutineRepository.detachFromPlan).
+     */
+    @Modifying(clearAutomatically = true, flushAutomatically = true)
+    @Query("update Task t set t.project = null where t.project.id = :projectId")
+    void detachFromProject(@Param("projectId") Long projectId);
 
     // Anzahl offener Tasks
     @Query("SELECT COUNT(t) FROM Task t WHERE t.user.id = :userId AND t.status = 'OPEN'")

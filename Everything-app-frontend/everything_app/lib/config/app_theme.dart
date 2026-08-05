@@ -23,6 +23,8 @@ class AppTheme {
   static const Color tasksColor = Color(0xFFD1D9F8);  // Tertiary
   static const Color recipesColor = Color(0xFFC3CBE9); 
   static const Color financeColor = Color(0xFF4ADE80); // Green
+  /// Pink — identisch zur Projekte-Kachel im Spaces-Grid und zur Blockfarbe des Schedulers.
+  static const Color projectsColor = Color(0xFFEC4899);
   
   // Light Theme (Fallback, Kinetic Mono is inherently dark but we provide a base)
   static ThemeData get lightTheme {
@@ -164,6 +166,8 @@ class AppTheme {
         return recipesColor;
       case 'FINANCE':
         return financeColor;
+      case 'PROJECTS':
+        return projectsColor;
       default:
         return outlineVariant;
     }

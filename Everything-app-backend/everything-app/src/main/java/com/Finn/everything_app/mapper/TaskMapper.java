@@ -1,6 +1,7 @@
 package com.Finn.everything_app.mapper;
 
 import com.Finn.everything_app.dto.TaskDTO;
+import com.Finn.everything_app.model.Project;
 import com.Finn.everything_app.model.Task;
 import org.springframework.stereotype.Component;
 
@@ -64,6 +65,14 @@ public class TaskMapper {
         task.setMaxChunksPerDay(dto.getMaxChunksPerDay());
         task.setCompletedMinutes(dto.getCompletedMinutes());
         task.setNotBefore(dto.getNotBefore());
+        // Nur der Fremdschluessel als Traeger — aufgeloest und besitzgeprueft wird die Referenz
+        // im TaskService, der Mapper hat bewusst keinen Repository-Zugriff. Ohne diese Zeilen
+        // blieb tasks.project_id immer NULL und der Projektfortschritt dauerhaft bei 0 %.
+        if (dto.getProjectId() != null) {
+            Project projectRef = new Project();
+            projectRef.setId(dto.getProjectId());
+            task.setProject(projectRef);
+        }
 
         return task;
     }
