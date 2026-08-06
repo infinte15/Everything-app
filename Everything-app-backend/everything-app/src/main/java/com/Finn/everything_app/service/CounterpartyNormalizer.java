@@ -1,6 +1,7 @@
 package com.Finn.everything_app.service;
 
 import java.util.Locale;
+import java.util.Set;
 
 /**
  * Bringt den Namen einer Gegenpartei auf eine vergleichbare Form.
@@ -19,15 +20,21 @@ public final class CounterpartyNormalizer {
     private CounterpartyNormalizer() {
     }
 
-    /** Rechtsformen und Zusaetze, die keinen Unterscheidungswert tragen. */
-    private static final String[] NOISE_WORDS = {
-            "gmbh & co. kg", "gmbh und co kg", "gmbh & co kg",
-            "gmbh", "ag", "kgaa", "e.k.", "ohg", "kg", "mbh",
-            "s.a.r.l.", "sarl", "b.v.", "n.v.", "s.a.", "s.p.a.", "plc", "ltd", "inc",
-            "se & co", "se", "ug", "gbr", "e.v.", "ev",
-            "deutschland", "germany", "europe", "international",
-            "sagt danke", "danke", "vielen dank",
-    };
+    /**
+     * Rechtsformen und Zusaetze, die keinen Unterscheidungswert tragen.
+     *
+     * <p>Wird <strong>tokenweise</strong> angewandt und nicht als Textersatz. Der Unterschied ist
+     * nicht kosmetisch: ein {@code replace("ag", " ")} macht aus "rewe sagt danke" ein
+     * "rewe s t danke", und ab da gruppiert nichts mehr zusammen, was zusammengehoert.
+     *
+     * <p>Mehrwortige Zusaetze stehen als einzelne Token darin ("sagt", "danke"), weil die
+     * Zerlegung ohnehin vorher passiert.
+     */
+    private static final Set<String> NOISE_TOKENS = Set.of(
+            "gmbh", "mbh", "ag", "kgaa", "kg", "ohg", "ek", "ug", "gbr", "se", "ev",
+            "sarl", "bv", "nv", "sa", "spa", "plc", "ltd", "inc", "llc", "ab", "as", "oy", "aps",
+            "co", "und", "deutschland", "germany", "europe", "european", "international", "eu",
+            "sagt", "danke", "dank", "vielen", "ihr", "einkauf");
 
     /**
      * Vergleichsform: klein, ohne Rechtsform, ohne Ziffernbloecke, ohne Mehrfach-Leerzeichen.
@@ -56,17 +63,25 @@ public final class CounterpartyNormalizer {
         value = value.replaceAll("\\b\\d{1,2}[./-]\\d{1,2}([./-]\\d{2,4})?\\b", " ");
         // Uhrzeiten
         value = value.replaceAll("\\b\\d{1,2}:\\d{2}\\b", " ");
-
-        for (String noise : NOISE_WORDS) {
-            value = value.replace(noise, " ");
-        }
-
         // Satzzeichen raus, Umlaute bleiben - "baeckerei" und "bäckerei" sind verschiedene Quellen.
         value = value.replaceAll("[^\\p{L}\\p{N}\\s&+-]", " ");
-        value = value.replaceAll("\\s+", " ").trim();
 
+        StringBuilder result = new StringBuilder();
+        for (String token : value.split("\\s+")) {
+            // Ein-Zeichen-Reste stammen aus Abkuerzungspunkten ("s.a.r.l." wird zu "s a r l") und
+            // tragen fuer sich genommen nichts bei.
+            if (token.length() < 2 || NOISE_TOKENS.contains(token) || token.matches("\\d+")) {
+                continue;
+            }
+            if (result.length() > 0) {
+                result.append(' ');
+            }
+            result.append(token);
+        }
+
+        String normalized = result.toString();
         // Ein Ein-Zeichen-Rest ist kein brauchbarer Schluessel.
-        return value.length() < 2 ? "" : value;
+        return normalized.length() < 2 ? "" : normalized;
     }
 
     private static int indexOfAny(String value, String... needles) {

@@ -50,14 +50,23 @@ public class ContractDetectionService {
     private record Rhythm(int minDays, int maxDays, ContractFrequency frequency) {
     }
 
+    /**
+     * Die Baender sind bewusst weit.
+     *
+     * <p>Ein "monatlicher" Einzug trifft nie denselben Abstand: die Monate sind 28 bis 31 Tage lang,
+     * Wochenenden und Feiertage schieben um bis zu drei Tage, und beides addiert sich. Zwischen dem
+     * 8. Maerz und dem 10. April liegen 33 Tage - mit einem Band von 27 bis 32 waere genau das kein
+     * Abo mehr. Ueberschneidungsfrei bleiben die Baender trotzdem, also bleibt die Zuordnung
+     * eindeutig.
+     */
     private static final List<Rhythm> RHYTHMS = List.of(
-            new Rhythm(6, 8, ContractFrequency.WEEKLY),
-            new Rhythm(13, 16, ContractFrequency.BIWEEKLY),
-            new Rhythm(27, 32, ContractFrequency.MONTHLY),
-            new Rhythm(57, 63, ContractFrequency.BIMONTHLY),
-            new Rhythm(86, 95, ContractFrequency.QUARTERLY),
-            new Rhythm(178, 189, ContractFrequency.SEMIANNUAL),
-            new Rhythm(358, 372, ContractFrequency.YEARLY));
+            new Rhythm(6, 9, ContractFrequency.WEEKLY),
+            new Rhythm(12, 17, ContractFrequency.BIWEEKLY),
+            new Rhythm(25, 35, ContractFrequency.MONTHLY),
+            new Rhythm(55, 66, ContractFrequency.BIMONTHLY),
+            new Rhythm(84, 98, ContractFrequency.QUARTERLY),
+            new Rhythm(175, 192, ContractFrequency.SEMIANNUAL),
+            new Rhythm(353, 378, ContractFrequency.YEARLY));
 
     @Transactional
     public void detectForUser(Long userId) {
@@ -233,10 +242,8 @@ public class ContractDetectionService {
         contract.setFrequency(detection.frequency());
         contract.setIntervalDays(detection.intervalDays());
         contract.setLastBookingDate(detection.lastDate());
-        contract.setNextDueDate(detection.lastDate().plusDays(detection.intervalDays()));
         contract.setOccurrenceCount(series.size());
-        contract.setActive(true);
-        contract.setCancelledAt(null);
+        applyLifecycle(contract, detection.lastDate(), detection.intervalDays());
 
         contractRepository.save(contract);
 
@@ -259,7 +266,32 @@ public class ContractDetectionService {
     }
 
     /**
-     * Vertraege, deren naechste Buchung deutlich ueberfaellig ist, gelten als gekuendigt.
+     * Entscheidet ueber aktiv/gekuendigt und das naechste Faelligkeitsdatum.
+     *
+     * <p>Muss auch beim Erkennen laufen, nicht nur bei den unberuehrt gebliebenen Vertraegen: die
+     * Buchungshistorie eines gekuendigten Abos bleibt ja bestehen, die Reihe ist also weiterhin
+     * erkennbar. Wer hier stur {@code active = true} setzt, hat ein Abo, das nie endet - und eine
+     * Prognose, die eine Zahlung erwartet, die nicht mehr kommt.
+     */
+    private void applyLifecycle(Contract contract, LocalDate lastDate, int intervalDays) {
+        long silentDays = ChronoUnit.DAYS.between(lastDate, LocalDate.now());
+
+        if (silentDays > intervalDays * OVERDUE_FACTOR) {
+            contract.setActive(false);
+            if (contract.getCancelledAt() == null) {
+                contract.setCancelledAt(LocalDateTime.now());
+            }
+            contract.setNextDueDate(null);
+        } else {
+            contract.setActive(true);
+            contract.setCancelledAt(null);
+            contract.setNextDueDate(lastDate.plusDays(intervalDays));
+        }
+    }
+
+    /**
+     * Dasselbe fuer Vertraege, die dieser Lauf gar nicht mehr gesehen hat - deren Buchungen aus
+     * dem Rueckblickfenster gefallen sind.
      *
      * <p>Nur automatisch erkannte: einen von Hand gepflegten Vertrag stillzulegen, weil die Bank
      * noch nicht gebucht hat, waere eine Anmassung.
