@@ -102,16 +102,25 @@ public class DemoBankDataProvider implements BankDataProvider {
 
     // ==================== Erzeugung ====================
 
+    /**
+     * Erzeugt die Historie und schneidet sie danach auf das angefragte Fenster zu.
+     *
+     * <p><strong>Immer ab demselben Anker</strong>, nie ab {@code from}: die Zufallsfolge haengt
+     * daran, wie viele Monate durchlaufen werden. Wer bei {@code from} beginnt, bekommt fuer
+     * denselben Tag je nach Fenstergroesse andere Buchungen - und der zweite Sync legt dann
+     * Duplikate an, obwohl die Deduplizierung fehlerfrei arbeitet. Eine echte Bank liefert fuer
+     * einen Tag immer dieselben Umsaetze, unabhaengig vom abgefragten Zeitraum; ein Ersatz, der
+     * das nicht tut, taugt weder zum Entwickeln noch zum Testen.
+     */
     private List<BankTx> generate(LocalDate from) {
         LocalDate today = LocalDate.now();
-        LocalDate start = from.isBefore(today.minusMonths(HISTORY_MONTHS))
-                ? today.minusMonths(HISTORY_MONTHS)
-                : from;
+        LocalDate anchor = today.minusMonths(HISTORY_MONTHS).withDayOfMonth(1);
+        LocalDate start = from.isBefore(anchor) ? anchor : from;
 
         Random random = new Random(SEED);
         List<BankTx> result = new ArrayList<>();
 
-        LocalDate month = start.withDayOfMonth(1);
+        LocalDate month = anchor;
         while (!month.isAfter(today)) {
             addRecurring(result, month, today, random);
             addEverydaySpending(result, month, today, random);

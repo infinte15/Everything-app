@@ -43,7 +43,8 @@ abstract final class FinanceTheme {
     Color(0xFF8FC9C4), // Petrol, hell
   ];
 
-  /// Feste Zuordnung fuer die Kategorien, die der Regel-Katalog ausliefert.
+  /// Feste Zuordnung fuer die Kategorien, die der Regel-Katalog ausliefert
+  /// (siehe `config/finance_categories.dart`).
   ///
   /// Damit behaelt "Lebensmittel" ueber alle Monate hinweg dieselbe Farbe. Eine
   /// Zuordnung ueber die Reihenfolge im Diagramm waere von Monat zu Monat
@@ -51,16 +52,14 @@ abstract final class FinanceTheme {
   /// Donut - waere dahin.
   static const _fixed = <String, int>{
     'Lebensmittel': 0,
-    'Wohnen': 1,
-    'Mobilität': 2,
-    'Transport': 2,
-    'Gesundheit': 3,
-    'Freizeit': 4,
-    'Unterhaltung': 4,
-    'Versicherung': 5,
-    'Abos': 6,
-    'Shopping': 7,
-    'Restaurant': 8,
+    'Restaurant': 1,
+    'Wohnen': 2,
+    'Transport': 3,
+    'Gesundheit': 4,
+    'Unterhaltung': 5,
+    'Kleidung': 6,
+    'Einnahmen': 7,
+    'Sonstiges': 8,
   };
 
   /// Farbe einer Kategorie. Unbekannte Kategorien bekommen ueber den Hash des

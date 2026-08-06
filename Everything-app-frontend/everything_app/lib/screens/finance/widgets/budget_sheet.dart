@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import '../../../config/finance_categories.dart';
 import '../../../models/budget_category.dart';
 import '../../../providers/finance_provider.dart';
 import '../../../theme/finance_theme.dart';
@@ -34,18 +35,6 @@ class BudgetSheet extends StatefulWidget {
 }
 
 class _BudgetSheetState extends State<BudgetSheet> {
-  static const _categories = [
-    'Lebensmittel',
-    'Wohnen',
-    'Mobilität',
-    'Gesundheit',
-    'Freizeit',
-    'Unterhaltung',
-    'Shopping',
-    'Restaurant',
-    'Sonstiges',
-  ];
-
   late String _category = widget.existing?.name ?? 'Lebensmittel';
   late final _limitController = TextEditingController(
     text: widget.existing == null
@@ -116,7 +105,7 @@ class _BudgetSheetState extends State<BudgetSheet> {
                 spacing: 8,
                 runSpacing: 8,
                 children: [
-                  for (final category in _categories)
+                  for (final category in financeExpenseCategories)
                     GestureDetector(
                       onTap: () => setState(() => _category = category),
                       child: Container(

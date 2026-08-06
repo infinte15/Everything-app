@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import '../../../config/finance_categories.dart';
 import '../../../models/finance_transaction.dart';
 import '../../../providers/finance_provider.dart';
 import '../../../theme/finance_theme.dart';
@@ -34,23 +35,6 @@ class RecategorizeSheet extends StatefulWidget {
 }
 
 class _RecategorizeSheetState extends State<RecategorizeSheet> {
-  /// Dieselben Kategorien, die der ausgelieferte Regel-Katalog vergibt - eine
-  /// eigene Liste hier würde Kategorien erzeugen, die keine Regel je trifft.
-  static const _categories = [
-    'Lebensmittel',
-    'Wohnen',
-    'Mobilität',
-    'Gesundheit',
-    'Freizeit',
-    'Unterhaltung',
-    'Versicherung',
-    'Abos',
-    'Shopping',
-    'Restaurant',
-    'Einnahmen',
-    'Sonstiges',
-  ];
-
   late String _selected = widget.transaction.category;
   bool _applyToPast = true;
   bool _saving = false;
@@ -110,7 +94,7 @@ class _RecategorizeSheetState extends State<RecategorizeSheet> {
             spacing: 8,
             runSpacing: 8,
             children: [
-              for (final category in _categories)
+              for (final category in financeCategories)
                 _CategoryOption(
                   label: category,
                   selected: category == _selected,

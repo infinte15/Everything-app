@@ -90,6 +90,24 @@ class BankSyncServiceTest {
     }
 
     @Test
+    void laufenderSyncNachErstImportLegtKeineDuplikateAn() {
+        // Der laufende Sync fragt ein kleines Fenster ab, der Erst-Import die volle Historie.
+        // Genau hier fiel auf, dass der Demo-Provider seine Zufallsfolge am Fenster ausrichtete
+        // und fuer denselben Tag je nach Anfrage andere Buchungen lieferte - die Deduplizierung
+        // war dagegen machtlos, und der zweite Lauf legte Duplikate an.
+        BankConnection verbindung = verbinden();
+        bankSyncService.syncConnection(verbindung.getId(), null, true);
+        long nachErstImport = transactionRepository.findByUserId(nutzer.getId()).size();
+
+        BankSyncService.SyncSummary laufend =
+                bankSyncService.syncConnection(verbindung.getId(), null, false);
+
+        assertEquals(0, laufend.imported(),
+                "der laufende Sync darf nach dem Erst-Import nichts Neues finden");
+        assertEquals(nachErstImport, transactionRepository.findByUserId(nutzer.getId()).size());
+    }
+
+    @Test
     void importierteBuchungenTragenHerkunftUndGegenpartei() {
         BankConnection verbindung = verbinden();
         bankSyncService.syncConnection(verbindung.getId(), null, true);

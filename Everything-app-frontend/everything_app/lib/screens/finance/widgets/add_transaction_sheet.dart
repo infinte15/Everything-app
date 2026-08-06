@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 
+import '../../../config/finance_categories.dart';
 import '../../../models/finance_transaction.dart';
 import '../../../providers/finance_provider.dart';
 import '../../../theme/finance_theme.dart';
@@ -31,18 +32,6 @@ class AddTransactionSheet extends StatefulWidget {
 }
 
 class _AddTransactionSheetState extends State<AddTransactionSheet> {
-  static const _categories = [
-    'Lebensmittel',
-    'Wohnen',
-    'Mobilität',
-    'Gesundheit',
-    'Freizeit',
-    'Unterhaltung',
-    'Shopping',
-    'Restaurant',
-    'Sonstiges',
-  ];
-
   bool _isExpense = true;
   String _category = 'Sonstiges';
   DateTime _date = DateTime.now();
@@ -168,7 +157,7 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
                 spacing: 8,
                 runSpacing: 8,
                 children: [
-                  for (final category in _categories)
+                  for (final category in financeExpenseCategories)
                     GestureDetector(
                       onTap: () => setState(() => _category = category),
                       child: Container(
