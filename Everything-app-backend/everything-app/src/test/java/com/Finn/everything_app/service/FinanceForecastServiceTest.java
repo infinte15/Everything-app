@@ -152,6 +152,26 @@ class FinanceForecastServiceTest {
     }
 
     @Test
+    void kernzahlIstDieSummeIhrerAusgewiesenenBestandteile() {
+        // Die Oberfläche zeigt die Bestandteile einzeln an. Weichen sie von der Kernzahl ab, sieht
+        // es aus wie ein Rechenfehler - und war auch einer: ein heute fälliger Vertrag stand in
+        // upcomingContractExpenses, fehlte aber im projizierten Saldo.
+        konto(1000.00);
+        vertrag("Heute fällig", 13.99, TransactionType.EXPENSE, heute, 30);
+        vertrag("Morgen fällig", 25.00, TransactionType.EXPENSE, heute.plusDays(1), 30);
+        vertrag("Gehalt", 2000.00, TransactionType.INCOME, heute.plusDays(2), 30);
+
+        FinanceForecastDTO prognose = forecastService.forecast(nutzer.getId(), heute);
+
+        double summe = prognose.getCurrentBalance()
+                + prognose.getUpcomingContractIncome()
+                - prognose.getUpcomingContractExpenses()
+                - prognose.getProjectedVariableExpenses();
+
+        assertEquals(summe, prognose.getAvailable(), 0.02);
+    }
+
+    @Test
     void ueberfaelligerVertragFaelltNichtWeg() {
         konto(1000.00);
         LocalDate monatsende = heute.withDayOfMonth(heute.lengthOfMonth());

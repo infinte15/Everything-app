@@ -103,7 +103,6 @@ public class FinanceForecastService {
         List<FinanceForecastDTO.DayPoint> series = new ArrayList<>();
         series.addAll(actualSeries(monthTransactions, monthStart, anchor, currentBalance));
 
-        double available = currentBalance;
         Map<LocalDate, Double> byDate = new HashMap<>();
         for (Occurrence occurrence : occurrences) {
             double signed = occurrence.contract().getDirection() == TransactionType.INCOME
@@ -111,6 +110,12 @@ public class FinanceForecastService {
                     : -occurrence.contract().getAmount();
             byDate.merge(occurrence.date(), signed, Double::sum);
         }
+
+        // Was heute faellig ist, zaehlt zur Prognose und nicht zur Vergangenheit: der Kontostand
+        // von heute enthaelt es noch nicht, sonst waere der Vertrag nicht mehr faellig. Ohne diese
+        // Zeile stuende es in upcomingContractExpenses, fehlte aber in available - und die Kernzahl
+        // waere um genau diesen Betrag zu hoch.
+        double available = currentBalance + byDate.getOrDefault(anchor, 0.0);
 
         for (LocalDate day = anchor.plusDays(1); !day.isAfter(monthEnd); day = day.plusDays(1)) {
             available += byDate.getOrDefault(day, 0.0) - dailyVariable;
