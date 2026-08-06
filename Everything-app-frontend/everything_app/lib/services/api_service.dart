@@ -124,6 +124,31 @@ class ApiService {
     }
   }
 
+  /// PATCH Request
+  ///
+  /// Für Teiländerungen, bei denen ein PUT das ganze Objekt aus dem Client
+  /// übernehmen würde - etwa die Kategorie einer Buchung oder der Sync-Schalter
+  /// eines Bankkontos.
+  Future<http.Response> patch(String url, Map<String, dynamic> body) async {
+    final uri = _buildUri(url);
+    try {
+      final headers = await getHeaders();
+      final response = await _client
+          .patch(
+            uri,
+            headers: headers,
+            body: json.encode(body),
+          )
+          .timeout(ApiConfig.timeout);
+
+      _logRequest('PATCH', uri.toString(), response.statusCode);
+      return response;
+    } catch (e) {
+      _logError('PATCH', uri.toString(), e);
+      rethrow;
+    }
+  }
+
   /// DELETE Request
   Future<http.Response> delete(String url) async {
     final uri = _buildUri(url);

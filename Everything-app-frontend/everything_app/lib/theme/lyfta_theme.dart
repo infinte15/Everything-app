@@ -1,33 +1,32 @@
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
+
+import 'kinetic_theme.dart';
 
 /// Layout und Formensprache sind an Lyfta angelehnt (dunkler Gym-Tracker), die
 /// Farben kommen aus der "Kinetic Mono"-Palette der restlichen App ([AppTheme]).
 ///
-/// Die Oberflaeche bleibt bewusst weitgehend farblos - Periwinkle setzt nur
-/// Akzente. Davon ausgenommen ist die Anatomie: die Muskelfarben unten sind
-/// Fachfarben (rot = beansprucht, blau = unterstuetzend) und folgen der
-/// Oberflaechenfarbe absichtlich *nicht*.
+/// Die gemeinsame Basis liegt seit dem Umbau des Finance Space in
+/// [KineticTheme]; hier stehen nur noch die Fachfarben des Gym Space und die
+/// Durchreichungen. Die Durchreichungen bleiben bewusst bestehen, statt die rund
+/// zwanzig Gym-Dateien auf [KineticTheme] umzuschreiben: es waere eine grosse
+/// Aenderung ohne jeden sichtbaren Unterschied.
+///
+/// Die Anatomie folgt der Oberflaechenfarbe absichtlich *nicht*: die
+/// Muskelfarben unten sind Fachfarben (rot = beansprucht, blau = unterstuetzend).
 abstract final class LyftaTheme {
-  static const background = Color(0xFF0E0E0E); // AppTheme.surfaceColor
-  static const surface = Color(0xFF131313); // surfaceContainerLow
-  static const surfaceElevated = Color(0xFF1F2020); // surfaceContainerHigh
-  static const surfaceHighlight = Color(0xFF252626); // surfaceContainerHighest
+  static const background = KineticTheme.background;
+  static const surface = KineticTheme.surface;
+  static const surfaceElevated = KineticTheme.surfaceElevated;
+  static const surfaceHighlight = KineticTheme.surfaceHighlight;
 
-  /// [AppTheme.primaryColor] - der App-Akzent. Sparsam einsetzen.
-  static const primary = Color(0xFFC2C1FF);
+  static const primary = KineticTheme.primary;
+  static const onPrimary = KineticTheme.onPrimary;
 
-  /// Dunkles Indigo auf hellem Periwinkle, wie der FAB im App-Theme.
-  static const onPrimary = Color(0xFF2D27AD);
-
-  static const textPrimary = Color(0xFFE7E5E5); // onSurfaceColor
-  static const textSecondary = Color(0xFFACABAA); // onSurfaceVariant
-
-  /// Bewusst nicht `outlineVariant` (#484848): das waere auf #0E0E0E nur 2,1:1
-  /// und damit fuer den 11px-[label]-Stil unlesbar. #7A7877 liegt bei 4,5:1.
-  static const textTertiary = Color(0xFF7A7877);
-  static const divider = Color(0xFF484848); // outlineVariant
-  static const danger = Color(0xFFEC7C8A); // AppTheme.errorColor
+  static const textPrimary = KineticTheme.textPrimary;
+  static const textSecondary = KineticTheme.textSecondary;
+  static const textTertiary = KineticTheme.textTertiary;
+  static const divider = KineticTheme.divider;
+  static const danger = KineticTheme.danger;
 
   /// Persoenliche Bestleistungen. Gold statt Periwinkle, damit ein Rekord nicht
   /// wie ein weiteres Bedienelement aussieht - entsaettigt, damit es sich in die
@@ -52,101 +51,12 @@ abstract final class LyftaTheme {
   /// Unterstuetzender Muskel.
   static const muscleSecondary = Color(0xFF4C8DF6);
 
-  static ThemeData get darkTheme {
-    final base = ThemeData(
-      useMaterial3: true,
-      brightness: Brightness.dark,
-      scaffoldBackgroundColor: background,
-      colorScheme: const ColorScheme.dark(
-        surface: surface,
-        primary: primary,
-        onPrimary: onPrimary,
-        secondary: prAccent,
-        error: danger,
-        onSurface: textPrimary,
-        onSurfaceVariant: textSecondary,
-        outlineVariant: divider,
-      ),
-      dividerColor: divider,
-      appBarTheme: AppBarTheme(
-        backgroundColor: background,
-        foregroundColor: textPrimary,
-        elevation: 0,
-        centerTitle: true,
-        titleTextStyle: GoogleFonts.inter(
-          fontSize: 17,
-          fontWeight: FontWeight.w600,
-          color: textPrimary,
-        ),
-      ),
-      cardTheme: const CardThemeData(
-        color: surface,
-        elevation: 0,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.all(Radius.circular(12))),
-      ),
-      filledButtonTheme: FilledButtonThemeData(
-        style: FilledButton.styleFrom(
-          backgroundColor: primary,
-          foregroundColor: onPrimary,
-          minimumSize: const Size.fromHeight(50),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-          textStyle: GoogleFonts.inter(fontWeight: FontWeight.w600, fontSize: 16),
-        ),
-      ),
-      inputDecorationTheme: InputDecorationTheme(
-        filled: true,
-        fillColor: surfaceElevated,
-        border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(10),
-          borderSide: BorderSide.none,
-        ),
-        hintStyle: GoogleFonts.inter(color: textTertiary, fontSize: 15),
-      ),
-      chipTheme: ChipThemeData(
-        backgroundColor: surfaceElevated,
-        selectedColor: primary.withValues(alpha: 0.2),
-        labelStyle: GoogleFonts.inter(fontSize: 13, fontWeight: FontWeight.w500),
-        side: const BorderSide(color: divider),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-      ),
-    );
-    return base.copyWith(
-      textTheme: GoogleFonts.interTextTheme(base.textTheme).apply(
-        bodyColor: textPrimary,
-        displayColor: textPrimary,
-      ),
-    );
-  }
+  /// Wie [KineticTheme.darkTheme], nur mit dem Rekord-Gold als `secondary`.
+  static ThemeData get darkTheme => KineticTheme.buildDarkTheme(secondary: prAccent);
 
-  static TextStyle get headline => GoogleFonts.inter(
-        fontSize: 28,
-        fontWeight: FontWeight.w700,
-        color: textPrimary,
-        letterSpacing: -0.5,
-      );
-
-  static TextStyle get title => GoogleFonts.inter(
-        fontSize: 17,
-        fontWeight: FontWeight.w600,
-        color: textPrimary,
-      );
-
-  static TextStyle get subtitle => GoogleFonts.inter(
-        fontSize: 15,
-        fontWeight: FontWeight.w400,
-        color: textSecondary,
-      );
-
-  static TextStyle get caption => GoogleFonts.inter(
-        fontSize: 13,
-        fontWeight: FontWeight.w500,
-        color: textSecondary,
-      );
-
-  static TextStyle get label => GoogleFonts.inter(
-        fontSize: 11,
-        fontWeight: FontWeight.w600,
-        color: textTertiary,
-        letterSpacing: 0.5,
-      );
+  static TextStyle get headline => KineticTheme.headline;
+  static TextStyle get title => KineticTheme.title;
+  static TextStyle get subtitle => KineticTheme.subtitle;
+  static TextStyle get caption => KineticTheme.caption;
+  static TextStyle get label => KineticTheme.label;
 }

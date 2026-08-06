@@ -133,8 +133,36 @@ class ApiConfig {
   //FINANCE ENDPOINTS
   static const String transactions = '$baseUrl/finance/transactions';
   static String transactionById(int id) => '$baseUrl/finance/transactions/$id';
+  static String transactionCategory(int id) =>
+      '$baseUrl/finance/transactions/$id/category';
   static const String budgets = '$baseUrl/finance/budgets';
+  static String budgetById(int id) => '$baseUrl/finance/budgets/$id';
+  static const String budgetProgress = '$baseUrl/finance/stats/budget-progress';
   static const String financeStats = '$baseUrl/finance/stats/overview';
+  static String financeMonthlyStats(String month) =>
+      '$baseUrl/finance/stats/monthly?month=$month';
+
+  // Verträge. Liefert seit der Vertragserkennung echte Contracts und nicht mehr
+  // Buchungen mit isRecurring=true.
+  static const String contracts = '$baseUrl/finance/contracts';
+  static String contractById(int id) => '$baseUrl/finance/contracts/$id';
+  static String contractTransactions(int id) =>
+      '$baseUrl/finance/contracts/$id/transactions';
+
+  // Prognose. Ohne month-Parameter der laufende Monat.
+  static String financeForecast([String? month]) =>
+      month == null ? '$baseUrl/finance/forecast' : '$baseUrl/finance/forecast?month=$month';
+
+  //BANK ENDPOINTS
+  static String bankAspsps(String country) =>
+      '$baseUrl/finance/bank/aspsps?country=$country';
+  static const String bankConnect = '$baseUrl/finance/bank/connect';
+  static const String bankConnections = '$baseUrl/finance/bank/connections';
+  static String bankConnectionById(int id) => '$baseUrl/finance/bank/connections/$id';
+  static const String bankAccounts = '$baseUrl/finance/bank/accounts';
+  static String bankAccountById(int id) => '$baseUrl/finance/bank/accounts/$id';
+  static const String bankSync = '$baseUrl/finance/bank/sync';
+  static const String bankStatus = '$baseUrl/finance/bank/status';
   
   //HABIT ENDPOINTS
   static const String habits = '$baseUrl/habits';

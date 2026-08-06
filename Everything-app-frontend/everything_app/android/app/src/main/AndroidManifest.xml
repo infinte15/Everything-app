@@ -44,5 +44,14 @@
             <action android:name="android.intent.action.PROCESS_TEXT"/>
             <data android:mimeType="text/plain"/>
         </intent>
+
+        <!-- Bank-Login im externen Browser (url_launcher, Finance Space).
+             Ab Android 11 sieht eine App fremde Pakete nur noch, wenn sie hier
+             danach fragt - ohne diesen Eintrag liefert launchUrl schlicht false,
+             ohne Fehler und ohne Hinweis. -->
+        <intent>
+            <action android:name="android.intent.action.VIEW"/>
+            <data android:scheme="https"/>
+        </intent>
     </queries>
 </manifest>

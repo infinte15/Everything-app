@@ -55,6 +55,11 @@ dependencies:
   # Navigation
   go_router: ^12.1.3
 
+  # Bank-Login im externen Browser. Muss extern sein: eine Bank-Anmeldung in
+  # einem eingebetteten WebView wird von vielen Instituten abgelehnt, und der
+  # Nutzer könnte nicht prüfen, wem er seine Zugangsdaten gibt.
+  url_launcher: ^6.2.0
+
 
   # The following adds the Cupertino Icons font to your application.
   # Use with the CupertinoIcons class for iOS style icons.
