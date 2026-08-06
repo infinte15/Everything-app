@@ -38,6 +38,25 @@ public class FinanceTransactionDTO {
     private Boolean isRecurring;
     private String recurringFrequency;
 
+    // ==================== Bankimport ====================
+
+    /**
+     * Gegenpartei - in der Liste die grosse Zeile, der Verwendungszweck die kleine. Bei manuellen
+     * Buchungen {@code null}; dann traegt die Beschreibung allein.
+     */
+    private String counterparty;
+
+    /** {@code MANUAL} oder {@code BANK}. Altbestaende koennen {@code null} tragen. */
+    private String source;
+
+    /** Der Nutzer hat die Kategorie selbst gesetzt - kein Vorschlag der Automatik. */
+    private Boolean categoryLocked;
+
+    /** Gesetzt, wenn die Buchung zu einem erkannten Vertrag gehoert. */
+    private Long contractId;
+
+    private LocalDate valueDate;
+
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
 }

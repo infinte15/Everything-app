@@ -19,8 +19,9 @@ public interface BankAccountRepository extends JpaRepository<BankAccount, Long> 
     // Ersetzt die bewusst weggelassene Inverse-Collection auf BankConnection
     List<BankAccount> findByConnectionId(Long connectionId);
 
-    // Upsert beim Sync: Konto anhand der Enable-Banking-UID wiederfinden
-    Optional<BankAccount> findByUserIdAndAccountUid(Long userId, String accountUid);
+    // Upsert beim Sync. Bewusst ueber den identification_hash und nicht ueber die account_uid:
+    // die UID wechselt bei jeder Neu-Autorisierung (siehe BankAccount).
+    Optional<BankAccount> findByUserIdAndIdentificationHash(Long userId, String identificationHash);
 
     // Nur diese Konten holt der Sync ab
     List<BankAccount> findByUserIdAndSyncEnabledTrue(Long userId);

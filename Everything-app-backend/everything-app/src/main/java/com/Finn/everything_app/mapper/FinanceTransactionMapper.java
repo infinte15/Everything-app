@@ -24,6 +24,11 @@ public class FinanceTransactionMapper {
         dto.setReceiptUrl(transaction.getReceiptUrl());
         dto.setIsRecurring(transaction.getIsRecurring());
         dto.setRecurringFrequency(transaction.getRecurringFrequency());
+        dto.setCounterparty(transaction.getCounterparty());
+        dto.setSource(transaction.getSource() != null ? transaction.getSource().name() : null);
+        dto.setCategoryLocked(transaction.getCategoryLocked());
+        dto.setContractId(transaction.getContract() != null ? transaction.getContract().getId() : null);
+        dto.setValueDate(transaction.getValueDate());
         dto.setCreatedAt(transaction.getCreatedAt());
         dto.setUpdatedAt(transaction.getUpdatedAt());
 
@@ -46,6 +51,11 @@ public class FinanceTransactionMapper {
         transaction.setReceiptUrl(dto.getReceiptUrl());
         transaction.setIsRecurring(dto.getIsRecurring());
         transaction.setRecurringFrequency(dto.getRecurringFrequency());
+        transaction.setCounterparty(dto.getCounterparty());
+        transaction.setValueDate(dto.getValueDate());
+        // source, categoryLocked, externalId und contract bleiben aussen vor: sie beschreiben die
+        // Herkunft der Buchung. Wer sie aus dem Client uebernaehme, koennte eine getippte Buchung
+        // als Bankbuchung ausgeben und damit den Dedup-Schluessel des Imports vergiften.
 
         return transaction;
     }

@@ -11,11 +11,16 @@ import java.time.LocalDateTime;
  * <p>{@link #user} ist gegenueber {@code connection.getUser()} denormalisiert. Jede Abfrage in
  * diesem Projekt ist nutzer-skopiert ({@code findByUserId...}); der Umweg ueber die Verbindung
  * waere ein zusaetzlicher Join auf genau dem Pfad, den der Import am haeufigsten geht.
+ *
+ * <p><strong>Identitaet haengt an {@link #identificationHash}, nicht an {@link #accountUid}.</strong>
+ * Der UID gilt laut Enable-Banking-Spezifikation nur, solange die Sitzung autorisiert ist - nach
+ * einer Neu-Autorisierung traegt dasselbe Konto einen anderen UID. Wer darauf dedupliziert, legt
+ * bei jeder erneuten Zustimmung ein zweites Konto samt kompletter Buchungshistorie an.
  */
 @Entity
 @Table(name = "bank_accounts",
-        uniqueConstraints = @UniqueConstraint(name = "uk_bank_accounts_user_uid",
-                columnNames = {"user_id", "account_uid"}),
+        uniqueConstraints = @UniqueConstraint(name = "uk_bank_accounts_user_hash",
+                columnNames = {"user_id", "identification_hash"}),
         indexes = {
                 @Index(name = "idx_bank_accounts_user", columnList = "user_id"),
                 @Index(name = "idx_bank_accounts_connection", columnList = "bank_connection_id")
@@ -27,8 +32,24 @@ public class BankAccount {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    /** UID von Enable Banking; der Schluessel, ueber den der Sync bestehende Konten wiederfindet. */
-    @Column(name = "account_uid", nullable = false, length = 100)
+    /**
+     * Stabiler Kontoschluessel ueber Sitzungen hinweg ({@code identification_hash}). Der Upsert
+     * beim Sync laeuft ueber dieses Feld, und die ersten acht Zeichen stecken im
+     * {@code externalId} jeder importierten Buchung - {@code entry_reference} allein ist laut
+     * Spezifikation nicht kontouebergreifend eindeutig.
+     */
+    @Column(name = "identification_hash", nullable = false, length = 128)
+    private String identificationHash;
+
+    /**
+     * Sitzungsgebundener UID von Enable Banking; nur damit lassen sich Salden und Umsaetze
+     * abrufen. Wird bei jedem Sitzungsstart neu gesetzt und ist deshalb <em>kein</em>
+     * Identitaetsmerkmal (siehe Klassenkommentar).
+     *
+     * <p>Nullable, weil die Spezifikation Konten ohne UID kennt - etwa gesperrte oder aufgeloeste.
+     * Solche Konten werden beim Sync uebersprungen.
+     */
+    @Column(name = "account_uid", length = 100)
     private String accountUid;
 
     @Column(length = 34)

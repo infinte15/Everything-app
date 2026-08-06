@@ -44,6 +44,10 @@ public class SecurityConfig {
                                 "/api/auth/register",
                                 "/api/auth/login",
                                 "/api/auth/dev-login",
+                                // Rücksprung aus dem Bank-Login: der Browser kommt ohne JWT zurück.
+                                // Die Zuordnung zum Nutzer läuft über den einmalig verwendbaren
+                                // state-Parameter, nicht über den Authorization-Header.
+                                "/api/finance/bank/callback",
                                 "/error")
                         .permitAll()
 

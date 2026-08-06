@@ -2,6 +2,7 @@ package com.Finn.everything_app.service;
 
 import com.Finn.everything_app.exception.BadRequestException;
 import com.Finn.everything_app.repository.BudgetCategoryRepository;
+import com.Finn.everything_app.repository.ContractRepository;
 import com.Finn.everything_app.repository.FinanceTransactionRepository;
 import com.Finn.everything_app.repository.UserRepository;
 import org.junit.jupiter.api.Test;
@@ -22,6 +23,7 @@ class FinanceTransactionServiceTest {
     @Mock FinanceTransactionRepository transactionRepository;
     @Mock UserRepository userRepository;
     @Mock BudgetCategoryRepository budgetCategoryRepository;
+    @Mock ContractRepository contractRepository;
 
     @InjectMocks FinanceTransactionService service;
 

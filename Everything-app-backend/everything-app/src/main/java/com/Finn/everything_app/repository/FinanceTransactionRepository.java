@@ -122,4 +122,7 @@ public interface FinanceTransactionRepository extends JpaRepository<FinanceTrans
 
     List<FinanceTransaction> findByContractId(Long contractId);
 
+    // Beim Trennen einer Verbindung: Kontobezug loesen, Buchungen behalten
+    List<FinanceTransaction> findByBankAccountId(Long bankAccountId);
+
 }

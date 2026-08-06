@@ -22,9 +22,13 @@ public class FinanceController {
 
     private final FinanceTransactionService transactionService;
     private final BudgetCategoryService budgetService;
+    private final ContractService contractService;
+    private final TransactionCategorizer categorizer;
+    private final FinanceForecastService forecastService;
 
     private final FinanceTransactionMapper transactionMapper;
     private final BudgetCategoryMapper budgetMapper;
+    private final ContractMapper contractMapper;
 
     // ==================== TRANSACTIONS ====================
 
@@ -44,12 +48,51 @@ public class FinanceController {
         return ResponseEntity.ok(transactionMapper.toDTO(transaction));
     }
 
+    // ==================== CONTRACTS ====================
+
+    /**
+     * Wiederkehrende Zahlungen.
+     *
+     * <p>Lieferte frueher Buchungen mit {@code isRecurring = true}; seit der Vertragserkennung sind
+     * es echte {@code Contract}s. Ein Vertrag traegt Rhythmus, naechste Faelligkeit und die Zahl der
+     * Buchungen, aus denen er erkannt wurde - all das lag in einer einzelnen Buchung nicht vor.
+     */
     @GetMapping("/contracts")
-    public ResponseEntity<List<FinanceTransactionDTO>> getContracts(@CurrentUser Long userId) {
-        List<FinanceTransaction> contracts = transactionService.getContracts(userId);
-        return ResponseEntity.ok(
-                contracts.stream().map(transactionMapper::toDTO).collect(Collectors.toList())
-        );
+    public ResponseEntity<List<ContractDTO>> getContracts(
+            @CurrentUser Long userId,
+            @RequestParam(required = false, defaultValue = "false") boolean activeOnly) {
+
+        return ResponseEntity.ok(contractService.getContracts(userId, activeOnly).stream()
+                .map(contractMapper::toDTO)
+                .collect(Collectors.toList()));
+    }
+
+    /** Die Buchungen, aus denen der Vertrag erkannt wurde - macht die Erkennung nachvollziehbar. */
+    @GetMapping("/contracts/{id}/transactions")
+    public ResponseEntity<List<FinanceTransactionDTO>> getContractTransactions(
+            @CurrentUser Long userId,
+            @PathVariable Long id) {
+
+        return ResponseEntity.ok(contractService.getTransactions(userId, id).stream()
+                .map(transactionMapper::toDTO)
+                .collect(Collectors.toList()));
+    }
+
+    @PutMapping("/contracts/{id}")
+    public ResponseEntity<ContractDTO> updateContract(
+            @CurrentUser Long userId,
+            @PathVariable Long id,
+            @Valid @RequestBody ContractDTO contractDTO) {
+
+        Contract contract = contractService.getContract(userId, id);
+        contractMapper.applyTo(contract, contractDTO);
+        return ResponseEntity.ok(contractMapper.toDTO(contractService.save(contract)));
+    }
+
+    @DeleteMapping("/contracts/{id}")
+    public ResponseEntity<Void> deleteContract(@CurrentUser Long userId, @PathVariable Long id) {
+        contractService.delete(userId, id);
+        return ResponseEntity.noContent().build();
     }
 
 
@@ -139,6 +182,29 @@ public class FinanceController {
     public ResponseEntity<Void> deleteTransaction(@PathVariable Long id) {
         transactionService.deleteTransaction(id);
         return ResponseEntity.noContent().build();
+    }
+
+    /**
+     * Kategorie korrigieren - und daraus lernen.
+     *
+     * <p>Legt zugleich eine Regel auf die normalisierte Gegenpartei an, damit kuenftige Buchungen
+     * derselben Quelle richtig einsortiert werden. {@code affectedCount} in der Antwort zaehlt die
+     * frueheren Buchungen derselben Gegenpartei: damit kann die App "auch auf 23 frühere Buchungen
+     * anwenden?" anbieten, statt es stillschweigend zu tun oder stillschweigend zu lassen.
+     */
+    @PatchMapping("/transactions/{id}/category")
+    public ResponseEntity<RecategorizeResultDTO> recategorize(
+            @CurrentUser Long userId,
+            @PathVariable Long id,
+            @Valid @RequestBody RecategorizeRequest request) {
+
+        TransactionCategorizer.Recategorized result = categorizer.recategorize(
+                userId, id, request.getCategory(), request.getSubcategory(), request.isApplyToPast());
+
+        return ResponseEntity.ok(new RecategorizeResultDTO(
+                transactionMapper.toDTO(result.transaction()),
+                result.affected(),
+                request.isApplyToPast()));
     }
 
     // ==================== BUDGET CATEGORIES ====================
@@ -268,6 +334,24 @@ public class FinanceController {
 
         SpendingTrendsDTO trends = transactionService.getSpendingTrends(userId, start, end, groupBy);
         return ResponseEntity.ok(trends);
+    }
+
+    // ==================== FORECAST ====================
+
+    /**
+     * Was bis Monatsende noch bleibt.
+     *
+     * <p>Ohne verbundenes Konto ist {@code available} {@code null} - die Oberflaeche zeigt dann den
+     * "Konto verbinden"-Zustand statt einer erfundenen Zahl. Die Vertragsseite der Antwort ist
+     * trotzdem gefuellt.
+     */
+    @GetMapping("/forecast")
+    public ResponseEntity<FinanceForecastDTO> getForecast(
+            @CurrentUser Long userId,
+            @RequestParam(required = false) String month) {
+
+        LocalDate targetMonth = month != null ? LocalDate.parse(month + "-01") : LocalDate.now();
+        return ResponseEntity.ok(forecastService.forecast(userId, targetMonth));
     }
 
     // ==================== REPORTS ====================

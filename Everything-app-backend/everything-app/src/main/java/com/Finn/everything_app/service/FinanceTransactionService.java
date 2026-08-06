@@ -18,6 +18,7 @@ public class FinanceTransactionService {
     private final FinanceTransactionRepository transactionRepository;
     private final UserRepository userRepository;
     private final BudgetCategoryRepository budgetCategoryRepository;
+    private final ContractRepository contractRepository;
 
     @Transactional
     public FinanceTransaction createTransaction(Long userId, FinanceTransaction transaction, Long budgetCategoryId) {
@@ -66,12 +67,6 @@ public class FinanceTransactionService {
 
     public List<FinanceTransaction> getTransactionsByCategory(Long userId, String category) {
         return transactionRepository.findByUserIdAndCategory(userId, category);
-    }
-
-    public List<FinanceTransaction> getContracts(Long userId) {
-        return getUserTransactions(userId).stream()
-                .filter(t -> "AUSGABE".equals(t.getType()) && Boolean.TRUE.equals(t.getIsRecurring()))
-                .collect(Collectors.toList());
     }
 
     public List<FinanceTransaction> searchTransactions(Long userId, String query) {
@@ -170,6 +165,31 @@ public class FinanceTransactionService {
         return stats;
     }
 
+    /**
+     * Fixkosten eines Monats aus den erkannten Vertraegen.
+     *
+     * <p>Frueher war das die Summe der Buchungen mit {@code isRecurring = true} im jeweiligen Monat -
+     * und damit von Monat zu Monat verschieden, obwohl sich an den Vertraegen nichts geaendert hatte:
+     * eine vierteljaehrliche Versicherung tauchte in einem von drei Monaten in voller Hoehe auf und
+     * in den anderen beiden gar nicht. Ueber {@code frequency} auf einen Monat normalisiert ergibt
+     * sich stattdessen die Zahl, nach der man tatsaechlich plant.
+     */
+    private double monthlyFixedCosts(Long userId) {
+        return contractRepository
+                .findByUserIdAndActiveTrueAndDirection(userId, TransactionType.EXPENSE).stream()
+                .filter(c -> c.getAmount() != null && c.getFrequency() != null)
+                .mapToDouble(c -> c.getAmount() * 30.44 / switch (c.getFrequency()) {
+                    case WEEKLY -> 7;
+                    case BIWEEKLY -> 14;
+                    case MONTHLY, IRREGULAR -> 30;
+                    case BIMONTHLY -> 61;
+                    case QUARTERLY -> 91;
+                    case SEMIANNUAL -> 183;
+                    case YEARLY -> 365;
+                })
+                .sum();
+    }
+
     public FinanceStatisticsDTO calculateMonthlyStatistics(Long userId, LocalDate month) {
         LocalDate start = month.withDayOfMonth(1);
         LocalDate end = month.withDayOfMonth(month.lengthOfMonth());
@@ -188,10 +208,7 @@ public class FinanceTransactionService {
 
         double monthlySavings = monthlyIncome - monthlyExpenses;
 
-        double totalFixedCosts = monthTransactions.stream()
-                .filter(t -> "AUSGABE".equals(t.getType()) && Boolean.TRUE.equals(t.getIsRecurring()))
-                .mapToDouble(FinanceTransaction::getAmount)
-                .sum();
+        double totalFixedCosts = monthlyFixedCosts(userId);
 
         double disposableIncome = monthlyIncome - totalFixedCosts;
 
