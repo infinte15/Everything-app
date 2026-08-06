@@ -8,6 +8,8 @@ import org.springframework.data.repository.query.Param;
 
 import java.time.LocalDate;
 import java.util.List;
+import java.util.Optional;
+import java.util.Set;
 
 public interface FinanceTransactionRepository extends JpaRepository<FinanceTransaction, Long> {
 
@@ -84,5 +86,40 @@ public interface FinanceTransactionRepository extends JpaRepository<FinanceTrans
 
     // Anzahl Transaktionen in Zeitraum
     Long countByUserIdAndTransactionDateBetween(Long userId, LocalDate startDate, LocalDate endDate);
+
+    // ==================== Bankimport ====================
+
+    // Dedup einer einzelnen Buchung
+    boolean existsByUserIdAndExternalId(Long userId, String externalId);
+
+    Optional<FinanceTransaction> findByUserIdAndExternalId(Long userId, String externalId);
+
+    /** Ein Sync holt bis zu 90 Tage auf einmal - ein SELECT statt eines pro Buchung. */
+    @Query("SELECT ft.externalId FROM FinanceTransaction ft " +
+            "WHERE ft.user.id = :userId " +
+            "AND ft.externalId IS NOT NULL " +
+            "AND ft.transactionDate >= :from")
+    Set<String> findExternalIdsSince(@Param("userId") Long userId, @Param("from") LocalDate from);
+
+    /**
+     * Buchungen, deren Kategorie die Auto-Kategorisierung anfassen darf.
+     *
+     * <p>Bewusst als JPQL und nicht als abgeleitetes {@code ...AndCategoryLockedFalse}: Zeilen aus
+     * der Zeit vor der Spalte tragen {@code category_locked = NULL}, und die wuerde eine
+     * abgeleitete Abfrage uebersehen.
+     */
+    @Query("SELECT ft FROM FinanceTransaction ft " +
+            "WHERE ft.user.id = :userId " +
+            "AND (ft.categoryLocked IS NULL OR ft.categoryLocked = false) " +
+            "ORDER BY ft.transactionDate DESC")
+    List<FinanceTransaction> findRecategorizable(@Param("userId") Long userId);
+
+    // Vertragserkennung: Buchungshistorie chronologisch, um Abstaende zu bilden
+    List<FinanceTransaction> findByUserIdAndTransactionDateAfterOrderByTransactionDateAsc(
+            Long userId,
+            LocalDate from
+    );
+
+    List<FinanceTransaction> findByContractId(Long contractId);
 
 }

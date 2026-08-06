@@ -1,0 +1,92 @@
+[
+  {
+    "category": "Einnahmen",
+    "priority": 200,
+    "patterns": [
+      "gehalt", "lohn", "bezüge", "honorar", "rente", "bafög", "bafoeg", "kindergeld",
+      "elterngeld", "stipendium", "steuererstattung", "dividende", "ausbildungsvergütung"
+    ]
+  },
+  {
+    "category": "Lebensmittel",
+    "patterns": [
+      "rewe", "edeka", "aldi", "lidl", "penny", "netto marken", "kaufland", "norma",
+      "famila", "marktkauf", "tegut", "globus", "nahkauf", "denns", "alnatura",
+      "bio company", "trinkgut", "getränkemarkt"
+    ]
+  },
+  {
+    "category": "Transport",
+    "patterns": [
+      "shell", "aral", "esso", "total ", "jet tankstelle", "star tankstelle",
+      "deutsche bahn", "db vertrieb", "db fernverkehr", "bvg", "hvv", "mvg", "rmv",
+      "vrr", "vrs", "kvb", "flixbus", "uber", "bolt", "free now", "tier ", "lime",
+      "sixt", "europcar", "apcoa", "easypark", "adac"
+    ]
+  },
+  {
+    "category": "Wohnen",
+    "patterns": [
+      "miete", "vermieter", "hausverwaltung", "nebenkosten", "hausgeld", "stadtwerke",
+      "vattenfall", "e.on", "eon energie", "rwe", "enbw", "yello", "lichtblick",
+      "naturstrom", "wasserwerke", "telekom", "vodafone", "1&1", "o2 ", "pyur",
+      "rundfunkbeitrag", "ikea"
+    ]
+  },
+  {
+    "category": "Gesundheit",
+    "patterns": [
+      "aok", "techniker krankenkasse", "barmer", "dak", "ikk", "kkh", "hkk",
+      "apotheke", "zahnarzt", "praxis dr", "klinikum", "krankenhaus", "physiotherapie",
+      "fielmann", "optiker", "dm-drogerie", "rossmann"
+    ]
+  },
+  {
+    "category": "Unterhaltung",
+    "patterns": [
+      "netflix", "spotify", "disney", "dazn", "amazon prime", "prime video",
+      "sky deutschland", "audible", "deezer", "youtube premium", "steam games",
+      "playstation", "nintendo", "xbox", "google play", "itunes", "patreon",
+      "cinemaxx", "cineplex", "uci kino"
+    ]
+  },
+  {
+    "category": "Kleidung",
+    "patterns": [
+      "zalando", "h&m", "hennes", "c&a", "zara", "primark", "about you", "tk maxx",
+      "peek & cloppenburg", "deichmann", "snipes", "foot locker", "s.oliver",
+      "breuninger", "asos", "decathlon", "adidas", "nike"
+    ]
+  },
+  {
+    "category": "Restaurant",
+    "patterns": [
+      "mcdonald", "burger king", "kfc", "subway", "starbucks", "vapiano", "lieferando",
+      "wolt", "uber eats", "too good to go", "bäckerei", "baeckerei", "backwerk",
+      "kamps", "dean & david", "five guys", "nordsee", "block house", "döner", "doener"
+    ]
+  },
+  {
+    "category": "Restaurant",
+    "priority": 50,
+    "patterns": ["pizza", "restaurant", "gaststätte", "café", "cafe "]
+  },
+  {
+    "category": "Sonstiges",
+    "subcategory": "Versicherung",
+    "patterns": [
+      "allianz", "huk", "debeka", "ergo versicherung", "axa versicherung", "generali",
+      "signal iduna", "cosmos direkt", "getsafe", "wefox"
+    ]
+  },
+  {
+    "category": "Sonstiges",
+    "subcategory": "Sparen",
+    "patterns": ["trade republic", "scalable capital", "comdirect depot", "sparplan", "vwl "]
+  },
+  {
+    "category": "Sonstiges",
+    "priority": 50,
+    "patterns": ["amazon", "otto ", "ebay", "media markt", "saturn", "obi ", "bauhaus", "hornbach"]
+  }
+]
