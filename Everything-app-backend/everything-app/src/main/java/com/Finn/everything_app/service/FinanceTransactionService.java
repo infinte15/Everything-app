@@ -1,6 +1,7 @@
 package com.Finn.everything_app.service;
 
 import com.Finn.everything_app.dto.*;
+import com.Finn.everything_app.exception.BadRequestException;
 import com.Finn.everything_app.model.*;
 import com.Finn.everything_app.repository.*;
 import lombok.RequiredArgsConstructor;
@@ -47,8 +48,20 @@ public class FinanceTransactionService {
         return transactionRepository.findByUserIdAndTransactionDateBetween(userId, start, end);
     }
 
+    /**
+     * Buchungen nach Typ.
+     *
+     * <p>Die Uebersetzung ueber {@link TransactionType} ist noetig, weil die Spalte die deutschen
+     * Werte "EINNAHME"/"AUSGABE" traegt: ein durchgereichtes "INCOME" wuerde immer eine leere
+     * Liste liefern, und das frueher hier verwendete {@code TransactionType.valueOf(type)} warf
+     * bei genau den Werten, die tatsaechlich in der Datenbank stehen.
+     */
     public List<FinanceTransaction> getTransactionsByType(Long userId, String type) {
-        return transactionRepository.findByUserIdAndType(userId, String.valueOf(TransactionType.valueOf(type)));
+        TransactionType parsed = TransactionType.fromLegacy(type);
+        if (parsed == null) {
+            throw new BadRequestException("Unbekannter Typ: " + type);
+        }
+        return transactionRepository.findByUserIdAndType(userId, parsed.toLegacy());
     }
 
     public List<FinanceTransaction> getTransactionsByCategory(Long userId, String category) {
