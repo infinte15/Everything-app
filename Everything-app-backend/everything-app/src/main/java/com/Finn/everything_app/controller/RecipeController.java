@@ -5,6 +5,8 @@ import com.Finn.everything_app.mapper.*;
 import com.Finn.everything_app.model.*;
 import com.Finn.everything_app.security.CurrentUser;
 import com.Finn.everything_app.service.*;
+import com.Finn.everything_app.service.recipe.ChefkochImporter;
+import com.Finn.everything_app.service.recipe.IngredientParser;
 import lombok.RequiredArgsConstructor;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.HttpStatus;
@@ -34,6 +36,8 @@ public class RecipeController {
 
     private final RecipeService recipeService;
     private final MealPlanService mealPlanService;
+    private final ChefkochImporter chefkochImporter;
+    private final IngredientParser ingredientParser;
 
     private final RecipeMapper recipeMapper;
     private final MealPlanMapper mealPlanMapper;
@@ -134,6 +138,39 @@ public class RecipeController {
 
         recipeService.deleteRecipe(userId, id);
         return ResponseEntity.noContent().build();
+    }
+
+    // ==================== IMPORT ====================
+
+    /**
+     * Liest ein Rezept von einer chefkoch.de-Adresse - ohne es zu speichern.
+     *
+     * <p>Zwei Schritte statt einem: die App zeigt das Ergebnis samt Warnungen zur Ansicht, und
+     * erst die Bestaetigung geht ueber {@code POST /api/recipes}. Ein Import, der still ein
+     * halbfalsches Rezept anlegt, ist schlimmer als gar keiner.
+     */
+    @PostMapping("/import/preview")
+    public ResponseEntity<RecipeImportPreviewDTO> previewImport(
+            @Valid @RequestBody RecipeImportRequest request) {
+
+        return ResponseEntity.ok(chefkochImporter.importFrom(request.getUrl()));
+    }
+
+    /**
+     * Zerlegt eingefuegte Zutatenzeilen - reine Vorschau, schreibt nichts.
+     *
+     * <p>Damit von Hand eingefuegte Zeilen durch denselben Parser laufen wie importierte.
+     */
+    @PostMapping("/ingredients/parse")
+    public ResponseEntity<List<RecipeIngredientDTO>> parseIngredients(
+            @Valid @RequestBody IngredientParseRequest request) {
+
+        List<RecipeIngredientDTO> parsed = ingredientParser.parseAll(request.getText()).stream()
+                .map(i -> new RecipeIngredientDTO(
+                        null, i.amount(), i.unit(), i.name(), i.note(), i.rawText(), null))
+                .collect(Collectors.toList());
+
+        return ResponseEntity.ok(parsed);
     }
 
     // ==================== MEAL PLANNING ====================

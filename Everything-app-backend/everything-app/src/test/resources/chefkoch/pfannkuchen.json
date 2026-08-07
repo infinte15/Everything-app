@@ -1,0 +1,169 @@
+{
+  "@context": "https://schema.org",
+  "@graph": [
+    {
+      "@type": "Recipe",
+      "@id": "https://www.chefkoch.de/rezepte/1208161226570428/Der-perfekte-Pfannkuchen-gelingt-einfach-immer.html#recipe",
+      "publisher": {
+        "@id": "https://www.chefkoch.de/#organization"
+      },
+      "inLanguage": "de-DE",
+      "recipeCuisine": "Deutsch",
+      "recipeCategory": "Mehlspeisen",
+      "author": {
+        "@id": "https://www.chefkoch.de/user/profil/3bbaa37bcbdf1ec4af331a8effc960a0#author"
+      },
+      "contributor": {
+        "@id": "https://www.chefkoch.de/user/profil/d3142db2b8d4bf10d3ffea753e48ef4c#author"
+      },
+      "name": "Der perfekte Pfannkuchen - gelingt einfach immer von zwergenmuomi",
+      "description": "Der perfekte Pfannkuchen - gelingt einfach immer - von Kindern geliebt und auch für Kochneulinge super geeignet. Über 2834 Bewertungen und für vorzüglich befunden. Mit ► Portionsrechner ► Kochbuch ► Video-Tipps!",
+      "abstract": "Dieses Rezept für Pfannkuchen gelingt garantiert immer. Klebt nicht, reißt nicht und verlangt keine besonderen Kochtechniken oder Vorwissen. Außerdem ist mit einer Rührschüssel und einer Pfanne auch das Küchenequipment überschaubar. Das Beste daran ist aber der Geschmack! Ein Allrounder fürs Frühstück, Mittagessen oder zum Dessert.   ",
+      "award": "Chefkoch Top Rezept",
+      "mainEntityOfPage": {
+        "@id": "https://www.chefkoch.de/rezepte/1208161226570428/Der-perfekte-Pfannkuchen-gelingt-einfach-immer.html"
+      },
+      "alternativeHeadline": "Von Kindern geliebt und auch für Kochneulinge super geeignet",
+      "image": {
+        "@id": "https://www.chefkoch.de/rezepte/1208161226570428/Der-perfekte-Pfannkuchen-gelingt-einfach-immer.html#primaryimage"
+      },
+      "prepTime": "PT5M",
+      "cookTime": "PT10M",
+      "totalTime": "PT15M",
+      "recipeYield": [
+        "4",
+        "4 Portionen"
+      ],
+      "keywords": "Backen, Schnell, einfach, Kinder",
+      "datePublished": "2008-11-13",
+      "dateModified": "2026-08-06",
+      "recipeInstructions": [
+        {
+          "@type": "HowToSection",
+          "name": "Zubereitung",
+          "itemListElement": [
+            {
+              "@type": "HowToStep",
+              "position": 1,
+              "text": "Mehl, Eier, Salz und Milch in eine Schüssel geben und zügig zu einem glatten Teig verrühren, bis er Blasen wirft.  Den Teig für etwa 30 Minuten im Kühlschrank ruhen lassen. (So können sich die Zutaten miteinander verbinden und der Teig wird geschmeidig.)  ",
+              "url": "https://www.chefkoch.de/rezepte/1208161226570428/Der-perfekte-Pfannkuchen-gelingt-einfach-immer.html#step1"
+            },
+            {
+              "@type": "HowToStep",
+              "position": 2,
+              "text": "Nach der Ruhezeit einen Schuss Wasser mit Kohlensäure zugeben und nochmals vorsichtig durchrühren.  ",
+              "url": "https://www.chefkoch.de/rezepte/1208161226570428/Der-perfekte-Pfannkuchen-gelingt-einfach-immer.html#step2"
+            },
+            {
+              "@type": "HowToStep",
+              "position": 3,
+              "text": "Pfanne auf die Herdplatte stellen und auf mittlerer Stufe vollständig aufheizen lassen. Dann etwas Butter in die Pfanne geben, schmelzen lassen und gleichmäßig bis an die Pfannenränder schwenken. (Für den ersten Pfannkuchen ruhig etwas mehr Butter nehmen, etwa 1 TL. Für alle weiteren Pfannkuchen reicht dann auch weniger.)  ",
+              "url": "https://www.chefkoch.de/rezepte/1208161226570428/Der-perfekte-Pfannkuchen-gelingt-einfach-immer.html#step3"
+            },
+            {
+              "@type": "HowToStep",
+              "position": 4,
+              "text": "Je nach Pfannengröße eine Kelle Teig in die heiße Pfanne geben und sofort durch Schwenken gleichmäßig bis an die Ränder gleichmäßig verteilen.   ",
+              "url": "https://www.chefkoch.de/rezepte/1208161226570428/Der-perfekte-Pfannkuchen-gelingt-einfach-immer.html#step4"
+            },
+            {
+              "@type": "HowToStep",
+              "position": 5,
+              "text": "Mit dem Wenden des Pfannkuchens so lange warten, bis der Teig in der Mitte der oberen Seite nicht mehr flüssig ist. Dann lässt er sich einfach mit einem Pfannenwender an den Rändern lösen und wenden.",
+              "url": "https://www.chefkoch.de/rezepte/1208161226570428/Der-perfekte-Pfannkuchen-gelingt-einfach-immer.html#step5"
+            },
+            {
+              "@type": "HowToStep",
+              "position": 6,
+              "text": "Die andere Seite des Pfannkuchens wesentlich kürzer goldbraun ausbacken. Mit dem restlichen Teig genauso verfahren.",
+              "url": "https://www.chefkoch.de/rezepte/1208161226570428/Der-perfekte-Pfannkuchen-gelingt-einfach-immer.html#step6"
+            }
+          ]
+        }
+      ],
+      "recipeIngredient": [
+        "400 g Mehl (wer mag, kann Vollkornmehl verwenden)",
+        "3 große Ei(er), Größe L",
+        "1 Prise(n) Salz",
+        "750 ml Milch (fettarme)",
+        "30 ml Mineralwasser mit Kohlensäure",
+        "Butter (zum Backen)"
+      ],
+      "nutrition": {
+        "@type": "NutritionInformation",
+        "servingSize": "1 Portion",
+        "calories": "545 kcal",
+        "proteinContent": "22 g",
+        "fatContent": "13 g",
+        "carbohydrateContent": "80 g"
+      },
+      "aggregateRating": {
+        "@type": "AggregateRating",
+        "worstRating": 0,
+        "bestRating": 5,
+        "ratingCount": 2834,
+        "ratingValue": 4.72
+      },
+      "commentCount": 1326,
+      "interactionStatistic": [
+        {
+          "@type": "InteractionCounter",
+          "interactionType": {
+            "@type": "CommentAction"
+          },
+          "userInteractionCount": 1326
+        }
+      ],
+      "comment": [
+        {
+          "@type": "Comment",
+          "text": "Sehr einfaches Rezept und klappt wirklich gut.\nSchmeckt wirklich sehr lecker. ",
+          "datePublished": "2026-07-26",
+          "author": {
+            "@type": "Person",
+            "@id": "https://www.chefkoch.de/user/profil/cef24426e8ffb821a18025dd0475e326#author",
+            "name": "Panda1992"
+          }
+        },
+        {
+          "@type": "Comment",
+          "text": "Nach diesem Rezept mach ich meine Pfannkuchen schon seit Jahren.\r\nIch halte die Pfannkuchen warm, indem ich einen Topf mit Wasser auf den Herd stelle und die Platte auf 1 schalte. Dann kommt ein Teller drauf, auf dem ich dann die Pfannkuchen stapele. Mit dem Topfdeckel decke ich dann die Pfannkuchen zu. \r\nKlappt prima und ist energiesparend.\r\nLG Molly",
+          "datePublished": "2012-06-15",
+          "author": {
+            "@type": "Person",
+            "@id": "https://www.chefkoch.de/user/profil/210dcea8e7cacc392e7b912787e1ef50#author",
+            "name": "Molly43"
+          },
+          "upvoteCount": 97
+        },
+        {
+          "@type": "Comment",
+          "text": "Hallo zusammen - jetzt habe ich doch noch was vergessen...... \r\n\r\nTIP 1: Den Backofen zum Warmhalten der schon fertigen Pfannkuchen auf 100 Grad vorheizen, da es relativ lange dauert bis ein Pfannkuchen nach dem anderen gebacken ist und man aber doch meist gemeinsam und warme Pfannkuchen essen möchte ;o))\r\n\r\nTIP 2: Übrige Pfannkuchen schmecken nach 30 Sek. in der Mikrowelle wieder fast wir frisch gebacken.\r\n\r\nTIP 3: Wir schneiden übrige Pfannkuchen immer klein und machen eine leckere Pfannkuchensuppe, (Flädlesuppe) Schmecke auch superlecker!!",
+          "datePublished": "2008-11-15",
+          "author": {
+            "@type": "Person",
+            "@id": "https://www.chefkoch.de/user/profil/3bbaa37bcbdf1ec4af331a8effc960a0#author",
+            "name": "zwergenmuomi"
+          },
+          "upvoteCount": 62
+        }
+      ],
+      "video": [
+        {
+          "@id": "https://www.chefkoch.de/rezepte/1208161226570428/Der-perfekte-Pfannkuchen-gelingt-einfach-immer.html#video"
+        }
+      ],
+      "hasPart": {
+        "@id": "https://www.chefkoch.de/rezepte/1208161226570428/Der-perfekte-Pfannkuchen-gelingt-einfach-immer.html#redaktionstipps"
+      }
+    },
+    {
+      "@type": "ImageObject",
+      "@id": "https://www.chefkoch.de/rezepte/1208161226570428/Der-perfekte-Pfannkuchen-gelingt-einfach-immer.html#primaryimage",
+      "url": "https://img.chefkoch-cdn.de/rezepte/1208161226570428/bilder/1626735/crop-960x540/der-perfekte-pfannkuchen-gelingt-einfach-immer.jpg",
+      "contentUrl": "https://img.chefkoch-cdn.de/rezepte/1208161226570428/bilder/1626735/crop-960x540/der-perfekte-pfannkuchen-gelingt-einfach-immer.jpg",
+      "width": 960,
+      "height": 540
+    }
+  ]
+}
