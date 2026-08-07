@@ -73,9 +73,16 @@ class _CategoryDonutState extends State<CategoryDonut> {
                     startDegreeOffset: -90,
                     pieTouchData: PieTouchData(
                       touchCallback: (event, response) {
+                        // fl_chart meldet -1, sobald der Finger nicht auf einem
+                        // Segment liegt: im Loch, im Zwischenraum, außerhalb des
+                        // Rings. Beim Scrollen über die Karte ist das der
+                        // Normalfall - ungeprüft übernommen wird daraus ein
+                        // Zugriff auf slices[-1].
+                        final index =
+                            response?.touchedSection?.touchedSectionIndex ?? -1;
                         setState(() {
-                          _touched = event.isInterestedForInteractions
-                              ? response?.touchedSection?.touchedSectionIndex
+                          _touched = event.isInterestedForInteractions && index >= 0
+                              ? index
                               : null;
                         });
                       },

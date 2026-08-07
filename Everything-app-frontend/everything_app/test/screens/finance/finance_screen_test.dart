@@ -9,8 +9,10 @@ import 'package:everything_app/screens/finance/pages/finance_budget_tab.dart';
 import 'package:everything_app/screens/finance/pages/finance_contracts_tab.dart';
 import 'package:everything_app/screens/finance/pages/finance_overview_tab.dart';
 import 'package:everything_app/screens/finance/pages/finance_transactions_tab.dart';
+import 'package:everything_app/screens/finance/widgets/category_donut.dart';
 import 'package:everything_app/screens/finance/widgets/recategorize_sheet.dart';
 import 'package:everything_app/theme/kinetic_theme.dart';
+import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:intl/date_symbol_data_local.dart';
@@ -204,6 +206,36 @@ void main() {
 
       expect(find.textContaining('ist abgelaufen'), findsOneWidget);
       expect(find.text('Erneuern'), findsOneWidget);
+    });
+
+    testWidgets('ein Griff neben ein Donut-Segment stürzt nicht ab',
+        (tester) async {
+      // fl_chart meldet den Segmentindex -1, sobald der Finger nicht auf dem
+      // Ring liegt. Der Ring füllt nur die Mitte der Karte - beim Scrollen ist
+      // daneben der Normalfall, und ungeprüft wurde daraus slices[-1].
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: KineticTheme.darkTheme,
+          home: const Scaffold(
+            body: CategoryDonut(
+              spendingByCategory: {'Lebensmittel': 240, 'Wohnen': 845},
+            ),
+          ),
+        ),
+      );
+
+      // Aufsetzen und halten, nicht tippen: bei einem Tap liegen Down und Up im
+      // selben Frame, und der Zustand -1 wird nie gezeichnet.
+      final chart = tester.getRect(find.byType(PieChart));
+      final gesture = await tester.startGesture(chart.topLeft + const Offset(16, 16));
+      await tester.pumpAndSettle();
+
+      expect(tester.takeException(), isNull);
+      // Ohne getroffenes Segment bleibt die Gesamtsumme in der Mitte stehen.
+      expect(find.text('gesamt'), findsOneWidget);
+
+      await gesture.up();
+      await tester.pumpAndSettle();
     });
   });
 
