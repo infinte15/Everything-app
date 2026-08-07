@@ -77,20 +77,6 @@ public class Recipe {
     @OrderBy("position ASC")
     private List<RecipeStep> steps = new ArrayList<>();
 
-    /**
-     * Altlast: Zutaten und Anleitung als Klartext.
-     *
-     * <p>Die Spalten sind seit der Migration nullbar und werden nur noch gespiegelt beschrieben,
-     * damit ein Rollback auf die vorige Jar und der noch nicht umgebaute Client weiterlaufen.
-     * Sie verschwinden mit {@code 2026-08-07-recipe-drop-legacy-text.sql}; gelesen wird
-     * ausschliesslich {@link #ingredientList} und {@link #steps}.
-     */
-    @Column(columnDefinition = "TEXT")
-    private String ingredients;
-
-    @Column(columnDefinition = "TEXT")
-    private String instructions;
-
     // Naehrwerte je Portion.
     private Integer calories;
     private Double protein;

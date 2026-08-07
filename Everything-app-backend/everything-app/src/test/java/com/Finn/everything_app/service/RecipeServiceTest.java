@@ -1,5 +1,7 @@
 package com.Finn.everything_app.service;
 
+import com.Finn.everything_app.dto.RecipeCookLogDTO;
+import com.Finn.everything_app.exception.BadRequestException;
 import com.Finn.everything_app.exception.ResourceNotFoundException;
 import com.Finn.everything_app.model.*;
 import com.Finn.everything_app.repository.*;
@@ -10,6 +12,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.math.BigDecimal;
+import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
@@ -23,6 +26,7 @@ class RecipeServiceTest {
 
     @Mock RecipeRepository recipeRepository;
     @Mock UserRepository userRepository;
+    @Mock RecipeCookLogRepository cookLogRepository;
 
     @InjectMocks
     RecipeService service;
@@ -159,15 +163,86 @@ class RecipeServiceTest {
         assertFalse(created.getIsFavorite());
     }
 
-    // Solange die Altspalten existieren, muessen sie den Stand der Kinder spiegeln - sonst
-    // liefert ein Rollback auf die vorige Jar ein Rezept ohne Zutaten aus.
+    // ── Bewertung und Kochprotokoll ───────────────────────────────────────────────────────
+
     @Test
-    void derKlartextSpiegelWirdBeimSpeichernMitgeschrieben() {
+    void gekochtZaehltHochUndMerktSichDenZeitpunkt() {
+        Recipe recipe = recipe(1L, "Hauptgericht");
+        when(recipeRepository.findByIdAndUserId(1L, 1L)).thenReturn(Optional.of(recipe));
         when(userRepository.findById(1L)).thenReturn(Optional.of(user(1L)));
         when(recipeRepository.save(any(Recipe.class))).thenAnswer(i -> i.getArgument(0));
 
-        Recipe created = service.createRecipe(1L, recipe(1L, "Hauptgericht"));
+        Recipe result = service.logCooked(1L, 1L, new RecipeCookLogDTO());
 
-        assertEquals("400 g Mehl", created.getIngredients());
+        assertEquals(1, result.getCookCount());
+        assertNotNull(result.getLastCookedAt());
+        verify(cookLogRepository).save(any(RecipeCookLog.class));
+    }
+
+    // Wer einen alten Termin nachtraegt, soll "zuletzt gekocht" nicht zurueckdrehen.
+    @Test
+    void einNachgetragenerAlterTerminDrehtZuletztGekochtNichtZurueck() {
+        Recipe recipe = recipe(1L, "Hauptgericht");
+        LocalDateTime gestern = LocalDateTime.now().minusDays(1);
+        recipe.setLastCookedAt(gestern);
+        recipe.setCookCount(1);
+        when(recipeRepository.findByIdAndUserId(1L, 1L)).thenReturn(Optional.of(recipe));
+        when(userRepository.findById(1L)).thenReturn(Optional.of(user(1L)));
+        when(recipeRepository.save(any(Recipe.class))).thenAnswer(i -> i.getArgument(0));
+
+        RecipeCookLogDTO entry = new RecipeCookLogDTO();
+        entry.setCookedAt(LocalDateTime.now().minusDays(30));
+        Recipe result = service.logCooked(1L, 1L, entry);
+
+        assertEquals(gestern, result.getLastCookedAt());
+        assertEquals(2, result.getCookCount());
+    }
+
+    @Test
+    void eineBewertungBeimKochenGiltAuchFuerDasRezept() {
+        Recipe recipe = recipe(1L, "Hauptgericht");
+        when(recipeRepository.findByIdAndUserId(1L, 1L)).thenReturn(Optional.of(recipe));
+        when(userRepository.findById(1L)).thenReturn(Optional.of(user(1L)));
+        when(recipeRepository.save(any(Recipe.class))).thenAnswer(i -> i.getArgument(0));
+
+        RecipeCookLogDTO entry = new RecipeCookLogDTO();
+        entry.setRating((short) 5);
+
+        assertEquals((short) 5, service.logCooked(1L, 1L, entry).getRating());
+    }
+
+    @Test
+    void eineBewertungAusserhalbVonEinsBisFuenfWirdAbgelehnt() {
+        assertThrows(BadRequestException.class, () -> service.rate(1L, 1L, (short) 6));
+        assertThrows(BadRequestException.class, () -> service.rate(1L, 1L, (short) 0));
+        // Und nichts davon hat das Rezept ueberhaupt geladen.
+        verify(recipeRepository, never()).save(any());
+    }
+
+    // Ein Vertipper darf ein dreimal gekochtes Rezept nicht aus "zuletzt gekocht" werfen -
+    // deshalb wird der Stand aus dem verbleibenden Protokoll neu bestimmt.
+    @Test
+    void einGeloeschterProtokolleintragSetztDieZaehlerNeuStattSieZuLeeren() {
+        Recipe recipe = recipe(1L, "Hauptgericht");
+        recipe.setCookCount(2);
+        recipe.setLastCookedAt(LocalDateTime.now());
+
+        RecipeCookLog toDelete = new RecipeCookLog();
+        toDelete.setId(9L);
+        toDelete.setRecipe(recipe);
+
+        LocalDateTime frueher = LocalDateTime.now().minusDays(10);
+        RecipeCookLog remaining = new RecipeCookLog();
+        remaining.setCookedAt(frueher);
+
+        when(cookLogRepository.findByIdAndUserId(9L, 1L)).thenReturn(Optional.of(toDelete));
+        when(cookLogRepository.findByRecipeIdAndUserIdOrderByCookedAtDesc(1L, 1L))
+                .thenReturn(List.of(remaining));
+        when(recipeRepository.save(any(Recipe.class))).thenAnswer(i -> i.getArgument(0));
+
+        service.deleteCookLog(1L, 9L);
+
+        assertEquals(1, recipe.getCookCount());
+        assertEquals(frueher, recipe.getLastCookedAt());
     }
 }

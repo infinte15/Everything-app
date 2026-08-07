@@ -36,11 +36,14 @@ public class RecipeController {
 
     private final RecipeService recipeService;
     private final MealPlanService mealPlanService;
+    private final ShoppingListService shoppingListService;
     private final ChefkochImporter chefkochImporter;
     private final IngredientParser ingredientParser;
 
     private final RecipeMapper recipeMapper;
     private final MealPlanMapper mealPlanMapper;
+    private final ShoppingItemMapper shoppingItemMapper;
+    private final RecipeCookLogMapper cookLogMapper;
 
     // ==================== RECIPES ====================
 
@@ -202,7 +205,9 @@ public class RecipeController {
             @Valid @RequestBody MealPlanDTO mealPlanDTO) {
 
         MealPlan mealPlan = mealPlanMapper.toEntity(mealPlanDTO);
-        MealPlan created = mealPlanService.createMealPlan(userId, mealPlan, mealPlanDTO.getRecipeId());
+        MealPlan created = mealPlanService.createMealPlan(
+                userId, mealPlan, mealPlanDTO.getRecipeId(),
+                Boolean.TRUE.equals(mealPlanDTO.getScheduleCooking()));
 
         return ResponseEntity.status(HttpStatus.CREATED).body(
                 mealPlanMapper.toDTO(created)
@@ -251,32 +256,139 @@ public class RecipeController {
         return ResponseEntity.noContent().build();
     }
 
-    // ==================== SHOPPING LIST ====================
+    // ==================== BEWERTUNG UND KOCHPROTOKOLL ====================
 
+    @PutMapping("/{id}/rating")
+    public ResponseEntity<RecipeDTO> rate(
+            @CurrentUser Long userId,
+            @PathVariable Long id,
+            @RequestBody RecipeCookLogDTO body) {
+
+        return ResponseEntity.ok(recipeMapper.toDTO(recipeService.rate(userId, id, body.getRating())));
+    }
+
+    /** "Gekocht!" - Protokolleintrag plus Zaehler am Rezept. */
+    @PostMapping("/{id}/cooked")
+    public ResponseEntity<RecipeDTO> logCooked(
+            @CurrentUser Long userId,
+            @PathVariable Long id,
+            @Valid @RequestBody RecipeCookLogDTO body) {
+
+        return ResponseEntity.ok(recipeMapper.toDTO(recipeService.logCooked(userId, id, body)));
+    }
+
+    @GetMapping("/{id}/cook-log")
+    public ResponseEntity<List<RecipeCookLogDTO>> getCookLog(
+            @CurrentUser Long userId,
+            @PathVariable Long id) {
+
+        return ResponseEntity.ok(recipeService.getCookLog(userId, id).stream()
+                .map(cookLogMapper::toDTO).collect(Collectors.toList()));
+    }
+
+    @DeleteMapping("/cook-log/{logId}")
+    public ResponseEntity<Void> deleteCookLog(
+            @CurrentUser Long userId,
+            @PathVariable Long logId) {
+
+        recipeService.deleteCookLog(userId, logId);
+        return ResponseEntity.noContent().build();
+    }
+
+    // ==================== ENTDECKEN ====================
+
+    @GetMapping("/recently-cooked")
+    public ResponseEntity<List<RecipeDTO>> getRecentlyCooked(@CurrentUser Long userId) {
+        return ResponseEntity.ok(toDTOs(recipeService.getRecentlyCooked(userId)));
+    }
+
+    @GetMapping("/not-cooked-lately")
+    public ResponseEntity<List<RecipeDTO>> getNotCookedLately(
+            @CurrentUser Long userId,
+            @RequestParam(defaultValue = "30") int days) {
+
+        return ResponseEntity.ok(toDTOs(recipeService.getNotCookedInAWhile(userId, days)));
+    }
+
+    @GetMapping("/never-cooked")
+    public ResponseEntity<List<RecipeDTO>> getNeverCooked(@CurrentUser Long userId) {
+        return ResponseEntity.ok(toDTOs(recipeService.getNeverCooked(userId)));
+    }
+
+    @GetMapping("/best-rated")
+    public ResponseEntity<List<RecipeDTO>> getBestRated(
+            @CurrentUser Long userId,
+            @RequestParam(defaultValue = "4") short minRating) {
+
+        return ResponseEntity.ok(toDTOs(recipeService.getBestRated(userId, minRating)));
+    }
+
+    // ==================== EINKAUFSLISTE ====================
 
     @GetMapping("/shopping-list")
-    public ResponseEntity<ShoppingListDTO> generateShoppingList(
+    public ResponseEntity<List<ShoppingItemDTO>> getShoppingList(@CurrentUser Long userId) {
+        return ResponseEntity.ok(toShoppingDTOs(shoppingListService.getList(userId)));
+    }
+
+    @PostMapping("/shopping-list")
+    public ResponseEntity<ShoppingItemDTO> addShoppingItem(
+            @CurrentUser Long userId,
+            @Valid @RequestBody ShoppingItemDTO body) {
+
+        return ResponseEntity.status(HttpStatus.CREATED).body(
+                shoppingItemMapper.toDTO(shoppingListService.addManualItem(userId, body)));
+    }
+
+    @PatchMapping("/shopping-list/{id}")
+    public ResponseEntity<ShoppingItemDTO> updateShoppingItem(
+            @CurrentUser Long userId,
+            @PathVariable Long id,
+            @RequestBody ShoppingItemDTO body) {
+
+        return ResponseEntity.ok(
+                shoppingItemMapper.toDTO(shoppingListService.updateItem(userId, id, body)));
+    }
+
+    @DeleteMapping("/shopping-list/checked")
+    public ResponseEntity<Void> deleteCheckedShoppingItems(@CurrentUser Long userId) {
+        shoppingListService.deleteChecked(userId);
+        return ResponseEntity.noContent().build();
+    }
+
+    @DeleteMapping("/shopping-list/{id}")
+    public ResponseEntity<Void> deleteShoppingItem(
+            @CurrentUser Long userId,
+            @PathVariable Long id) {
+
+        shoppingListService.deleteItem(userId, id);
+        return ResponseEntity.noContent().build();
+    }
+
+    /**
+     * Baut die Wochenplan-Zeilen neu auf.
+     *
+     * <p>Ausdruecklich angestossen, nicht automatisch: eine Liste, die sich waehrend des
+     * Einkaufs von selbst umbaut, ist im Laden unbrauchbar. Eigene Eintraege und alles bereits
+     * Abgehakte bleiben stehen.
+     */
+    @PostMapping("/shopping-list/from-meal-plan")
+    public ResponseEntity<List<ShoppingItemDTO>> rebuildShoppingList(
             @CurrentUser Long userId,
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate startDate,
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate endDate) {
 
-        return ResponseEntity.ok(mealPlanService.generateShoppingList(userId, startDate, endDate));
-    }
-
-    // ==================== NUTRITION STATS ====================
-
-    @GetMapping("/nutrition/daily")
-    public ResponseEntity<NutritionStatsDTO> getDailyNutrition(
-            @CurrentUser Long userId,
-            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date) {
-
-        return ResponseEntity.ok(mealPlanService.calculateDailyNutrition(userId, date));
+        shoppingListService.rebuildFromMealPlan(userId, startDate, endDate);
+        return ResponseEntity.ok(toShoppingDTOs(shoppingListService.getList(userId)));
     }
 
     // ── Hilfen ────────────────────────────────────────────────────────────────────────────
 
     private List<RecipeDTO> toDTOs(List<Recipe> recipes) {
         return recipes.stream().map(recipeMapper::toDTO).collect(Collectors.toList());
+    }
+
+    private List<ShoppingItemDTO> toShoppingDTOs(List<ShoppingItem> items) {
+        return items.stream().map(shoppingItemMapper::toDTO).collect(Collectors.toList());
     }
 
     private List<MealPlanDTO> toMealPlanDTOs(List<MealPlan> mealPlans) {

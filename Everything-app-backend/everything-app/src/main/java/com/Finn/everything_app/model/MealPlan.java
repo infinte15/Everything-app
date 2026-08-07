@@ -39,6 +39,20 @@ public class MealPlan {
     @Column(length = 500)
     private String notes;
 
+    /**
+     * Die Aufgabe, die der Scheduler fuer die Kochzeit einplant - falls gewuenscht.
+     *
+     * <p>Nur die Id, keine Beziehung: der Wochenplan soll nicht an der Aufgabenverwaltung
+     * haengen, und geloescht wird ueber den {@code TaskService}, damit dessen Aufraeumarbeit
+     * (Kalendereintraege, Projektzahlen, Neuplanung) mitlaeuft.
+     *
+     * <p>Vorher legte der Flutter-Provider diese Aufgabe still selbst an - mit erfundener
+     * Faelligkeit um 13:00 bzw. 19:00 - und liess sie stehen, wenn man die Mahlzeit wieder
+     * aus dem Plan nahm.
+     */
+    @Column(name = "cooking_task_id")
+    private Long cookingTaskId;
+
     @Column(name = "created_at")
     private LocalDateTime createdAt;
 

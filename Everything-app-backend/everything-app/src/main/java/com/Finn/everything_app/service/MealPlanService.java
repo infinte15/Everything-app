@@ -1,6 +1,6 @@
 package com.Finn.everything_app.service;
 
-import com.Finn.everything_app.dto.*;
+import com.Finn.everything_app.dto.RecipeCookLogDTO;
 import com.Finn.everything_app.exception.ResourceNotFoundException;
 import com.Finn.everything_app.model.*;
 import com.Finn.everything_app.repository.*;
@@ -18,9 +18,12 @@ public class MealPlanService {
     private final MealPlanRepository mealPlanRepository;
     private final UserRepository userRepository;
     private final RecipeRepository recipeRepository;
+    private final RecipeService recipeService;
+    private final TaskService taskService;
 
     @Transactional
-    public MealPlan createMealPlan(Long userId, MealPlan mealPlan, Long recipeId) {
+    public MealPlan createMealPlan(Long userId, MealPlan mealPlan, Long recipeId,
+                                   boolean scheduleCooking) {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new ResourceNotFoundException("User nicht gefunden"));
 
@@ -34,7 +37,49 @@ public class MealPlanService {
             mealPlan.setPlannedServings(recipe.getServings());
         }
 
+        if (scheduleCooking) {
+            mealPlan.setCookingTaskId(createCookingTask(userId, mealPlan, recipe));
+        }
+
         return mealPlanRepository.save(mealPlan);
+    }
+
+    /**
+     * Legt die Kochzeit als Aufgabe an, damit der Scheduler sie in den Kalender bringt.
+     *
+     * <p>Nur auf ausdruecklichen Wunsch. Vorher tat das der Flutter-Provider bei jedem
+     * Einplanen still und heimlich, mit einer erfundenen Faelligkeit um 13:00 bzw. 19:00 -
+     * und liess die Aufgabe stehen, wenn man die Mahlzeit wieder aus dem Plan nahm. Jetzt
+     * entsteht sie in derselben Transaktion wie die Mahlzeit und verschwindet mit ihr.
+     */
+    private Long createCookingTask(Long userId, MealPlan mealPlan, Recipe recipe) {
+        int duration = recipe.getTotalTimeMinutes();
+        if (duration <= 0) {
+            return null;
+        }
+
+        Task task = new Task();
+        task.setTitle("Kochen: " + recipe.getName());
+        task.setDescription(mealPlan.getMealType().getDisplayName() + " am "
+                + mealPlan.getDate());
+        task.setEstimatedDurationMinutes(duration);
+        task.setDeadline(mealPlan.getDate().atTime(deadlineHour(mealPlan.getMealType()), 0));
+        task.setCategory("RECIPES");
+        task.setSpaceType(SpaceType.RECIPES);
+        task.setPriority(3);
+        // Kochen laesst sich nicht in drei Haeppchen ueber den Tag verteilen.
+        task.setSplittable(false);
+
+        return taskService.createTask(userId, task).getId();
+    }
+
+    private int deadlineHour(MealType mealType) {
+        return switch (mealType) {
+            case FRUEHSTUECK -> 9;
+            case MITTAGESSEN -> 13;
+            case ABENDESSEN -> 19;
+            case SNACK -> 16;
+        };
     }
 
     public List<MealPlan> getMealPlanForPeriod(Long userId, LocalDate start, LocalDate end) {
@@ -70,12 +115,26 @@ public class MealPlanService {
         return mealPlanRepository.save(mealPlan);
     }
 
+    /**
+     * Hakt eine geplante Mahlzeit ab - und schreibt damit einen Eintrag ins Kochprotokoll.
+     *
+     * <p>Eine geplante Mahlzeit abzuhaken <em>ist</em> gekocht zu haben. Ohne diese Kopplung
+     * muesste man dasselbe zweimal melden, und die Reihe "lange nicht gekocht" waere falsch,
+     * sobald man ueber den Wochenplan statt ueber die Rezeptseite arbeitet.
+     */
     @Transactional
     public MealPlan completeMealPlan(Long userId, Long id) {
         MealPlan mealPlan = getMealPlan(userId, id);
+        if (Boolean.TRUE.equals(mealPlan.getIsCompleted())) {
+            return mealPlan;
+        }
 
         mealPlan.setIsCompleted(true);
         mealPlan.setCompletedAt(LocalDateTime.now());
+
+        RecipeCookLogDTO entry = new RecipeCookLogDTO();
+        entry.setServings(mealPlan.getPlannedServings());
+        recipeService.logCooked(userId, mealPlan.getRecipe().getId(), entry);
 
         return mealPlanRepository.save(mealPlan);
     }
@@ -83,7 +142,16 @@ public class MealPlanService {
     @Transactional
     public void deleteMealPlan(Long userId, Long id) {
         MealPlan mealPlan = getMealPlan(userId, id);
+        Long cookingTaskId = mealPlan.getCookingTaskId();
+
         mealPlanRepository.delete(mealPlan);
+
+        if (cookingTaskId != null) {
+            // Ueber den TaskService, damit dessen Aufraeumarbeit mitlaeuft: der Scheduler hat
+            // aus der Aufgabe einen Kalendereintrag gemacht, und der haengt an einem
+            // Fremdschluessel.
+            taskService.deleteTask(cookingTaskId);
+        }
     }
 
     // AUTOMATISCHE WOCHENPLANUNG
@@ -146,104 +214,5 @@ public class MealPlanService {
         }
 
         return weeklyPlan;
-    }
-
-    // EINKAUFSLISTE GENERIEREN
-
-    public ShoppingListDTO generateShoppingList(Long userId, LocalDate start, LocalDate end) {
-        List<MealPlan> mealPlans = getMealPlanForPeriod(userId, start, end);
-
-        // Sammle alle Zutaten
-        Map<String, List<String>> ingredientsByCategory = new HashMap<>();
-        Set<String> allIngredients = new HashSet<>();
-
-        for (MealPlan mealPlan : mealPlans) {
-            Recipe recipe = mealPlan.getRecipe();
-
-            for (RecipeIngredient ingredient : recipe.getIngredientList()) {
-                String name = ingredient.getName();
-                if (name == null || name.isBlank()) {
-                    continue;
-                }
-                allIngredients.add(name);
-
-                // Kategorisiere (vereinfacht)
-                String category = categorizeIngredient(name);
-                ingredientsByCategory.computeIfAbsent(category, k -> new ArrayList<>()).add(name);
-            }
-        }
-
-        ShoppingListDTO shoppingList = new ShoppingListDTO();
-        shoppingList.setIngredientsByCategory(ingredientsByCategory);
-        shoppingList.setTotalItems(allIngredients.size());
-        shoppingList.setAllIngredients(new ArrayList<>(allIngredients));
-
-        return shoppingList;
-    }
-
-    private String categorizeIngredient(String ingredient) {
-        ingredient = ingredient.toLowerCase();
-
-        if (ingredient.contains("fleisch") || ingredient.contains("hähnchen") || ingredient.contains("rind")) {
-            return "Fleisch & Fisch";
-        } else if (ingredient.contains("milch") || ingredient.contains("käse") || ingredient.contains("joghurt")) {
-            return "Milchprodukte";
-        } else if (ingredient.contains("tomate") || ingredient.contains("gurke") || ingredient.contains("salat")) {
-            return "Gemüse";
-        } else if (ingredient.contains("apfel") || ingredient.contains("banane") || ingredient.contains("orange")) {
-            return "Obst";
-        } else {
-            return "Sonstiges";
-        }
-    }
-
-    // NÄHRWERT-BERECHNUNG
-
-    public NutritionStatsDTO calculateDailyNutrition(Long userId, LocalDate date) {
-        List<MealPlan> dailyMeals = getMealPlanForDate(userId, date);
-
-        int totalCalories = 0;
-        double totalProtein = 0.0;
-        double totalCarbs = 0.0;
-        double totalFat = 0.0;
-        int mealsCompleted = 0;
-
-        for (MealPlan mealPlan : dailyMeals) {
-            Recipe recipe = mealPlan.getRecipe();
-            double servingRatio = (double) mealPlan.getPlannedServings() / recipe.getServings();
-
-            if (recipe.getCalories() != null) {
-                totalCalories += (int) (recipe.getCalories() * servingRatio);
-            }
-            if (recipe.getProtein() != null) {
-                totalProtein += recipe.getProtein() * servingRatio;
-            }
-            if (recipe.getCarbs() != null) {
-                totalCarbs += recipe.getCarbs() * servingRatio;
-            }
-            if (recipe.getFat() != null) {
-                totalFat += recipe.getFat() * servingRatio;
-            }
-
-            if (mealPlan.getIsCompleted()) {
-                mealsCompleted++;
-            }
-        }
-
-        NutritionStatsDTO stats = new NutritionStatsDTO();
-        stats.setTotalCalories(totalCalories);
-        stats.setTotalProtein(totalProtein);
-        stats.setTotalCarbs(totalCarbs);
-        stats.setTotalFat(totalFat);
-        stats.setMealsPlanned(dailyMeals.size());
-        stats.setMealsCompleted(mealsCompleted);
-
-        // Zielwerte (können später anpassbar gemacht werden)
-        stats.setTargetCalories(2000);
-        stats.setTargetProtein(150.0);
-        stats.setTargetCarbs(250.0);
-        stats.setTargetFat(65.0);
-
-        return stats;
     }
 }

@@ -21,6 +21,7 @@ public class MealPlanMapper {
         dto.setIsCompleted(mealPlan.getIsCompleted());
         dto.setCompletedAt(mealPlan.getCompletedAt());
         dto.setNotes(mealPlan.getNotes());
+        dto.setCookingTaskId(mealPlan.getCookingTaskId());
         dto.setCreatedAt(mealPlan.getCreatedAt());
 
         return dto;

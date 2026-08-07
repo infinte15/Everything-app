@@ -30,5 +30,16 @@ public class MealPlanDTO {
 
     private String notes;
 
+    /**
+     * Kochzeit als Aufgabe einplanen, damit der Scheduler sie in den Kalender legt.
+     *
+     * <p>Vorgabe aus. Frueher geschah das immer und unsichtbar - jetzt ist es ein Schalter im
+     * Picker, und die Aufgabe verschwindet mit der Mahlzeit wieder.
+     */
+    private Boolean scheduleCooking;
+
+    /** Gesetzt, wenn eine Kochzeit im Kalender steht. Nur lesend. */
+    private Long cookingTaskId;
+
     private LocalDateTime createdAt;
 }

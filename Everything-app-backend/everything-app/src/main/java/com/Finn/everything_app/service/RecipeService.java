@@ -1,13 +1,15 @@
 package com.Finn.everything_app.service;
 
+import com.Finn.everything_app.dto.RecipeCookLogDTO;
+import com.Finn.everything_app.exception.BadRequestException;
 import com.Finn.everything_app.exception.ResourceNotFoundException;
-import com.Finn.everything_app.mapper.RecipeMapper;
 import com.Finn.everything_app.model.*;
 import com.Finn.everything_app.repository.*;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.LocalDateTime;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Set;
@@ -27,6 +29,7 @@ public class RecipeService {
 
     private final RecipeRepository recipeRepository;
     private final UserRepository userRepository;
+    private final RecipeCookLogRepository cookLogRepository;
 
     @Transactional
     public Recipe createRecipe(Long userId, Recipe recipe) {
@@ -39,8 +42,6 @@ public class RecipeService {
         if (recipe.getSuitableFor().isEmpty()) {
             recipe.setSuitableFor(defaultMealTypes(recipe.getCategory()));
         }
-        syncLegacyText(recipe);
-
         return recipeRepository.save(recipe);
     }
 
@@ -135,8 +136,6 @@ public class RecipeService {
         if (updatedRecipe.getSourceUrl() != null) {
             recipe.setSourceUrl(updatedRecipe.getSourceUrl());
         }
-        syncLegacyText(recipe);
-
         return recipeRepository.save(recipe);
     }
 
@@ -153,6 +152,107 @@ public class RecipeService {
     public void deleteRecipe(Long userId, Long id) {
         Recipe recipe = getRecipeById(userId, id);
         recipeRepository.delete(recipe);
+    }
+
+    // ── Bewertung und Kochprotokoll ───────────────────────────────────────────────────────
+
+    @Transactional
+    public Recipe rate(Long userId, Long id, Short rating) {
+        if (rating != null && (rating < 1 || rating > 5)) {
+            throw new BadRequestException("Bewertung liegt zwischen 1 und 5.");
+        }
+        Recipe recipe = getRecipeById(userId, id);
+        recipe.setRating(rating);
+        return recipeRepository.save(recipe);
+    }
+
+    /**
+     * Haelt fest, dass das Rezept gekocht wurde.
+     *
+     * <p>Schreibt den Protokolleintrag und zieht die Zaehler am Rezept in derselben
+     * Transaktion nach. Die Zaehler sind bewusst denormalisiert: die Entdecken-Reihen wollen
+     * ein {@code ORDER BY last_cooked_at}, kein Group-by ueber das Protokoll bei jedem Aufruf.
+     *
+     * <p>Eine mitgegebene Bewertung gilt auch als aktuelle Bewertung des Rezepts - wer nach
+     * dem Kochen Sterne vergibt, meint das Rezept, nicht nur diesen Abend.
+     */
+    @Transactional
+    public Recipe logCooked(Long userId, Long id, RecipeCookLogDTO entry) {
+        Recipe recipe = getRecipeById(userId, id);
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new ResourceNotFoundException("User nicht gefunden"));
+
+        if (entry.getRating() != null && (entry.getRating() < 1 || entry.getRating() > 5)) {
+            throw new BadRequestException("Bewertung liegt zwischen 1 und 5.");
+        }
+
+        LocalDateTime cookedAt = entry.getCookedAt() != null ? entry.getCookedAt() : LocalDateTime.now();
+
+        RecipeCookLog log = new RecipeCookLog();
+        log.setRecipe(recipe);
+        log.setUser(user);
+        log.setCookedAt(cookedAt);
+        log.setRating(entry.getRating());
+        log.setServings(entry.getServings() != null ? entry.getServings() : recipe.getServings());
+        log.setNote(entry.getNote());
+        cookLogRepository.save(log);
+
+        recipe.setCookCount((recipe.getCookCount() == null ? 0 : recipe.getCookCount()) + 1);
+        // Nachtragen eines aelteren Termins darf "zuletzt gekocht" nicht zurueckdrehen.
+        if (recipe.getLastCookedAt() == null || cookedAt.isAfter(recipe.getLastCookedAt())) {
+            recipe.setLastCookedAt(cookedAt);
+        }
+        if (entry.getRating() != null) {
+            recipe.setRating(entry.getRating());
+        }
+
+        return recipeRepository.save(recipe);
+    }
+
+    public List<RecipeCookLog> getCookLog(Long userId, Long recipeId) {
+        getRecipeById(userId, recipeId);
+        return cookLogRepository.findByRecipeIdAndUserIdOrderByCookedAtDesc(recipeId, userId);
+    }
+
+    /**
+     * Nimmt einen Protokolleintrag zurueck und korrigiert die Zaehler.
+     *
+     * <p>{@code lastCookedAt} wird aus dem verbleibenden Protokoll neu bestimmt, nicht
+     * einfach auf null gesetzt - sonst verschwindet ein Rezept nach einem Vertipper aus
+     * "zuletzt gekocht", obwohl es dreimal gekocht wurde.
+     */
+    @Transactional
+    public void deleteCookLog(Long userId, Long logId) {
+        RecipeCookLog log = cookLogRepository.findByIdAndUserId(logId, userId)
+                .orElseThrow(() -> new ResourceNotFoundException("Eintrag nicht gefunden"));
+
+        Recipe recipe = log.getRecipe();
+        cookLogRepository.delete(log);
+
+        List<RecipeCookLog> remaining =
+                cookLogRepository.findByRecipeIdAndUserIdOrderByCookedAtDesc(recipe.getId(), userId);
+        recipe.setCookCount(remaining.size());
+        recipe.setLastCookedAt(remaining.isEmpty() ? null : remaining.get(0).getCookedAt());
+        recipeRepository.save(recipe);
+    }
+
+    // ── Entdecken ─────────────────────────────────────────────────────────────────────────
+
+    public List<Recipe> getRecentlyCooked(Long userId) {
+        return recipeRepository.findByUserIdAndLastCookedAtIsNotNullOrderByLastCookedAtDesc(userId);
+    }
+
+    /** Lange nicht gekocht - siehe die Bedingung in der Abfrage, sie ist der Kern. */
+    public List<Recipe> getNotCookedInAWhile(Long userId, int days) {
+        return recipeRepository.findNotCookedSince(userId, LocalDateTime.now().minusDays(days));
+    }
+
+    public List<Recipe> getNeverCooked(Long userId) {
+        return recipeRepository.findByUserIdAndCookCountOrderByCreatedAtDesc(userId, 0);
+    }
+
+    public List<Recipe> getBestRated(Long userId, short minRating) {
+        return recipeRepository.findBestRated(userId, minRating);
     }
 
     // ── Mahlzeiten-Eignung ────────────────────────────────────────────────────────────────
@@ -184,18 +284,5 @@ public class RecipeService {
             }
         }
         return types;
-    }
-
-    /**
-     * Schreibt den Klartext-Spiegel in die Altspalten.
-     *
-     * <p>Uebergangsloesung fuer genau eine Phase: solange {@code recipes.ingredients} und
-     * {@code recipes.instructions} noch existieren, halten sie den alten Client und einen
-     * Rollback auf die vorige Jar am Leben. Gelesen werden sie nirgends mehr. Die Methode
-     * faellt mit {@code 2026-08-07-recipe-drop-legacy-text.sql} weg.
-     */
-    private void syncLegacyText(Recipe recipe) {
-        recipe.setIngredients(RecipeMapper.renderIngredients(recipe.getIngredientList()));
-        recipe.setInstructions(RecipeMapper.renderSteps(recipe.getSteps()));
     }
 }

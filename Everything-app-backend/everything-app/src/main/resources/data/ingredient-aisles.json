@@ -1,0 +1,65 @@
+{
+  "_comment": [
+    "Zutat auf Ladenregal - fuer die Reihenfolge der Einkaufsliste.",
+    "",
+    "Ersetzt eine fuenfzweigige if-Kette, die 'fleisch', 'milch', 'tomate', 'apfel' kannte und",
+    "alles andere zu 'Sonstiges' machte. Bei einem Einkauf mit zwanzig Positionen landeten",
+    "damit siebzehn im selben Topf.",
+    "",
+    "Gesucht wird nach dem laengsten passenden Stichwort im Zutatennamen, damit",
+    "'Kokosmilch' nicht wegen 'milch' im Kuehlregal landet. Alles Unbekannte wird",
+    "'Sonstiges' - das ist ehrlicher als zu raten, und die Zeile steht dann eben am Ende.",
+    "",
+    "Keine Seeder-Tabelle wie bei category-rules.json: das hier sind keine Zeilen, die der",
+    "Nutzer bearbeitet, sondern eine Nachschlagetabelle."
+  ],
+  "aisles": {
+    "Obst & Gemüse": [
+      "apfel", "banane", "orange", "zitrone", "limette", "beere", "erdbeer", "himbeer",
+      "heidelbeer", "traube", "birne", "pfirsich", "melone", "mango", "avocado", "kiwi",
+      "tomate", "gurke", "salat", "paprika", "zwiebel", "knoblauch", "kartoffel", "möhre",
+      "karotte", "sellerie", "lauch", "porree", "zucchini", "aubergine", "brokkoli",
+      "blumenkohl", "spinat", "champignon", "pilz", "kürbis", "kohl", "rucola", "petersilie",
+      "schnittlauch", "basilikum", "dill", "koriander", "ingwer", "suppengrün", "bohne",
+      "erbse", "mais", "radieschen", "rettich", "fenchel", "spargel", "rosmarin", "thymian"
+    ],
+    "Kühlregal": [
+      "milch", "sahne", "schmand", "creme fraiche", "crème fraîche", "joghurt", "quark",
+      "butter", "margarine", "käse", "mozzarella", "parmesan", "feta", "gouda", "frischkäse",
+      "mascarpone", "ricotta", "ei", "eier", "hefe", "pudding", "buttermilch", "kefir",
+      "tofu", "blätterteig", "pizzateig"
+    ],
+    "Fleisch & Fisch": [
+      "fleisch", "hack", "rind", "schwein", "kalb", "lamm", "hähnchen", "huhn", "pute",
+      "ente", "gans", "speck", "schinken", "wurst", "salami", "bacon", "steak", "filet",
+      "kotelett", "gulasch", "braten", "fisch", "lachs", "thunfisch", "forelle", "kabeljau",
+      "garnele", "shrimp", "muschel", "tintenfisch", "sardelle"
+    ],
+    "Trockenware": [
+      "mehl", "zucker", "reis", "nudel", "spaghetti", "penne", "lasagne", "tagliatelle",
+      "makkaroni", "couscous", "bulgur", "quinoa", "linse", "grieß", "haferflocke", "müsli",
+      "semmelbrösel", "paniermehl", "stärke", "polenta", "brot", "brötchen", "toast",
+      "zwieback", "knäckebrot", "löffelbiskuit", "nuss", "mandel", "walnuss", "haselnuss",
+      "cashew", "rosine", "kokosraspel"
+    ],
+    "Konserven": [
+      "dose", "passierte", "tomatenmark", "kokosmilch", "kichererbse", "kidneybohne",
+      "mais aus der dose", "oliven", "kapern", "gurken (eingelegt)", "sauerkraut",
+      "brühe", "fond", "kokosnussmilch"
+    ],
+    "Tiefkühl": [
+      "tiefkühl", "tk-", "gefroren", "eis", "blattspinat (tk)"
+    ],
+    "Getränke": [
+      "wasser", "mineralwasser", "saft", "wein", "bier", "sekt", "cola", "limonade",
+      "kaffee", "tee", "espresso", "rum", "likör", "prosecco"
+    ],
+    "Gewürze & Backen": [
+      "salz", "pfeffer", "paprikapulver", "curry", "kreuzkümmel", "kümmel", "muskat",
+      "zimt", "vanille", "oregano", "majoran", "lorbeer", "chili", "cayenne", "kurkuma",
+      "backpulver", "natron", "hefe (trocken)", "puderzucker", "vanillezucker",
+      "kakao", "schokolade", "honig", "sirup", "essig", "öl", "olivenöl", "senf",
+      "ketchup", "mayonnaise", "sojasauce", "worcester", "kräuter", "brühwürfel"
+    ]
+  }
+}

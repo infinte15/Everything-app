@@ -70,8 +70,8 @@ class RecipeMapperTest {
         assertSame(recipe, recipe.getIngredientList().get(0).getRecipe());
     }
 
-    // Der Klartext ist das, was ein Mensch beim Pruefen der Antwort lesen will - und solange
-    // die Altspalten existieren, zugleich das, was hineingespiegelt wird.
+    // Der Klartext ist das, was ein Mensch beim Pruefen der Antwort im Terminal lesen will -
+    // dreissig JSON-Objekte sagen einem nicht, ob der Import etwas Sinnvolles erzeugt hat.
     @Test
     void klartextSchreibtMengeEinheitUndNameInEinerZeile() {
         Recipe recipe = mapper.toEntity(dto());
