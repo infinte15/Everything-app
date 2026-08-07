@@ -10,6 +10,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.ApplicationArguments;
 import org.springframework.boot.ApplicationRunner;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import org.springframework.core.annotation.Order;
 import org.springframework.core.io.ClassPathResource;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
@@ -32,6 +33,8 @@ import java.util.Set;
 @Component
 @RequiredArgsConstructor
 @Slf4j
+// Vor allen anderen Runnern: der Demo-Seeder baut seine Routinen aus diesem Katalog.
+@Order(0)
 @ConditionalOnProperty(name = "app.exercise-seed.enabled", havingValue = "true", matchIfMissing = true)
 public class ExerciseCatalogSeeder implements ApplicationRunner {
 

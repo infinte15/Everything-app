@@ -25,6 +25,16 @@ There is a root `pom.xml` that aggregates the backend module, but it exists only
 
 Requires a local PostgreSQL database `everything_app` (see `src/main/resources/application.properties` for credentials/port — currently hardcoded there, not via env vars). `spring.jpa.hibernate.ddl-auto=update`, so schema is auto-migrated from entities; there are no separate migration scripts.
 
+**Demo-Datenbestand** (`seed/demo/DemoDataSeeder`) — füllt alle Spaces und den Kalender für den `dev_tester`-Nutzer, damit sich die App vorführen lässt. Standardmäßig aus:
+
+```bash
+./mvnw spring-boot:run -Dspring-boot.run.arguments="--app.demo-seed.enabled=true"
+# neu aufbauen (löscht vorher alle Daten des Nutzers):
+./mvnw spring-boot:run -Dspring-boot.run.arguments="--app.demo-seed.enabled=true --app.demo-seed.reset=true"
+```
+
+Alle Daten hängen an `LocalDate.now()`; am Ende läuft einmal der Smart Scheduler, damit der Kalender gefüllt ist. Anmeldung danach über `POST /api/auth/dev-login`.
+
 ### Frontend (`Everything-app-frontend/everything_app`)
 
 ```bash
