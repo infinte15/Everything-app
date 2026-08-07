@@ -1,6 +1,7 @@
 package com.Finn.everything_app.service;
 
 import com.Finn.everything_app.dto.*;
+import com.Finn.everything_app.exception.ResourceNotFoundException;
 import com.Finn.everything_app.model.*;
 import com.Finn.everything_app.repository.*;
 import lombok.RequiredArgsConstructor;
@@ -9,7 +10,6 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.*;
-import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -22,10 +22,10 @@ public class MealPlanService {
     @Transactional
     public MealPlan createMealPlan(Long userId, MealPlan mealPlan, Long recipeId) {
         User user = userRepository.findById(userId)
-                .orElseThrow(() -> new RuntimeException("User nicht gefunden"));
+                .orElseThrow(() -> new ResourceNotFoundException("User nicht gefunden"));
 
-        Recipe recipe = recipeRepository.findById(recipeId)
-                .orElseThrow(() -> new RuntimeException("Rezept nicht gefunden"));
+        Recipe recipe = recipeRepository.findByIdAndUserId(recipeId, userId)
+                .orElseThrow(() -> new ResourceNotFoundException("Rezept nicht gefunden"));
 
         mealPlan.setUser(user);
         mealPlan.setRecipe(recipe);
@@ -45,10 +45,14 @@ public class MealPlanService {
         return mealPlanRepository.findByUserIdAndDate(userId, date);
     }
 
+    public MealPlan getMealPlan(Long userId, Long id) {
+        return mealPlanRepository.findByIdAndUserId(id, userId)
+                .orElseThrow(() -> new ResourceNotFoundException("Essensplan nicht gefunden"));
+    }
+
     @Transactional
-    public MealPlan updateMealPlan(Long id, MealPlan updatedMealPlan) {
-        MealPlan mealPlan = mealPlanRepository.findById(id)
-                .orElseThrow(() -> new RuntimeException("Essensplan nicht gefunden"));
+    public MealPlan updateMealPlan(Long userId, Long id, MealPlan updatedMealPlan) {
+        MealPlan mealPlan = getMealPlan(userId, id);
 
         if (updatedMealPlan.getDate() != null) {
             mealPlan.setDate(updatedMealPlan.getDate());
@@ -67,9 +71,8 @@ public class MealPlanService {
     }
 
     @Transactional
-    public MealPlan completeMealPlan(Long id) {
-        MealPlan mealPlan = mealPlanRepository.findById(id)
-                .orElseThrow(() -> new RuntimeException("Essensplan nicht gefunden"));
+    public MealPlan completeMealPlan(Long userId, Long id) {
+        MealPlan mealPlan = getMealPlan(userId, id);
 
         mealPlan.setIsCompleted(true);
         mealPlan.setCompletedAt(LocalDateTime.now());
@@ -78,50 +81,67 @@ public class MealPlanService {
     }
 
     @Transactional
-    public void deleteMealPlan(Long id) {
-        MealPlan mealPlan = mealPlanRepository.findById(id)
-                .orElseThrow(() -> new RuntimeException("Essensplan nicht gefunden"));
+    public void deleteMealPlan(Long userId, Long id) {
+        MealPlan mealPlan = getMealPlan(userId, id);
         mealPlanRepository.delete(mealPlan);
     }
 
     // AUTOMATISCHE WOCHENPLANUNG
 
+    /**
+     * Fuellt sieben Tage mit Fruehstueck, Mittag- und Abendessen.
+     *
+     * <p>Die Auswahl laeuft ueber {@link Recipe#getSuitableFor()}, nicht mehr ueber die
+     * Kategorie. Vorher stand dort {@code recipe.getCategory().equals("MITTAGESSEN")} - die
+     * Kategorie beschreibt aber, *was* ein Gericht ist, nicht *wann* man es isst. Mit einem
+     * echten Kategorienkatalog ("Pasta & Reis", "Auflauf & Ofen") hat dieser Vergleich nie
+     * wieder getroffen, und die Planung lieferte stumm eine leere Liste.
+     *
+     * <p>Innerhalb eines Durchlaufs kommt kein Rezept zweimal vor, solange es Alternativen
+     * gibt; die Reihenfolge kommt aus der Abfrage, also lange nicht Gekochtes zuerst. Ein Slot
+     * ohne passendes Rezept wird uebersprungen - frueher brach die ganze Generierung mit
+     * {@code RuntimeException("Keine Rezepte verfügbar")} ab, auch wenn nur das Fruehstueck fehlte.
+     */
     @Transactional
     public List<MealPlan> generateWeeklyPlan(Long userId, LocalDate startDate) {
         User user = userRepository.findById(userId)
-                .orElseThrow(() -> new RuntimeException("User nicht gefunden"));
+                .orElseThrow(() -> new ResourceNotFoundException("User nicht gefunden"));
 
-        List<Recipe> recipes = recipeRepository.findByUserIdOrderByCreatedAtDesc(userId);
+        MealType[] mealTypes = {MealType.FRUEHSTUECK, MealType.MITTAGESSEN, MealType.ABENDESSEN};
 
-        if (recipes.isEmpty()) {
-            throw new RuntimeException("Keine Rezepte verfügbar für automatische Planung");
+        Map<MealType, List<Recipe>> candidates = new EnumMap<>(MealType.class);
+        for (MealType mealType : mealTypes) {
+            candidates.put(mealType, recipeRepository.findSuitableFor(userId, mealType));
         }
 
         List<MealPlan> weeklyPlan = new ArrayList<>();
-        String[] mealTypes = {"FRÜHSTÜCK", "MITTAGESSEN", "ABENDESSEN"};
+        Set<Long> alreadyPlanned = new HashSet<>();
 
-        // Plane 7 Tage
         for (int day = 0; day < 7; day++) {
             LocalDate date = startDate.plusDays(day);
 
-            for (String mealType : mealTypes) {
-                // Wähle zufälliges Rezept passend zur Mahlzeit
-                List<Recipe> suitableRecipes = recipes.stream()
-                        .filter(r -> r.getCategory().equals(mealType))
-                        .collect(Collectors.toList());
-
-                if (!suitableRecipes.isEmpty()) {
-                    Recipe randomRecipe = suitableRecipes.get(new Random().nextInt(suitableRecipes.size()));
-
-                    MealPlan mealPlan = new MealPlan();
-                    mealPlan.setUser(user);
-                    mealPlan.setRecipe(randomRecipe);
-                    mealPlan.setDate(date);
-                    mealPlan.setMealType(mealType);
-                    mealPlan.setPlannedServings(randomRecipe.getServings());
-
-                    weeklyPlan.add(mealPlanRepository.save(mealPlan));
+            for (MealType mealType : mealTypes) {
+                List<Recipe> suitable = candidates.get(mealType);
+                if (suitable.isEmpty()) {
+                    continue;
                 }
+
+                Recipe chosen = suitable.stream()
+                        .filter(r -> !alreadyPlanned.contains(r.getId()))
+                        .findFirst()
+                        // Weniger Rezepte als Slots: dann lieber ein zweites Mal dasselbe
+                        // Gericht als eine Luecke im Plan.
+                        .orElse(suitable.get(day % suitable.size()));
+                alreadyPlanned.add(chosen.getId());
+
+                MealPlan mealPlan = new MealPlan();
+                mealPlan.setUser(user);
+                mealPlan.setRecipe(chosen);
+                mealPlan.setDate(date);
+                mealPlan.setMealType(mealType);
+                mealPlan.setPlannedServings(chosen.getServings());
+
+                weeklyPlan.add(mealPlanRepository.save(mealPlan));
             }
         }
 
@@ -139,17 +159,17 @@ public class MealPlanService {
 
         for (MealPlan mealPlan : mealPlans) {
             Recipe recipe = mealPlan.getRecipe();
-            String[] ingredients = recipe.getIngredients().split("\n");
 
-            for (String ingredient : ingredients) {
-                ingredient = ingredient.trim();
-                if (!ingredient.isEmpty()) {
-                    allIngredients.add(ingredient);
-
-                    // Kategorisiere (vereinfacht)
-                    String category = categorizeIngredient(ingredient);
-                    ingredientsByCategory.computeIfAbsent(category, k -> new ArrayList<>()).add(ingredient);
+            for (RecipeIngredient ingredient : recipe.getIngredientList()) {
+                String name = ingredient.getName();
+                if (name == null || name.isBlank()) {
+                    continue;
                 }
+                allIngredients.add(name);
+
+                // Kategorisiere (vereinfacht)
+                String category = categorizeIngredient(name);
+                ingredientsByCategory.computeIfAbsent(category, k -> new ArrayList<>()).add(name);
             }
         }
 

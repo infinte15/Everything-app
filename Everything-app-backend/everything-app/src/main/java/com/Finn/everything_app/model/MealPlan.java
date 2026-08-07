@@ -2,8 +2,10 @@ package com.Finn.everything_app.model;
 
 import jakarta.persistence.*;
 import lombok.Data;
+import lombok.EqualsAndHashCode;
 import lombok.NoArgsConstructor;
 import lombok.AllArgsConstructor;
+import lombok.ToString;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 
@@ -21,8 +23,9 @@ public class MealPlan {
     @Column(nullable = false)
     private LocalDate date;
 
-    @Column(name = "meal_type", nullable = false, length = 50)
-    private String mealType;
+    @Column(name = "meal_type", nullable = false, length = 20)
+    @Enumerated(EnumType.STRING)
+    private MealType mealType;
 
     @Column(name = "planned_servings")
     private Integer plannedServings = 1;
@@ -41,10 +44,15 @@ public class MealPlan {
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "user_id", nullable = false)
+    @ToString.Exclude
+    @EqualsAndHashCode.Exclude
     private User user;
 
+    /** Rueckverweis - ausgenommen wie bei {@link RecipeIngredient#getRecipe()}. */
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "recipe_id", nullable = false)
+    @ToString.Exclude
+    @EqualsAndHashCode.Exclude
     private Recipe recipe;
 
     @PrePersist

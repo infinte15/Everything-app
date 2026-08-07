@@ -1,8 +1,15 @@
 package com.Finn.everything_app.dto;
 
+import com.Finn.everything_app.model.MealType;
 import lombok.Data;
+import jakarta.validation.Valid;
 import jakarta.validation.constraints.*;
+
 import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.LinkedHashSet;
+import java.util.List;
+import java.util.Set;
 
 
 @Data
@@ -16,7 +23,7 @@ public class RecipeDTO {
     private String description;
 
     @NotNull(message = "Zubereitungszeit erforderlich")
-    @Min(value = 1, message = "Zubereitungszeit muss mindestens 1 Minute sein")
+    @Min(value = 0, message = "Zubereitungszeit kann nicht negativ sein")
     private Integer prepTimeMinutes;
 
     @NotNull(message = "Kochzeit erforderlich")
@@ -30,14 +37,28 @@ public class RecipeDTO {
     @NotBlank(message = "Kategorie erforderlich")
     private String category;
 
+    /** Zu welchen Mahlzeiten das Rezept passt. Leer heisst: aus der Kategorie ableiten. */
+    private Set<MealType> suitableFor = new LinkedHashSet<>();
 
-    @NotBlank(message = "Zutaten erforderlich")
-    private String ingredients;
+    @NotEmpty(message = "Mindestens eine Zutat erforderlich")
+    @Valid
+    private List<RecipeIngredientDTO> ingredients = new ArrayList<>();
 
-    @NotBlank(message = "Anleitung erforderlich")
-    private String instructions;
+    @NotEmpty(message = "Mindestens ein Zubereitungsschritt erforderlich")
+    @Valid
+    private List<RecipeStepDTO> steps = new ArrayList<>();
 
-    // Nährwerte pro Portion
+    /**
+     * Zutaten und Anleitung als Klartext, nur lesend.
+     *
+     * <p>Nicht fuer die App gedacht, sondern zum Hinsehen: wer eine Antwort im Terminal prueft,
+     * will nicht dreissig JSON-Objekte lesen, um zu erkennen, ob der Import etwas Sinnvolles
+     * erzeugt hat. Beim Schreiben werden die Felder ignoriert.
+     */
+    private String ingredientsText;
+    private String instructionsText;
+
+    // Naehrwerte je Portion.
     private Integer calories;
     private Double protein;
     private Double carbs;
@@ -50,6 +71,18 @@ public class RecipeDTO {
     private String tags;
 
     private Boolean isFavorite;
+
+    @Min(value = 1, message = "Bewertung liegt zwischen 1 und 5")
+    @Max(value = 5, message = "Bewertung liegt zwischen 1 und 5")
+    private Short rating;
+
+    private Integer cookCount;
+    private LocalDateTime lastCookedAt;
+
+    private String notes;
+
+    private String sourceUrl;
+    private String sourceName;
 
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;

@@ -1,5 +1,6 @@
 package com.Finn.everything_app.dto;
 
+import com.Finn.everything_app.model.MealType;
 import lombok.Data;
 import jakarta.validation.constraints.*;
 import java.time.LocalDate;
@@ -12,12 +13,15 @@ public class MealPlanDTO {
     @NotNull(message = "Datum erforderlich")
     private LocalDate date;
 
-    @NotBlank(message = "Mahlzeitentyp erforderlich")
-    private String mealType;
+    @NotNull(message = "Mahlzeitentyp erforderlich")
+    private MealType mealType;
 
     @NotNull(message = "Rezept erforderlich")
     private Long recipeId;
     private String recipeName;
+
+    /** Vorschaubild des Rezepts - der Wochenplan zeigt Kacheln, nicht nur Namen. */
+    private String recipeImageUrl;
 
     private Integer plannedServings;
 

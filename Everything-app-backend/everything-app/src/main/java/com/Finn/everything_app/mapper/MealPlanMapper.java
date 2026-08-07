@@ -16,6 +16,7 @@ public class MealPlanMapper {
         dto.setMealType(mealPlan.getMealType());
         dto.setRecipeId(mealPlan.getRecipe() != null ? mealPlan.getRecipe().getId() : null);
         dto.setRecipeName(mealPlan.getRecipe() != null ? mealPlan.getRecipe().getName() : null);
+        dto.setRecipeImageUrl(mealPlan.getRecipe() != null ? mealPlan.getRecipe().getImageUrl() : null);
         dto.setPlannedServings(mealPlan.getPlannedServings());
         dto.setIsCompleted(mealPlan.getIsCompleted());
         dto.setCompletedAt(mealPlan.getCompletedAt());

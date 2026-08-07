@@ -11,6 +11,7 @@ import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.context.request.WebRequest;
+import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 import java.time.LocalDateTime;
 import java.util.HashMap;
 import java.util.Map;
@@ -115,6 +116,25 @@ public class GlobalExceptionHandler {
         error.setStatus(HttpStatus.BAD_REQUEST.value());
         error.setError("Bad Request");
         error.setMessage("Ungültiger Request-Body: " + ex.getMostSpecificCause().getMessage());
+        error.setPath(request.getDescription(false).replace("uri=", ""));
+
+        return new ResponseEntity<>(error, HttpStatus.BAD_REQUEST);
+    }
+
+    // Same reasoning one layer out: HttpMessageNotReadableException only covers the request
+    // BODY. A malformed date or enum in a query parameter or path variable arrives as a
+    // MethodArgumentTypeMismatchException and fell through to the 500 handler — so
+    // ?startDate=nonsense looked like a backend crash instead of a bad request.
+    @ExceptionHandler(MethodArgumentTypeMismatchException.class)
+    public ResponseEntity<ErrorResponse> handleMethodArgumentTypeMismatchException(
+            MethodArgumentTypeMismatchException ex,
+            WebRequest request
+    ) {
+        ErrorResponse error = new ErrorResponse();
+        error.setTimestamp(LocalDateTime.now());
+        error.setStatus(HttpStatus.BAD_REQUEST.value());
+        error.setError("Bad Request");
+        error.setMessage("Ungültiger Wert für '" + ex.getName() + "': " + ex.getValue());
         error.setPath(request.getDescription(false).replace("uri=", ""));
 
         return new ResponseEntity<>(error, HttpStatus.BAD_REQUEST);

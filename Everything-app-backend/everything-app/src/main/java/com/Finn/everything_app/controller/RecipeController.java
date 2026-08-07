@@ -6,6 +6,7 @@ import com.Finn.everything_app.model.*;
 import com.Finn.everything_app.security.CurrentUser;
 import com.Finn.everything_app.service.*;
 import lombok.RequiredArgsConstructor;
+import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -14,6 +15,17 @@ import java.time.LocalDate;
 import java.util.List;
 import java.util.stream.Collectors;
 
+/**
+ * Rezepte, Wochenplan, Einkaufsliste.
+ *
+ * <p>Alle Einzelzugriffe reichen die {@code userId} bis in die Repository-Abfrage durch. Vorher
+ * nahmen {@code getRecipeById}, {@code updateRecipe}, {@code toggleFavorite},
+ * {@code deleteRecipe} und die drei Wochenplan-Endpunkte nur eine Id entgegen - jeder
+ * angemeldete Nutzer kam damit an fremde Daten.
+ *
+ * <p>Datumsangaben werden von Spring gebunden statt mit {@code LocalDate.parse} von Hand
+ * zerlegt: ein kaputtes Datum ist damit ein 400 mit Begruendung und kein 500.
+ */
 @RestController
 @RequestMapping("/api/recipes")
 @RequiredArgsConstructor
@@ -32,14 +44,15 @@ public class RecipeController {
     @GetMapping
     public ResponseEntity<List<RecipeDTO>> getAllRecipes(@CurrentUser Long userId) {
         List<Recipe> recipes = recipeService.getUserRecipes(userId);
-        return ResponseEntity.ok(
-                recipes.stream().map(recipeMapper::toDTO).collect(Collectors.toList())
-        );
+        return ResponseEntity.ok(toDTOs(recipes));
     }
 
     @GetMapping("/{id}")
-    public ResponseEntity<RecipeDTO> getRecipeById(@PathVariable Long id) {
-        Recipe recipe = recipeService.getRecipeById(id);
+    public ResponseEntity<RecipeDTO> getRecipeById(
+            @CurrentUser Long userId,
+            @PathVariable Long id) {
+
+        Recipe recipe = recipeService.getRecipeById(userId, id);
         return ResponseEntity.ok(recipeMapper.toDTO(recipe));
     }
 
@@ -49,20 +62,13 @@ public class RecipeController {
             @CurrentUser Long userId,
             @PathVariable String category) {
 
-        List<Recipe> recipes = recipeService.getRecipesByCategory(userId, category);
-        return ResponseEntity.ok(
-                recipes.stream().map(recipeMapper::toDTO).collect(Collectors.toList())
-        );
+        return ResponseEntity.ok(toDTOs(recipeService.getRecipesByCategory(userId, category)));
     }
-
 
 
     @GetMapping("/favorites")
     public ResponseEntity<List<RecipeDTO>> getFavoriteRecipes(@CurrentUser Long userId) {
-        List<Recipe> recipes = recipeService.getFavoriteRecipes(userId);
-        return ResponseEntity.ok(
-                recipes.stream().map(recipeMapper::toDTO).collect(Collectors.toList())
-        );
+        return ResponseEntity.ok(toDTOs(recipeService.getFavoriteRecipes(userId)));
     }
 
 
@@ -71,19 +77,16 @@ public class RecipeController {
             @CurrentUser Long userId,
             @RequestParam String query) {
 
-        List<Recipe> recipes = recipeService.searchRecipes(userId, query);
-        return ResponseEntity.ok(
-                recipes.stream().map(recipeMapper::toDTO).collect(Collectors.toList())
-        );
+        return ResponseEntity.ok(toDTOs(recipeService.searchRecipes(userId, query)));
     }
 
 
     @GetMapping("/quick")
-    public ResponseEntity<List<RecipeDTO>> getQuickRecipes(@CurrentUser Long userId) {
-        List<Recipe> recipes = recipeService.getQuickRecipes(userId, 30);
-        return ResponseEntity.ok(
-                recipes.stream().map(recipeMapper::toDTO).collect(Collectors.toList())
-        );
+    public ResponseEntity<List<RecipeDTO>> getQuickRecipes(
+            @CurrentUser Long userId,
+            @RequestParam(defaultValue = "30") Integer maxMinutes) {
+
+        return ResponseEntity.ok(toDTOs(recipeService.getQuickRecipes(userId, maxMinutes)));
     }
 
 
@@ -103,26 +106,33 @@ public class RecipeController {
 
     @PutMapping("/{id}")
     public ResponseEntity<RecipeDTO> updateRecipe(
+            @CurrentUser Long userId,
             @PathVariable Long id,
             @Valid @RequestBody RecipeDTO recipeDTO) {
 
         Recipe recipe = recipeMapper.toEntity(recipeDTO);
-        Recipe updated = recipeService.updateRecipe(id, recipe);
+        Recipe updated = recipeService.updateRecipe(userId, id, recipe);
 
         return ResponseEntity.ok(recipeMapper.toDTO(updated));
     }
 
 
     @PutMapping("/{id}/favorite")
-    public ResponseEntity<RecipeDTO> toggleFavorite(@PathVariable Long id) {
-        Recipe recipe = recipeService.toggleFavorite(id);
+    public ResponseEntity<RecipeDTO> toggleFavorite(
+            @CurrentUser Long userId,
+            @PathVariable Long id) {
+
+        Recipe recipe = recipeService.toggleFavorite(userId, id);
         return ResponseEntity.ok(recipeMapper.toDTO(recipe));
     }
 
 
     @DeleteMapping("/{id}")
-    public ResponseEntity<Void> deleteRecipe(@PathVariable Long id) {
-        recipeService.deleteRecipe(id);
+    public ResponseEntity<Void> deleteRecipe(
+            @CurrentUser Long userId,
+            @PathVariable Long id) {
+
+        recipeService.deleteRecipe(userId, id);
         return ResponseEntity.noContent().build();
     }
 
@@ -132,30 +142,20 @@ public class RecipeController {
     @GetMapping("/meal-plan")
     public ResponseEntity<List<MealPlanDTO>> getMealPlan(
             @CurrentUser Long userId,
-            @RequestParam String startDate,
-            @RequestParam String endDate) {
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate startDate,
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate endDate) {
 
-        LocalDate start = LocalDate.parse(startDate);
-        LocalDate end = LocalDate.parse(endDate);
-
-        List<MealPlan> mealPlans = mealPlanService.getMealPlanForPeriod(userId, start, end);
-        return ResponseEntity.ok(
-                mealPlans.stream().map(mealPlanMapper::toDTO).collect(Collectors.toList())
-        );
+        List<MealPlan> mealPlans = mealPlanService.getMealPlanForPeriod(userId, startDate, endDate);
+        return ResponseEntity.ok(toMealPlanDTOs(mealPlans));
     }
 
 
     @GetMapping("/meal-plan/date/{date}")
     public ResponseEntity<List<MealPlanDTO>> getMealPlanForDate(
             @CurrentUser Long userId,
-            @PathVariable String date) {
+            @PathVariable @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date) {
 
-        LocalDate targetDate = LocalDate.parse(date);
-        List<MealPlan> mealPlans = mealPlanService.getMealPlanForDate(userId, targetDate);
-
-        return ResponseEntity.ok(
-                mealPlans.stream().map(mealPlanMapper::toDTO).collect(Collectors.toList())
-        );
+        return ResponseEntity.ok(toMealPlanDTOs(mealPlanService.getMealPlanForDate(userId, date)));
     }
 
 
@@ -176,39 +176,41 @@ public class RecipeController {
     @PostMapping("/meal-plan/generate")
     public ResponseEntity<List<MealPlanDTO>> generateWeeklyMealPlan(
             @CurrentUser Long userId,
-            @RequestParam String startDate) {
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate startDate) {
 
-        LocalDate start = LocalDate.parse(startDate);
-        List<MealPlan> mealPlans = mealPlanService.generateWeeklyPlan(userId, start);
-
-        return ResponseEntity.ok(
-                mealPlans.stream().map(mealPlanMapper::toDTO).collect(Collectors.toList())
-        );
+        return ResponseEntity.ok(toMealPlanDTOs(mealPlanService.generateWeeklyPlan(userId, startDate)));
     }
 
 
     @PutMapping("/meal-plan/{id}")
     public ResponseEntity<MealPlanDTO> updateMealPlan(
+            @CurrentUser Long userId,
             @PathVariable Long id,
             @Valid @RequestBody MealPlanDTO mealPlanDTO) {
 
         MealPlan mealPlan = mealPlanMapper.toEntity(mealPlanDTO);
-        MealPlan updated = mealPlanService.updateMealPlan(id, mealPlan);
+        MealPlan updated = mealPlanService.updateMealPlan(userId, id, mealPlan);
 
         return ResponseEntity.ok(mealPlanMapper.toDTO(updated));
     }
 
 
     @PutMapping("/meal-plan/{id}/complete")
-    public ResponseEntity<MealPlanDTO> completeMealPlan(@PathVariable Long id) {
-        MealPlan completed = mealPlanService.completeMealPlan(id);
+    public ResponseEntity<MealPlanDTO> completeMealPlan(
+            @CurrentUser Long userId,
+            @PathVariable Long id) {
+
+        MealPlan completed = mealPlanService.completeMealPlan(userId, id);
         return ResponseEntity.ok(mealPlanMapper.toDTO(completed));
     }
 
 
     @DeleteMapping("/meal-plan/{id}")
-    public ResponseEntity<Void> deleteMealPlan(@PathVariable Long id) {
-        mealPlanService.deleteMealPlan(id);
+    public ResponseEntity<Void> deleteMealPlan(
+            @CurrentUser Long userId,
+            @PathVariable Long id) {
+
+        mealPlanService.deleteMealPlan(userId, id);
         return ResponseEntity.noContent().build();
     }
 
@@ -218,14 +220,10 @@ public class RecipeController {
     @GetMapping("/shopping-list")
     public ResponseEntity<ShoppingListDTO> generateShoppingList(
             @CurrentUser Long userId,
-            @RequestParam String startDate,
-            @RequestParam String endDate) {
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate startDate,
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate endDate) {
 
-        LocalDate start = LocalDate.parse(startDate);
-        LocalDate end = LocalDate.parse(endDate);
-
-        ShoppingListDTO shoppingList = mealPlanService.generateShoppingList(userId, start, end);
-        return ResponseEntity.ok(shoppingList);
+        return ResponseEntity.ok(mealPlanService.generateShoppingList(userId, startDate, endDate));
     }
 
     // ==================== NUTRITION STATS ====================
@@ -233,11 +231,18 @@ public class RecipeController {
     @GetMapping("/nutrition/daily")
     public ResponseEntity<NutritionStatsDTO> getDailyNutrition(
             @CurrentUser Long userId,
-            @RequestParam String date) {
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date) {
 
-        LocalDate targetDate = LocalDate.parse(date);
-        NutritionStatsDTO stats = mealPlanService.calculateDailyNutrition(userId, targetDate);
+        return ResponseEntity.ok(mealPlanService.calculateDailyNutrition(userId, date));
+    }
 
-        return ResponseEntity.ok(stats);
+    // ── Hilfen ────────────────────────────────────────────────────────────────────────────
+
+    private List<RecipeDTO> toDTOs(List<Recipe> recipes) {
+        return recipes.stream().map(recipeMapper::toDTO).collect(Collectors.toList());
+    }
+
+    private List<MealPlanDTO> toMealPlanDTOs(List<MealPlan> mealPlans) {
+        return mealPlans.stream().map(mealPlanMapper::toDTO).collect(Collectors.toList());
     }
 }

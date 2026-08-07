@@ -1,0 +1,28 @@
+{
+  "_comment": [
+    "Fester Kategorienkatalog des Rezept-Space.",
+    "",
+    "Wird im Frontend von lib/config/recipe_categories.dart gespiegelt; ein Test dort haelt",
+    "beide Listen gegeneinander. Weichen sie ab, bekommt dieselbe Sache zwei Namen: die eine",
+    "Haelfte der Rezepte landet unter 'Auflauf & Ofen', die andere unter 'Auflauf', der",
+    "Kategorienfilter zeigt beide, und niemand sieht, warum die Zahlen nicht aufgehen.",
+    "",
+    "Die Reihenfolge ist die Anzeigereihenfolge und zugleich der Farbindex im Frontend -",
+    "eine Kategorie behaelt ihre Farbe nur, solange sie ihre Position behaelt. Neue",
+    "Kategorien deshalb hinten anhaengen, nicht einsortieren."
+  ],
+  "categories": [
+    "Hauptgericht",
+    "Pasta & Reis",
+    "Auflauf & Ofen",
+    "Suppe & Eintopf",
+    "Salat & Bowl",
+    "Beilage & Sauce",
+    "Vorspeise & Snack",
+    "Frühstück",
+    "Backen",
+    "Dessert",
+    "Getränk",
+    "Sonstiges"
+  ]
+}
