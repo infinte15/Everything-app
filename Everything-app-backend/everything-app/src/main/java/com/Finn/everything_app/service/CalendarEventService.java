@@ -34,6 +34,21 @@ public class CalendarEventService {
         return calendarEventRepository.findFixedEvents(userId, start, end);
     }
 
+    /**
+     * Alle gepinnten Scheduler-Blöcke ab {@code start}, ohne obere Grenze.
+     *
+     * Gegenstück zu {@link #getFixedEvents}: das dort gelieferte Fenster sagt dem Solver, welche
+     * ZEIT belegt ist, diese Liste dagegen, welche ITEMS bereits versorgt sind. Beides muss
+     * getrennt bleiben — ein Block, den der Nutzer über den Horizont hinaus gezogen hat, belegt
+     * keine Zeit auf der Zeitachse, verbraucht aber sehr wohl seine Ausführung.
+     */
+    public List<CalendarEvent> getPinnedScheduledEventsFrom(Long userId, LocalDateTime start) {
+        return calendarEventRepository.findByUserIdAndEventTypeInAndIsFixedTrueAndStartTimeGreaterThanEqual(
+                userId,
+                List.of(EventType.TASK, EventType.HABIT, EventType.WORKOUT, EventType.PROJECT),
+                start);
+    }
+
     public boolean isTimeSlotFree(Long userId, LocalDateTime start, LocalDateTime end) {
         Long overlapping = calendarEventRepository.countOverlappingEvents(userId, start, end);
         return overlapping == 0;

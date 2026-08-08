@@ -36,6 +36,17 @@ public class ScheduleInput {
     private List<CalendarEvent> frozenEvents;
 
     /**
+     * Alle gepinnten Scheduler-Blöcke ab dem Horizontbeginn — auch die JENSEITS des Horizonts.
+     *
+     * {@link #fixedEvents} ist auf den Horizont beschnitten, weil es dem Solver belegte Zeit auf
+     * seiner Zeitachse meldet. Für die Frage "ist dieses Item schon versorgt?" ist genau dieser
+     * Zuschnitt aber falsch: zieht der Nutzer einen Block über den Horizont hinaus, fiele er aus
+     * der Buchhaltung, das Item gälte als ungeplant und bekäme im Horizont einen zweiten Block.
+     * Deshalb eine eigene, unbeschnittene Liste rein für die Buchhaltung.
+     */
+    private List<CalendarEvent> pinnedCommitments;
+
+    /**
      * Vom Nutzer übersprungene Ausführungen.
      *
      * Sie sperren keine Zeit und sind keine Stabilitätsanker — ihr einziger Zweck ist, das

@@ -59,7 +59,8 @@ public class CalendarEvent {
     private LocalDateTime completedAt;
 
     /**
-     * Nur für PROJECT-Blöcke: die ISO-Woche (Montag), deren Wochenpensum dieser Block abdeckt.
+     * Nur für quotenbasierte Blöcke (PROJECT, flexible HABIT): die ISO-Woche (Montag), deren
+     * Wochenpensum dieser Block abdeckt.
      *
      * Projekt-Sessions haben keine eigene Entität — dieser Kalendereintrag <em>ist</em> die
      * Session. Damit fehlt ihnen das, was {@code WorkoutSession.targetWeekStart} für Trainings
@@ -71,6 +72,21 @@ public class CalendarEvent {
      */
     @Column(name = "target_week_start")
     private LocalDate targetWeekStart;
+
+    /**
+     * Nur für HABIT-Blöcke an festen Wochentagen: der Tag, dessen Ausführung dieser Block abdeckt.
+     *
+     * Das Gegenstück zu {@link #targetWeekStart} eine Ebene tiefer. Eine Gewohnheit ohne
+     * {@code timesPerWeek} hängt an ihren Wochentags-Flags, nicht an einem Wochenpensum — für sie
+     * ist der Ursprungs<em>tag</em> die Buchung, nicht die Woche. Ohne dieses Feld gilt nach einem
+     * Drag-and-Drop von Montag auf Mittwoch der Montag wieder als unversorgt und immer noch als
+     * fällig: es entsteht ein zweiter Block am alten Platz.
+     *
+     * Nullable: flexible Gewohnheiten und Bestandszeilen haben den Wert nicht, dort gilt der Tag
+     * des Termins selbst.
+     */
+    @Column(name = "target_date")
+    private LocalDate targetDate;
 
     /**
      * Gesetzt, wenn der Nutzer diese Ausführung übersprungen hat.

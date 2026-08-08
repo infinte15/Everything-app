@@ -26,6 +26,19 @@ public interface CalendarEventRepository extends JpaRepository<CalendarEvent, Lo
             @Param("end") LocalDateTime end
     );
 
+    /**
+     * Alle gepinnten Scheduler-Blöcke ab einem Zeitpunkt — bewusst OHNE obere Grenze.
+     *
+     * Der Solver muss wissen, was für ein Item bereits festliegt, auch wenn der Nutzer den Block
+     * per Drag-and-Drop weit über den Planungshorizont hinaus gezogen hat. Sonst gilt das Item als
+     * ungeplant und bekommt im Horizont einen zweiten Block — der verschobene bleibt daneben stehen.
+     *
+     * Anders als {@link #findFixedEvents} reicht hier die Startzeit als Filter: gebucht wird ein
+     * Block über seinen Beginn, nicht über die Zeit, die er blockiert.
+     */
+    List<CalendarEvent> findByUserIdAndEventTypeInAndIsFixedTrueAndStartTimeGreaterThanEqual(
+            Long userId, List<EventType> eventTypes, LocalDateTime start);
+
     // Prüfen ob Zeitraum frei ist
     @Query("SELECT COUNT(e) FROM CalendarEvent e WHERE e.user.id = :userId " +
             "AND ((e.startTime <= :start AND e.endTime > :start) " +

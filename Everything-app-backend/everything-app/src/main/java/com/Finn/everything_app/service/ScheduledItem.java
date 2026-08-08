@@ -34,6 +34,14 @@ public class ScheduledItem {
      * als wäre der verschobene Termin am alten Platz stehen geblieben.
      */
     private LocalDate targetWeekStart;
+
+    /**
+     * Nur für HABIT an festen Wochentagen: der Tag, dessen Ausführung dieser Block abdeckt.
+     *
+     * Dieselbe Idee wie {@link #targetWeekStart}, nur auf Tagesebene — siehe
+     * {@code CalendarEvent.targetDate}. Bei flexiblen Gewohnheiten null, dort trägt die Woche.
+     */
+    private LocalDate targetDate;
 }
 
 enum ScheduledItemType {

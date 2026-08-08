@@ -10,6 +10,7 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
@@ -106,6 +107,26 @@ class CalendarEventServiceTest {
         assertEquals(LocalDateTime.of(2026, 8, 4, 19, 0), session.getStartTime());
         assertEquals(LocalDateTime.of(2026, 8, 4, 20, 0), session.getEndTime());
         verify(workoutSessionRepository).save(session);
+    }
+
+    @Test
+    void movingAnEventKeepsItsBooking() {
+        CalendarEvent stored = existingEvent(EventType.HABIT, LocalDateTime.of(2026, 8, 3, 7, 0),
+                LocalDateTime.of(2026, 8, 3, 7, 30));
+        // Der Scheduler hat den Block auf Montag der KW 32 gebucht.
+        stored.setTargetDate(LocalDate.of(2026, 8, 3));
+        stored.setTargetWeekStart(LocalDate.of(2026, 8, 3));
+
+        // Das Frontend schickt beim Verschieben seine ganze toJson() — und die kennt weder
+        // targetDate noch targetWeekStart. Würde updateEvent die Felder mitpatchen, ginge die
+        // Buchung auf null und der Scheduler legte am Ursprung einen Ersatzblock an.
+        CalendarEvent moved = service.updateEvent(5L, 1L,
+                patch(EventType.HABIT, LocalDateTime.of(2026, 8, 5, 18, 0),
+                        LocalDateTime.of(2026, 8, 5, 18, 30)));
+
+        assertEquals(LocalDate.of(2026, 8, 3), moved.getTargetDate(),
+                "der Block deckt weiter die Montags-Ausführung ab, auch wenn er am Mittwoch liegt");
+        assertEquals(LocalDate.of(2026, 8, 3), moved.getTargetWeekStart());
     }
 
     @Test

@@ -769,6 +769,145 @@ class SmartSchedulerServiceTest {
     }
 
     // ==================================================================
+    // Drag-and-Drop: der verschobene Block darf keinen Ersatz am alten Platz bekommen
+    //
+    // Zwei Löcher in der Buchhaltung erzeugten früher genau das Bild, über das der Nutzer
+    // gestolpert ist: der gezogene Block bleibt liegen UND ein zweiter taucht am Ursprung auf.
+    //   1. Wochentags-Gewohnheiten verbuchten nur ihren tatsächlichen, nicht ihren Ursprungstag.
+    //   2. Alles, was über den Planungshorizont hinaus gezogen wurde, fiel aus der Abfrage und
+    //      galt damit als ungeplant.
+    // ==================================================================
+
+    /**
+     * Der Fall aus 1: Montagsblock auf Mittwoch gezogen. {@code targetDate} hält fest, dass die
+     * Montags-Ausführung bereits versorgt ist — sonst ist der Montag wieder frei und immer noch
+     * per Wochentags-Flag fällig.
+     */
+    @Test
+    void verschobeneWochentagsGewohnheitBekommtKeinenErsatzAmUrsprungstag() {
+        LocalDate monday = TODAY.plusDays(1).with(TemporalAdjusters.next(DayOfWeek.MONDAY));
+        LocalDate wednesday = monday.plusDays(2);
+
+        Habit habit = new Habit();
+        habit.setId(420L);
+        habit.setName("Lesen");
+        habit.setDurationMinutes(30);
+        habit.setPriority(3);
+        habit.setMonday(true);
+        habit.setStartDate(monday);
+        // timesPerWeek bleibt null -> Legacy-Modus, eine Ausführung je gesetztem Wochentag.
+
+        // Der Block liegt am Mittwoch, ist aber auf den Montag gebucht — genau das, was
+        // updateEvent nach einem Drag-and-Drop hinterlässt.
+        CalendarEvent verschoben = makeFixedEvent(421L, wednesday.atTime(20, 0), wednesday.atTime(20, 30));
+        verschoben.setEventType(EventType.HABIT);
+        verschoben.setRelatedHabit(habit);
+        verschoben.setTargetDate(monday);
+
+        when(habitRepository.findHabitsActiveInRange(eq(1L), any(), any())).thenReturn(List.of(habit));
+        when(taskService.getSchedulableTasks(1L)).thenReturn(new ArrayList<>());
+        when(calendarEventService.getFixedEvents(eq(1L), any(), any())).thenReturn(List.of(verschoben));
+
+        ScheduleResult result = service.generateOptimalSchedule(1L, monday, monday.plusDays(6));
+
+        assertTrue(result.getScheduledHabits().isEmpty(),
+                "die Montags-Ausführung hängt bereits (am Mittwoch) im Kalender — "
+                        + "am Montag darf kein zweiter Block entstehen");
+    }
+
+    /** Der Fall aus 2 für Tasks: gepinnter Block weit jenseits des Horizonts. */
+    @Test
+    void gepinnterTaskBlockJenseitsDesHorizontsWirdWeiterGutgeschrieben() {
+        LocalDate tomorrow = TODAY.plusDays(1);
+        LocalDate weitDraussen = TODAY.plusDays(60);
+
+        Task task = makeTask(600L, "Bericht", 120, 3, TODAY.plusDays(90).atTime(23, 59));
+
+        CalendarEvent verschoben = makeFixedEvent(601L,
+                weitDraussen.atTime(9, 0), weitDraussen.atTime(11, 0));
+        verschoben.setEventType(EventType.TASK);
+        verschoben.setRelatedTask(task);
+
+        when(taskService.getSchedulableTasks(1L)).thenReturn(List.of(task));
+        // Ausserhalb des Planungsfensters: die Fenster-Abfrage sieht den Block nicht mehr,
+        // nur die unbeschnittene Buchhaltungs-Abfrage.
+        when(calendarEventService.getFixedEvents(eq(1L), any(), any())).thenReturn(new ArrayList<>());
+        when(calendarEventService.getPinnedScheduledEventsFrom(eq(1L), any()))
+                .thenReturn(List.of(verschoben));
+
+        ScheduleResult result = service.generateOptimalSchedule(1L, tomorrow, tomorrow.plusDays(6));
+
+        assertTrue(result.getScheduledTasks().isEmpty(),
+                "die vollen 120 Minuten liegen bereits fest — es bleibt nichts zu planen");
+    }
+
+    /** Der Fall aus 2 für Workouts. */
+    @Test
+    void gepinntesWorkoutJenseitsDesHorizontsWirdNichtErneutGeplant() {
+        LocalDate tomorrow = TODAY.plusDays(1);
+        LocalDate weitDraussen = TODAY.plusDays(60);
+
+        WorkoutSession workout = makeFlexibleWorkout(610L, "Push", 60,
+                tomorrow.with(TemporalAdjusters.previousOrSame(DayOfWeek.MONDAY)));
+        workout.setStartTime(weitDraussen.atTime(15, 0));
+        workout.setEndTime(weitDraussen.atTime(16, 0));
+
+        CalendarEvent verschoben = makeFixedEvent(611L,
+                weitDraussen.atTime(15, 0), weitDraussen.atTime(16, 0));
+        verschoben.setEventType(EventType.WORKOUT);
+        verschoben.setRelatedWorkout(workout);
+
+        when(workoutSessionRepository.findByUserIdAndIsFlexibleTrue(1L)).thenReturn(List.of(workout));
+        when(taskService.getSchedulableTasks(1L)).thenReturn(new ArrayList<>());
+        when(calendarEventService.getFixedEvents(eq(1L), any(), any())).thenReturn(new ArrayList<>());
+        when(calendarEventService.getPinnedScheduledEventsFrom(eq(1L), any()))
+                .thenReturn(List.of(verschoben));
+
+        ScheduleResult result = service.generateOptimalSchedule(1L, tomorrow, tomorrow.plusDays(6));
+
+        assertTrue(result.getScheduledHabits().stream()
+                        .noneMatch(i -> i.getType() == ScheduledItemType.WORKOUT),
+                "das Workout hängt schon gepinnt im Kalender, nur eben weit draussen");
+        verify(workoutSessionRepository, never()).save(any(WorkoutSession.class));
+    }
+
+    /**
+     * Der Fall aus 2 für flexible Gewohnheiten: der Block liegt jenseits des Horizonts, bleibt
+     * über {@code targetWeekStart} aber auf die Woche gebucht, aus der er stammt.
+     */
+    @Test
+    void gepinnteFlexibleGewohnheitJenseitsDesHorizontsKuerztIhreWochenquote() {
+        LocalDate monday = TODAY.plusDays(1).with(TemporalAdjusters.next(DayOfWeek.MONDAY));
+        LocalDate weitDraussen = monday.plusDays(60);
+
+        Habit habit = new Habit();
+        habit.setId(620L);
+        habit.setName("Laufen");
+        habit.setDurationMinutes(45);
+        habit.setPriority(3);
+        habit.setTimesPerWeek(3);
+        habit.setIdealWindow(HabitWindow.ANYTIME);
+        habit.setStartDate(monday);
+
+        CalendarEvent verschoben = makeFixedEvent(621L,
+                weitDraussen.atTime(16, 0), weitDraussen.atTime(16, 45));
+        verschoben.setEventType(EventType.HABIT);
+        verschoben.setRelatedHabit(habit);
+        verschoben.setTargetWeekStart(monday);
+
+        when(habitRepository.findHabitsActiveInRange(eq(1L), any(), any())).thenReturn(List.of(habit));
+        when(taskService.getSchedulableTasks(1L)).thenReturn(new ArrayList<>());
+        when(calendarEventService.getFixedEvents(eq(1L), any(), any())).thenReturn(new ArrayList<>());
+        when(calendarEventService.getPinnedScheduledEventsFrom(eq(1L), any()))
+                .thenReturn(List.of(verschoben));
+
+        ScheduleResult result = service.generateOptimalSchedule(1L, monday, monday.plusDays(6));
+
+        assertEquals(2, result.getScheduledHabits().size(),
+                "3x pro Woche minus die eine weit verschobene Ausführung ergibt 2");
+    }
+
+    // ==================================================================
     // Wunschzeiten der Gewohnheiten
     // ==================================================================
 

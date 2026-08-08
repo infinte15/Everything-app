@@ -198,9 +198,24 @@ public class SmartSchedulerService {
         // Letzter Tag, an dem noch Task-Blöcke liegen dürfen (siehe taskHorizonDays).
         int taskLastDay = Math.min(totalDays - 1, Math.max(0, taskHorizonDays));
 
-        // Gepinnte und eingefrorene Blöcke sind für die Zerlegung dasselbe: beide belegen Zeit,
-        // die weder neu geplant noch doppelt verplant werden darf.
-        List<CalendarEvent> committed = concat(input.getFixedEvents(), input.getFrozenEvents());
+        // Gepinnte und eingefrorene Blöcke sind für die Zerlegung dasselbe: beide sind bereits
+        // vergeben und dürfen weder neu geplant noch doppelt verplant werden.
+        //
+        // Welche ZEIT dabei blockiert ist, sagt weiterhin input.getFixedEvents() — auf den Horizont
+        // beschnitten, weil nur Zeit auf der Zeitachse den Solver interessiert (collectBlockedSlots).
+        //
+        // Für die BUCHHALTUNG zählt dagegen die unbeschnittene Liste: ein Block, den der Nutzer
+        // über den Horizont hinaus gezogen hat, blockiert dort zwar keine Zeit auf der Zeitachse,
+        // versorgt sein Item aber trotzdem. Ohne diese Trennung hielt der Solver das Item für
+        // ungeplant und legte im Horizont einen zweiten Block an — der verschobene blieb daneben
+        // stehen, und genau das sah der Nutzer als Duplikat nach jedem Drag-and-Drop.
+        //
+        // Vereinigung statt Ersatz: die beiden Abfragen schneiden unterschiedlich. fixedEvents
+        // greift Überlappungen (ein Block von gestern 23 Uhr, der in den Horizont hineinragt),
+        // pinnedCommitments filtert über die Startzeit. Zusammen fällt keiner von beiden weg;
+        // dedupById entfernt die große Schnittmenge.
+        List<CalendarEvent> committed = dedupById(concat(
+                input.getPinnedCommitments(), input.getFixedEvents(), input.getFrozenEvents()));
 
         // Verpasste Blöcke überfälliger Tasks sind davon ausgenommen: sie sperren ihre Zeit in der
         // Vergangenheit zwar weiter, dürfen dem Task aber weder Minuten gutschreiben noch ihm einen
@@ -212,7 +227,7 @@ public class SmartSchedulerService {
         // Fürs Wochenpensum zählen übersprungene Ausführungen mit, für alles andere nicht: sie
         // sperren keine Zeit und schreiben keine Minuten gut. Deshalb eine eigene Liste und nicht
         // einfach committed erweitert.
-        List<CalendarEvent> counted = concat(committed, input.getSkippedEvents());
+        List<CalendarEvent> counted = dedupById(concat(committed, input.getSkippedEvents()));
 
         Map<Long, Integer> pinnedMinutes = pinnedMinutesPerTask(credited);
         List<TaskChunk> chunks     = decomposeTasks(input.getTasks(), prefs, pinnedMinutes);
@@ -603,7 +618,7 @@ public class SmartSchedulerService {
         for (CalendarEvent e : nz(fixedEvents)) {
             if (e.getRelatedHabit() == null || e.getStartTime() == null) continue;
             out.computeIfAbsent(e.getRelatedHabit().getId(), k -> new WeeklyCommitments())
-               .add(e.getStartTime().toLocalDate(), chargedWeek(e));
+               .add(e.getStartTime().toLocalDate(), chargedDay(e), chargedWeek(e));
         }
         return out;
     }
@@ -618,25 +633,36 @@ public class SmartSchedulerService {
         Map<Long, WeeklyCommitments> out = new LinkedHashMap<>();
         for (CalendarEvent e : nz(committed)) {
             if (e.getRelatedProject() == null || e.getStartTime() == null) continue;
+            // Ist- und Solltag sind hier immer identisch: Projekte kennen nur die Wochenquote,
+            // keine festen Wochentage — verschoben wird über chargedWeek verbucht.
+            LocalDate day = e.getStartTime().toLocalDate();
             out.computeIfAbsent(e.getRelatedProject().getId(), k -> new WeeklyCommitments())
-               .add(e.getStartTime().toLocalDate(), chargedWeek(e));
+               .add(day, day, chargedWeek(e));
         }
         return out;
     }
 
     /**
-     * Was für ein wochenbasiertes Item (Projekt, flexible Gewohnheit) bereits festliegt.
+     * Was für ein Item bereits festliegt.
      *
-     * Zwei getrennte Sichten, weil ein verschobener Block beides gleichzeitig ist: er belegt
-     * seinen <b>Tag</b> (dort darf keine zweite Session hin), zählt aber auf das Pensum der
-     * <b>Woche</b>, aus der er stammt.
+     * Drei getrennte Sichten, weil ein verschobener Block mehreres gleichzeitig ist:
+     * <ul>
+     *   <li>{@code days} — der <b>tatsächlich belegte</b> Tag. Dorthin darf keine zweite Session.</li>
+     *   <li>{@code chargedDays} — der Tag, dessen <b>Ausführung damit abgegolten</b> ist. Bei
+     *       Wochentags-Gewohnheiten der Ursprungstag, sonst derselbe wie oben.</li>
+     *   <li>{@code perWeek} — das Pensum der <b>Woche</b>, aus der er stammt.</li>
+     * </ul>
+     * Ist und Soll auseinanderzuhalten ist der ganze Punkt: sonst gibt ein auf Mittwoch gezogener
+     * Montagsblock den Montag wieder frei und die Gewohnheit bekommt dort einen zweiten Termin.
      */
     private static final class WeeklyCommitments {
         final Set<LocalDate> days = new HashSet<>();
+        final Set<LocalDate> chargedDays = new HashSet<>();
         final Map<LocalDate, Integer> perWeek = new HashMap<>();
 
-        void add(LocalDate day, LocalDate week) {
+        void add(LocalDate day, LocalDate chargedDay, LocalDate week) {
             days.add(day);
+            if (chargedDay != null) chargedDays.add(chargedDay);
             perWeek.merge(week, 1, Integer::sum);
         }
 
@@ -662,6 +688,20 @@ public class SmartSchedulerService {
     }
 
     /**
+     * Der Tag, dessen Ausführung ein festliegender Block abdeckt — das Tages-Pendant zu
+     * {@link #chargedWeek}.
+     *
+     * Bestandszeilen ohne {@code targetDate} zählen wie früher zu dem Tag, an dem sie tatsächlich
+     * liegen. Der Unterschied wird erst nach einem Drag-and-Drop sichtbar: dann steht hier noch
+     * der Montag, während der Block schon am Mittwoch liegt.
+     */
+    private static LocalDate chargedDay(CalendarEvent e) {
+        return e.getTargetDate() != null
+                ? e.getTargetDate()
+                : e.getStartTime().toLocalDate();
+    }
+
+    /**
      * Tage, an denen bereits ein Training steht, das der Solver nicht mehr anfassen darf —
      * gepinnt, in Arbeit oder erledigt.
      *
@@ -669,9 +709,13 @@ public class SmartSchedulerService {
      * pro Tag", unabhängig von der Routine. Neben den Kalendereinträgen zählen auch die
      * {@code fixedWorkouts} mit, denn eine Einheit mit fester Uhrzeit muss ihren Tag auch dann
      * verbrauchen, wenn ihr Kalendereintrag (noch) fehlt.
+     *
+     * Gelesen wird zusätzlich aus {@code pinnedCommitments} — Buchhaltung, also ohne
+     * Horizontgrenze. Ein Set von Tagen verträgt die Überschneidung mit {@code fixedEvents} ohnehin.
      */
     private Set<LocalDate> committedWorkoutDates(ScheduleInput input) {
-        Set<LocalDate> days = concat(input.getFixedEvents(), input.getFrozenEvents()).stream()
+        Set<LocalDate> days = concat(input.getPinnedCommitments(), input.getFixedEvents(),
+                                     input.getFrozenEvents()).stream()
                 .filter(e -> e.getRelatedWorkout() != null && e.getStartTime() != null)
                 .map(e -> e.getStartTime().toLocalDate())
                 .collect(Collectors.toCollection(HashSet::new));
@@ -805,11 +849,13 @@ public class SmartSchedulerService {
             WeeklyCommitments committed = new WeeklyCommitments();
             completionsByHabit.getOrDefault(habit.getId(), Set.of()).stream()
                     .filter(d -> !d.isBefore(from) && !d.isAfter(to))
-                    .forEach(d -> committed.add(d, weekOf(d)));
+                    // Eine Erledigung ist an ihrem Tag passiert — Ist und Soll fallen zusammen.
+                    .forEach(d -> committed.add(d, d, weekOf(d)));
 
             WeeklyCommitments pinned = pinnedDates.get(habit.getId());
             if (pinned != null) {
                 pinned.days.forEach(committed.days::add);
+                pinned.chargedDays.forEach(committed.chargedDays::add);
                 pinned.perWeek.forEach((w, n) -> committed.perWeek.merge(w, n, Integer::sum));
             }
 
@@ -822,7 +868,12 @@ public class SmartSchedulerService {
             } else {
                 for (LocalDate d = rangeStart; !d.isAfter(rangeEnd); d = d.plusDays(1)) {
                     if (!isHabitScheduledOn(habit, d)) continue;
-                    if (committed.days.contains(d)) continue;
+                    // Zwei Gründe, den Tag zu überspringen, und beide sind nötig:
+                    // days      — hier liegt schon ein Block dieser Gewohnheit (Tag ist belegt).
+                    // chargedDays — die Ausführung DIESES Tages ist bereits versorgt, auch wenn
+                    //               der Block inzwischen woanders liegt. Ohne das entsteht nach
+                    //               jedem Drag-and-Drop ein zweiter Block am Ursprungstag.
+                    if (committed.days.contains(d) || committed.chargedDays.contains(d)) continue;
 
                     HabitSlot s = new HabitSlot();
                     s.habit           = habit;
@@ -1854,8 +1905,9 @@ public class SmartSchedulerService {
             ScheduledItem item = new ScheduledItem();
             item.setHabit(s.habit);
             // Nur flexible Slots haben eine Wochenquote; feste Wochentags-Habits (weekStart null)
-            // hängen ohnehin an ihrem Tag und brauchen keine Wochenbuchung.
+            // hängen ohnehin an ihrem Tag — die werden über targetDate gebucht.
             item.setTargetWeekStart(s.weekStart);
+            item.setTargetDate(s.legacyDate);
             item.setStartTime(start);
             item.setEndTime(start.plusMinutes(s.durationMinutes));   // echte Dauer, nicht die aufgerundete
             item.setType(ScheduledItemType.HABIT);
@@ -1918,6 +1970,14 @@ public class SmartSchedulerService {
         input.setFixedEvents(fixed.stream()
                 .filter(e -> e.getSkippedAt() == null)
                 .collect(Collectors.toList()));
+
+        // Dieselben Blöcke, aber ohne Horizontgrenze — siehe ScheduleInput#pinnedCommitments.
+        // Ein Block, den der Nutzer weit in die Zukunft gezogen hat, muss seinem Item weiter
+        // gutgeschrieben werden, sonst bekommt es hier im Horizont einen zweiten.
+        List<CalendarEvent> pinned = nz(calendarEventService.getPinnedScheduledEventsFrom(userId, start));
+        input.setPinnedCommitments(pinned.stream()
+                .filter(e -> e.getSkippedAt() == null)
+                .collect(Collectors.toList()));
         input.setHabits(habitRepository.findHabitsActiveInRange(userId, startDate, endDate));
         input.setCourseSchedules(courseScheduleRepository.findByUserId(userId));
         input.setProjects(projectRepository.findByUserIdAndStatusIn(userId, SCHEDULABLE_PROJECT_STATUS));
@@ -1941,12 +2001,13 @@ public class SmartSchedulerService {
         // noch als Stabilitätsanker dienen. Ihr einziger Beitrag ist die verbrauchte Wochenquote.
         //
         // Aus BEIDEN Quellen: wer einen Block erst verschiebt und dann überspringt, hat ihn
-        // gepinnt — der steckt dann in fixed und nicht in previous. Nur aus previous gelesen,
+        // gepinnt — der steckt dann in pinned und nicht in previous. Nur aus previous gelesen,
         // fiele seine Wochenquote unter den Tisch und die Woche bekäme doch wieder Ersatz.
-        input.setSkippedEvents(
-                java.util.stream.Stream.concat(fixed.stream(), previous.stream())
-                        .filter(e -> e.getStartTime() != null && e.getSkippedAt() != null)
-                        .collect(Collectors.toList()));
+        // Gepinnte Blöcke kommen aus der unbeschnittenen Liste, damit das auch gilt, wenn der
+        // Block außerhalb des Horizonts liegt.
+        input.setSkippedEvents(dedupById(concat(pinned, fixed, previous)).stream()
+                .filter(e -> e.getStartTime() != null && e.getSkippedAt() != null)
+                .collect(Collectors.toList()));
 
         Map<Boolean, List<CalendarEvent>> split = previous.stream()
                 .filter(e -> e.getStartTime() != null && e.getSkippedAt() == null)
@@ -1958,8 +2019,11 @@ public class SmartSchedulerService {
         // Ein manuell verschobenes Workout hat ein gepinntes Kalender-Event. Es bleibt in der
         // Datenbank zwar "flexibel", darf aber nicht mehr umgeplant werden — sonst zieht der
         // Solver es sofort wieder weg und der Drag-and-Drop hätte keine Wirkung. Für ein bereits
-        // gelaufenes Workout gilt dasselbe.
-        Set<Long> pinnedWorkoutIds = concat(input.getFixedEvents(), input.getFrozenEvents()).stream()
+        // gelaufenes Workout gilt dasselbe. pinnedCommitments muss hier mit hinein: ein Workout,
+        // das der Nutzer über den Horizont hinaus gezogen hat, gälte sonst wieder als frei
+        // planbar und bekäme im Horizont eine zweite Einheit.
+        Set<Long> pinnedWorkoutIds = concat(input.getPinnedCommitments(), input.getFixedEvents(),
+                                            input.getFrozenEvents()).stream()
                 .filter(e -> e.getRelatedWorkout() != null)
                 .map(e -> e.getRelatedWorkout().getId())
                 .collect(Collectors.toSet());
@@ -2031,8 +2095,10 @@ public class SmartSchedulerService {
                     ev.setRelatedHabit(item.getHabit());
                     ev.setColor("#4CAF50");
                     // Wie beim Projektblock: bleibt auf seine Woche gebucht, auch wenn der
-                    // Nutzer ihn später in eine andere zieht.
+                    // Nutzer ihn später in eine andere zieht. Bei Wochentags-Gewohnheiten gibt
+                    // es keine Woche, dort trägt der Ursprungstag dieselbe Rolle.
                     ev.setTargetWeekStart(item.getTargetWeekStart());
+                    ev.setTargetDate(item.getTargetDate());
                 }
                 case WORKOUT -> {
                     ev.setTitle(item.getWorkoutSession().getName());
@@ -2217,6 +2283,26 @@ public class SmartSchedulerService {
     private static <T> List<T> concat(List<T>... lists) {
         List<T> out = new ArrayList<>();
         for (List<T> l : lists) out.addAll(nz(l));
+        return out;
+    }
+
+    /**
+     * Entfernt Doppelte nach Id, Reihenfolge bleibt erhalten.
+     *
+     * Nötig, seit die Buchhaltung aus mehreren überlappenden Quellen gespeist wird: ein Block kann
+     * gleichzeitig in {@code pinnedCommitments} und (über die Skip-Liste) in {@code counted}
+     * landen. Doppelt gezählt schrumpfte ein Task um die Minuten eines einzigen Blocks zweimal
+     * und die Wochenquote einer Gewohnheit um zwei statt eine Ausführung.
+     *
+     * Events ohne Id (in Tests konstruiert) bleiben unangetastet, sonst fielen sie alle bis auf
+     * eines weg.
+     */
+    private static List<CalendarEvent> dedupById(List<CalendarEvent> events) {
+        List<CalendarEvent> out = new ArrayList<>();
+        Set<Long> seen = new HashSet<>();
+        for (CalendarEvent e : nz(events)) {
+            if (e.getId() == null || seen.add(e.getId())) out.add(e);
+        }
         return out;
     }
 
