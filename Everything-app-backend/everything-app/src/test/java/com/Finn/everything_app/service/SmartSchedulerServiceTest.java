@@ -18,6 +18,7 @@ import java.time.temporal.ChronoUnit;
 import java.time.temporal.TemporalAdjusters;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -64,7 +65,7 @@ class SmartSchedulerServiceTest {
         lenient().when(userService.getOrCreatePreferences(1L)).thenReturn(prefs);
         lenient().when(userService.findById(1L)).thenReturn(user);
         lenient().when(habitRepository.findHabitsActiveInRange(eq(1L), any(), any())).thenReturn(new ArrayList<>());
-        lenient().when(habitCompletionRepository.findByHabitIdAndCompletionDateBetween(anyLong(), any(), any()))
+        lenient().when(habitCompletionRepository.findByHabitIdInAndCompletionDateBetween(any(), any(), any()))
                  .thenReturn(new ArrayList<>());
         lenient().when(workoutSessionRepository.findByUserIdAndStartTimeBetween(eq(1L), any(), any()))
                  .thenReturn(new ArrayList<>());
@@ -765,6 +766,521 @@ class SmartSchedulerServiceTest {
         assertTrue(scheduled.getEndTime().isBefore(tomorrow.atTime(15, 0).plusSeconds(1))
                         || !scheduled.getStartTime().isBefore(tomorrow.atTime(16, 0)),
                 "der Task darf nicht in das gepinnte Workout hineinlaufen");
+    }
+
+    // ==================================================================
+    // Wunschzeiten der Gewohnheiten
+    // ==================================================================
+
+    /**
+     * Der Kern der Beschwerde "eine Gewohnheit klebt direkt hinter der nächsten".
+     *
+     * Ohne gesetztes Wunschfenster ist die Abweichungsstrafe über den ganzen Arbeitstag exakt 0.
+     * Bei so flachem Ziel behielt CP-SAT die Phase-1-Lösung, und die sitzt auf der unteren
+     * Schranke der Startvariablen — also landeten alle Gewohnheiten ab Arbeitsbeginn direkt
+     * hintereinander.
+     */
+    @Test
+    void zweiGewohnheitenOhneWunschzeitKlebenNichtAneinander() {
+        LocalDate tomorrow = TODAY.plusDays(1);
+
+        Habit meditation = makeDailyHabit(1401L, "Meditation", 30);
+        Habit lesen      = makeDailyHabit(1402L, "Lesen", 30);
+
+        when(habitRepository.findHabitsActiveInRange(eq(1L), any(), any()))
+                .thenReturn(List.of(meditation, lesen));
+        when(taskService.getSchedulableTasks(1L)).thenReturn(new ArrayList<>());
+        when(calendarEventService.getFixedEvents(eq(1L), any(), any())).thenReturn(new ArrayList<>());
+
+        ScheduleResult result = service.generateOptimalSchedule(1L, tomorrow, tomorrow);
+
+        List<LocalDateTime> starts = result.getScheduledHabits().stream()
+                .map(ScheduledItem::getStartTime)
+                .sorted()
+                .toList();
+
+        assertEquals(2, starts.size(), "beide Gewohnheiten sollen geplant werden");
+        long gapMinutes = ChronoUnit.MINUTES.between(starts.get(0), starts.get(1));
+        assertTrue(gapMinutes >= 120,
+                "zwei Gewohnheiten ohne Wunschzeit sollen über den Tag verteilt werden, lagen aber "
+                        + gapMinutes + " Minuten auseinander: " + starts);
+    }
+
+    /**
+     * Der hergeleitete Anker ist bewusst schwach: er soll nur das flache Ziel aufbrechen. Eine
+     * Gewohnheit mit ausdrücklicher Wunschzeit muss weiterhin genau dort landen.
+     */
+    @Test
+    void ausdrueckicheWunschzeitSchlaegtDenHergeleitetenAnker() {
+        LocalDate tomorrow = TODAY.plusDays(1);
+
+        Habit fix = makeDailyHabit(1411L, "Mittagsspaziergang", 30);
+        fix.setPreferredTime(LocalTime.of(12, 0));
+        Habit frei = makeDailyHabit(1412L, "Lesen", 30);
+
+        when(habitRepository.findHabitsActiveInRange(eq(1L), any(), any()))
+                .thenReturn(List.of(fix, frei));
+        when(taskService.getSchedulableTasks(1L)).thenReturn(new ArrayList<>());
+        when(calendarEventService.getFixedEvents(eq(1L), any(), any())).thenReturn(new ArrayList<>());
+
+        ScheduleResult result = service.generateOptimalSchedule(1L, tomorrow, tomorrow);
+
+        LocalDateTime start = result.getScheduledHabits().stream()
+                .filter(i -> i.getHabit() != null && i.getHabit().getId().equals(1411L))
+                .map(ScheduledItem::getStartTime)
+                .findFirst()
+                .orElseThrow();
+
+        assertEquals(LocalTime.of(12, 0), start.toLocalTime(),
+                "die gesetzte Wunschzeit muss den hergeleiteten Anker überstimmen");
+    }
+
+    /** Gleicher Bestand, gleiche Anker — sonst wäre der Stabilitätsterm wertlos. */
+    @Test
+    void hergeleiteteAnkerSindUeberLaeufeStabil() {
+        LocalDate tomorrow = TODAY.plusDays(1);
+
+        Habit a = makeDailyHabit(1421L, "A", 30);
+        Habit b = makeDailyHabit(1422L, "B", 30);
+
+        when(habitRepository.findHabitsActiveInRange(eq(1L), any(), any())).thenReturn(List.of(a, b));
+        when(taskService.getSchedulableTasks(1L)).thenReturn(new ArrayList<>());
+        when(calendarEventService.getFixedEvents(eq(1L), any(), any())).thenReturn(new ArrayList<>());
+
+        List<LocalDateTime> first = service.generateOptimalSchedule(1L, tomorrow, tomorrow)
+                .getScheduledHabits().stream().map(ScheduledItem::getStartTime).sorted().toList();
+        List<LocalDateTime> second = service.generateOptimalSchedule(1L, tomorrow, tomorrow)
+                .getScheduledHabits().stream().map(ScheduledItem::getStartTime).sorted().toList();
+
+        assertEquals(first, second, "zwei Läufe ohne Änderung müssen dieselben Zeiten ergeben");
+    }
+
+    /**
+     * Dasselbe wie beim Projektblock, nur für eine Gewohnheit mit Wochenquote: wird eine
+     * Ausführung in die Folgewoche gezogen, darf die verlassene Woche keinen Ersatz bekommen.
+     */
+    @Test
+    void eineInDieFolgewocheGezogeneGewohnheitErzeugtKeinenErsatzInDerAltenWoche() {
+        LocalDate weekA = TODAY.plusDays(1).with(TemporalAdjusters.next(DayOfWeek.MONDAY));
+        LocalDate weekB = weekA.plusWeeks(1);
+
+        Habit run = new Habit();
+        run.setId(1450L);
+        run.setName("Laufen gehen");
+        run.setDurationMinutes(45);
+        run.setPriority(3);
+        run.setTimesPerWeek(2);
+        run.setIdealWindow(HabitWindow.ANYTIME);
+        run.setStartDate(weekA);
+
+        // Gehört zum Pensum von Woche A, liegt nach dem Verschieben in Woche B.
+        LocalDate droppedOn = weekB.plusDays(1);
+        CalendarEvent moved = makeFixedEvent(1451L, droppedOn.atTime(17, 0), droppedOn.atTime(17, 45));
+        moved.setEventType(EventType.HABIT);
+        moved.setRelatedHabit(run);
+        moved.setTargetWeekStart(weekA);
+
+        when(habitRepository.findHabitsActiveInRange(eq(1L), any(), any())).thenReturn(List.of(run));
+        when(taskService.getSchedulableTasks(1L)).thenReturn(new ArrayList<>());
+        when(calendarEventService.getFixedEvents(eq(1L), any(), any())).thenReturn(List.of(moved));
+
+        ScheduleResult result = service.generateOptimalSchedule(1L, weekA, weekB.plusDays(6));
+
+        List<LocalDate> days = result.getScheduledHabits().stream()
+                .filter(i -> i.getType() == ScheduledItemType.HABIT)
+                .map(i -> i.getStartTime().toLocalDate())
+                .sorted()
+                .toList();
+
+        long inWeekA = days.stream().filter(d -> d.isBefore(weekB)).count();
+        long inWeekB = days.stream().filter(d -> !d.isBefore(weekB)).count();
+
+        assertEquals(1, inWeekA,
+                "Woche A ist durch die verschobene Ausführung halb gedeckt: " + days);
+        assertEquals(2, inWeekB, "Woche B behält ihr volles Pensum: " + days);
+        assertFalse(days.contains(droppedOn),
+                "am Tag der verschobenen Ausführung darf keine zweite entstehen: " + days);
+    }
+
+    /** Tägliche Gewohnheit ohne Wunschfenster — alle Wochentage gesetzt, keine Zeitvorgabe. */
+    private Habit makeDailyHabit(Long id, String name, int minutes) {
+        Habit h = new Habit();
+        h.setId(id);
+        h.setName(name);
+        h.setDurationMinutes(minutes);
+        h.setPriority(3);
+        h.setFrequency(HabitFrequency.DAILY);
+        h.setMonday(true);   h.setTuesday(true); h.setWednesday(true); h.setThursday(true);
+        h.setFriday(true);   h.setSaturday(true); h.setSunday(true);
+        return h;
+    }
+
+    // ==================================================================
+    // Verteilung der Trainingseinheiten über die Woche
+    // ==================================================================
+
+    /**
+     * Der Kern der Beschwerde "zwei Trainings an einem Tag". Flexible Workouts waren die einzige
+     * Gruppe ohne Wochengruppen-Constraint und hatten zugleich das stärkste Dringlichkeitsgewicht
+     * im Modell — sie wurden also aktiv an den Wochenanfang gezogen und stapelten sich dort.
+     */
+    @Test
+    void dreiWorkoutsLandenAnDreiVerschiedenenTagen() {
+        LocalDate monday = TODAY.plusDays(1).with(TemporalAdjusters.next(DayOfWeek.MONDAY));
+
+        List<WorkoutSession> plan = List.of(
+                makeFlexibleWorkout(701L, "Push", 60, monday),
+                makeFlexibleWorkout(702L, "Pull", 60, monday),
+                makeFlexibleWorkout(703L, "Legs", 60, monday));
+
+        when(taskService.getSchedulableTasks(1L)).thenReturn(new ArrayList<>());
+        when(calendarEventService.getFixedEvents(eq(1L), any(), any())).thenReturn(new ArrayList<>());
+        when(workoutSessionRepository.findByUserIdAndIsFlexibleTrue(1L)).thenReturn(plan);
+
+        ScheduleResult result = service.generateOptimalSchedule(1L, monday, monday.plusDays(6));
+
+        List<LocalDate> days = workoutDays(result);
+        assertEquals(3, days.size(), "alle drei Einheiten sollen geplant werden");
+        assertEquals(3, Set.copyOf(days).size(), "keine zwei Trainings am selben Tag: " + days);
+    }
+
+    /** Zwischen zwei Einheiten soll möglichst ein voller Ruhetag liegen. */
+    @Test
+    void workoutsHaltenEinenRuhetagAbstand() {
+        LocalDate monday = TODAY.plusDays(1).with(TemporalAdjusters.next(DayOfWeek.MONDAY));
+
+        List<WorkoutSession> plan = List.of(
+                makeFlexibleWorkout(711L, "Push", 60, monday),
+                makeFlexibleWorkout(712L, "Pull", 60, monday),
+                makeFlexibleWorkout(713L, "Legs", 60, monday));
+
+        when(taskService.getSchedulableTasks(1L)).thenReturn(new ArrayList<>());
+        when(calendarEventService.getFixedEvents(eq(1L), any(), any())).thenReturn(new ArrayList<>());
+        when(workoutSessionRepository.findByUserIdAndIsFlexibleTrue(1L)).thenReturn(plan);
+
+        ScheduleResult result = service.generateOptimalSchedule(1L, monday, monday.plusDays(6));
+
+        List<LocalDate> days = workoutDays(result);
+        assertEquals(3, days.size());
+        for (int i = 1; i < days.size(); i++) {
+            long gap = ChronoUnit.DAYS.between(days.get(i - 1), days.get(i));
+            assertTrue(gap >= 2,
+                    "zwischen zwei Trainings soll ein Ruhetag liegen, war " + gap + " Tag(e): " + days);
+        }
+    }
+
+    /**
+     * Die Ruhetag-Regel ist weich: bei fünf Einheiten in sieben Tagen ist sie nicht mehr für jedes
+     * Paar erfüllbar. Das darf weder das Modell sprengen noch Einheiten kosten.
+     */
+    @Test
+    void fuenfWorkoutsProWocheBleibenLoesbar() {
+        LocalDate monday = TODAY.plusDays(1).with(TemporalAdjusters.next(DayOfWeek.MONDAY));
+
+        List<WorkoutSession> plan = List.of(
+                makeFlexibleWorkout(721L, "A", 45, monday),
+                makeFlexibleWorkout(722L, "B", 45, monday),
+                makeFlexibleWorkout(723L, "C", 45, monday),
+                makeFlexibleWorkout(724L, "D", 45, monday),
+                makeFlexibleWorkout(725L, "E", 45, monday));
+
+        when(taskService.getSchedulableTasks(1L)).thenReturn(new ArrayList<>());
+        when(calendarEventService.getFixedEvents(eq(1L), any(), any())).thenReturn(new ArrayList<>());
+        when(workoutSessionRepository.findByUserIdAndIsFlexibleTrue(1L)).thenReturn(plan);
+
+        ScheduleResult result = service.generateOptimalSchedule(1L, monday, monday.plusDays(6));
+
+        List<LocalDate> days = workoutDays(result);
+        assertEquals(5, days.size(), "keine Einheit darf an der weichen Regel scheitern");
+        assertEquals(5, Set.copyOf(days).size(), "die harte Tagesregel gilt weiterhin: " + days);
+    }
+
+    /**
+     * Verschiebt der Nutzer eine Einheit per Drag-and-Drop, ist deren Tag verbraucht. Vorher hat
+     * der Solver am Abend desselben Tages eine zweite Einheit angelegt — die Zeit war ja frei.
+     */
+    @Test
+    void gepinntesWorkoutBlockiertSeinenTagFuerDieAnderen() {
+        LocalDate monday = TODAY.plusDays(1).with(TemporalAdjusters.next(DayOfWeek.MONDAY));
+
+        WorkoutSession pinnedSession = makeFlexibleWorkout(731L, "Push", 60, monday);
+        pinnedSession.setStartTime(monday.atTime(9, 0));
+        pinnedSession.setEndTime(monday.atTime(10, 0));
+
+        CalendarEvent pinned = makeFixedEvent(732L, monday.atTime(9, 0), monday.atTime(10, 0));
+        pinned.setEventType(EventType.WORKOUT);
+        pinned.setRelatedWorkout(pinnedSession);
+
+        List<WorkoutSession> plan = List.of(
+                pinnedSession,
+                makeFlexibleWorkout(733L, "Pull", 60, monday),
+                makeFlexibleWorkout(734L, "Legs", 60, monday));
+
+        when(taskService.getSchedulableTasks(1L)).thenReturn(new ArrayList<>());
+        when(calendarEventService.getFixedEvents(eq(1L), any(), any())).thenReturn(List.of(pinned));
+        when(workoutSessionRepository.findByUserIdAndIsFlexibleTrue(1L)).thenReturn(plan);
+        when(workoutSessionRepository.findByUserIdAndStartTimeBetween(eq(1L), any(), any()))
+                .thenReturn(List.of(pinnedSession));
+
+        ScheduleResult result = service.generateOptimalSchedule(1L, monday, monday.plusDays(6));
+
+        List<LocalDate> days = workoutDays(result);
+        assertEquals(2, days.size(), "die gepinnte Einheit wird nicht erneut geplant");
+        assertFalse(days.contains(monday),
+                "der Tag der gepinnten Einheit ist verbraucht, war aber belegt mit: " + days);
+    }
+
+    /**
+     * Der Ruhetag ist hart, sobald die erlaubten Tage ihn hergeben — sonst weich. Hier passen drei
+     * Einheiten mit Ruhetag nicht in vier Tage, es darf aber trotzdem keine ausfallen.
+     */
+    @Test
+    void dreiWorkoutsInVierTagenWerdenAlleGeplant() {
+        LocalDate monday = TODAY.plusDays(1).with(TemporalAdjusters.next(DayOfWeek.MONDAY));
+
+        List<WorkoutSession> plan = List.of(
+                makeFlexibleWorkout(741L, "A", 45, monday),
+                makeFlexibleWorkout(742L, "B", 45, monday),
+                makeFlexibleWorkout(743L, "C", 45, monday));
+
+        when(taskService.getSchedulableTasks(1L)).thenReturn(new ArrayList<>());
+        when(calendarEventService.getFixedEvents(eq(1L), any(), any())).thenReturn(new ArrayList<>());
+        when(workoutSessionRepository.findByUserIdAndIsFlexibleTrue(1L)).thenReturn(plan);
+
+        // Horizont endet Donnerstag: nur Mo–Do erlaubt, also vier Tage für drei Einheiten.
+        ScheduleResult result = service.generateOptimalSchedule(1L, monday, monday.plusDays(3));
+
+        List<LocalDate> days = workoutDays(result);
+        assertEquals(3, days.size(), "die weiche Rückfallregel darf keine Einheit kosten: " + days);
+        assertEquals(3, Set.copyOf(days).size(), "ein Training pro Tag bleibt hart: " + days);
+    }
+
+    /**
+     * Schutz vor einem Ausreißer in der Laufzeit. Die Schranke ist bewusst großzügig — geprüft
+     * wird nicht die exakte Dauer, sondern dass ein realistischer Bestand nicht in eine
+     * Größenordnung rutscht, die man nach einem Drag-and-Drop spürt.
+     */
+    @Test
+    void einRealistischerBestandBleibtImZeitbudget() {
+        LocalDate tomorrow = TODAY.plusDays(1);
+
+        List<Task> tasks = new ArrayList<>();
+        for (int i = 0; i < 20; i++) {
+            Task t = makeTask(2000L + i, "Aufgabe " + i, 60 + (i % 4) * 30, 1 + (i % 5),
+                    tomorrow.plusDays(2 + (i % 10)).atTime(20, 0));
+            tasks.add(t);
+        }
+
+        List<Habit> habits = new ArrayList<>();
+        for (int i = 0; i < 5; i++) {
+            habits.add(makeDailyHabit(2100L + i, "Gewohnheit " + i, 15 + i * 5));
+        }
+
+        LocalDate weekStart = tomorrow.with(TemporalAdjusters.previousOrSame(DayOfWeek.MONDAY));
+        List<WorkoutSession> workouts = List.of(
+                makeFlexibleWorkout(2200L, "Push", 60, weekStart),
+                makeFlexibleWorkout(2201L, "Pull", 60, weekStart),
+                makeFlexibleWorkout(2202L, "Legs", 60, weekStart));
+
+        when(taskService.getSchedulableTasks(1L)).thenReturn(tasks);
+        when(habitRepository.findHabitsActiveInRange(eq(1L), any(), any())).thenReturn(habits);
+        when(workoutSessionRepository.findByUserIdAndIsFlexibleTrue(1L)).thenReturn(workouts);
+        when(calendarEventService.getFixedEvents(eq(1L), any(), any())).thenReturn(new ArrayList<>());
+
+        long startedAt = System.nanoTime();
+        ScheduleResult result = service.generateOptimalSchedule(1L, tomorrow, tomorrow.plusDays(14));
+        long millis = (System.nanoTime() - startedAt) / 1_000_000;
+
+        assertNotNull(result.getSolverStatus());
+        assertFalse(result.getScheduledTasks().isEmpty(), "der Bestand muss planbar sein");
+        assertTrue(millis < 15_000,
+                "ein realistischer Bestand soll deutlich im Zeitbudget bleiben, brauchte aber "
+                        + millis + " ms");
+    }
+
+    // ==================================================================
+    // Überspringen einer Ausführung
+    // ==================================================================
+
+    /**
+     * Eine übersprungene Projekt-Session zählt weiter auf das Wochenpensum.
+     *
+     * Ohne das wäre Überspringen genauso wirkungslos wie Löschen: die Woche stünde unter Pensum
+     * und bekäme innerhalb von Sekunden Ersatz.
+     */
+    @Test
+    void uebersprungeneProjektSessionZaehltWeiterAufsWochenpensum() {
+        LocalDate monday = TODAY.plusDays(1).with(TemporalAdjusters.next(DayOfWeek.MONDAY));
+        Project project = makeProject(580L, "Everything App", 2, 60);
+        project.setStartDate(monday);
+
+        LocalDate skippedOn = monday.plusDays(1);
+        CalendarEvent skipped = makeSkippedEvent(581L, skippedOn.atTime(10, 0), skippedOn.atTime(11, 0));
+        skipped.setEventType(EventType.PROJECT);
+        skipped.setRelatedProject(project);
+        skipped.setTargetWeekStart(monday);
+
+        when(projectRepository.findByUserIdAndStatusIn(eq(1L), any())).thenReturn(List.of(project));
+        when(taskService.getSchedulableTasks(1L)).thenReturn(new ArrayList<>());
+        when(calendarEventService.getFixedEvents(eq(1L), any(), any())).thenReturn(new ArrayList<>());
+        when(calendarEventRepository.findByUserIdAndEventTypeInAndIsFixedAndStartTimeBetween(
+                eq(1L), anyList(), eq(false), any(), any())).thenReturn(List.of(skipped));
+
+        ScheduleResult result = service.generateOptimalSchedule(1L, monday, monday.plusDays(6));
+
+        List<LocalDate> days = projectItems(result).stream()
+                .map(i -> i.getStartTime().toLocalDate()).sorted().toList();
+
+        assertEquals(1, days.size(),
+                "2 pro Woche minus die übersprungene ergibt genau eine neue Session: " + days);
+        assertFalse(days.contains(skippedOn),
+                "am übersprungenen Tag darf kein Ersatz entstehen: " + days);
+    }
+
+    /** Dasselbe für eine Gewohnheit mit Wochenquote. */
+    @Test
+    void uebersprungeneGewohnheitZaehltWeiterAufsWochenpensum() {
+        LocalDate monday = TODAY.plusDays(1).with(TemporalAdjusters.next(DayOfWeek.MONDAY));
+
+        Habit run = new Habit();
+        run.setId(1470L);
+        run.setName("Laufen gehen");
+        run.setDurationMinutes(45);
+        run.setPriority(3);
+        run.setTimesPerWeek(3);
+        run.setIdealWindow(HabitWindow.ANYTIME);
+        run.setStartDate(monday);
+
+        LocalDate skippedOn = monday.plusDays(1);
+        CalendarEvent skipped = makeSkippedEvent(1471L, skippedOn.atTime(17, 0), skippedOn.atTime(17, 45));
+        skipped.setEventType(EventType.HABIT);
+        skipped.setRelatedHabit(run);
+        skipped.setTargetWeekStart(monday);
+
+        when(habitRepository.findHabitsActiveInRange(eq(1L), any(), any())).thenReturn(List.of(run));
+        when(taskService.getSchedulableTasks(1L)).thenReturn(new ArrayList<>());
+        when(calendarEventService.getFixedEvents(eq(1L), any(), any())).thenReturn(new ArrayList<>());
+        when(calendarEventRepository.findByUserIdAndEventTypeInAndIsFixedAndStartTimeBetween(
+                eq(1L), anyList(), eq(false), any(), any())).thenReturn(List.of(skipped));
+
+        ScheduleResult result = service.generateOptimalSchedule(1L, monday, monday.plusDays(6));
+
+        List<LocalDate> days = result.getScheduledHabits().stream()
+                .filter(i -> i.getType() == ScheduledItemType.HABIT)
+                .map(i -> i.getStartTime().toLocalDate()).sorted().toList();
+
+        assertEquals(2, days.size(),
+                "3 pro Woche minus die übersprungene ergibt zwei neue Ausführungen: " + days);
+        assertFalse(days.contains(skippedOn),
+                "am übersprungenen Tag darf kein Ersatz entstehen: " + days);
+    }
+
+    /** Eine übersprungene Trainingseinheit wird nicht neu platziert. */
+    @Test
+    void uebersprungenesWorkoutWirdNichtNeuGeplant() {
+        LocalDate monday = TODAY.plusDays(1).with(TemporalAdjusters.next(DayOfWeek.MONDAY));
+
+        WorkoutSession skippedSession = makeFlexibleWorkout(751L, "Push", 60, monday);
+        skippedSession.setIsSkipped(true);
+        WorkoutSession open = makeFlexibleWorkout(752L, "Pull", 60, monday);
+
+        when(taskService.getSchedulableTasks(1L)).thenReturn(new ArrayList<>());
+        when(calendarEventService.getFixedEvents(eq(1L), any(), any())).thenReturn(new ArrayList<>());
+        when(workoutSessionRepository.findByUserIdAndIsFlexibleTrue(1L))
+                .thenReturn(List.of(skippedSession, open));
+
+        ScheduleResult result = service.generateOptimalSchedule(1L, monday, monday.plusDays(6));
+
+        List<ScheduledItem> workouts = result.getScheduledHabits().stream()
+                .filter(i -> i.getType() == ScheduledItemType.WORKOUT).toList();
+
+        assertEquals(1, workouts.size(), "nur die nicht übersprungene Einheit wird geplant");
+        assertEquals(752L, workouts.get(0).getWorkoutSession().getId());
+    }
+
+    /** Übersprungene Blöcke geben ihre Zeit frei — sie dürfen nichts mehr blockieren. */
+    @Test
+    void uebersprungenerBlockSperrtKeineZeitMehr() {
+        LocalDate tomorrow = TODAY.plusDays(1);
+
+        Habit habit = makeDailyHabit(1480L, "Meditation", 30);
+        // Gepinnt UND übersprungen: früher hätte der gepinnte Block seine Zeit weiter gesperrt.
+        CalendarEvent skipped = makeSkippedEvent(1481L, tomorrow.atTime(9, 0), tomorrow.atTime(12, 0));
+        skipped.setEventType(EventType.HABIT);
+        skipped.setRelatedHabit(habit);
+        skipped.setIsFixed(true);
+
+        Task task = makeTask(1482L, "Bericht", 120, 5, tomorrow.atTime(23, 59));
+
+        when(habitRepository.findHabitsActiveInRange(eq(1L), any(), any())).thenReturn(new ArrayList<>());
+        when(taskService.getSchedulableTasks(1L)).thenReturn(List.of(task));
+        when(calendarEventService.getFixedEvents(eq(1L), any(), any())).thenReturn(List.of(skipped));
+
+        ScheduleResult result = service.generateOptimalSchedule(1L, tomorrow, tomorrow);
+
+        assertFalse(result.getScheduledTasks().isEmpty(), "der Task muss planbar sein");
+        boolean usesFreedTime = result.getScheduledTasks().stream()
+                .anyMatch(i -> i.getStartTime().isBefore(tomorrow.atTime(12, 0))
+                        && i.getEndTime().isAfter(tomorrow.atTime(9, 0)));
+        assertTrue(usesFreedTime,
+                "die freigegebene Zeit des übersprungenen Blocks soll wieder nutzbar sein");
+    }
+
+    /**
+     * Erst verschieben, dann überspringen: der Block ist dadurch gepinnt und taucht in einer
+     * anderen Abfrage auf als die übrigen. Seine Wochenquote muss trotzdem zählen.
+     */
+    @Test
+    void einVerschobenerUndDannUebersprungenerBlockZaehltWeiterAufsWochenpensum() {
+        LocalDate monday = TODAY.plusDays(1).with(TemporalAdjusters.next(DayOfWeek.MONDAY));
+        Project project = makeProject(590L, "Everything App", 2, 60);
+        project.setStartDate(monday);
+
+        LocalDate droppedOn = monday.plusDays(2);
+        CalendarEvent moved = makeSkippedEvent(591L, droppedOn.atTime(10, 0), droppedOn.atTime(11, 0));
+        moved.setEventType(EventType.PROJECT);
+        moved.setRelatedProject(project);
+        moved.setTargetWeekStart(monday);
+        moved.setIsFixed(true);   // Verschieben pinnt den Block
+
+        when(projectRepository.findByUserIdAndStatusIn(eq(1L), any())).thenReturn(List.of(project));
+        when(taskService.getSchedulableTasks(1L)).thenReturn(new ArrayList<>());
+        when(calendarEventService.getFixedEvents(eq(1L), any(), any())).thenReturn(List.of(moved));
+
+        ScheduleResult result = service.generateOptimalSchedule(1L, monday, monday.plusDays(6));
+
+        List<LocalDate> days = projectItems(result).stream()
+                .map(i -> i.getStartTime().toLocalDate()).sorted().toList();
+
+        assertEquals(1, days.size(),
+                "2 pro Woche minus die übersprungene ergibt genau eine neue Session: " + days);
+    }
+
+    private CalendarEvent makeSkippedEvent(Long id, LocalDateTime start, LocalDateTime end) {
+        CalendarEvent ev = makeFixedEvent(id, start, end);
+        ev.setIsFixed(false);
+        ev.setSkippedAt(LocalDateTime.now());
+        return ev;
+    }
+
+    /** Chronologisch sortierte Tage der geplanten Trainingsblöcke. */
+    private List<LocalDate> workoutDays(ScheduleResult result) {
+        return result.getScheduledHabits().stream()
+                .filter(i -> i.getType() == ScheduledItemType.WORKOUT)
+                .map(i -> i.getStartTime().toLocalDate())
+                .sorted()
+                .toList();
+    }
+
+    private WorkoutSession makeFlexibleWorkout(Long id, String name, int minutes, LocalDate weekStart) {
+        WorkoutSession w = new WorkoutSession();
+        w.setId(id);
+        w.setName(name);
+        w.setDurationMinutes(minutes);
+        w.setIsFlexible(true);
+        w.setIsCompleted(false);
+        w.setTargetWeekStart(weekStart);
+        return w;
     }
 
     // ==================================================================
@@ -1802,6 +2318,77 @@ class SmartSchedulerServiceTest {
         List<LocalDate> days = sessions.stream().map(i -> i.getStartTime().toLocalDate()).toList();
         assertFalse(days.contains(wednesday),
                 "am gepinnten Tag darf keine zweite Session desselben Projekts entstehen");
+    }
+
+    /**
+     * Ein in die Folgewoche gezogener Projektblock darf in seiner Ursprungswoche keinen Ersatz
+     * nach sich ziehen.
+     *
+     * Vorher wurde das Pensum je ISO-Woche unabhängig aufgefüllt: die Zielwoche zählte den
+     * verschobenen Block mit, die verlassene Woche stand dadurch unter Pensum und bekam einen
+     * neuen Block — den der Stabilitätsanker prompt wieder an den alten Platz legte. Für den
+     * Nutzer sah es aus, als stünde der Termin nach dem Verschieben doppelt im Kalender.
+     */
+    @Test
+    void einInDieFolgewocheGezogenerProjektblockErzeugtKeinenErsatzInDerAltenWoche() {
+        LocalDate weekA = TODAY.plusDays(1).with(TemporalAdjusters.next(DayOfWeek.MONDAY));
+        LocalDate weekB = weekA.plusWeeks(1);
+
+        Project project = makeProject(560L, "Everything App", 2, 60);
+        project.setStartDate(weekA);
+
+        // Der Block gehört zum Pensum von Woche A, liegt nach dem Verschieben aber in Woche B.
+        LocalDate droppedOn = weekB.plusDays(1);
+        CalendarEvent moved = makeFixedEvent(561L, droppedOn.atTime(16, 0), droppedOn.atTime(17, 0));
+        moved.setEventType(EventType.PROJECT);
+        moved.setRelatedProject(project);
+        moved.setTargetWeekStart(weekA);
+
+        when(projectRepository.findByUserIdAndStatusIn(eq(1L), any())).thenReturn(List.of(project));
+        when(taskService.getSchedulableTasks(1L)).thenReturn(new ArrayList<>());
+        when(calendarEventService.getFixedEvents(eq(1L), any(), any())).thenReturn(List.of(moved));
+
+        ScheduleResult result = service.generateOptimalSchedule(1L, weekA, weekB.plusDays(6));
+
+        List<LocalDate> days = projectItems(result).stream()
+                .map(i -> i.getStartTime().toLocalDate())
+                .sorted()
+                .toList();
+
+        long inWeekA = days.stream().filter(d -> d.isBefore(weekB)).count();
+        long inWeekB = days.stream().filter(d -> !d.isBefore(weekB)).count();
+
+        assertEquals(1, inWeekA,
+                "Woche A ist durch den verschobenen Block schon zur Hälfte gedeckt, es fehlt nur "
+                        + "noch eine Session — geplant wurde aber: " + days);
+        assertEquals(2, inWeekB, "Woche B behält ihr volles Pensum: " + days);
+        assertFalse(days.contains(droppedOn),
+                "am Tag des verschobenen Blocks darf keine zweite Session entstehen: " + days);
+    }
+
+    /** Die Wochenzuordnung muss am neu angelegten Kalendereintrag hängen, sonst geht sie verloren. */
+    @Test
+    void projektblockWirdMitSeinerZielwocheGespeichert() {
+        LocalDate monday = TODAY.plusDays(1).with(TemporalAdjusters.next(DayOfWeek.MONDAY));
+        Project project = makeProject(570L, "Everything App", 1, 60);
+        project.setStartDate(monday);
+
+        when(projectRepository.findByUserIdAndStatusIn(eq(1L), any())).thenReturn(List.of(project));
+        when(taskService.getSchedulableTasks(1L)).thenReturn(new ArrayList<>());
+        when(calendarEventService.getFixedEvents(eq(1L), any(), any())).thenReturn(new ArrayList<>());
+
+        service.generateOptimalSchedule(1L, monday, monday.plusDays(6));
+
+        ArgumentCaptor<CalendarEvent> saved = ArgumentCaptor.forClass(CalendarEvent.class);
+        verify(calendarEventRepository, atLeastOnce()).save(saved.capture());
+
+        CalendarEvent block = saved.getAllValues().stream()
+                .filter(e -> e.getEventType() == EventType.PROJECT)
+                .findFirst()
+                .orElseThrow(() -> new AssertionError("kein Projektblock gespeichert"));
+
+        assertEquals(monday, block.getTargetWeekStart(),
+                "der Block muss die Woche kennen, deren Pensum er abdeckt");
     }
 
     // ------------------------------------------------------------------

@@ -123,6 +123,45 @@ void main() {
     });
   });
 
+  group('CalendarProvider.setSkipped', () {
+    test('markiert den Block als übersprungen und übernimmt die Serverantwort', () async {
+      final original = _event(eventType: 'HABIT');
+      final fake = FakeCalendarService([original]);
+      final provider = await _loadedProvider(fake);
+
+      expect(await provider.setSkipped(1, true), isTrue);
+      expect(fake.setSkippedCallCount, 1);
+      expect(fake.lastSkipped, isTrue);
+    });
+
+    test('blendet den übersprungenen Block aus der Ansicht aus', () async {
+      final original = _event(eventType: 'HABIT');
+      final fake = FakeCalendarService([original]);
+      final provider = await _loadedProvider(fake);
+
+      expect(provider.events, hasLength(1));
+      await provider.setSkipped(1, true);
+
+      expect(provider.events, isEmpty,
+          reason: 'die Zeit ist wieder frei — der Tag soll auch so aussehen');
+      expect(provider.getEventsForDay(original.startTime), isEmpty);
+    });
+
+    test('holt eine übersprungene Ausführung wieder zurück', () async {
+      final original = _event(eventType: 'PROJECT');
+      final fake = FakeCalendarService([original]);
+      final provider = await _loadedProvider(fake);
+
+      await provider.setSkipped(1, true);
+      expect(provider.events, isEmpty);
+
+      expect(await provider.setSkipped(1, false), isTrue);
+      expect(provider.events, hasLength(1),
+          reason: 'das Rückgängig muss den Block wieder sichtbar machen');
+      expect(provider.events.first.isSkipped, isFalse);
+    });
+  });
+
   group('CalendarProvider reconcile', () {
     test('updateEvent schedules a refetch so backend reflows become visible', () async {
       final original = _event();

@@ -25,6 +25,7 @@ class ApiConfig {
   static String calendarEventById(int id) => '$baseUrl/calendar/events/$id';
   static String calendarEventPin(int id) => '$baseUrl/calendar/events/$id/pin';
   static String calendarEventComplete(int id) => '$baseUrl/calendar/events/$id/complete';
+  static String calendarEventSkip(int id) => '$baseUrl/calendar/events/$id/skip';
   static const String generateSchedule = '$baseUrl/calendar/generate-schedule';
 
   //USER / PREFERENCES ENDPOINTS

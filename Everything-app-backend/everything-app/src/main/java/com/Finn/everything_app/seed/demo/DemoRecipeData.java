@@ -452,7 +452,9 @@ public class DemoRecipeData {
         Recipe[] lunches = {bowl, bowl, bowl, suppe, bowl, bolognese, curry};
         Recipe[] breakfasts = {porridge, porridge, pancakes, porridge, shakshuka, pancakes, porridge};
 
-        for (int weekOffset = -1; weekOffset <= 1; weekOffset++) {
+        // Nur die laufende und die kommende Woche: drei Wochen a 21 Mahlzeiten waren mehr
+        // Wochenplan, als sich im Rezept-Space ueberblicken laesst.
+        for (int weekOffset = 0; weekOffset <= 1; weekOffset++) {
             LocalDate weekStart = monday.plusWeeks(weekOffset);
             for (int day = 0; day < 7; day++) {
                 LocalDate date = weekStart.plusDays(day);

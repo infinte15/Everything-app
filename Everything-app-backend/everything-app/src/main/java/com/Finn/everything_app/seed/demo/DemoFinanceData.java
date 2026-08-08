@@ -51,8 +51,8 @@ public class DemoFinanceData {
     private final BankAccountRepository bankAccountRepository;
     private final BankConnectionRepository bankConnectionRepository;
 
-    /** Monate Kontohistorie vor dem laufenden Monat. */
-    private static final int HISTORY_MONTHS = 4;
+    /** Monate Kontohistorie vor dem laufenden Monat. Jeder Monat sind rund 30 Buchungen. */
+    private static final int HISTORY_MONTHS = 2;
 
     private final Random random = new Random(20260807L);
 

@@ -34,4 +34,13 @@ public class ScheduleInput {
      * eine Neuplanung auslöst.
      */
     private List<CalendarEvent> frozenEvents;
+
+    /**
+     * Vom Nutzer übersprungene Ausführungen.
+     *
+     * Sie sperren keine Zeit und sind keine Stabilitätsanker — ihr einziger Zweck ist, das
+     * Wochenpensum ihrer Gewohnheit bzw. ihres Projekts als bereits gedeckt zu melden. Ohne sie
+     * stünde die Woche unter Pensum und der Solver legte prompt Ersatz an.
+     */
+    private List<CalendarEvent> skippedEvents;
 }

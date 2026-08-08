@@ -22,20 +22,39 @@ class CalendarProvider with ChangeNotifier {
   // calendarService is injectable so tests can supply a fake instead of hitting the network.
   CalendarProvider({
     CalendarService? calendarService,
-    this.reconcileDelay = const Duration(seconds: 3),
+    this.reconcileDelay = const Duration(milliseconds: 600),
   }) : _calendarService = calendarService ?? CalendarService() {
     _startPolling();
   }
 
   /// Der Backend-Scheduler plant nach jeder Mutation den kompletten Zeitraum neu
-  /// (2s Entprellung + Solve). Ohne diesen Nachlauf sieht der Nutzer die Umplanung
+  /// (0,4s Entprellung + Solve). Ohne diesen Nachlauf sieht der Nutzer die Umplanung
   /// erst beim 30s-Poll — nach einem Drag-and-Drop fühlt sich das kaputt an.
+  ///
+  /// Mehrere kurze Versuche statt eines langen Wartens: wann das Ergebnis vorliegt, hängt am
+  /// Solver (Zeitbudget 2s) und an der Entprellung, lässt sich hier also nicht vorhersagen.
+  /// Ein einzelner Poll zum falschen Zeitpunkt zeigt den alten Stand und der Kalender springt
+  /// erst Sekunden später um. Die Leiter deckt den ganzen erwartbaren Bereich ab; ein Poll ist
+  /// ein einzelnes GET über den sichtbaren Monat und damit billig.
+  static const List<Duration> _reconcileRetries = [
+    Duration(milliseconds: 900),
+    Duration(milliseconds: 1000),
+    Duration(milliseconds: 1200),
+  ];
+
   void scheduleReconcile() {
     _reconcileTimer?.cancel();
     _reconcileTimer = Timer(reconcileDelay, () async {
       await _pollEventsSilent();
-      // Zweiter Versuch, falls der Solver länger gebraucht hat als die erste Wartezeit.
-      _reconcileTimer = Timer(const Duration(seconds: 6), _pollEventsSilent);
+      _scheduleReconcileRetry(0);
+    });
+  }
+
+  void _scheduleReconcileRetry(int index) {
+    if (index >= _reconcileRetries.length) return;
+    _reconcileTimer = Timer(_reconcileRetries[index], () async {
+      await _pollEventsSilent();
+      _scheduleReconcileRetry(index + 1);
     });
   }
 
@@ -70,14 +89,26 @@ class CalendarProvider with ChangeNotifier {
   }
 
   // Getters
-  List<CalendarEvent> get events => _events;
+
+  /// Alle sichtbaren Termine — uebersprungene sind bewusst nicht dabei.
+  ///
+  /// Ueberspringen gibt die Zeit frei; genau so soll der Tag dann auch aussehen. Bliebe der
+  /// Block stehen, wuerde der Scheduler die freigegebene Zeit neu belegen und im Kalender laegen
+  /// zwei Bloecke uebereinander — das sieht aus wie ein Fehler, obwohl beides stimmt.
+  ///
+  /// Der Block selbst bleibt serverseitig erhalten (er ist der Beleg fuer das verbrauchte
+  /// Wochenpensum); zurueckholen laesst er sich direkt nach dem Ueberspringen ueber das
+  /// Rueckgaengig im Hinweis.
+  List<CalendarEvent> get events =>
+      _events.where((e) => !e.isSkipped).toList(growable: false);
   bool get isLoading => _isLoading;
   String? get error => _error;
   DateTime get focusedDay => _focusedDay;
   DateTime? get selectedDay => _selectedDay;
 
   List<CalendarEvent> getEventsForDay(DateTime day) {
-    return _events.where((event) {
+    // Ueber den Getter, damit uebersprungene Bloecke auch hier nicht auftauchen.
+    return events.where((event) {
       return event.startTime.year == day.year &&
              event.startTime.month == day.month &&
              event.startTime.day == day.day;
@@ -243,6 +274,31 @@ class CalendarProvider with ChangeNotifier {
       return true;
     } catch (e) {
       _error = 'Fehler beim Abhaken des Blocks: $e';
+      notifyListeners();
+      return false;
+    }
+  }
+
+  /// Überspringt eine Ausführung oder holt sie zurück.
+  ///
+  /// Wie [setCompleted] und anders als [setPinned] bewusst NICHT optimistisch: das Überspringen
+  /// gibt Zeit frei, stößt eine Neuplanung an und markiert bei einem Training zusätzlich die
+  /// Session. Was daraus wird, lässt sich hier nicht vorhersagen — also gilt, was zurückkommt.
+  Future<bool> setSkipped(int id, bool skipped) async {
+    try {
+      final updated = await _calendarService.setSkipped(id, skipped);
+      if (updated == null) return false;
+
+      final idx = _events.indexWhere((e) => e.id == id);
+      if (idx != -1) {
+        _events[idx] = updated;
+        notifyListeners();
+      }
+      // Die freigegebene Zeit füllt der Scheduler entprellt nach.
+      scheduleReconcile();
+      return true;
+    } catch (e) {
+      _error = 'Fehler beim Überspringen des Blocks: $e';
       notifyListeners();
       return false;
     }

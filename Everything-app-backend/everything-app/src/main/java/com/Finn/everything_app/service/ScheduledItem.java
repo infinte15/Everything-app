@@ -2,6 +2,7 @@ package com.Finn.everything_app.service;
 
 import com.Finn.everything_app.model.*;
 import lombok.Data;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 
 @Data
@@ -23,6 +24,16 @@ public class ScheduledItem {
     // damit im Kalender "Report (2/3)" steht. Bei einem einzigen Block bleibt chunkCount 1.
     private Integer chunkIndex;
     private Integer chunkCount;
+
+    /**
+     * Nur für PROJECT: die ISO-Woche (Montag), deren Pensum dieser Block abdeckt.
+     *
+     * Bewusst getrennt vom tatsächlichen Termin: verschiebt der Nutzer den Block in eine andere
+     * Woche, bleibt er auf die ursprüngliche gebucht. Ohne diese Trennung stünde die verlassene
+     * Woche wieder unter ihrem Pensum und bekäme einen Ersatzblock — für den Nutzer sähe das aus,
+     * als wäre der verschobene Termin am alten Platz stehen geblieben.
+     */
+    private LocalDate targetWeekStart;
 }
 
 enum ScheduledItemType {

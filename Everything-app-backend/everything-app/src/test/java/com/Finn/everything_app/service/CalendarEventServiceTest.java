@@ -188,6 +188,103 @@ class CalendarEventServiceTest {
         verify(calendarEventRepository, never()).save(any());
     }
 
+    // ------------------------------------------------------------------
+    // Überspringen
+    // ------------------------------------------------------------------
+
+    @Test
+    void eineGewohnheitLaesstSichUeberspringenUndZurueckholen() {
+        CalendarEvent block = storedOwned(EventType.HABIT);
+
+        CalendarEvent skipped = service.setSkipped(5L, 1L, true);
+        assertNotNull(skipped.getSkippedAt(), "der Block muss als übersprungen markiert sein");
+
+        // Zurücknehmen: der Zeitstempel verschwindet wieder.
+        when(calendarEventRepository.save(any(CalendarEvent.class))).thenAnswer(i -> i.getArgument(0));
+        CalendarEvent restored = service.setSkipped(5L, 1L, false);
+        assertNull(restored.getSkippedAt(), "das Zurücknehmen muss den Block wiederherstellen");
+    }
+
+    @Test
+    void einAufgabenblockLaesstSichNichtUeberspringen() {
+        CalendarEvent block = storedOwned(EventType.TASK);
+
+        assertThrows(BadRequestException.class, () -> service.setSkipped(5L, 1L, true));
+
+        assertNull(block.getSkippedAt(),
+                "ein Task-Block ist ein Bruchteil einer Aufgabe — seine Restminuten bleiben");
+        verify(calendarEventRepository, never()).save(any());
+    }
+
+    @Test
+    void einUebersprungenesWorkoutMarkiertAuchSeineSession() {
+        CalendarEvent block = storedOwned(EventType.WORKOUT);
+        WorkoutSession session = new WorkoutSession();
+        session.setId(42L);
+        session.setIsFlexible(true);
+        block.setRelatedWorkout(session);
+
+        service.setSkipped(5L, 1L, true);
+
+        assertTrue(session.getIsSkipped(),
+                "der Solver liest Trainings aus der Session — ohne Abgleich wäre es sofort zurück");
+        verify(workoutSessionRepository).save(session);
+    }
+
+    @Test
+    void zweimalUeberspringenSchreibtNichtZweimal() {
+        CalendarEvent block = storedOwned(EventType.PROJECT);
+
+        service.setSkipped(5L, 1L, true);
+        clearInvocations(calendarEventRepository);
+        service.setSkipped(5L, 1L, true);
+
+        verify(calendarEventRepository, never()).save(any());
+    }
+
+    @Test
+    void uebersprungeneBloeckeUeberlebenDasAufraeumen() {
+        LocalDateTime start = LocalDateTime.of(2026, 8, 3, 0, 0);
+        LocalDateTime end = LocalDateTime.of(2026, 8, 9, 23, 59, 59);
+
+        CalendarEvent offen = new CalendarEvent();
+        offen.setId(1L);
+        CalendarEvent uebersprungen = new CalendarEvent();
+        uebersprungen.setId(2L);
+        uebersprungen.setSkippedAt(LocalDateTime.of(2026, 8, 4, 9, 0));
+
+        when(calendarEventRepository.findByUserIdAndEventTypeInAndIsFixedAndStartTimeBetween(
+                eq(1L), anyList(), eq(false), any(), any()))
+                .thenReturn(List.of(offen, uebersprungen));
+
+        service.clearScheduledEvents(1L, start, end);
+
+        ArgumentCaptor<List<CalendarEvent>> deleted = ArgumentCaptor.forClass(List.class);
+        verify(calendarEventRepository).deleteAll(deleted.capture());
+        assertEquals(List.of(offen), deleted.getValue(),
+                "würde der übersprungene Block hier verschwinden, käme sofort Ersatz");
+    }
+
+    /** Ein vom Scheduler verwalteter Block des Testnutzers. */
+    private CalendarEvent storedOwned(EventType type) {
+        User owner = new User();
+        owner.setId(1L);
+
+        CalendarEvent event = new CalendarEvent();
+        event.setId(5L);
+        event.setUser(owner);
+        event.setTitle("Block");
+        event.setEventType(type);
+        event.setIsFixed(false);
+        event.setStartTime(LocalDateTime.of(2026, 8, 4, 8, 0));
+        event.setEndTime(LocalDateTime.of(2026, 8, 4, 9, 0));
+
+        when(calendarEventRepository.findById(5L)).thenReturn(Optional.of(event));
+        lenient().when(calendarEventRepository.save(any(CalendarEvent.class)))
+                 .thenAnswer(i -> i.getArgument(0));
+        return event;
+    }
+
     @Test
     void eineVorlesungLaesstSichNichtLoeschen() {
         storedLecture();

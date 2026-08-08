@@ -100,6 +100,28 @@ class CalendarService {
     }
   }
 
+  /// Überspringt eine Ausführung oder holt sie zurück.
+  ///
+  /// Der Gegenentwurf zum Löschen: bei Gewohnheiten, Projektzeit und Trainings war Löschen
+  /// wirkungslos, weil die Woche danach unter ihrem Pensum stand und der Scheduler binnen
+  /// Sekunden Ersatz anlegte. Übersprungen bleibt der Block stehen, gibt aber seine Zeit frei.
+  Future<CalendarEvent?> setSkipped(int id, bool skipped) async {
+    try {
+      final response = await _apiService.put(
+        ApiConfig.calendarEventSkip(id),
+        {'skipped': skipped},
+      );
+
+      if (_apiService.isSuccess(response)) {
+        return CalendarEvent.fromJson(_apiService.parseResponse(response));
+      }
+      throw Exception(_apiService.getErrorMessage(response));
+    } catch (e) {
+      debugPrint('Error skipping event: $e');
+      return null;
+    }
+  }
+
   /// Hakt einen Aufgabenblock ab oder nimmt das zurück.
   ///
   /// Eigener Endpunkt, weil das Abhaken Minuten gutschreibt — ans Lernziel oder an die

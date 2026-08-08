@@ -23,6 +23,14 @@ class CalendarEvent {
   /// PUT /events/{id}/complete gesetzt — dort werden auch die Minuten gutgeschrieben.
   final DateTime? completedAt;
 
+  /// Vom Nutzer uebersprungen; null heisst offen. Wird ausschliesslich ueber
+  /// PUT /events/{id}/skip gesetzt.
+  ///
+  /// Der Block bleibt bewusst stehen: er ist der Beleg dafuer, dass diese Ausfuehrung schon vom
+  /// Wochenpensum abgezogen ist. Wuerde er verschwinden, plante der Scheduler prompt Ersatz —
+  /// genau daran scheiterte frueher das Loeschen automatisch geplanter Bloecke.
+  final DateTime? skippedAt;
+
   CalendarEvent({
     this.id,
     required this.title,
@@ -39,6 +47,7 @@ class CalendarEvent {
     this.relatedWorkoutId,
     this.relatedProjectId,
     this.completedAt,
+    this.skippedAt,
   });
 
   // JSON zu CalendarEvent
@@ -60,6 +69,9 @@ class CalendarEvent {
       relatedProjectId: json['relatedProjectId'],
       completedAt: json['completedAt'] != null
           ? DateTime.parse(json['completedAt'])
+          : null,
+      skippedAt: json['skippedAt'] != null
+          ? DateTime.parse(json['skippedAt'])
           : null,
     );
   }
@@ -101,6 +113,8 @@ class CalendarEvent {
     int? relatedHabitId,
     int? relatedWorkoutId,
     int? relatedProjectId,
+    DateTime? completedAt,
+    DateTime? skippedAt,
   }) {
     return CalendarEvent(
       id: id ?? this.id,
@@ -117,6 +131,8 @@ class CalendarEvent {
       relatedHabitId: relatedHabitId ?? this.relatedHabitId,
       relatedWorkoutId: relatedWorkoutId ?? this.relatedWorkoutId,
       relatedProjectId: relatedProjectId ?? this.relatedProjectId,
+      completedAt: completedAt ?? this.completedAt,
+      skippedAt: skippedAt ?? this.skippedAt,
     );
   }
 
@@ -153,6 +169,16 @@ class CalendarEvent {
   bool get isTask => eventType.toUpperCase() == 'TASK';
 
   bool get isCompleted => completedAt != null;
+
+  bool get isSkipped => skippedAt != null;
+
+  /// Quotenbasierte Bloecke: nur sie lassen sich ueberspringen. Ein Aufgabenblock ist ein
+  /// Bruchteil einer Aufgabe — seine Restminuten wollen auch danach verplant werden, dafuer
+  /// gibt es Verschieben oder Abhaken.
+  bool get isSkippable {
+    final t = eventType.toUpperCase();
+    return t == 'HABIT' || t == 'PROJECT' || t == 'WORKOUT';
+  }
 
   bool get isToday {
     final now = DateTime.now();

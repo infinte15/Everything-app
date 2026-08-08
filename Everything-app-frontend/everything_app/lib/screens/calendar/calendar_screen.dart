@@ -1696,6 +1696,49 @@ class _EventDetailSheet extends StatelessWidget {
                   ),
                   const SizedBox(height: 10),
                 ],
+                // Überspringen statt Löschen — nur für Gewohnheiten, Projektzeit und Trainings.
+                // Bei denen war Löschen wirkungslos: die Woche stand danach unter ihrem Pensum
+                // und der Scheduler legte binnen Sekunden Ersatz an.
+                // Nur eine Richtung: übersprungene Blöcke zeichnet der Kalender nicht mehr,
+                // dieses Sheet bekommt also nie einen zu sehen. Der Weg zurück führt über das
+                // Rückgängig im Hinweis unten.
+                if (event.id != null && event.isSkippable) ...[
+                  SizedBox(
+                    width: double.infinity,
+                    child: OutlinedButton.icon(
+                      icon: const Icon(Icons.skip_next_rounded, size: 16),
+                      label: const Text('Diesmal überspringen'),
+                      style: OutlinedButton.styleFrom(
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.zero),
+                      ),
+                      onPressed: () async {
+                        final provider = context.read<CalendarProvider>();
+                        final messenger = ScaffoldMessenger.of(context);
+                        final id = event.id!;
+                        Navigator.pop(context);
+
+                        if (!await provider.setSkipped(id, true)) {
+                          messenger.showSnackBar(const SnackBar(
+                              content: Text('Konnte nicht gespeichert werden.')));
+                          return;
+                        }
+
+                        // Der Block verschwindet aus dem Kalender, sobald er übersprungen ist —
+                        // die Zeit ist ja wieder frei. Damit ist er auch nicht mehr antippbar,
+                        // deshalb führt der einzige Weg zurück über dieses Rückgängig.
+                        messenger.showSnackBar(SnackBar(
+                          content: const Text('Übersprungen — die Zeit ist wieder frei.'),
+                          duration: const Duration(seconds: 6),
+                          action: SnackBarAction(
+                            label: 'Rückgängig',
+                            onPressed: () => provider.setSkipped(id, false),
+                          ),
+                        ));
+                      },
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                ],
                 // Pinnen, Bearbeiten und Löschen fehlen bei Vorlesungen bewusst: das Backend
                 // weist sie mit 400 ab, ein Knopf wäre also nur ein Weg in eine Fehlermeldung.
                 if (event.id != null && !event.isClass) ...[

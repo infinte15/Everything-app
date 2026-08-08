@@ -78,16 +78,14 @@ public class DemoStudyData {
         Course prog2 = course(user, previous, "Programmierung II", "INF-102", "Prof. Dr. Ritter", 8, "#06D6A0",
                 "Objektorientierung, Datenstrukturen, Nebenläufigkeit in Java.");
 
+        // Ein schlanker Stundenplan: jede Zeile hier wird ueber syncClassEvents zu einem festen
+        // Kalenderblock in JEDER Woche des Horizonts und ist damit der groesste einzelne Posten
+        // im Demo-Kalender. Sechs Termine reichen, um Mo-Fr belegt zu zeigen.
         schedule(analysis, DayOfWeek.MONDAY, 8, 15, 9, 45, "HS 1 - Hörsaalzentrum");
         schedule(theo, DayOfWeek.MONDAY, 14, 15, 15, 45, "HS 4 - Informatikgebäude");
         schedule(dbs, DayOfWeek.TUESDAY, 10, 15, 11, 45, "HS 3 - Informatikgebäude");
-        schedule(stat, DayOfWeek.TUESDAY, 14, 15, 15, 45, "HS 5 - Mathegebäude");
-        schedule(analysis, DayOfWeek.TUESDAY, 16, 15, 17, 45, "SR 12 - Übungsgruppe");
-        schedule(theo, DayOfWeek.WEDNESDAY, 8, 15, 9, 45, "HS 4 - Informatikgebäude");
         schedule(se, DayOfWeek.WEDNESDAY, 12, 15, 13, 45, "HS 2 - Hörsaalzentrum");
         schedule(analysis, DayOfWeek.THURSDAY, 10, 15, 11, 45, "HS 1 - Hörsaalzentrum");
-        schedule(se, DayOfWeek.THURSDAY, 14, 15, 15, 45, "Labor B - Rechnerpool");
-        schedule(dbs, DayOfWeek.FRIDAY, 8, 15, 9, 45, "SR 204 - Übungsgruppe");
         schedule(stat, DayOfWeek.FRIDAY, 10, 15, 11, 45, "SR 101 - Mathegebäude");
 
         grade(user, linalg, "Klausur", 2.3, 100, today.minusWeeks(16), "Klausur", true, null);

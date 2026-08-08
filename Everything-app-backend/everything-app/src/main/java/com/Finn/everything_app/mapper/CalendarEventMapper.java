@@ -22,6 +22,7 @@ public class CalendarEventMapper {
         dto.setColor(event.getColor());
         dto.setNotes(event.getNotes());
         dto.setCompletedAt(event.getCompletedAt());
+        dto.setSkippedAt(event.getSkippedAt());
 
 
         if (event.getRelatedTask() != null) {
@@ -41,9 +42,10 @@ public class CalendarEventMapper {
     }
 
     /**
-     * Bewusst OHNE {@code completedAt}: sonst könnte ein gewöhnliches {@code PUT /events/{id}}
-     * einen Block als erledigt markieren und damit eine Gutschrift auslösen, die nur
-     * {@code setCompleted} vergeben darf.
+     * Bewusst OHNE {@code completedAt} und {@code skippedAt}: sonst könnte ein gewöhnliches
+     * {@code PUT /events/{id}} einen Block als erledigt markieren und damit eine Gutschrift
+     * auslösen, die nur {@code setCompleted} vergeben darf — oder ihn stillschweigend
+     * überspringen, was {@code setSkipped} vorbehalten ist.
      */
     public CalendarEvent toEntity(CalendarEventDTO dto) {
         if (dto == null) return null;

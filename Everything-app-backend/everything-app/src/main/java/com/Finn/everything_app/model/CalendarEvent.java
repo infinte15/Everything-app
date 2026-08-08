@@ -4,6 +4,7 @@ import jakarta.persistence.*;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 import lombok.AllArgsConstructor;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 
 @Entity
@@ -56,6 +57,32 @@ public class CalendarEvent {
      */
     @Column(name = "completed_at")
     private LocalDateTime completedAt;
+
+    /**
+     * Nur für PROJECT-Blöcke: die ISO-Woche (Montag), deren Wochenpensum dieser Block abdeckt.
+     *
+     * Projekt-Sessions haben keine eigene Entität — dieser Kalendereintrag <em>ist</em> die
+     * Session. Damit fehlt ihnen das, was {@code WorkoutSession.targetWeekStart} für Trainings
+     * leistet: die Zugehörigkeit zu einer Woche, unabhängig davon, wann der Block tatsächlich
+     * liegt. Ohne sie zählt ein in die Folgewoche verschobener Block dort mit, die verlassene
+     * Woche fällt unter ihr Pensum und bekommt einen Ersatzblock am alten Platz.
+     *
+     * Nullable: Bestandszeilen haben den Wert nicht, dort gilt die Woche des Termins selbst.
+     */
+    @Column(name = "target_week_start")
+    private LocalDate targetWeekStart;
+
+    /**
+     * Gesetzt, wenn der Nutzer diese Ausführung übersprungen hat.
+     *
+     * <p>Der Block wird bewusst nicht gelöscht: er <em>ist</em> die einzige Spur dieser
+     * Ausführung. Ohne die Zeile fiele die Woche unter ihr Pensum und der Scheduler legte beim
+     * nächsten Lauf Ersatz an — genau deshalb war Löschen bei automatisch geplanten Blöcken
+     * wirkungslos. Übersprungen heißt also: zählt weiter auf das Wochenpensum, belegt aber keine
+     * Zeit mehr und lässt sich jederzeit zurücknehmen.
+     */
+    @Column(name = "skipped_at")
+    private LocalDateTime skippedAt;
 
     @Column(name = "created_at")
     private LocalDateTime createdAt;

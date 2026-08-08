@@ -35,4 +35,7 @@ public class CalendarEventDTO {
 
     /** Nur lesend: gesetzt wird das ausschließlich über PUT /events/{id}/complete. */
     private LocalDateTime completedAt;
+
+    /** Nur lesend: gesetzt wird das ausschließlich über PUT /events/{id}/skip. */
+    private LocalDateTime skippedAt;
 }

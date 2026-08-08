@@ -85,6 +85,18 @@ public class CalendarController {
         return ResponseEntity.ok(calendarEventMapper.toDTO(saved));
     }
 
+    // Überspringen einer Ausführung. Eigener Endpunkt aus demselben Grund wie beim Abhaken:
+    // der Mapper trägt skippedAt nur nach außen, damit ein gewöhnliches PUT es nicht setzen kann.
+    @PutMapping("/events/{id}/skip")
+    public ResponseEntity<CalendarEventDTO> setSkipped(
+            @CurrentUser Long userId,
+            @PathVariable Long id,
+            @Valid @RequestBody SkipRequest request) {
+
+        CalendarEvent saved = calendarEventService.setSkipped(id, userId, request.getSkipped());
+        return ResponseEntity.ok(calendarEventMapper.toDTO(saved));
+    }
+
     // Eigener Endpunkt statt eines Feldes im normalen Payload: das Abhaken schreibt Minuten
     // gut (ans Lernziel oder an den Task) und darf nicht versehentlich durch ein gewöhnliches
     // PUT ausgelöst werden — der Mapper überträgt completedAt deshalb nur nach außen.

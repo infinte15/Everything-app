@@ -95,6 +95,16 @@ public class CalendarEventService {
     }
 
     /**
+     * Blocktypen, die sich überspringen lassen: die quotenbasierten.
+     *
+     * TASK fehlt bewusst — ein Aufgabenblock ist ein Bruchteil einer Aufgabe, deren Restminuten
+     * auch nach dem Überspringen verplant werden wollen. CLASS und die manuellen Typen gehören
+     * dem Nutzer und werden schlicht gelöscht.
+     */
+    private static final java.util.Set<EventType> SKIPPABLE_TYPES =
+            java.util.EnumSet.of(EventType.HABIT, EventType.PROJECT, EventType.WORKOUT);
+
+    /**
      * Abgeleitete Termine: sie entstehen aus dem Stundenplan und werden bei jeder Neuplanung neu
      * erzeugt. Eine Änderung hier wäre spätestens nach zwei Sekunden wieder weg, und ein
      * gepinnter CLASS-Termin überlebte sogar {@link #clearClassEvents} dauerhaft und verdoppelte
@@ -218,6 +228,50 @@ public class CalendarEventService {
      * (er zählte vorher als eingefrorene Minuten, danach als Gutschrift derselben Höhe). Einen
      * künftigen Block abzuhaken verkleinert das Restbudget und hält die Zeit trotzdem belegt.
      */
+    /**
+     * Überspringt eine Ausführung oder nimmt das zurück.
+     *
+     * <p>Der Gegenentwurf zum Löschen: bei quotenbasierten Blöcken war Löschen wirkungslos, weil
+     * die Woche danach unter ihrem Pensum stand und der Scheduler binnen Sekunden Ersatz anlegte.
+     * Übersprungen heißt stattdessen "diese eine Ausführung fällt aus": der Block bleibt als
+     * Beleg stehen, zählt weiter auf das Wochenpensum, gibt seine Zeit aber frei.
+     *
+     * <p>Nur für die drei quotenbasierten Typen. Ein Aufgabenblock ist ein Bruchteil einer
+     * Aufgabe — ihn zu überspringen hieße nichts, denn die Restminuten der Aufgabe bleiben und
+     * wollen weiterhin verplant werden. Dafür gibt es {@code notBefore}, eine kleinere Schätzung
+     * oder das Abhaken.
+     */
+    @Transactional
+    public CalendarEvent setSkipped(Long id, Long userId, boolean skipped) {
+        CalendarEvent event = getEventById(id);
+        requireOwner(event, userId);
+        requireEditableFromCalendar(event);
+
+        if (!SKIPPABLE_TYPES.contains(event.getEventType())) {
+            throw new BadRequestException(
+                    "Nur Gewohnheiten, Projektzeit und Trainings lassen sich überspringen.");
+        }
+
+        // Ohne diesen Wächter schreibt ein Doppeltipp nur einen neuen Zeitstempel.
+        if ((event.getSkippedAt() != null) == skipped) {
+            return event;
+        }
+
+        event.setSkippedAt(skipped ? LocalDateTime.now() : null);
+
+        // Beim Training hängt die Planung an der Session, nicht am Kalendereintrag: ohne diesen
+        // Abgleich platziert der Solver die Einheit sofort neu und das Überspringen verpufft.
+        if (event.getRelatedWorkout() != null) {
+            WorkoutSession session = event.getRelatedWorkout();
+            session.setIsSkipped(skipped);
+            workoutSessionRepository.save(session);
+        }
+
+        CalendarEvent saved = calendarEventRepository.save(event);
+        eventPublisher.publishEvent(new ScheduleChangedEvent(this, userId));
+        return saved;
+    }
+
     @Transactional
     public CalendarEvent setCompleted(Long id, Long userId, boolean completed) {
         CalendarEvent event = getEventById(id);
@@ -354,10 +408,15 @@ public class CalendarEventService {
         // Erledigte Blöcke bleiben stehen. Sie sind Protokoll, keine Planung — die entprellte
         // Neuplanung soll sie nicht zwei Sekunden nach dem Haken wieder wegräumen.
         //
+        // Übersprungene ebenso, und aus einem zweiten Grund: sie sind der einzige Beleg dafür,
+        // dass diese Ausführung bereits vom Wochenpensum abgezogen ist. Würden sie hier
+        // weggeräumt, stünde die Woche wieder unter Pensum und bekäme prompt Ersatz — also
+        // genau das Verhalten, gegen das das Überspringen gebaut ist.
+        //
         // Gefiltert in eine neue Liste statt removeIf: was das Repository zurückgibt, muss
         // nicht veränderbar sein.
         calendarEventRepository.deleteAll(events.stream()
-                .filter(e -> e.getCompletedAt() == null)
+                .filter(e -> e.getCompletedAt() == null && e.getSkippedAt() == null)
                 .toList());
     }
 

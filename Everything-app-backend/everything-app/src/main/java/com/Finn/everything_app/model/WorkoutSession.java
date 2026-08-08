@@ -91,6 +91,15 @@ public class WorkoutSession {
     @Column(name = "target_week_start")
     private LocalDate targetWeekStart;
 
+    /**
+     * true = der Nutzer hat diese Einheit übersprungen.
+     *
+     * Die Zeile bleibt stehen, damit sie weiter auf das Wochenpensum des Plans zählt: sonst
+     * legte generateWeeklyPlaceholders sofort eine neue Einheit als Ersatz an.
+     */
+    @Column(name = "is_skipped")
+    private Boolean isSkipped = false;
+
     @PrePersist
     protected void onCreate() {
         createdAt = LocalDateTime.now();

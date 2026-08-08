@@ -51,8 +51,8 @@ public class DemoSportsData {
     private final ExerciseSetRepository setRepository;
     private final ExerciseRepository exerciseRepository;
 
-    /** Wochen Trainingshistorie vor heute. */
-    private static final int HISTORY_WEEKS = 6;
+    /** Wochen Trainingshistorie vor heute. Jede Woche kostet drei Sessions mit je ~20 Saetzen. */
+    private static final int HISTORY_WEEKS = 3;
 
     /** Eine Zeile einer Routine: Übungsname aus dem Katalog + Zielvorgaben. */
     private record Slot(String exerciseName, int sets, int repsMin, int repsMax,
