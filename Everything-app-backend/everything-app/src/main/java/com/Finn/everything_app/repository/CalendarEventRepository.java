@@ -2,6 +2,7 @@ package com.Finn.everything_app.repository;
 
 import com.Finn.everything_app.model.CalendarEvent;
 import com.Finn.everything_app.model.EventType;
+import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
@@ -10,7 +11,13 @@ import java.util.List;
 
 public interface CalendarEventRepository extends JpaRepository<CalendarEvent, Long> {
 
-    // Events in Zeitraum
+    // Events in Zeitraum.
+    //
+    // relatedTask wird mitgeladen, weil CalendarEventMapper daraus Deadline und Priorität ans
+    // Frontend gibt (Dringlichkeits-Optik im Kalender). Ohne den EntityGraph wäre relatedTask ein
+    // LAZY-Proxy und jeder Task-Block löste beim Mappen eine eigene Abfrage aus — bei einem
+    // Monat sind das schnell dreistellig viele.
+    @EntityGraph(attributePaths = "relatedTask")
     List<CalendarEvent> findByUserIdAndStartTimeBetween(Long userId, LocalDateTime start, LocalDateTime end);
 
     // Fixe Events. Bewusst eine Überlappungs-Prüfung statt "startTime BETWEEN": ein Termin, der

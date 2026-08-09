@@ -682,6 +682,86 @@ void main() {
     });
   });
 
+  group('CalendarScreen Dringlichkeit', () {
+    testWidgets('ein Block kurz vor der Deadline zeigt statt des Typs die Fälligkeit',
+        (tester) async {
+      final event = CalendarEvent(
+        id: 40,
+        title: 'Abgabe',
+        startTime: _at(0),
+        endTime: _at(60),
+        eventType: 'TASK',
+        isFixed: false,
+        relatedTaskId: 7,
+        // Deadline am selben Tag: der Block ist die letzte Chance.
+        relatedTaskDeadline: _at(180),
+        relatedTaskPriority: 5,
+      );
+      final fake = FakeCalendarService([event]);
+      final provider = await _pumpCalendar(tester, fake: fake);
+
+      await tester.ensureVisible(find.text('Abgabe'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('HEUTE FÄLLIG'), findsOneWidget,
+          reason: 'die Typ-Zeile muss der Fälligkeit weichen');
+      expect(find.text('TASK'), findsNothing);
+      expect(find.byIcon(Icons.priority_high_rounded), findsOneWidget);
+
+      provider.dispose();
+    });
+
+    testWidgets('ein Block mit fernem Termin bleibt unverändert', (tester) async {
+      final event = CalendarEvent(
+        id: 41,
+        title: 'Recherche',
+        startTime: _at(0),
+        endTime: _at(60),
+        eventType: 'TASK',
+        isFixed: false,
+        relatedTaskId: 8,
+        relatedTaskDeadline: _at(60).add(const Duration(days: 9)),
+        relatedTaskPriority: 5,
+      );
+      final fake = FakeCalendarService([event]);
+      final provider = await _pumpCalendar(tester, fake: fake);
+
+      await tester.ensureVisible(find.text('Recherche'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('TASK'), findsOneWidget);
+      expect(find.byIcon(Icons.priority_high_rounded), findsNothing);
+
+      provider.dispose();
+    });
+
+    testWidgets('das Detail-Sheet nennt den genauen Termin', (tester) async {
+      final deadline = _at(180);
+      final event = CalendarEvent(
+        id: 42,
+        title: 'Abgabe',
+        startTime: _at(0),
+        endTime: _at(60),
+        eventType: 'TASK',
+        isFixed: false,
+        relatedTaskId: 9,
+        relatedTaskDeadline: deadline,
+        relatedTaskPriority: 4,
+      );
+      final fake = FakeCalendarService([event]);
+      final provider = await _pumpCalendar(tester, fake: fake);
+
+      await tester.ensureVisible(find.text('Abgabe'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Abgabe'));
+      await tester.pumpAndSettle();
+
+      expect(find.textContaining('Fällig:'), findsOneWidget);
+
+      provider.dispose();
+    });
+  });
+
   group('CalendarScreen month view', () {
     // Von klein (kompaktes Handy) bis groß (Tablet) — das Raster darf auf keiner
     // Größe scrollen und muss trotzdem jeden Tag des Monats zeigen.

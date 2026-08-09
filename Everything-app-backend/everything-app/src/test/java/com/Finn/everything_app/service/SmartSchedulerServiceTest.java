@@ -1466,6 +1466,22 @@ class SmartSchedulerServiceTest {
     // ------------------------------------------------------------------
 
     /** Vorlesung über den kompletten Arbeitstag; [semester] darf null sein. */
+    /** Eine gewöhnliche 90-Minuten-Vorlesung ohne Semestergrenzen (gilt also in jeder Woche). */
+    private CourseSchedule makeLecture(Long id, DayOfWeek day, LocalTime von, LocalTime bis) {
+        Course course = new Course();
+        course.setId(id);
+        course.setName("Vorlesung " + id);
+        course.setColor("#C2C1FF");
+
+        CourseSchedule lecture = new CourseSchedule();
+        lecture.setId(id);
+        lecture.setCourse(course);
+        lecture.setDayOfWeek(day);
+        lecture.setStartTime(von);
+        lecture.setEndTime(bis);
+        return lecture;
+    }
+
     private CourseSchedule fullDayLecture(DayOfWeek day, Semester semester) {
         Course course = new Course();
         course.setId(700L);
@@ -2638,9 +2654,360 @@ class SmartSchedulerServiceTest {
         return p;
     }
 
+    // ==================================================================
+    // Deadline als harte Grenze
+    // ==================================================================
+
+    /**
+     * Der Kernfall: ein Block darf nicht mehr hinter seiner Deadline liegen.
+     *
+     * Vorher war die Deadline nur eine Strafe im Zielterm — bei knappem Zeitbudget stieg der
+     * Löser aus, bevor er sie eingelöst hatte, und im Kalender stand ein Block, der den Termin
+     * nicht mehr retten konnte.
+     */
+    @Test
+    void taskWirdNichtNachSeinerDeadlineGeplant() {
+        LocalDate tomorrow = TODAY.plusDays(1);
+        LocalDateTime deadline = tomorrow.atTime(12, 0);
+
+        Task task = makeTask(3000L, "Abgabe", 60, 3, deadline);
+        when(taskService.getSchedulableTasks(1L)).thenReturn(List.of(task));
+        when(calendarEventService.getFixedEvents(eq(1L), any(), any())).thenReturn(new ArrayList<>());
+
+        // Horizont bewusst weit: ohne harte Grenze hätte der Löser reichlich Platz danach.
+        ScheduleResult result = service.generateOptimalSchedule(1L, tomorrow, tomorrow.plusDays(5));
+
+        assertFalse(result.getScheduledTasks().isEmpty(), "der Task passt locker vor die Deadline");
+        for (ScheduledItem item : result.getScheduledTasks()) {
+            assertFalse(item.getEndTime().isAfter(deadline),
+                    "Block endet " + item.getEndTime() + " und damit nach der Deadline " + deadline);
+        }
+    }
+
+    /**
+     * Was nicht mehr vor die Deadline passt, wird gemeldet statt zu spät geplant.
+     *
+     * 600 Minuten Arbeit, aber nur 08:00–12:00 bis zur Deadline: ein Teil muss liegen bleiben.
+     * Ein Block um 14:00 wäre die bequeme, aber unehrliche Antwort.
+     */
+    @Test
+    void taskDerNichtVorDieDeadlinePasstWirdGemeldetStattZuSpaetGeplant() {
+        LocalDate tomorrow = TODAY.plusDays(1);
+        LocalDateTime deadline = tomorrow.atTime(12, 0);
+
+        Task task = makeTask(3010L, "Zu viel", 600, 4, deadline);
+        when(taskService.getSchedulableTasks(1L)).thenReturn(List.of(task));
+        when(calendarEventService.getFixedEvents(eq(1L), any(), any())).thenReturn(new ArrayList<>());
+
+        ScheduleResult result = service.generateOptimalSchedule(1L, tomorrow, tomorrow.plusDays(5));
+
+        for (ScheduledItem item : result.getScheduledTasks()) {
+            assertFalse(item.getEndTime().isAfter(deadline),
+                    "nichts darf hinter die Deadline rutschen, lag aber bei " + item.getEndTime());
+        }
+        List<AtRiskItem> forTask = result.getAtRisk().stream()
+                .filter(a -> a.getTaskId() != null && a.getTaskId().equals(3010L)).toList();
+        assertEquals(1, forTask.size(), "genau eine Meldung pro Task, nicht eine pro Block");
+        assertEquals(AtRiskReason.WOULD_MISS_DEADLINE, forTask.get(0).getReason());
+        assertTrue(forTask.get(0).getMinutes() > 0, "die fehlenden Minuten gehören in die Meldung");
+    }
+
+    /**
+     * Die Inversion, die es vor der multiplikativen Gewichtung gab.
+     *
+     * Additiv kam der P1-Task von morgen auf 100+1000 = 1100 und schlug damit den P5-Task auf
+     * 500+300 = 800 — eine Nebensächlichkeit verdrängte etwas Wichtiges, nur weil sie einen Tag
+     * früher fällig war. Multiplikativ steht es 800 zu 2000.
+     */
+    @Test
+    void hohePrioritaetMitSpaetererDeadlineSchlaegtNiedrigePrioritaetMitFrueherer() {
+        LocalDate tomorrow = TODAY.plusDays(1);
+
+        // Je 480 Minuten: das Tageslimit für Task-Zeit lässt genau einen der beiden zu.
+        Task unwichtigAberBald = makeTask(3020L, "Unwichtig", 480, 1, tomorrow.atTime(23, 59));
+        unwichtigAberBald.setSplittable(false);
+        Task wichtigEtwasSpaeter = makeTask(3021L, "Wichtig", 480, 5, tomorrow.plusDays(2).atTime(23, 59));
+        wichtigEtwasSpaeter.setSplittable(false);
+
+        when(taskService.getSchedulableTasks(1L))
+                .thenReturn(List.of(unwichtigAberBald, wichtigEtwasSpaeter));
+        when(calendarEventService.getFixedEvents(eq(1L), any(), any())).thenReturn(new ArrayList<>());
+
+        // Nur ein einziger Tag Horizont — der Zweite kann nicht auf morgen ausweichen.
+        ScheduleResult result = service.generateOptimalSchedule(1L, tomorrow, tomorrow);
+
+        assertEquals(1, result.getScheduledTasks().size(), "es passt nur einer der beiden");
+        assertEquals(3021L, result.getScheduledTasks().get(0).getTask().getId(),
+                "bei knappem Platz muss die wichtigere Aufgabe gewinnen, nicht die frühere");
+    }
+
+    /** Bei gleicher Priorität entscheidet die Deadline über die Reihenfolge. */
+    @Test
+    void gleichePrioritaetFruehereDeadlineZuerst() {
+        LocalDate tomorrow = TODAY.plusDays(1);
+
+        Task spaet = makeTask(3030L, "Später fällig", 120, 3, tomorrow.plusDays(20).atTime(20, 0));
+        Task frueh = makeTask(3031L, "Bald fällig", 120, 3, tomorrow.plusDays(1).atTime(20, 0));
+
+        // Bewusst in "falscher" Reihenfolge übergeben.
+        when(taskService.getSchedulableTasks(1L)).thenReturn(List.of(spaet, frueh));
+        when(calendarEventService.getFixedEvents(eq(1L), any(), any())).thenReturn(new ArrayList<>());
+
+        ScheduleResult result = service.generateOptimalSchedule(1L, tomorrow, tomorrow.plusDays(25));
+
+        LocalDateTime startFrueh = firstStartOf(result, 3031L);
+        LocalDateTime startSpaet = firstStartOf(result, 3030L);
+        assertTrue(startFrueh.isBefore(startSpaet),
+                "die bald fällige Aufgabe muss zuerst drankommen: " + startFrueh + " vs " + startSpaet);
+    }
+
+    /**
+     * Ein überfälliger Task wird nachgeholt — und zwar sofort, nicht irgendwann im Monat.
+     *
+     * Seine Deadline taugt nicht mehr als Obergrenze (jede Lage ist zu spät), deshalb bekommt er
+     * ein kurzes Nachhol-Fenster ab jetzt. Ohne das landete er irgendwo im Horizont, sobald dort
+     * gerade mehr Platz war.
+     */
+    @Test
+    void ueberfaelligerTaskLandetImNahbereich() {
+        LocalDate tomorrow = TODAY.plusDays(1);
+
+        Task ueberfaellig = makeTask(3040L, "Längst fällig", 60, 3, TODAY.minusDays(10).atTime(12, 0));
+        when(taskService.getSchedulableTasks(1L)).thenReturn(List.of(ueberfaellig));
+        when(calendarEventService.getFixedEvents(eq(1L), any(), any())).thenReturn(new ArrayList<>());
+
+        ScheduleResult result = service.generateOptimalSchedule(1L, tomorrow, tomorrow.plusDays(30));
+
+        assertFalse(result.getScheduledTasks().isEmpty(), "überfällig heißt nicht verworfen");
+        LocalDate day = result.getScheduledTasks().get(0).getStartTime().toLocalDate();
+        assertFalse(day.isAfter(tomorrow.plusDays(3)),
+                "ein überfälliger Task gehört in die nächsten Tage, lag aber am " + day);
+    }
+
+    /**
+     * Der Nahbereich für Tasks (14 Tage) darf einen späten {@code notBefore} nicht aussperren.
+     *
+     * Vorher blieb für so einen Task kein einziges Fenster übrig: er wurde zwangsverworfen und
+     * als "kein Platz" gemeldet, obwohl der Kalender an dem Tag komplett leer war.
+     */
+    @Test
+    void taskMitNotBeforeJenseitsDesTaskHorizontsWirdTrotzdemGeplant() {
+        LocalDate tomorrow = TODAY.plusDays(1);
+
+        Task spaeterStart = makeTask(3050L, "Erst in drei Wochen", 60, 3, null);
+        spaeterStart.setNotBefore(tomorrow.plusDays(21).atTime(8, 0));
+        when(taskService.getSchedulableTasks(1L)).thenReturn(List.of(spaeterStart));
+        when(calendarEventService.getFixedEvents(eq(1L), any(), any())).thenReturn(new ArrayList<>());
+
+        ScheduleResult result = service.generateOptimalSchedule(1L, tomorrow, tomorrow.plusDays(30));
+
+        assertEquals(1, result.getScheduledTasks().size(),
+                "ein leerer Kalender in drei Wochen ist kein Grund, den Task zu verwerfen");
+        assertFalse(result.getScheduledTasks().get(0).getStartTime()
+                        .isBefore(spaeterStart.getNotBefore()),
+                "und er darf trotzdem nicht vor notBefore starten");
+        assertTrue(result.getAtRisk().isEmpty(), "kein falscher Alarm");
+    }
+
+    /**
+     * Mehrere Chunks, ein Problem, eine Meldung.
+     *
+     * Vorher erzeugte derselbe Task bis zu vier Einträge — einen fürs Nichtpassen plus je einen
+     * pro Block hinter der Deadline. In der Oberfläche las sich das wie vier Probleme.
+     */
+    @Test
+    void einTaskMeldetHoechstensEinenAtRiskEintrag() {
+        LocalDate tomorrow = TODAY.plusDays(1);
+
+        Task brocken = makeTask(3060L, "Vielteilig", 900, 5, tomorrow.atTime(11, 0));
+        when(taskService.getSchedulableTasks(1L)).thenReturn(List.of(brocken));
+        when(calendarEventService.getFixedEvents(eq(1L), any(), any())).thenReturn(new ArrayList<>());
+
+        ScheduleResult result = service.generateOptimalSchedule(1L, tomorrow, tomorrow.plusDays(5));
+
+        assertEquals(1, result.getAtRisk().size(),
+                "ein Task, ein Eintrag — gemeldet wurde: " + result.getAtRisk());
+    }
+
+    /**
+     * Laufzeit bei lauter deadline-behafteten Aufgaben über einen ganzen Monat.
+     *
+     * Genau der Bestand, für den der Fensterzuschnitt gedacht ist: jede Aufgabe bekommt nur die
+     * Tage bis zu ihrer Deadline statt des vollen Nahbereichs.
+     */
+    @Test
+    void einMonatVollerDeadlinesBleibtImZeitbudget() {
+        LocalDate tomorrow = TODAY.plusDays(1);
+
+        List<Task> tasks = new ArrayList<>();
+        for (int i = 0; i < 20; i++) {
+            tasks.add(makeTask(3100L + i, "Termin " + i, 60 + (i % 3) * 30, 1 + (i % 5),
+                    tomorrow.plusDays(1 + i).atTime(18, 0)));
+        }
+        when(taskService.getSchedulableTasks(1L)).thenReturn(tasks);
+        when(calendarEventService.getFixedEvents(eq(1L), any(), any())).thenReturn(new ArrayList<>());
+
+        long startedAt = System.nanoTime();
+        ScheduleResult result = service.generateOptimalSchedule(1L, tomorrow, tomorrow.plusDays(30));
+        long millis = (System.nanoTime() - startedAt) / 1_000_000;
+
+        assertFalse(result.getScheduledTasks().isEmpty(), "der Bestand muss planbar sein");
+        assertTrue(millis < 15_000,
+                "ein Monat voller Deadlines soll im Zeitbudget bleiben, brauchte aber " + millis + " ms");
+    }
+
+    /**
+     * Voller Monat, echtes Zeitbudget: es muss trotzdem fast alles eingeplant werden.
+     *
+     * Die übrigen Tests laufen mit dem großzügigen Feld-Default von 10 Sekunden und hätten den
+     * teuersten Fehler dieser Änderung nicht bemerkt: Aufgaben mit Deadline in vier oder fünf
+     * Wochen bekamen zwischenzeitlich Fenster über den ganzen Horizont, und Phase 1 fand in ihrem
+     * Anteil an den 1.5 Sekunden keine brauchbare Menge mehr — 16 von 17 Aufgaben blieben
+     * ungeplant, im Betrieb kam zeitweise gar keine Lösung mehr zustande.
+     *
+     * Der Bestand ist der echte Entwicklungsdatenbestand: gemischte Prioritäten, Deadlines von
+     * überfällig bis in sechs Wochen, geteilte Aufgaben mit Tagesdeckel, notBefore, dazu acht
+     * tägliche Gewohnheiten und vier Wochen Training.
+     */
+    @Test
+    void vollerMonatMitEchtemZeitbudgetPlantFastAlles() throws Exception {
+        java.lang.reflect.Field budget =
+                SmartSchedulerService.class.getDeclaredField("solverTimeLimitSeconds");
+        budget.setAccessible(true);
+        budget.setDouble(service, 1.5);   // Produktionswert aus application.properties
+
+        // Einstellungen wie im Entwicklungsbestand. Jede davon vergrößert das Modell, und in
+        // Summe waren sie es, die den Lauf kippen ließen — allen voran das Leistungshoch: es
+        // hängt an JEDEM Task-Block eine Abweichungsvariable pro erlaubtem Tag, die der Presolve
+        // von Phase 1 mitverarbeiten muss, obwohl sie erst in Phase 2 im Ziel steht.
+        prefs.setWorkdayEnd(LocalTime.of(22, 0));
+        prefs.setBreakDurationMinutes(15);
+        prefs.setBufferMinutes(10);
+        prefs.setMaxTaskMinutesPerDay(360);
+        prefs.setPeakProductivityTime(ProductivityPeakTime.MORNING);
+        LocalDate today = TODAY;
+
+        List<Task> tasks = new ArrayList<>();
+        tasks.add(makeTask(4400L, "Überfällig", 60, 3, today.minusDays(3).atTime(18, 0)));
+        tasks.add(makeTask(4401L, "Heute", 120, 3, today.atTime(18, 0)));
+        tasks.add(makeTask(4402L, "Morgen klein", 30, 5, today.plusDays(1).atTime(12, 0)));
+        tasks.add(makeTask(4403L, "Morgen groß", 120, 4, today.plusDays(1).atTime(23, 59)));
+        tasks.add(makeTask(4404L, "In drei Tagen", 180, 4, today.plusDays(3).atTime(23, 59)));
+        tasks.add(makeTask(4405L, "In neun Tagen", 120, 3, today.plusDays(9).atTime(19, 0)));
+        Task geteilt = makeTask(4406L, "Geteilt mit Tagesdeckel", 240, 4, today.plusDays(11).atTime(18, 0));
+        geteilt.setSplittable(true);
+        geteilt.setMaxChunksPerDay(1);
+        tasks.add(geteilt);
+        Task spaeterStart = makeTask(4407L, "Erst später", 90, 4, today.plusDays(17).atTime(19, 0));
+        spaeterStart.setNotBefore(today.plusDays(10).atTime(9, 0));
+        tasks.add(spaeterStart);
+        // Die teuren Fälle: Deadline weit jenseits des Nahbereichs, dazu viele Chunks. Genau sie
+        // ließen das Modell wachsen, als das Fenster noch bis zur Deadline reichte.
+        Task klausur = makeTask(4408L, "Klausurvorbereitung Analysis", 480, 5,
+                today.plusDays(34).atTime(8, 0));
+        klausur.setSplittable(true);
+        klausur.setMaxChunksPerDay(1);
+        tasks.add(klausur);
+        Task klausurZwei = makeTask(4409L, "Klausurvorbereitung ThInf", 600, 5,
+                today.plusDays(41).atTime(8, 0));
+        klausurZwei.setSplittable(true);
+        klausurZwei.setMaxChunksPerDay(2);
+        klausurZwei.setNotBefore(today.plusDays(20).atTime(8, 0));
+        tasks.add(klausurZwei);
+        tasks.add(makeTask(4410L, "Steuererklärung", 180, 4, today.plusDays(27).atTime(18, 0)));
+        tasks.add(makeTask(4411L, "Ohne Termin", 60, 2, null));
+        tasks.add(makeTask(4412L, "In vier Tagen", 45, 3, today.plusDays(4).atTime(17, 0)));
+        Task unteilbar = makeTask(4413L, "Unteilbar spät", 45, 5, today.plusDays(4).atTime(23, 59));
+        unteilbar.setSplittable(false);
+        unteilbar.setNotBefore(today.plusDays(4).atStartOfDay());
+        tasks.add(unteilbar);
+        tasks.add(makeTask(4414L, "In zwei Wochen", 60, 2, today.plusDays(13).atTime(19, 0)));
+        Task fern = makeTask(4415L, "Sehr spät erlaubt", 240, 1, null);
+        fern.setNotBefore(today.plusDays(48).atTime(9, 0));   // jenseits des Horizonts
+        tasks.add(fern);
+
+        List<Habit> habits = new ArrayList<>();
+        for (int i = 0; i < 8; i++) habits.add(makeDailyHabit(4420L + i, "Gewohnheit " + i, 15 + i * 5));
+
+        LocalDate weekStart = today.with(TemporalAdjusters.previousOrSame(DayOfWeek.MONDAY));
+        List<WorkoutSession> workouts = new ArrayList<>();
+        for (int w = 0; w < 4; w++) {
+            for (int i = 0; i < 3; i++) {
+                workouts.add(makeFlexibleWorkout(4440L + w * 10 + i, "Einheit " + i, 60,
+                        weekStart.plusWeeks(w)));
+            }
+        }
+
+        // Drei Projekte mit Wochenpensum und ein voller Stundenplan. Die Vorlesungen sind der
+        // Punkt, an dem es kippte: sie zerlegen jeden Werktag in Stücke, und erst mit ihnen fand
+        // Phase 1 in ihrem alten Anteil am Zeitbudget gar keine Lösung mehr.
+        List<Project> projects = List.of(
+                makeProject(4460L, "Bachelorarbeit", 2, 90),
+                makeProject(4461L, "Everything App", 2, 60),
+                makeProject(4462L, "Interrail", 1, 45));
+        projects.forEach(p -> p.setStartDate(today.minusDays(10)));
+
+        List<CourseSchedule> vorlesungen = List.of(
+                makeLecture(4470L, DayOfWeek.MONDAY,    LocalTime.of(8, 15),  LocalTime.of(9, 45)),
+                makeLecture(4471L, DayOfWeek.MONDAY,    LocalTime.of(14, 15), LocalTime.of(15, 45)),
+                makeLecture(4472L, DayOfWeek.TUESDAY,   LocalTime.of(10, 15), LocalTime.of(11, 45)),
+                makeLecture(4473L, DayOfWeek.WEDNESDAY, LocalTime.of(12, 15), LocalTime.of(13, 45)),
+                makeLecture(4474L, DayOfWeek.THURSDAY,  LocalTime.of(10, 15), LocalTime.of(11, 45)),
+                makeLecture(4475L, DayOfWeek.FRIDAY,    LocalTime.of(10, 15), LocalTime.of(11, 45)));
+
+        // Gepinnte Termine quer über den Horizont.
+        List<CalendarEvent> gepinnt = new ArrayList<>();
+        for (int i = 0; i < 24; i++) {
+            LocalDate d = today.plusDays((i * 29) % 31);
+            int stunde = 9 + (i % 9);
+            gepinnt.add(makeFixedEvent(4480L + i, d.atTime(stunde, 0), d.atTime(stunde + 1, 30)));
+        }
+
+        when(taskService.getSchedulableTasks(1L)).thenReturn(tasks);
+        when(habitRepository.findHabitsActiveInRange(eq(1L), any(), any())).thenReturn(habits);
+        when(workoutSessionRepository.findByUserIdAndIsFlexibleTrue(1L)).thenReturn(workouts);
+        when(projectRepository.findByUserIdAndStatusIn(eq(1L), any())).thenReturn(projects);
+        when(courseScheduleRepository.findByUserId(1L)).thenReturn(vorlesungen);
+        when(calendarEventService.getFixedEvents(eq(1L), any(), any())).thenReturn(gepinnt);
+
+        // Bewusst mehrfach: entscheidend ist nicht, dass EIN Lauf gut ausgeht, sondern dass JEDER
+        // es tut. Genau daran scheiterte das zu große Modell — es lag so dicht an der Grenze des
+        // Zeitbudgets, dass derselbe Bestand mal 25 Blöcke ergab und mal 2. Im Betrieb läuft nach
+        // jeder Änderung eine Neuplanung; ein einziger schlechter Wurf leert den halben Kalender.
+        for (int lauf = 1; lauf <= 3; lauf++) {
+            ScheduleResult result = service.generateOptimalSchedule(1L, today, today.plusDays(31));
+
+            assertNotEquals("UNKNOWN", result.getSolverStatus(),
+                    "Lauf " + lauf + ": bei realistischem Monatsbestand muss eine Lösung herauskommen");
+            // Gemessen liegen hier 25–26 Blöcke an; die Schranke lässt Luft für Solver-Rauschen,
+            // schlägt aber bei dem beobachteten Einbruch (2 Blöcke) sicher an.
+            assertTrue(result.getScheduledTasks().size() >= 15,
+                    "Lauf " + lauf + ": fast alle Aufgaben müssen einen Block bekommen, waren aber nur "
+                            + result.getScheduledTasks().size());
+            // Nur die Aufgaben zählen: bei diesem Sättigungsgrad bleiben zwangsläufig einzelne
+            // Gewohnheiten liegen, und dass sie gemeldet werden, ist gewollt. Die beiden
+            // erwarteten Aufgaben-Meldungen sind der überfällige Task und der, dessen "nicht vor"
+            // jenseits des Horizonts liegt.
+            List<AtRiskItem> aufgabenInGefahr = result.getAtRisk().stream()
+                    .filter(a -> a.getTaskId() != null).toList();
+            assertTrue(aufgabenInGefahr.size() <= 4,
+                    "Lauf " + lauf + ": nur wenige Aufgaben dürfen übrig bleiben, gemeldet wurden aber "
+                            + aufgabenInGefahr);
+        }
+    }
+
     // ------------------------------------------------------------------
     // Helpers
     // ------------------------------------------------------------------
+
+    /** Früheste Startzeit aller Blöcke eines Tasks. */
+    private LocalDateTime firstStartOf(ScheduleResult result, long taskId) {
+        return result.getScheduledTasks().stream()
+                .filter(i -> i.getTask() != null && i.getTask().getId().equals(taskId))
+                .map(ScheduledItem::getStartTime)
+                .min(LocalDateTime::compareTo)
+                .orElseThrow(() -> new AssertionError("Task " + taskId + " wurde nicht geplant"));
+    }
 
     private Task makeTask(Long id, String title, int durationMin, int priority, LocalDateTime deadline) {
         Task t = new Task();

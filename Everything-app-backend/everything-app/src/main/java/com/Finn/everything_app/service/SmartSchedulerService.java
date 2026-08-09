@@ -131,6 +131,31 @@ public class SmartSchedulerService {
     /** Angestrebter Abstand zwischen zwei Trainings: ein voller Ruhetag dazwischen. */
     private static final int  REST_DAYS_BETWEEN_WORKOUTS = 2;
 
+    /**
+     * Anteil des Zeitbudgets für Phase 1.
+     *
+     * Früher 0.35. Das war zu knapp: Phase 1 entscheidet, WAS überhaupt einen Termin bekommt —
+     * findet sie keine Lösung, bleibt der ganze Kalender stehen. Und ihr Modell enthält bereits
+     * das komplette Phase-2-Gerüst (Abweichung zum Leistungshoch, Stabilitätsanker), das der
+     * Presolve mitverarbeiten muss, obwohl es in Phase 1 gar nicht im Ziel steht. Bei einem
+     * Bestand mit Stundenplan reichten die 0.525s davon nicht mehr, und der Lauf endete
+     * reproduzierbar mit UNKNOWN statt mit einem Zeitplan.
+     *
+     * Phase 2 verliert dadurch wenig: sie beweist ohnehin nie Optimalität, ihr Ergebnis wird mit
+     * mehr Zeit nur graduell besser. Phase 1 dagegen ist ein Alles-oder-nichts.
+     */
+    private static final double PHASE1_SHARE = 0.6;
+
+    /**
+     * Nachhol-Fenster für einen bereits überfälligen Task, in Tagen ab jetzt.
+     *
+     * Eine harte Obergrenze gibt es hier nicht mehr zu erben — die Deadline ist vorbei, jede Lage
+     * ist zu spät. Trotzdem darf der Block nicht irgendwo im Monat landen: "überfällig" heißt
+     * "jetzt", nicht "in drei Wochen". Drei Tage lassen dem Solver genug Luft, um einen vollen
+     * Tag zu umgehen, halten die Domäne der Startvariablen aber klein.
+     */
+    private static final int  CATCHUP_DAYS = 3;
+
     // Drop-Gewicht der Projektzeit. Liegt unter dem Workout (300) und unter einem Prio-3-Habit
     // (300): Projektzeit ist der am ehesten verzichtbare wiederkehrende Block — deadlinefrei,
     // quotenbasiert und nächste Woche wieder da.
@@ -148,6 +173,11 @@ public class SmartSchedulerService {
      * teuer: jeder Task-Chunk bekommt eine Tages-Boolean pro Horizont-Tag, ein Habit-Slot nur
      * für die sieben Tage seiner eigenen Woche. Ohne den Zuschnitt wächst allein der Task-Teil
      * des Modells linear mit dem Horizont.
+     *
+     * Gilt seit {@link #taskBounds} nur noch für Tasks OHNE Deadline. Mit Deadline reicht das
+     * Fenster genau bis dorthin — auch über diesen Nahbereich hinaus, denn dann ist es nach oben
+     * ohnehin scharf begrenzt und bleibt klein. Ebenso wandert der Nahbereich mit, wenn
+     * {@code notBefore} hinter ihm liegt; sonst bekäme so ein Task gar kein Fenster.
      */
     @Value("${scheduler.task-horizon-days:14}")
     private int taskHorizonDays = 14;
@@ -237,7 +267,7 @@ public class SmartSchedulerService {
                 committedDatesPerProject(counted));
 
         SolveOutcome outcome = solveWithCpSat(chunks, habitSlots, projectSlots, input, axis, prefs,
-                startDate, endDate, taskLastDay);
+                startDate, endDate, cutoff, taskLastDay);
 
         // Der entscheidende Unterschied zur alten Implementierung: gelöscht wird ERST, wenn eine
         // verwertbare Lösung vorliegt. Ein leerer Kalender ist schlechter als ein veralteter.
@@ -341,6 +371,14 @@ public class SmartSchedulerService {
 
     /** Ein erlaubtes Zeitfenster an einem konkreten Tag, bereits in Slots und startbezogen. */
     private record DayWindow(int day, int lo, int hi) {}
+
+    /**
+     * Wie weit ein Task in den Horizont hinein darf.
+     *
+     * @param lastDay       letzter erlaubter Tag (Index ab startDate)
+     * @param latestEndSlot späteste Endzeit in Slots, oder {@code null} für unbegrenzt
+     */
+    private record TaskBounds(int lastDay, Integer latestEndSlot) {}
 
     // =========================================================================
     // OPTIONALE INTERVALLE
@@ -1178,7 +1216,8 @@ public class SmartSchedulerService {
     private SolveOutcome solveWithCpSat(List<TaskChunk> chunks, List<HabitSlot> habitSlots,
                                         List<ProjectSlot> projectSlots,
                                         ScheduleInput input, Axis axis, UserPreferences prefs,
-                                        LocalDate startDate, LocalDate endDate, int taskLastDay) {
+                                        LocalDate startDate, LocalDate endDate, LocalDateTime cutoff,
+                                        int taskLastDay) {
 
         List<WorkoutSession> flexibleWorkouts = nz(input.getFlexibleWorkouts());
         if (chunks.isEmpty() && habitSlots.isEmpty() && flexibleWorkouts.isEmpty()
@@ -1193,7 +1232,10 @@ public class SmartSchedulerService {
         if (workEndSlot <= workStartSlot) workEndSlot = SLOTS_PER_DAY;   // defensiv gegen Fehlkonfiguration
 
         int bufferSlots = Math.max(0, nz(prefs.getBufferMinutes(), 0) / GRID);
-        int nowSlot     = Math.max(0, axis.ceilSlot(LocalDateTime.now()));
+        // Derselbe Zeitpunkt, ab dem auch gelöscht und neu geschrieben wird — nicht ein zweites,
+        // minimal späteres LocalDateTime.now(). Sonst entscheidet das Modell "überfällig" nach
+        // einer anderen Uhr als die Meldung in extract.
+        int nowSlot     = Math.max(0, axis.ceilSlot(cutoff));
         int[] peakWindow = peakWindow(prefs);
 
         // Mindestpause zwischen zwei automatisch geplanten Blöcken. Ohne sie stapelt der Solver
@@ -1235,12 +1277,16 @@ public class SmartSchedulerService {
         for (Map.Entry<Long, List<TaskChunk>> e : chunksByTask.entrySet()) {
             List<TaskChunk> group = e.getValue();
             Task task = group.get(0).task;
-            long weight = calculateTaskWeight(task);
+            long weight = calculateTaskWeight(task, startDate);
 
             int earliest = nowSlot;
             if (task.getNotBefore() != null) earliest = Math.max(earliest, axis.ceilSlot(task.getNotBefore()));
 
             Integer deadlineSlot = task.getDeadline() != null ? axis.floorSlot(task.getDeadline()) : null;
+
+            // Deadline schneidet das Fenster hart zu (siehe taskBounds). taskLastDay ist damit nur
+            // noch der Nahbereich für Tasks OHNE Deadline.
+            TaskBounds bounds = taskBounds(task, axis, taskLastDay, nowSlot, earliest);
 
             for (int ci = 0; ci < group.size(); ci++) {
                 TaskChunk c = group.get(ci);
@@ -1248,7 +1294,7 @@ public class SmartSchedulerService {
                 String name = "task" + task.getId() + "_c" + ci;
 
                 List<DayWindow> windows = dayWindows(axis, workStartSlot, workEndSlot, sizeSlots, earliest,
-                        null, taskLastDay);
+                        null, bounds.lastDay(), bounds.latestEndSlot());
                 Placeable p = makePlaceable(model, name, sizeSlots, c.durationMinutes, windows, gapSlots);
                 c.placeable = p;
                 allPlaceables.add(p);
@@ -1259,13 +1305,25 @@ public class SmartSchedulerService {
 
                 int prio = Math.max(1, nz(task.getPriority(), 3));
 
-                // Dringlichkeit: früher ist besser.
+                // Dringlichkeit: früher ist besser. Der Deadline-Faktor bricht den Gleichstand
+                // zwischen zwei gleich wichtigen Aufgaben, von denen eine morgen und eine
+                // nächsten Monat fällig ist — beide halten ihren Termin, aber nur eine Reihenfolge
+                // davon ergibt Sinn.
                 qVars.add(gated(model, p, "urg_" + name, p.start, axis.horizonSlots));
-                qWeights.add(W_URGENCY * prio);
+                qWeights.add(W_URGENCY * prio * PLACEMENT_URGENCY[deadlineBucket(task, startDate)]);
 
                 // Leistungshoch: die Einstellung war bislang reine Dekoration. Das Gewicht liegt
                 // über der Dringlichkeit, damit ein Block ins Hoch wandert, solange dort Platz
                 // ist — aber weit unter der Deadline-Strafe, damit nichts dafür zu spät wird.
+                //
+                // Der Prioritätsfaktor gehört hier zwingend dazu, obwohl das Hoch nur die TAGESZEIT
+                // wählt: er hält das Verhältnis zur Dringlichkeit (ebenfalls * prio) für jede
+                // Priorität gleich. Und genau dieses Verhältnis ist die Sicherheitsgrenze — die
+                // Abweichung kann innerhalb eines Tages höchstens die Breite des Arbeitstags
+                // erreichen (bei 08–17 rund 36 Slots), kostet also maximal 2*prio*36 = 72*prio,
+                // während ein Tag später zu liegen 1*prio*96 kostet. 72 < 96: das Hoch kann einen
+                // Block niemals auf einen anderen Tag ziehen. Ohne den Faktor kippt das je nach
+                // Priorität in die eine oder andere Richtung.
                 if (peakWindow != null) {
                     qVars.add(windowDeviation(model, p, sizeSlots, peakWindow[0], peakWindow[1],
                             axis, "peak_" + name));
@@ -1516,8 +1574,13 @@ public class SmartSchedulerService {
         // --- Tageslimit für Task-Zeit ---
         // addCumulative wäre hier falsch: es begrenzt die MOMENTANE Auslastung, nicht das Integral
         // über einen Tag. Die inDay-Booleans drücken genau das aus, was gemeint ist.
+        //
+        // Die Schleife läuft über den VOLLEN Horizont und nicht mehr nur bis taskLastDay: seit die
+        // Deadline das Fenster bestimmt (siehe taskBounds), kann ein Task-Block auch hinter dem
+        // Nahbereich liegen. Mit der alten Schranke wäre er dort unbegrenzt gewesen. Tage ohne
+        // Chunk kosten nichts — sie überspringt die any-Prüfung.
         int capSlots = Axis.slotsFor(nz(prefs.getMaxTaskMinutesPerDay(), FALLBACK_MAX_TASK_MIN_PER_DAY));
-        for (int d = 0; d <= taskLastDay; d++) {
+        for (int d = 0; d < axis.totalDays; d++) {
             LinearExprBuilder load = LinearExpr.newBuilder();
             boolean any = false;
             for (TaskChunk c : chunks) {
@@ -1530,12 +1593,21 @@ public class SmartSchedulerService {
         LinearExpr dropCost = dropB.add(dropConst).build();
 
         CpSolver solver = new CpSolver();
+        // Bewusst FEST auf vier und nicht availableProcessors(): jeder Worker baut seine eigene
+        // Kopie des Modells auf, und bei einem Zeitbudget von 1.5s (Phase 1 bekommt davon 0.525s)
+        // geht ein spürbarer Teil davon für das Hochfahren von zwölf Workern drauf. Gemessen an
+        // einem echten Bestand kippte der Lauf damit von "stabil" auf "mal 19 Blöcke, mal keine
+        // Lösung". Mehr Worker helfen erst, wenn der Löser auch Zeit zum Suchen hat.
         solver.getParameters().setNumSearchWorkers(4);
         solver.getParameters().setLogSearchProgress(false);
 
         // ---- Phase 1: möglichst viel (gewichtet) überhaupt unterbringen ----
+        //
+        // Bewusst OHNE Startwert. Ein Hint "alles platzieren" liegt nahe, ist aber genau dann
+        // unerfüllbar, wenn Phase 1 überhaupt gebraucht wird — CP-SAT verbrachte danach das ganze
+        // Budget mit dem Reparieren und lieferte gar keine Lösung mehr (UNKNOWN statt FEASIBLE).
         model.minimize(dropCost);
-        solver.getParameters().setMaxTimeInSeconds(Math.max(0.05, solverTimeLimitSeconds * 0.35));
+        solver.getParameters().setMaxTimeInSeconds(Math.max(0.05, solverTimeLimitSeconds * PHASE1_SHARE));
         CpSolverStatus s1 = solver.solve(model);
         if (s1 != CpSolverStatus.OPTIMAL && s1 != CpSolverStatus.FEASIBLE) {
             log.warn("CP-SAT Phase 1 ohne Lösung: {}", s1);
@@ -1544,6 +1616,12 @@ public class SmartSchedulerService {
         long bestDrop = Math.round(solver.objectiveValue());
 
         // ---- Phase 2: Qualität, ohne Phase 1 zu verschlechtern ----
+        //
+        // Die ungenutzte Zeit aus Phase 1 hier draufzuschlagen wäre naheliegend — Phase 1 beweist
+        // Optimalität meist in Millisekunden und verschenkt fast ihre ganzen 35%. Gemessen war es
+        // aber ein klarer Rückschritt: Phase 2 beweist bei realistischem Bestand NIE Optimalität
+        // und verbraucht deshalb jede Sekunde, die sie bekommt. Aus 6.6s wurden 10s, ohne dass
+        // sich am Zielwert etwas tat. Es bleibt bei den festen 65%.
         //
         // Der Startwert kommt bewusst NICHT unverändert aus Phase 1: dort zählt nur, wie viel
         // überhaupt untergebracht wird, die Uhrzeit ist völlig beliebig. Phase 2 müsste von dort
@@ -1560,8 +1638,20 @@ public class SmartSchedulerService {
         model.minimize(LinearExpr.weightedSum(
                 qVars.toArray(new LinearArgument[0]),
                 qWeights.stream().mapToLong(Long::longValue).toArray()));
-        solver.getParameters().setMaxTimeInSeconds(Math.max(0.05, solverTimeLimitSeconds * 0.65));
+        solver.getParameters().setMaxTimeInSeconds(
+                Math.max(0.05, solverTimeLimitSeconds * (1 - PHASE1_SHARE)));
+        // Kein setRelativeGapLimit: es lag hier kurzzeitig auf 2%, um das Budget nicht immer voll
+        // auszuschöpfen, kostet aber genau die Feinarbeit, für die Phase 2 da ist. Der Löser
+        // steigt aus, sobald er nah genug dran ist, und "nah genug" ist eine Viertelstunde
+        // Verschiebung: derselbe Projektblock landete ohne jede Änderung am Bestand einmal um
+        // 08:15 und im nächsten Lauf um 08:00. Für den Nutzer sieht das aus wie ein Kalender, der
+        // von selbst herumspringt — genau dagegen gibt es den Stabilitätsterm.
         CpSolverStatus s2 = solver.solve(model);
+        // Der Zielwert der Platzierung, fürs Log. Er ist die einzige Möglichkeit, die Wirkung des
+        // Zeitbudgets zu beurteilen: der Status bleibt bei realistischem Bestand immer FEASIBLE,
+        // aber der Zielwert zeigt, ab wann mehr Zeit nichts mehr bringt.
+        double placementObjective = (s2 == CpSolverStatus.OPTIMAL || s2 == CpSolverStatus.FEASIBLE)
+                ? solver.objectiveValue() : Double.NaN;
 
         CpSolverStatus effective = (s2 == CpSolverStatus.OPTIMAL || s2 == CpSolverStatus.FEASIBLE) ? s2 : s1;
         if (s2 != CpSolverStatus.OPTIMAL && s2 != CpSolverStatus.FEASIBLE) {
@@ -1570,19 +1660,20 @@ public class SmartSchedulerService {
             // damit der Solver-Zustand wieder zur Phase-1-Lösung passt.
             log.warn("CP-SAT Phase 2 ohne Lösung ({}), nutze Phase-1-Platzierung.", s2);
             model.minimize(dropCost);
-            solver.getParameters().setMaxTimeInSeconds(Math.max(0.05, solverTimeLimitSeconds * 0.35));
+            solver.getParameters().setMaxTimeInSeconds(Math.max(0.05, solverTimeLimitSeconds * PHASE1_SHARE));
             CpSolverStatus retry = solver.solve(model);
             if (retry != CpSolverStatus.OPTIMAL && retry != CpSolverStatus.FEASIBLE) {
                 return SolveOutcome.unusable(retry);
             }
         }
 
-        log.info("CP-SAT {} | Intervalle: {} | Chunks: {} Habits: {} Workouts: {} Projekte: {} | drop={}",
+        log.info("CP-SAT {} | Intervalle: {} | Chunks: {} Habits: {} Workouts: {} Projekte: {} | drop={} obj={}",
                 effective, allIntervals.size(), chunks.size(), habitSlots.size(),
-                flexibleWorkouts.size(), projectSlots.size(), bestDrop);
+                flexibleWorkouts.size(), projectSlots.size(), bestDrop,
+                Math.round(placementObjective));
 
         return extract(solver, effective, chunks, habitSlots, flexibleWorkouts, workoutPlaceables,
-                projectSlots, axis);
+                projectSlots, axis, cutoff);
     }
 
     /**
@@ -1722,10 +1813,26 @@ public class SmartSchedulerService {
     /**
      * Pro Tag ein erlaubtes Startfenster, bereits um "jetzt" und die Arbeitszeit beschnitten.
      * {@code lastDay} begrenzt zusätzlich, wie weit in den Horizont hinein das Item überhaupt
-     * darf — für Tasks der Task-Horizont, für Habits und Workouts der volle Horizont.
+     * darf — für Tasks der Task-Horizont bzw. ihre Deadline, für Habits und Workouts der volle
+     * Horizont.
      */
     private List<DayWindow> dayWindows(Axis axis, int workStartSlot, int workEndSlot, int sizeSlots,
                                        int earliestSlot, List<Integer> restrictToDays, int lastDay) {
+        return dayWindows(axis, workStartSlot, workEndSlot, sizeSlots, earliestSlot, restrictToDays,
+                lastDay, null);
+    }
+
+    /**
+     * Wie oben, zusätzlich mit einer spätesten ENDZEIT.
+     *
+     * {@code lastDay} allein wäre tagesgenau: eine Deadline am Freitag um 12:00 ließe noch einen
+     * Block am Freitagnachmittag zu. {@code latestEndSlot} schneidet den letzten Tag deshalb an
+     * der echten Uhrzeit ab. Ist danach kein Fenster mehr übrig, hat das Item keine zulässige
+     * Lage — es wird über sein Präsenz-Literal verworfen und in {@link #extract} gemeldet.
+     */
+    private List<DayWindow> dayWindows(Axis axis, int workStartSlot, int workEndSlot, int sizeSlots,
+                                       int earliestSlot, List<Integer> restrictToDays, int lastDay,
+                                       Integer latestEndSlot) {
         List<DayWindow> out = new ArrayList<>();
         int upper = Math.min(lastDay, axis.totalDays - 1);
         for (int d = 0; d <= upper; d++) {
@@ -1733,9 +1840,67 @@ public class SmartSchedulerService {
             int base = d * SLOTS_PER_DAY;
             int lo = Math.max(base + workStartSlot, earliestSlot);
             int hi = base + workEndSlot - sizeSlots;
+            if (latestEndSlot != null) hi = Math.min(hi, latestEndSlot - sizeSlots);
             if (lo <= hi) out.add(new DayWindow(d, lo, hi));
         }
         return out;
+    }
+
+    /**
+     * Bis wohin die Blöcke eines Tasks reichen dürfen.
+     *
+     * Die Deadline ist damit eine HARTE Grenze und nicht mehr nur eine Strafe: was nicht mehr
+     * davor passt, bekommt kein Fenster, wird verworfen und als {@link AtRiskItem} gemeldet. Ein
+     * Block nach der Deadline half niemandem — er stand im Kalender, als sei die Sache geplant,
+     * obwohl der Termin längst gerissen war.
+     *
+     * Der Zuschnitt ist zugleich der größte Hebel für die Laufzeit: ein Task mit Deadline in zwei
+     * Tagen bekommt zwei statt {@code taskHorizonDays} Tages-Booleans, und die Domäne seiner
+     * Startvariablen schrumpft entsprechend. Deshalb darf ein Task MIT Deadline auch über den
+     * Nahbereich hinausreichen (bis zum vollen Horizont), ohne dass das Modell wächst: sein
+     * Fenster ist genau so groß, wie es sein muss.
+     */
+    private TaskBounds taskBounds(Task task, Axis axis, int defaultLastDay, int nowSlot,
+                                  int earliestSlot) {
+        int maxDay = axis.totalDays - 1;
+        int lastDay;
+        Integer latestEnd = null;
+
+        if (task.getDeadline() == null) {
+            lastDay = defaultLastDay;
+        } else {
+            int deadlineSlot = axis.floorSlot(task.getDeadline());
+            if (deadlineSlot <= nowSlot) {
+                // Überfällig: die Deadline als Obergrenze wäre leer, jede Lage ist zu spät.
+                // Stattdessen ein kurzes Nachhol-Fenster ab jetzt — der weiche late-Term sorgt
+                // darin weiter für "so früh wie möglich".
+                lastDay = Math.min(maxDay, nowSlot / SLOTS_PER_DAY + CATCHUP_DAYS);
+            } else {
+                // Der Nahbereich bleibt die Obergrenze, auch wenn die Deadline weiter weg liegt.
+                // Ohne diesen Deckel wuchsen Aufgaben mit Deadline in vier oder fünf Wochen
+                // (Klausurvorbereitung, Steuererklärung) von 14 auf 31 Tages-Booleans, und Phase 1
+                // fand in ihrem Anteil am Zeitbudget keine brauchbare Menge mehr: an einem echten
+                // Bestand blieb sie bei Drop 28200 statt 800 stehen und ließ 16 von 17 Aufgaben
+                // ungeplant. Für die Deadline kostet der Deckel nichts — eine Aufgabe, die schon
+                // in den nächsten 14 Tagen eingeplant wird, reißt einen Termin in vier Wochen nicht.
+                lastDay = Math.min(defaultLastDay, deadlineSlot / SLOTS_PER_DAY);
+                // Die scharfe Endzeit nur, wenn die Deadline auch wirklich im Fenster liegt.
+                if (deadlineSlot / SLOTS_PER_DAY <= defaultLastDay) latestEnd = deadlineSlot;
+            }
+        }
+
+        // notBefore kann hinter jede der obigen Grenzen fallen — bei einem Nahbereich von 14 Tagen
+        // und "nicht vor in drei Wochen" bliebe kein einziges Fenster übrig, und der Task wurde
+        // bisher zwangsverworfen und fälschlich als NO_ROOM gemeldet. Der Nahbereich wandert
+        // deshalb mit dem frühesten erlaubten Start mit. Mit harter Deadline-Grenze wäre das
+        // sinnlos: dort liegt die Obergrenze fest, ein späterer notBefore heißt schlicht, dass der
+        // Termin nicht mehr zu halten ist.
+        if (latestEnd == null) {
+            int earliestDay = Math.max(0, earliestSlot) / SLOTS_PER_DAY;
+            if (earliestDay > lastDay) lastDay = Math.min(maxDay, earliestDay + defaultLastDay);
+        }
+
+        return new TaskBounds(Math.max(0, lastDay), latestEnd);
     }
 
     /**
@@ -1841,7 +2006,7 @@ public class SmartSchedulerService {
     private SolveOutcome extract(CpSolver solver, CpSolverStatus status, List<TaskChunk> chunks,
                                  List<HabitSlot> habitSlots, List<WorkoutSession> flexibleWorkouts,
                                  Map<Long, Placeable> workoutPlaceables,
-                                 List<ProjectSlot> projectSlots, Axis axis) {
+                                 List<ProjectSlot> projectSlots, Axis axis, LocalDateTime cutoff) {
         List<ScheduledItem> items  = new ArrayList<>();
         List<AtRiskItem>    atRisk = new ArrayList<>();
 
@@ -1861,9 +2026,23 @@ public class SmartSchedulerService {
                     missingMinutes += c.durationMinutes;
                 }
             }
-            if (missingMinutes > 0) {
-                AtRiskReason reason = task.getDeadline() != null && task.getDeadline().isBefore(LocalDateTime.now())
-                        ? AtRiskReason.PAST_DEADLINE : AtRiskReason.NO_ROOM;
+            // Genau EIN Eintrag pro Task. Vorher konnte ein Task mit drei Chunks bis zu vier
+            // Meldungen erzeugen (einmal "kein Platz" plus je eine pro Block hinter der Deadline);
+            // in der Oberfläche las sich das wie vier verschiedene Probleme.
+            //
+            // Ein überfälliger Task wird auch dann gemeldet, wenn jeder Block untergebracht ist:
+            // seine Deadline ist bereits gerissen, das bleibt der wichtigere Befund. Seit die
+            // Deadline das Fenster hart begrenzt (taskBounds), ist der Nachhol-Fall die einzige
+            // Lage, in der überhaupt noch ein Block hinter einer Deadline stehen kann.
+            AtRiskReason reason = null;
+            if (task.getDeadline() != null && task.getDeadline().isBefore(cutoff)) {
+                reason = AtRiskReason.PAST_DEADLINE;
+            } else if (missingMinutes > 0) {
+                reason = task.getDeadline() != null
+                        ? AtRiskReason.WOULD_MISS_DEADLINE   // Deadline noch vor uns, passt aber nicht mehr davor
+                        : AtRiskReason.NO_ROOM;
+            }
+            if (reason != null) {
                 atRisk.add(AtRiskItem.forTask(task.getId(), task.getTitle(), missingMinutes, reason));
             }
             if (placed.isEmpty()) continue;
@@ -1886,11 +2065,6 @@ public class SmartSchedulerService {
                 item.setChunkIndex(i + 1);
                 item.setChunkCount(placed.size());
                 items.add(item);
-
-                if (task.getDeadline() != null && end.isAfter(task.getDeadline())) {
-                    atRisk.add(AtRiskItem.forTask(task.getId(), task.getTitle(),
-                            placed.get(i)[1], AtRiskReason.WOULD_MISS_DEADLINE));
-                }
             }
         }
 
@@ -2199,21 +2373,56 @@ public class SmartSchedulerService {
     // GEWICHTE & HELFER
     // =========================================================================
 
-    /** Wie wichtig es ist, diesen Task überhaupt unterzubringen (Phase-1-Gewicht). */
-    private long calculateTaskWeight(Task task) {
-        long w = 0;
-        int priority = nz(task.getPriority(), 3);
-        w += (long) priority * 100;
+    /**
+     * Wie nah die Deadline ist, als Stufe 0 (fern oder keine) bis 4 (heute oder überfällig).
+     *
+     * Eine Stelle für beide Verwendungen — das Drop-Gewicht in Phase 1 und die Reihenfolge in
+     * Phase 2 —, damit "dringend" nicht an zwei Orten unterschiedlich definiert ist.
+     *
+     * @param today Bezugstag des Laufs (startDate), nicht LocalDate.now(): sonst hinge die Stufe
+     *              an einer anderen Uhr als das übrige Modell und wäre nicht testbar.
+     */
+    private int deadlineBucket(Task task, LocalDate today) {
+        if (task.getDeadline() == null) return 0;
+        long days = ChronoUnit.DAYS.between(today, task.getDeadline().toLocalDate());
+        if (days <= 0) return 4;
+        if (days == 1) return 3;
+        if (days <= 3) return 2;
+        if (days <= 7) return 1;
+        return 0;
+    }
 
-        if (task.getDeadline() != null) {
-            long days = ChronoUnit.DAYS.between(LocalDate.now(), task.getDeadline().toLocalDate());
-            if      (days <= 0) w += 1000;
-            else if (days == 1) w += 500;
-            else if (days <= 3) w += 300;
-            else if (days <= 7) w += 150;
-            else                w += 50;
-        }
-        return w;
+    /** Faktor auf das Drop-Gewicht je Deadline-Stufe. */
+    private static final long[] DROP_URGENCY = { 1, 2, 4, 6, 8 };
+
+    /**
+     * Faktor auf die Dringlichkeit ("früher ist besser") je Deadline-Stufe.
+     *
+     * Viel flacher als {@link #DROP_URGENCY}, und das mit Absicht: hier geht es nur noch um die
+     * Reihenfolge unter Aufgaben, die ihre Deadline ohnehin alle halten. Ohne den Faktor war das
+     * ein glatter Gleichstand — zwei gleich wichtige Aufgaben, eine morgen und eine nächsten
+     * Monat fällig, landeten in beliebiger Reihenfolge.
+     *
+     * Die Obergrenze ist bewusst 3: das Leistungshoch darf einen Block weiterhin nicht auf einen
+     * anderen Tag ziehen (Abweichung höchstens 2*prio*36 = 72*prio gegen einen Tagessprung von
+     * mindestens 1*prio*96), und die Deadline-Strafe W_LATE = 40 bleibt um Größenordnungen
+     * stärker als jede Dringlichkeit.
+     */
+    private static final long[] PLACEMENT_URGENCY = { 1, 1, 2, 2, 3 };
+
+    /**
+     * Wie wichtig es ist, diesen Task überhaupt unterzubringen (Phase-1-Gewicht).
+     *
+     * Die Nähe der Deadline ist ein FAKTOR, kein Summand. Addiert kippte die Rangfolge: ein
+     * P1-Task von heute kam auf 100+1000 = 1100 und schlug damit einen P5-Task von morgen mit
+     * 500+500 = 1000 — eine Nebensächlichkeit verdrängte etwas Wichtiges, nur weil sie einen Tag
+     * früher fällig war. Multiplikativ ist die Ordnung garantiert inversionsfrei: bei gleicher
+     * Deadline gewinnt immer die höhere Priorität, bei gleicher Priorität immer die nähere
+     * Deadline.
+     */
+    private long calculateTaskWeight(Task task, LocalDate today) {
+        int priority = Math.min(5, Math.max(1, nz(task.getPriority(), 3)));
+        return priority * 100L * DROP_URGENCY[deadlineBucket(task, today)];   // 100 .. 4000
     }
 
     private long calculateHabitWeight(Habit habit) {

@@ -6,6 +6,7 @@ import 'package:intl/intl.dart';
 import '../../providers/calendar_provider.dart';
 import '../../config/app_theme.dart';
 import '../../models/calendar_event.dart';
+import '../../utils/deadline_urgency.dart';
 import '../../widgets/create_event_sheet.dart';
 import '../../widgets/pointer_aware_draggable.dart';
 
@@ -58,6 +59,35 @@ IconData _typeIcon(String type) {
     default:
       return Icons.event_rounded;
   }
+}
+
+// ─── Dringlichkeit ───────────────────────────────────────────────────────────
+// Ein Aufgabenblock kurz vor seiner Deadline soll auf einen Blick zu erkennen sein. Die Stufe
+// wird hier und nicht im Backend berechnet: sie haengt an "jetzt" und wandert im Minutentakt.
+
+/// Die Faelligkeitsstufe eines Termins, oder [DeadlineUrgency.none] wenn er keine Aufgabe ist.
+DeadlineUrgency _urgencyFor(CalendarEvent e, DateTime now) =>
+    e.isTask && !e.isCompleted
+        ? urgencyOf(e.relatedTaskDeadline, e.endTime, now)
+        : DeadlineUrgency.none;
+
+/// Hervorhebungswuerdig? Nur die beiden obersten Stufen — sonst leuchtet der halbe Kalender.
+bool _isUrgent(CalendarEvent e, DateTime now) {
+  final u = _urgencyFor(e, now);
+  return u == DeadlineUrgency.lastChance || u == DeadlineUrgency.overdue;
+}
+
+/// Akzentfarbe der Hervorhebung, oder null wenn nicht dringlich.
+///
+/// Die Prioritaetsfarbe deckt sich mit getColorForTask im Backend, der Block wechselt beim
+/// Hervorheben also nicht die Farbfamilie. Ueberfaellig gewinnt immer die Fehlerfarbe.
+Color? _urgentAccent(CalendarEvent e, DateTime now) {
+  final u = _urgencyFor(e, now);
+  if (u == DeadlineUrgency.overdue) return AppTheme.errorColor;
+  if (u != DeadlineUrgency.lastChance) return null;
+  return e.relatedTaskPriority != null
+      ? AppTheme.getPriorityColor(e.relatedTaskPriority!)
+      : (e.color != null ? e.colorObject : _typeColor(e.eventType));
 }
 
 enum _CalView { day, week, month }
@@ -655,15 +685,26 @@ class _TimelineGridState extends State<_TimelineGrid> {
   static const double _kEdgeBand = 72.0;  // Trigger-Zone oben/unten
   static const double _kMaxStep = 14.0;   // px pro 16ms-Tick
 
+  // ── Dringlichkeit ──────────────────────────────────────────────────────────
+  // Die Faelligkeits-Einstufung der Aufgabenbloecke haengt an "jetzt": ohne Ticker bliebe ein
+  // Block "MORGEN FÄLLIG", bis der Nutzer das naechste Mal scrollt. Ein Timer fuer das ganze
+  // Grid statt einer pro Block — dieselbe Loesung wie in _CurrentTimeLine, nur eine Ebene hoeher,
+  // weil _EventBlock zustandslos bleibt.
+  Timer? _urgencyTimer;
+  DateTime _now = DateTime.now();
+
   @override
   void initState() {
     super.initState();
     _scroll = ScrollController(initialScrollOffset: widget.initialOffset)
       ..addListener(() => widget.onOffsetChanged(_scroll.offset));
+    _urgencyTimer = Timer.periodic(
+        const Duration(minutes: 1), (_) => setState(() => _now = DateTime.now()));
   }
 
   @override
   void dispose() {
+    _urgencyTimer?.cancel();
     _edgeScrollTimer?.cancel();
     _scroll.dispose();
     super.dispose();
@@ -970,6 +1011,7 @@ class _TimelineGridState extends State<_TimelineGrid> {
                                       opacity: isDragging ? 0.35 : 1.0,
                                       child: _EventBlock(
                                         event: event,
+                                        now: _now,
                                         onDragStarted: () => setState(() => _draggingEvent = event),
                                         onDragUpdate: (d) => _dragPointer = d.globalPosition,
                                         // Auch der Randscroll muss hier enden: wird der Drag
@@ -1148,12 +1190,16 @@ Widget _maybeFlexible(bool bounded, Widget child) =>
 
 class _EventBlock extends StatelessWidget {
   final CalendarEvent event;
+  /// Von aussen durchgereicht, damit alle Bloecke dieselbe Uhr benutzen und ein einziger Timer
+  /// im Grid die Faelligkeits-Einstufung aktuell haelt (siehe _TimelineGridState._urgencyTimer).
+  final DateTime now;
   final VoidCallback? onDragStarted;
   final VoidCallback? onDragEnd;
   final ValueChanged<DragUpdateDetails>? onDragUpdate;
 
   const _EventBlock({
     required this.event,
+    required this.now,
     this.onDragStarted,
     this.onDragEnd,
     this.onDragUpdate,
@@ -1162,7 +1208,19 @@ class _EventBlock extends StatelessWidget {
   Widget _buildCard(BuildContext context, {double opacity = 1.0}) {
     final color = event.color != null ? event.colorObject : _typeColor(event.eventType);
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final bg = isDark ? color.withValues(alpha: 0.20) : color.withValues(alpha: 0.15);
+
+    final accent = _urgentAccent(event, now);
+    final urgent = accent != null;
+
+    // Auf der hervorgehobenen Karte traegt der Akzent die ganze Flaeche statt nur einer Ahnung
+    // davon — genau das laesst sie aus einem vollen Tag herausspringen.
+    final bg = accent ??
+        (isDark ? color.withValues(alpha: 0.20) : color.withValues(alpha: 0.15));
+    // Alles, was sonst in der Typfarbe gezeichnet wird. Auf dem vollflaechigen Akzent Schwarz
+    // oder Weiss, je nachdem was darauf lesbar ist.
+    final fg = urgent
+        ? (accent.computeLuminance() > 0.5 ? Colors.black : Colors.white)
+        : color;
 
     // Layout richtet sich nach dem tatsächlich verfügbaren Platz statt nach der
     // Dauer allein: liegen zwei Termine parallel, teilen sie sich die Spalte und
@@ -1203,7 +1261,10 @@ class _EventBlock extends StatelessWidget {
             decoration: BoxDecoration(
               color: bg,
               borderRadius: BorderRadius.zero,
-              border: Border(left: BorderSide(color: color, width: 4)),
+              // Auf der vollflaechigen Karte muss der Balken gegen den Akzent anlaufen, nicht
+              // mit ihm verschmelzen — deshalb die Schriftfarbe und ein Stueck breiter.
+              border: Border(
+                  left: BorderSide(color: fg, width: urgent ? 6 : 4)),
             ),
             padding: const EdgeInsets.fromLTRB(6, 4, 4, 4),
             // ClipRect fängt die letzten Pixel ab, wenn die Zeilenhöhe der
@@ -1222,7 +1283,11 @@ class _EventBlock extends StatelessWidget {
                         children: [
                           Expanded(
                             child: Text(
-                              event.eventType.toUpperCase(),
+                              // Bei Dringlichkeit zaehlt die Faelligkeit, nicht der Typ — dass
+                              // es eine Aufgabe ist, sagt schon der Titel.
+                              urgent
+                                  ? deadlineLabel(event.relatedTaskDeadline!, now)
+                                  : event.eventType.toUpperCase(),
                               maxLines: 1,
                               softWrap: false,
                               overflow: TextOverflow.ellipsis,
@@ -1231,14 +1296,18 @@ class _EventBlock extends StatelessWidget {
                                   height: 1.2,
                                   fontWeight: FontWeight.w800,
                                   letterSpacing: 1.2,
-                                  color: color.withValues(alpha: 0.8)),
+                                  color: fg.withValues(alpha: urgent ? 0.95 : 0.8)),
                             ),
                           ),
-                          if (event.isCompleted)
+                          // Das Ausrufezeichen steht vor Haken und Schloss: es ist der Grund,
+                          // warum die Karte ueberhaupt heraussticht.
+                          if (urgent)
+                            Icon(Icons.priority_high_rounded, size: 10, color: fg)
+                          else if (event.isCompleted)
                             Icon(Icons.check_circle_rounded, size: 10,
-                                color: color.withValues(alpha: 0.7))
+                                color: fg.withValues(alpha: 0.7))
                           else if (showLock)
-                            Icon(Icons.lock_rounded, size: 10, color: color.withValues(alpha: 0.7)),
+                            Icon(Icons.lock_rounded, size: 10, color: fg.withValues(alpha: 0.7)),
                         ],
                       ),
                     ),
@@ -1259,15 +1328,20 @@ class _EventBlock extends StatelessWidget {
                             style: TextStyle(
                                 fontSize: titleSize,
                                 fontWeight: FontWeight.w800,
-                                color: color,
+                                color: fg,
                                 decoration: event.isCompleted
                                     ? TextDecoration.lineThrough
                                     : null,
                                 height: titleHeightFactor),
                           ),
                         ),
-                        if (showLock && !showType)
-                          Icon(Icons.lock_rounded, size: 10, color: color.withValues(alpha: 0.7)),
+                        // Zu schmal oder zu flach fuer die Typ-Zeile: dann muss das Zeichen
+                        // hierher, sonst faellt die Dringlichkeit genau bei den kleinen Bloecken
+                        // weg — und die sind es, die man leicht uebersieht.
+                        if (urgent && !showType)
+                          Icon(Icons.priority_high_rounded, size: 10, color: fg)
+                        else if (showLock && !showType)
+                          Icon(Icons.lock_rounded, size: 10, color: fg.withValues(alpha: 0.7)),
                       ],
                     ),
                   ),
@@ -1485,6 +1559,12 @@ class _MonthView extends StatelessWidget {
     final showDots = evts.isNotEmpty && cellH >= numSize * 1.4 + dotSize + 6;
     final maxDots = ((cellW - 6 + 2) / (dotSize + 2)).floor().clamp(1, 4);
 
+    // Dringliche Aufgaben zuerst: in eine Zelle passen nur vier Punkte, und ein "heute faellig"
+    // darf nicht ausgerechnet der sein, der wegen der Uhrzeit hinten runterfaellt.
+    final now = DateTime.now();
+    final dotted = [...evts]..sort((a, b) =>
+        (_isUrgent(b, now) ? 1 : 0).compareTo(_isUrgent(a, now) ? 1 : 0));
+
     return GestureDetector(
       onTap: () => onDayTap(day),
       child: Container(
@@ -1519,7 +1599,7 @@ class _MonthView extends StatelessWidget {
                 const SizedBox(height: 2),
                 Row(
                   mainAxisAlignment: MainAxisAlignment.center,
-                  children: evts
+                  children: dotted
                       .take(maxDots)
                       .map((e) => Container(
                             width: dotSize,
@@ -1528,7 +1608,8 @@ class _MonthView extends StatelessWidget {
                             decoration: BoxDecoration(
                               color: isSel
                                   ? Colors.white.withValues(alpha: 0.8)
-                                  : (e.color != null ? e.colorObject : _typeColor(e.eventType)),
+                                  : _urgentAccent(e, now) ??
+                                      (e.color != null ? e.colorObject : _typeColor(e.eventType)),
                               shape: BoxShape.rectangle,
                             ),
                           ))
@@ -1651,6 +1732,15 @@ class _EventDetailSheet extends StatelessWidget {
                   text: '${DateFormat('EEE, MMM d · h:mm a').format(event.startTime)} → ${DateFormat('h:mm a').format(event.endTime)}',
                   sub: '${event.durationInMinutes} minutes',
                 ),
+                // Faelligkeit der zugehoerigen Aufgabe. Die Karte im Raster zeigt nur "HEUTE
+                // FÄLLIG"; wer den Block antippt, will das genaue Datum sehen.
+                if (event.isTask && event.relatedTaskDeadline != null)
+                  _SheetRow(
+                    icon: Icons.flag_rounded,
+                    text: 'Fällig: ${DateFormat('EEE, d. MMM · HH:mm').format(event.relatedTaskDeadline!)}',
+                    sub: deadlineLabel(event.relatedTaskDeadline!, DateTime.now()),
+                    color: _urgentAccent(event, DateTime.now()),
+                  ),
                 if (event.location != null) _SheetRow(icon: Icons.location_on_rounded, text: event.location!),
                 if (event.description != null) _SheetRow(icon: Icons.notes_rounded, text: event.description!),
                 // Umformuliert, seit das Pinnen über den Button unten reversibel ist.
@@ -1820,7 +1910,9 @@ class _SheetRow extends StatelessWidget {
   final IconData icon;
   final String text;
   final String? sub;
-  const _SheetRow({required this.icon, required this.text, this.sub});
+  /// Hebt Symbol und Text hervor; ohne Angabe bleibt die Zeile im gewohnten Grau.
+  final Color? color;
+  const _SheetRow({required this.icon, required this.text, this.sub, this.color});
 
   @override
   Widget build(BuildContext context) {
@@ -1829,13 +1921,17 @@ class _SheetRow extends StatelessWidget {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Icon(icon, size: 16, color: Colors.grey),
+          Icon(icon, size: 16, color: color ?? Colors.grey),
           const SizedBox(width: 10),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(text, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500)),
+                Text(text,
+                    style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: color != null ? FontWeight.w700 : FontWeight.w500,
+                        color: color)),
                 if (sub != null) Text(sub!, style: const TextStyle(fontSize: 11, color: Colors.grey)),
               ],
             ),

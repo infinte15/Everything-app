@@ -401,15 +401,32 @@ class _TaskTile extends StatelessWidget {
                           Icon(
                             Icons.access_time,
                             size: 12,
-                            color: task.isOverdue ? Colors.red : Colors.grey,
+                            color: task.isOverdue ? AppTheme.errorColor : Colors.grey,
                           ),
                           const SizedBox(width: 4),
                           Text(
                             DateFormat('dd.MM.yyyy').format(task.deadline!),
                             style: TextStyle(
                               fontSize: 11,
-                              color: task.isOverdue ? Colors.red : Colors.grey,
+                              color: task.isOverdue ? AppTheme.errorColor : Colors.grey,
                               fontWeight: task.isOverdue ? FontWeight.bold : FontWeight.normal,
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                        ],
+                        // Der Scheduler hat keinen Block vor der Deadline untergebracht. Ohne
+                        // diesen Hinweis waere der einzige Unterschied zu einer eingeplanten
+                        // Aufgabe, dass irgendwo im Kalender ein Block fehlt.
+                        if (!isCompleted && task.isUnschedulable) ...[
+                          Icon(Icons.event_busy_rounded,
+                              size: 12, color: AppTheme.errorColor),
+                          const SizedBox(width: 4),
+                          Text(
+                            'Nicht einplanbar',
+                            style: TextStyle(
+                              fontSize: 11,
+                              color: AppTheme.errorColor,
+                              fontWeight: FontWeight.bold,
                             ),
                           ),
                           const SizedBox(width: 8),

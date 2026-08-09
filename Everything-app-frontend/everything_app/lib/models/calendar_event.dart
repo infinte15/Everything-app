@@ -31,6 +31,11 @@ class CalendarEvent {
   /// genau daran scheiterte frueher das Loeschen automatisch geplanter Bloecke.
   final DateTime? skippedAt;
 
+  /// Deadline und Prioritaet der verknuepften Aufgabe — nur lesend, gepflegt wird beides am Task.
+  /// Der Kalender hebt damit den Block hervor, der die letzte Chance vor der Deadline ist.
+  final DateTime? relatedTaskDeadline;
+  final int? relatedTaskPriority;
+
   CalendarEvent({
     this.id,
     required this.title,
@@ -48,6 +53,8 @@ class CalendarEvent {
     this.relatedProjectId,
     this.completedAt,
     this.skippedAt,
+    this.relatedTaskDeadline,
+    this.relatedTaskPriority,
   });
 
   // JSON zu CalendarEvent
@@ -73,6 +80,10 @@ class CalendarEvent {
       skippedAt: json['skippedAt'] != null
           ? DateTime.parse(json['skippedAt'])
           : null,
+      relatedTaskDeadline: json['relatedTaskDeadline'] != null
+          ? DateTime.parse(json['relatedTaskDeadline'])
+          : null,
+      relatedTaskPriority: json['relatedTaskPriority'],
     );
   }
 
@@ -94,6 +105,8 @@ class CalendarEvent {
       'relatedWorkoutId': relatedWorkoutId,
       'relatedProjectId': relatedProjectId,
       'completedAt': completedAt?.toIso8601String(),
+      // relatedTaskDeadline/-Priority fehlen bewusst: sie gehoeren dem Task, das Backend liest
+      // sie beim Speichern eines Termins ohnehin nicht (CalendarEventMapper.toEntity).
     };
   }
 
@@ -115,6 +128,8 @@ class CalendarEvent {
     int? relatedProjectId,
     DateTime? completedAt,
     DateTime? skippedAt,
+    DateTime? relatedTaskDeadline,
+    int? relatedTaskPriority,
   }) {
     return CalendarEvent(
       id: id ?? this.id,
@@ -133,6 +148,8 @@ class CalendarEvent {
       relatedProjectId: relatedProjectId ?? this.relatedProjectId,
       completedAt: completedAt ?? this.completedAt,
       skippedAt: skippedAt ?? this.skippedAt,
+      relatedTaskDeadline: relatedTaskDeadline ?? this.relatedTaskDeadline,
+      relatedTaskPriority: relatedTaskPriority ?? this.relatedTaskPriority,
     );
   }
 

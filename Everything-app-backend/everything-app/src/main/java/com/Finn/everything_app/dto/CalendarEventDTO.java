@@ -30,6 +30,16 @@ public class CalendarEventDTO {
     private Long relatedWorkoutId;
     private Long relatedProjectId;
 
+    /**
+     * Deadline und Priorität des verknüpften Tasks — nur lesend, gespeichert wird beides am Task.
+     *
+     * Der Kalender braucht sie, um einen Block hervorzuheben, der die letzte Chance vor der
+     * Deadline ist. Die Dringlichkeitsstufe selbst wird bewusst NICHT hier berechnet: sie hängt
+     * an "jetzt" und ändert sich im Minutentakt, also gehört sie in die Oberfläche.
+     */
+    private LocalDateTime relatedTaskDeadline;
+    private Integer relatedTaskPriority;
+
     private String color;
     private String notes;
 

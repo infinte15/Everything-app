@@ -142,6 +142,15 @@ class Task {
   
   bool get isCompleted => status == 'COMPLETED';
 
+  /// Offen, mit Termin, aber ohne Block im Kalender.
+  ///
+  /// Der Scheduler plant seit der harten Deadline-Grenze nichts mehr hinter die Deadline: passt
+  /// die Aufgabe nicht mehr davor, bleibt sie ungeplant. Er meldet das zwar als "at risk", aber
+  /// nur in der Antwort auf eine ausdrueckliche Neuplanung — laeuft die Neuplanung im Hintergrund,
+  /// sieht das niemand. Der fehlende Termin ist die Spur, die bleibt.
+  bool get isUnschedulable =>
+      !isCompleted && status != 'CANCELLED' && deadline != null && scheduledStartTime == null;
+
   @override
   String toString() => 'Task(id: $id, title: $title, status: $status)';
 }

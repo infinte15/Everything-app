@@ -27,6 +27,10 @@ public class CalendarEventMapper {
 
         if (event.getRelatedTask() != null) {
             dto.setRelatedTaskId(event.getRelatedTask().getId());
+            // Für die Dringlichkeits-Optik im Kalender. Beides bleibt nur lesend — geschrieben
+            // wird es ausschließlich am Task selbst, deshalb steht es nicht in toEntity.
+            dto.setRelatedTaskDeadline(event.getRelatedTask().getDeadline());
+            dto.setRelatedTaskPriority(event.getRelatedTask().getPriority());
         }
         if (event.getRelatedHabit() != null) {
             dto.setRelatedHabitId(event.getRelatedHabit().getId());
