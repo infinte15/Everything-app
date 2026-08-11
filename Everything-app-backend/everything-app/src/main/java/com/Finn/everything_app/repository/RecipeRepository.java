@@ -24,8 +24,24 @@ public interface RecipeRepository extends JpaRepository<Recipe, Long> {
     // Alle Rezepte
     List<Recipe> findByUserId(Long userId);
 
-    // Rezepte nach Name
-    List<Recipe> findByUserIdAndNameContainingIgnoreCase(Long userId, String name);
+    /**
+     * Freitextsuche ueber Name, Tags und Zutaten.
+     *
+     * <p>Die Zutaten gehoeren dazu, weil das Suchfeld im Frontend "Rezepte, Zutaten suchen"
+     * heisst - und weil die haeufigste Frage an ein eigenes Kochbuch lautet, was sich aus dem
+     * machen laesst, was noch da ist. Eine Suche nur ueber den Namen findet "Feta" in keinem
+     * Rezept, das nicht Feta heisst.
+     *
+     * <p>{@code DISTINCT} ist noetig: ohne es kommt ein Rezept mit drei passenden Zutaten
+     * dreimal zurueck.
+     */
+    @Query("SELECT DISTINCT r FROM Recipe r LEFT JOIN r.ingredientList i " +
+            "WHERE r.user.id = :userId AND (" +
+            " LOWER(r.name) LIKE LOWER(CONCAT('%', :query, '%')) OR " +
+            " LOWER(COALESCE(r.tags, '')) LIKE LOWER(CONCAT('%', :query, '%')) OR " +
+            " LOWER(i.name) LIKE LOWER(CONCAT('%', :query, '%'))) " +
+            "ORDER BY r.name ASC")
+    List<Recipe> search(@Param("userId") Long userId, @Param("query") String query);
 
     // Rezepte nach Kategorie
     List<Recipe> findByUserIdAndCategory(Long userId, String category);

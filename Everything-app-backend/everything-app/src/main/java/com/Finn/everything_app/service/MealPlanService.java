@@ -10,6 +10,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.*;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -82,17 +83,40 @@ public class MealPlanService {
         };
     }
 
+    /**
+     * Lesend transaktional und mit angefasstem Rezept.
+     *
+     * <p>{@code MealPlanMapper} holt Name und Bild ueber {@code mealPlan.getRecipe()}, und die
+     * Beziehung ist LAZY. Bei {@code spring.jpa.open-in-view=false} endet die Sitzung mit dem
+     * Repository-Aufruf - ohne diese Klammer wird der Wochenplan zu einem 500.
+     */
+    @Transactional(readOnly = true)
     public List<MealPlan> getMealPlanForPeriod(Long userId, LocalDate start, LocalDate end) {
-        return mealPlanRepository.findByUserIdAndDateBetween(userId, start, end);
+        return withRecipe(mealPlanRepository.findByUserIdAndDateBetween(userId, start, end));
     }
 
+    @Transactional(readOnly = true)
     public List<MealPlan> getMealPlanForDate(Long userId, LocalDate date) {
-        return mealPlanRepository.findByUserIdAndDate(userId, date);
+        return withRecipe(mealPlanRepository.findByUserIdAndDate(userId, date));
     }
 
+    @Transactional(readOnly = true)
     public MealPlan getMealPlan(Long userId, Long id) {
-        return mealPlanRepository.findByIdAndUserId(id, userId)
+        MealPlan mealPlan = mealPlanRepository.findByIdAndUserId(id, userId)
                 .orElseThrow(() -> new ResourceNotFoundException("Essensplan nicht gefunden"));
+        touchRecipe(mealPlan);
+        return mealPlan;
+    }
+
+    private static List<MealPlan> withRecipe(List<MealPlan> plans) {
+        plans.forEach(MealPlanService::touchRecipe);
+        return plans;
+    }
+
+    private static void touchRecipe(MealPlan plan) {
+        if (plan.getRecipe() != null) {
+            plan.getRecipe().getName();
+        }
     }
 
     @Transactional
@@ -169,6 +193,11 @@ public class MealPlanService {
      * gibt; die Reihenfolge kommt aus der Abfrage, also lange nicht Gekochtes zuerst. Ein Slot
      * ohne passendes Rezept wird uebersprungen - frueher brach die ganze Generierung mit
      * {@code RuntimeException("Keine Rezepte verfügbar")} ab, auch wenn nur das Fruehstueck fehlte.
+     *
+     * <p><b>Belegte Plaetze bleiben, wie sie sind.</b> Die Oberflaeche hat dafuer genau einen
+     * Knopf ("Woche füllen"); ohne diese Pruefung legte ein zweiter Druck einundzwanzig weitere
+     * Eintraege an, und der Wochenplan zeigte jede Mahlzeit doppelt. Aufgefuellt wird also nur,
+     * was leer ist - deshalb heisst der Knopf auch nicht "Woche neu planen".
      */
     @Transactional
     public List<MealPlan> generateWeeklyPlan(Long userId, LocalDate startDate) {
@@ -182,6 +211,11 @@ public class MealPlanService {
             candidates.put(mealType, recipeRepository.findSuitableFor(userId, mealType));
         }
 
+        Set<String> occupied = mealPlanRepository
+                .findByUserIdAndDateBetween(userId, startDate, startDate.plusDays(6)).stream()
+                .map(existing -> existing.getDate() + "|" + existing.getMealType())
+                .collect(Collectors.toSet());
+
         List<MealPlan> weeklyPlan = new ArrayList<>();
         Set<Long> alreadyPlanned = new HashSet<>();
 
@@ -189,6 +223,10 @@ public class MealPlanService {
             LocalDate date = startDate.plusDays(day);
 
             for (MealType mealType : mealTypes) {
+                if (occupied.contains(date + "|" + mealType)) {
+                    continue;
+                }
+
                 List<Recipe> suitable = candidates.get(mealType);
                 if (suitable.isEmpty()) {
                     continue;

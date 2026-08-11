@@ -58,7 +58,7 @@ public class DemoRecipeData {
         Recipe bolognese = recipe(user, "Bolognese wie bei Oma", "Pasta & Reis", 20, 150, 4,
                 "Vier Stunden wären besser, zweieinhalb reichen. Die Milch am Ende ist kein Tippfehler — "
                         + "sie macht die Sauce samtig und nimmt der Tomate die Säure.",
-                "mittel", 640, 34.0, 62.0, 24.0, "italienisch,meal-prep,klassiker",
+                "Mittel", 640, 34.0, 62.0, 24.0, "italienisch,meal-prep,klassiker",
                 true, (short) 5, 11, today.minusDays(6),
                 Set.of(MealType.MITTAGESSEN, MealType.ABENDESSEN),
                 List.of(
@@ -88,7 +88,7 @@ public class DemoRecipeData {
 
         Recipe linsen = recipe(user, "Rote-Linsen-Dal", "Suppe & Eintopf", 10, 30, 3,
                 "Der Standard für Abende, an denen der Kühlschrank leer ist — alles kommt aus dem Vorrat.",
-                "einfach", 420, 21.0, 58.0, 12.0, "vegan,vorratskammer,schnell",
+                "Einfach", 420, 21.0, 58.0, 12.0, "vegan,vorratskammer,schnell",
                 true, (short) 4, 23, today.minusDays(3),
                 Set.of(MealType.MITTAGESSEN, MealType.ABENDESSEN),
                 List.of(
@@ -111,7 +111,7 @@ public class DemoRecipeData {
 
         Recipe ofen = recipe(user, "Ofengemüse mit Feta und Honig", "Auflauf & Ofen", 15, 40, 2,
                 "Ein Blech, ein Handgriff, keine Aufmerksamkeit nötig — läuft nebenbei, während man lernt.",
-                "einfach", 480, 18.0, 42.0, 26.0, "vegetarisch,ein-blech,lernabend",
+                "Einfach", 480, 18.0, 42.0, 26.0, "vegetarisch,ein-blech,lernabend",
                 false, (short) 4, 7, today.minusDays(9),
                 Set.of(MealType.ABENDESSEN),
                 List.of(
@@ -132,7 +132,7 @@ public class DemoRecipeData {
 
         Recipe bowl = recipe(user, "Meal-Prep-Bowl mit Falafel", "Salat & Bowl", 25, 25, 4,
                 "Sonntags einmal gemacht, hält vier Tage im Kühlschrank. Die Sauce getrennt aufbewahren.",
-                "mittel", 590, 24.0, 68.0, 22.0, "meal-prep,vegetarisch,mittag",
+                "Mittel", 590, 24.0, 68.0, 22.0, "meal-prep,vegetarisch,mittag",
                 true, (short) 5, 14, today.minusDays(1),
                 Set.of(MealType.MITTAGESSEN),
                 List.of(
@@ -156,7 +156,7 @@ public class DemoRecipeData {
 
         Recipe porridge = recipe(user, "Overnight Oats mit Beeren", "Frühstück", 5, 0, 1,
                 "Abends 5 Minuten, morgens 0 — die einzige Art, wie ich vor einer 8:15-Vorlesung frühstücke.",
-                "einfach", 380, 14.0, 52.0, 11.0, "frühstück,vorbereiten,schnell",
+                "Einfach", 380, 14.0, 52.0, 11.0, "frühstück,vorbereiten,schnell",
                 true, (short) 4, 31, today.minusDays(1),
                 Set.of(MealType.FRUEHSTUECK),
                 List.of(
@@ -174,7 +174,7 @@ public class DemoRecipeData {
 
         Recipe curry = recipe(user, "Thai-Curry mit Hähnchen", "Hauptgericht", 20, 25, 3,
                 "Wenn die Paste gut ist, wird das Curry gut. Beim Rest kann man sparen.",
-                "mittel", 610, 38.0, 44.0, 30.0, "asiatisch,schnell,scharf",
+                "Mittel", 610, 38.0, 44.0, 30.0, "asiatisch,schnell,scharf",
                 true, (short) 5, 9, today.minusDays(12),
                 Set.of(MealType.ABENDESSEN),
                 List.of(
@@ -197,7 +197,7 @@ public class DemoRecipeData {
 
         Recipe risotto = recipe(user, "Pilzrisotto", "Pasta & Reis", 15, 35, 2,
                 "Nur mit heißer Brühe aufgießen — kalte Brühe stoppt die Stärke und das Risotto wird mehlig.",
-                "mittel", 520, 16.0, 70.0, 18.0, "italienisch,vegetarisch,wochenende",
+                "Mittel", 520, 16.0, 70.0, 18.0, "italienisch,vegetarisch,wochenende",
                 false, (short) 4, 5, today.minusDays(20),
                 Set.of(MealType.ABENDESSEN),
                 List.of(
@@ -218,7 +218,7 @@ public class DemoRecipeData {
 
         Recipe shakshuka = recipe(user, "Shakshuka", "Frühstück", 10, 25, 2,
                 "Funktioniert zu jeder Tageszeit. Brot ist keine Beilage, sondern Werkzeug.",
-                "einfach", 410, 22.0, 26.0, 24.0, "vegetarisch,brunch,eintopf",
+                "Einfach", 410, 22.0, 26.0, 24.0, "vegetarisch,brunch,eintopf",
                 true, (short) 5, 8, today.minusDays(15),
                 Set.of(MealType.FRUEHSTUECK, MealType.ABENDESSEN),
                 List.of(
@@ -239,7 +239,7 @@ public class DemoRecipeData {
 
         Recipe suppe = recipe(user, "Kürbissuppe mit Ingwer", "Suppe & Eintopf", 15, 30, 4,
                 "Hokkaido muss nicht geschält werden — das spart die halbe Arbeit.",
-                "einfach", 290, 6.0, 32.0, 14.0, "vegan,herbst,einfrieren",
+                "Einfach", 290, 6.0, 32.0, 14.0, "vegan,herbst,einfrieren",
                 false, (short) 4, 6, today.minusDays(30),
                 Set.of(MealType.MITTAGESSEN, MealType.ABENDESSEN),
                 List.of(
@@ -259,7 +259,7 @@ public class DemoRecipeData {
 
         Recipe pfanne = recipe(user, "Gnocchi-Pfanne mit Spinat", "Hauptgericht", 10, 15, 2,
                 "Von Kühlschrank auf Teller in 25 Minuten. Das Rezept für Tage nach dem Training.",
-                "einfach", 560, 20.0, 66.0, 22.0, "schnell,feierabend,vegetarisch",
+                "Einfach", 560, 20.0, 66.0, 22.0, "schnell,feierabend,vegetarisch",
                 true, (short) 4, 19, today.minusDays(4),
                 Set.of(MealType.ABENDESSEN),
                 List.of(
@@ -279,7 +279,7 @@ public class DemoRecipeData {
 
         Recipe brot = recipe(user, "No-Knead-Brot", "Backen", 15, 45, 8,
                 "18 Stunden Wartezeit, 15 Minuten Arbeit. Der Topf muss vorgeheizt werden, sonst geht es nicht auf.",
-                "mittel", 210, 7.0, 42.0, 1.0, "backen,wochenende,vorbereiten",
+                "Mittel", 210, 7.0, 42.0, 1.0, "backen,wochenende,vorbereiten",
                 true, (short) 5, 4, today.minusDays(24),
                 Set.of(MealType.FRUEHSTUECK, MealType.SNACK),
                 List.of(
@@ -297,7 +297,7 @@ public class DemoRecipeData {
 
         Recipe pancakes = recipe(user, "Protein-Pancakes", "Frühstück", 10, 10, 1,
                 "Nach dem Training. Quark statt Mehl hält den Kohlenhydratanteil unten.",
-                "einfach", 450, 42.0, 34.0, 12.0, "sport,protein,frühstück",
+                "Einfach", 450, 42.0, 34.0, 12.0, "sport,protein,frühstück",
                 false, (short) 3, 13, today.minusDays(2),
                 Set.of(MealType.FRUEHSTUECK, MealType.SNACK),
                 List.of(
@@ -314,7 +314,7 @@ public class DemoRecipeData {
 
         Recipe tiramisu = recipe(user, "Tiramisu ohne rohes Ei", "Dessert", 25, 0, 6,
                 "Muss mindestens sechs Stunden durchziehen. Über Nacht ist besser.",
-                "mittel", 430, 9.0, 38.0, 26.0, "dessert,gäste,vorbereiten",
+                "Mittel", 430, 9.0, 38.0, 26.0, "dessert,gäste,vorbereiten",
                 true, (short) 5, 3, today.minusDays(38),
                 Set.of(MealType.SNACK),
                 List.of(
@@ -334,7 +334,7 @@ public class DemoRecipeData {
 
         Recipe salat = recipe(user, "Krautsalat als Beilage", "Beilage & Sauce", 15, 0, 4,
                 "Der Salat wird besser, je länger er steht — am zweiten Tag ist er am besten.",
-                "einfach", 140, 3.0, 12.0, 9.0, "beilage,vorbereiten,vegan",
+                "Einfach", 140, 3.0, 12.0, 9.0, "beilage,vorbereiten,vegan",
                 false, (short) 3, 2, today.minusDays(45),
                 Set.of(MealType.MITTAGESSEN, MealType.ABENDESSEN),
                 List.of(

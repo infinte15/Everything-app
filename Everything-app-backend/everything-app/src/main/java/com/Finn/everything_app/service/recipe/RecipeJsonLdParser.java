@@ -112,8 +112,10 @@ public class RecipeJsonLdParser {
 
         dto.setCategory(mapCategory(text(recipeNode, "recipeCategory")));
         // Die Schwierigkeit steht nicht im JSON-LD. Raten waere schlechter als eine ehrliche
-        // Vorgabe, die im Sheet mit einem Tipp geaendert ist.
-        dto.setDifficulty("Normal");
+        // Vorgabe, die im Sheet mit einem Tipp geaendert ist. "Mittel" und nicht "Normal":
+        // kanonisch sind Einfach / Mittel / Aufwendig, und ein viertes Wort fuer dieselbe Stufe
+        // teilt den Filter in zwei Haelften.
+        dto.setDifficulty("Mittel");
 
         dto.setIngredients(readIngredients(recipeNode.get("recipeIngredient")));
         if (dto.getIngredients().isEmpty()) {

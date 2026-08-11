@@ -68,13 +68,21 @@ public class Recipe {
      * <p>{@code orphanRemoval}, weil eine Zutat ausserhalb ihres Rezepts keinen Sinn ergibt:
      * loescht man sie aus der Liste, soll die Zeile verschwinden, nicht mit
      * {@code recipe_id = null} zurueckbleiben.
+     *
+     * <p>{@code @BatchSize}: die Liste bleibt LAZY, wird aber fuer bis zu 50 Rezepte auf einmal
+     * nachgeladen. {@code RecipeService} muss sie vor dem Abbilden anfassen (siehe dort), und
+     * ohne diese Angabe waeren das beim Kochbuch zwei Abfragen je Rezept statt zwei je Seite.
+     * Ein {@code JOIN FETCH} geht nicht: zwei sortierte Listen in einer Abfrage lehnt Hibernate
+     * mit {@code MultipleBagFetchException} ab.
      */
     @OneToMany(mappedBy = "recipe", cascade = CascadeType.ALL, orphanRemoval = true)
     @OrderBy("position ASC")
+    @org.hibernate.annotations.BatchSize(size = 50)
     private List<RecipeIngredient> ingredientList = new ArrayList<>();
 
     @OneToMany(mappedBy = "recipe", cascade = CascadeType.ALL, orphanRemoval = true)
     @OrderBy("position ASC")
+    @org.hibernate.annotations.BatchSize(size = 50)
     private List<RecipeStep> steps = new ArrayList<>();
 
     // Naehrwerte je Portion.

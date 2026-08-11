@@ -22,6 +22,14 @@ import java.util.Set;
  * {@code updateRecipe}, {@code toggleFavorite} und {@code deleteRecipe} allein ueber die Id -
  * wer eine fremde Id kannte, kam an fremde Rezepte. Ein fremdes Rezept gibt hier 404, nicht
  * 403: was einem nicht gehoert, soll nicht einmal als existent erkennbar sein.
+ *
+ * <p><b>Warum die Lesemethoden {@code @Transactional} sind und die Sammlungen anfassen.</b>
+ * {@code spring.jpa.open-in-view=false} - die Sitzung endet also mit dem Repository-Aufruf und
+ * nicht mit der Antwort. {@link com.Finn.everything_app.mapper.RecipeMapper#toDTO} liest aber
+ * {@code ingredientList} und {@code steps}, und beide sind LAZY. Ohne diese Klammer wurde
+ * jeder Lesezugriff auf ein Rezept zu einem 500 mit
+ * {@code LazyInitializationException} - die Liste, die Suche, die Detailseite, alles. Sichtbar
+ * war das nur an einem einzigen Test, weil kein anderer die Zutaten der Antwort geprueft hat.
  */
 @Service
 @RequiredArgsConstructor
@@ -45,29 +53,58 @@ public class RecipeService {
         return recipeRepository.save(recipe);
     }
 
+    @Transactional(readOnly = true)
     public List<Recipe> getUserRecipes(Long userId) {
-        return recipeRepository.findByUserId(userId);
+        return withContent(recipeRepository.findByUserId(userId));
     }
 
+    @Transactional(readOnly = true)
     public Recipe getRecipeById(Long userId, Long id) {
-        return recipeRepository.findByIdAndUserId(id, userId)
-                .orElseThrow(() -> new ResourceNotFoundException("Rezept nicht gefunden"));
+        return withContent(recipeRepository.findByIdAndUserId(id, userId)
+                .orElseThrow(() -> new ResourceNotFoundException("Rezept nicht gefunden")));
     }
 
+    @Transactional(readOnly = true)
     public List<Recipe> getRecipesByCategory(Long userId, String category) {
-        return recipeRepository.findByUserIdAndCategory(userId, category);
+        return withContent(recipeRepository.findByUserIdAndCategory(userId, category));
     }
 
+    @Transactional(readOnly = true)
     public List<Recipe> getFavoriteRecipes(Long userId) {
-        return recipeRepository.findByUserIdAndIsFavoriteTrue(userId);
+        return withContent(recipeRepository.findByUserIdAndIsFavoriteTrue(userId));
     }
 
+    /** Sucht ueber Name, Tags und Zutaten. Ein leerer Suchbegriff gibt nichts zurueck. */
+    @Transactional(readOnly = true)
     public List<Recipe> searchRecipes(Long userId, String query) {
-        return recipeRepository.findByUserIdAndNameContainingIgnoreCase(userId, query);
+        if (query == null || query.isBlank()) {
+            return List.of();
+        }
+        return withContent(recipeRepository.search(userId, query.trim()));
     }
 
+    @Transactional(readOnly = true)
     public List<Recipe> getQuickRecipes(Long userId, Integer maxMinutes) {
-        return recipeRepository.findQuickRecipes(userId, maxMinutes);
+        return withContent(recipeRepository.findQuickRecipes(userId, maxMinutes));
+    }
+
+    /**
+     * Laedt Zutaten und Schritte nach, solange die Sitzung noch offen ist.
+     *
+     * <p>Kein {@code JOIN FETCH} in der Abfrage: es sind zwei Sammlungen ohne Sortierspalte,
+     * und Hibernate lehnt zwei solche Verbunde in einer Abfrage mit
+     * {@code MultipleBagFetchException} ab. Die Sammlungen tragen deshalb {@code @BatchSize},
+     * damit hier nicht pro Rezept zwei Abfragen entstehen, sondern zwei je Seite.
+     */
+    private static List<Recipe> withContent(List<Recipe> recipes) {
+        recipes.forEach(RecipeService::withContent);
+        return recipes;
+    }
+
+    private static Recipe withContent(Recipe recipe) {
+        recipe.getIngredientList().size();
+        recipe.getSteps().size();
+        return recipe;
     }
 
     /**
@@ -209,9 +246,14 @@ public class RecipeService {
         return recipeRepository.save(recipe);
     }
 
+    /** Lesend transaktional, weil der Mapper ueber {@code log.getRecipe()} den Namen holt. */
+    @Transactional(readOnly = true)
     public List<RecipeCookLog> getCookLog(Long userId, Long recipeId) {
         getRecipeById(userId, recipeId);
-        return cookLogRepository.findByRecipeIdAndUserIdOrderByCookedAtDesc(recipeId, userId);
+        List<RecipeCookLog> logs =
+                cookLogRepository.findByRecipeIdAndUserIdOrderByCookedAtDesc(recipeId, userId);
+        logs.forEach(log -> log.getRecipe().getName());
+        return logs;
     }
 
     /**
@@ -238,21 +280,27 @@ public class RecipeService {
 
     // ── Entdecken ─────────────────────────────────────────────────────────────────────────
 
+    @Transactional(readOnly = true)
     public List<Recipe> getRecentlyCooked(Long userId) {
-        return recipeRepository.findByUserIdAndLastCookedAtIsNotNullOrderByLastCookedAtDesc(userId);
+        return withContent(
+                recipeRepository.findByUserIdAndLastCookedAtIsNotNullOrderByLastCookedAtDesc(userId));
     }
 
     /** Lange nicht gekocht - siehe die Bedingung in der Abfrage, sie ist der Kern. */
+    @Transactional(readOnly = true)
     public List<Recipe> getNotCookedInAWhile(Long userId, int days) {
-        return recipeRepository.findNotCookedSince(userId, LocalDateTime.now().minusDays(days));
+        return withContent(
+                recipeRepository.findNotCookedSince(userId, LocalDateTime.now().minusDays(days)));
     }
 
+    @Transactional(readOnly = true)
     public List<Recipe> getNeverCooked(Long userId) {
-        return recipeRepository.findByUserIdAndCookCountOrderByCreatedAtDesc(userId, 0);
+        return withContent(recipeRepository.findByUserIdAndCookCountOrderByCreatedAtDesc(userId, 0));
     }
 
+    @Transactional(readOnly = true)
     public List<Recipe> getBestRated(Long userId, short minRating) {
-        return recipeRepository.findBestRated(userId, minRating);
+        return withContent(recipeRepository.findBestRated(userId, minRating));
     }
 
     // ── Mahlzeiten-Eignung ────────────────────────────────────────────────────────────────

@@ -7,6 +7,7 @@ import com.Finn.everything_app.security.CurrentUser;
 import com.Finn.everything_app.service.*;
 import com.Finn.everything_app.service.recipe.ChefkochImporter;
 import com.Finn.everything_app.service.recipe.IngredientParser;
+import com.Finn.everything_app.service.recipe.TextRecipeImporter;
 import lombok.RequiredArgsConstructor;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.HttpStatus;
@@ -38,6 +39,7 @@ public class RecipeController {
     private final MealPlanService mealPlanService;
     private final ShoppingListService shoppingListService;
     private final ChefkochImporter chefkochImporter;
+    private final TextRecipeImporter textRecipeImporter;
     private final IngredientParser ingredientParser;
 
     private final RecipeMapper recipeMapper;
@@ -157,6 +159,22 @@ public class RecipeController {
             @Valid @RequestBody RecipeImportRequest request) {
 
         return ResponseEntity.ok(chefkochImporter.importFrom(request.getUrl()));
+    }
+
+    /**
+     * Liest ein Rezept aus eingefuegtem Text - typisch eine Instagram-Bildunterschrift.
+     *
+     * <p>Kein Abruf von instagram.com: die Seite ist ohne Anmeldung nicht lesbar, und ein
+     * Server, der beliebige fremde Adressen abruft, ist genau die Luecke, die der
+     * {@link ChefkochImporter} mit seiner Host-Liste schliesst. Der Text kommt aus der
+     * Zwischenablage.
+     */
+    @PostMapping("/import/text")
+    public ResponseEntity<RecipeImportPreviewDTO> previewTextImport(
+            @Valid @RequestBody RecipeTextImportRequest request) {
+
+        return ResponseEntity.ok(textRecipeImporter.importFrom(
+                request.getText(), request.getSourceName(), request.getSourceUrl()));
     }
 
     /**

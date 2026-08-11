@@ -125,10 +125,12 @@ class RecipeJsonLdParserTest {
     }
 
     // Die Schwierigkeit steht nicht im JSON-LD, sondern nur im HTML hinter einem Vue-Hash,
-    // der sich mit jedem Deploy aendert. Eine ehrliche Vorgabe statt geraten.
+    // der sich mit jedem Deploy aendert. Eine ehrliche Vorgabe statt geraten - und sie muss
+    // aus dem kanonischen Vokabular Einfach / Mittel / Aufwendig kommen, sonst steht im Filter
+    // ein viertes Wort fuer dieselbe Stufe.
     @Test
     void setztEineVorgabeFuerDieSchwierigkeit() {
-        assertEquals("Normal", parsed().getDifficulty());
+        assertEquals("Mittel", parsed().getDifficulty());
     }
 
     @Test

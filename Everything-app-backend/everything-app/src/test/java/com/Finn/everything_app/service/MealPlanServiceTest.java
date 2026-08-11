@@ -95,6 +95,54 @@ class MealPlanServiceTest {
         assertEquals(3, plan.stream().map(p -> p.getRecipe().getId()).distinct().count());
     }
 
+    // Die Oberflaeche hat genau einen Knopf dafuer. Ohne diese Pruefung legte ein zweiter Druck
+    // einundzwanzig weitere Eintraege an, und jede Mahlzeit stand doppelt im Plan.
+    @Test
+    void belegtePlaetzeWerdenNichtEinZweitesMalGefuellt() {
+        LocalDate montag = LocalDate.now();
+        when(userRepository.findById(1L)).thenReturn(Optional.of(user()));
+        when(recipeRepository.findSuitableFor(1L, MealType.FRUEHSTUECK)).thenReturn(List.of());
+        when(recipeRepository.findSuitableFor(1L, MealType.ABENDESSEN)).thenReturn(List.of());
+        when(recipeRepository.findSuitableFor(1L, MealType.MITTAGESSEN))
+                .thenReturn(List.of(recipe(1L, "Lasagne", MealType.MITTAGESSEN)));
+        when(mealPlanRepository.save(any(MealPlan.class))).thenAnswer(i -> i.getArgument(0));
+
+        List<MealPlan> erster = service.generateWeeklyPlan(1L, montag);
+        assertEquals(7, erster.size());
+
+        // Der zweite Lauf sieht die Eintraege des ersten.
+        when(mealPlanRepository.findByUserIdAndDateBetween(1L, montag, montag.plusDays(6)))
+                .thenReturn(erster);
+
+        assertTrue(service.generateWeeklyPlan(1L, montag).isEmpty());
+        verify(mealPlanRepository, times(7)).save(any(MealPlan.class));
+    }
+
+    // Auffuellen, nicht neu planen: eine von Hand geplante Mahlzeit bleibt stehen, die Luecken
+    // daneben werden belegt.
+    @Test
+    void freiePlaetzeWerdenNebenBelegtenGefuellt() {
+        LocalDate montag = LocalDate.now();
+        MealPlan vorhanden = new MealPlan();
+        vorhanden.setDate(montag);
+        vorhanden.setMealType(MealType.MITTAGESSEN);
+        vorhanden.setRecipe(recipe(9L, "Von Hand", MealType.MITTAGESSEN));
+
+        when(userRepository.findById(1L)).thenReturn(Optional.of(user()));
+        when(recipeRepository.findSuitableFor(1L, MealType.FRUEHSTUECK)).thenReturn(List.of());
+        when(recipeRepository.findSuitableFor(1L, MealType.ABENDESSEN)).thenReturn(List.of());
+        when(recipeRepository.findSuitableFor(1L, MealType.MITTAGESSEN))
+                .thenReturn(List.of(recipe(1L, "Lasagne", MealType.MITTAGESSEN)));
+        when(mealPlanRepository.findByUserIdAndDateBetween(1L, montag, montag.plusDays(6)))
+                .thenReturn(List.of(vorhanden));
+        when(mealPlanRepository.save(any(MealPlan.class))).thenAnswer(i -> i.getArgument(0));
+
+        List<MealPlan> plan = service.generateWeeklyPlan(1L, montag);
+
+        assertEquals(6, plan.size());
+        assertTrue(plan.stream().noneMatch(p -> p.getDate().equals(montag)));
+    }
+
     // ── Kochzeit im Kalender ──────────────────────────────────────────────────────────────
 
     @Test

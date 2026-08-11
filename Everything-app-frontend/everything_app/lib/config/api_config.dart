@@ -128,9 +128,65 @@ class ApiConfig {
   //RECIPE ENDPOINTS
   static const String recipes = '$baseUrl/recipes';
   static String recipeById(int id) => '$baseUrl/recipes/$id';
+  static String recipesByCategory(String category) =>
+      '$baseUrl/recipes/category/${Uri.encodeComponent(category)}';
+  static const String favoriteRecipes = '$baseUrl/recipes/favorites';
+  static String recipeSearch(String query) =>
+      '$baseUrl/recipes/search?query=${Uri.encodeQueryComponent(query)}';
+  static String quickRecipes({int maxMinutes = 30}) =>
+      '$baseUrl/recipes/quick?maxMinutes=$maxMinutes';
+  static String recipeFavorite(int id) => '$baseUrl/recipes/$id/favorite';
+
+  // Entdecken-Reihen
+  static const String recentlyCookedRecipes = '$baseUrl/recipes/recently-cooked';
+  static String notCookedLately({int days = 30}) =>
+      '$baseUrl/recipes/not-cooked-lately?days=$days';
+  static const String neverCookedRecipes = '$baseUrl/recipes/never-cooked';
+  static String bestRatedRecipes({int minRating = 4}) =>
+      '$baseUrl/recipes/best-rated?minRating=$minRating';
+
+  // Bewertung und Kochprotokoll
+  static String recipeRating(int id) => '$baseUrl/recipes/$id/rating';
+  static String recipeCooked(int id) => '$baseUrl/recipes/$id/cooked';
+  static String recipeCookLog(int id) => '$baseUrl/recipes/$id/cook-log';
+  static String cookLogById(int logId) => '$baseUrl/recipes/cook-log/$logId';
+
+  // Import. `importText` ruft nichts ab - der Text kommt aus der Zwischenablage.
+  static const String recipeImportPreview = '$baseUrl/recipes/import/preview';
+  static const String recipeImportText = '$baseUrl/recipes/import/text';
+  static const String parseIngredients = '$baseUrl/recipes/ingredients/parse';
+
+  // Wochenplan
   static const String mealPlan = '$baseUrl/recipes/meal-plan';
+  static String mealPlanRange(DateTime from, DateTime to) =>
+      '$baseUrl/recipes/meal-plan?startDate=${isoDay(from)}&endDate=${isoDay(to)}';
+  static String mealPlanOnDate(DateTime day) =>
+      '$baseUrl/recipes/meal-plan/date/${isoDay(day)}';
+  static String mealPlanById(int id) => '$baseUrl/recipes/meal-plan/$id';
+  static String mealPlanComplete(int id) => '$baseUrl/recipes/meal-plan/$id/complete';
+  static String mealPlanGenerate(DateTime weekStart) =>
+      '$baseUrl/recipes/meal-plan/generate?startDate=${isoDay(weekStart)}';
+
+  // Einkaufsliste. Ohne Zeitraum-Parameter - die Liste ist ein Zustand, keine
+  // Auswertung eines Zeitraums.
   static const String shoppingList = '$baseUrl/recipes/shopping-list';
-  
+  static String shoppingItemById(int id) => '$baseUrl/recipes/shopping-list/$id';
+  static const String shoppingListChecked =
+      '$baseUrl/recipes/shopping-list/checked';
+  static String shoppingListFromMealPlan(DateTime from, DateTime to) =>
+      '$baseUrl/recipes/shopping-list/from-meal-plan'
+      '?startDate=${isoDay(from)}&endDate=${isoDay(to)}';
+
+  /// Datum ohne Zeitanteil für Query-Parameter - der Server bindet `LocalDate`.
+  ///
+  /// Von Hand zusammengesetzt statt über `toIso8601String()`: das liefert bei
+  /// einem `DateTime` in UTC den Vortag, wenn es lokal schon der nächste ist.
+  static String isoDay(DateTime day) =>
+      '${day.year.toString().padLeft(4, '0')}-'
+      '${day.month.toString().padLeft(2, '0')}-'
+      '${day.day.toString().padLeft(2, '0')}';
+
+
   //FINANCE ENDPOINTS
   static const String transactions = '$baseUrl/finance/transactions';
   static String transactionById(int id) => '$baseUrl/finance/transactions/$id';

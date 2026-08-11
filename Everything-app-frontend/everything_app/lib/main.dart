@@ -10,6 +10,7 @@ import 'providers/calendar_provider.dart';
 import 'providers/study_provider.dart';
 import 'providers/sports_provider.dart';
 import 'providers/recipe_provider.dart';
+import 'providers/shopping_list_provider.dart';
 import 'providers/finance_provider.dart';
 import 'providers/habit_provider.dart';
 import 'providers/project_provider.dart';
@@ -35,6 +36,7 @@ class MyApp extends StatelessWidget {
         ChangeNotifierProvider(create: (_) => StudyProvider()),
         ChangeNotifierProvider(create: (_) => SportsProvider()),
         ChangeNotifierProvider(create: (_) => RecipeProvider()),
+        ChangeNotifierProvider(create: (_) => ShoppingListProvider()),
         ChangeNotifierProvider(create: (_) => FinanceProvider()),
         ChangeNotifierProvider(create: (_) => HabitProvider()),
         ChangeNotifierProvider(create: (_) => ProjectProvider()),

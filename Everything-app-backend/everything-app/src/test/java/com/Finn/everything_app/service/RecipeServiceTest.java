@@ -75,6 +75,24 @@ class RecipeServiceTest {
         verify(recipeRepository, never()).delete(any());
     }
 
+    // Das Suchfeld heisst "Rezepte, Zutaten suchen" - vorher traf es nur den Namen.
+    @Test
+    void dieSucheGehtUeberDieRepositoryAbfrageMitZutaten() {
+        Recipe treffer = recipe(1L, "Hauptgericht");
+        when(recipeRepository.search(1L, "Feta")).thenReturn(List.of(treffer));
+
+        assertEquals(List.of(treffer), service.searchRecipes(1L, "  Feta  "));
+        verify(recipeRepository, never()).findByUserId(any());
+    }
+
+    // Ein leeres Feld soll nicht das ganze Kochbuch als "Treffer" ausgeben.
+    @Test
+    void leererSuchbegriffFragtGarNichtErstAb() {
+        assertTrue(service.searchRecipes(1L, "   ").isEmpty());
+        assertTrue(service.searchRecipes(1L, null).isEmpty());
+        verifyNoInteractions(recipeRepository);
+    }
+
     // Zeilen aus der Zeit vor der Vorgabe tragen kein is_favorite - !null war eine NPE.
     @Test
     void favoritSchaltenVertraegtEinenLeerenWert() {

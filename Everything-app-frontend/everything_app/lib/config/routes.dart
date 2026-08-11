@@ -10,6 +10,7 @@ import '../screens/spaces/spaces_screen.dart';
 import '../screens/study/study_screen.dart';
 import '../screens/sports/sports_screen.dart';
 import '../screens/tasks/tasks_screen.dart';
+import '../screens/recipes/pages/recipe_detail_page.dart';
 import '../screens/recipes/recipes_screen.dart';
 import '../screens/finance/finance_screen.dart';
 import '../screens/notes/notes_screen.dart';
@@ -99,6 +100,17 @@ final router = GoRouter(
     GoRoute(
       path: '/recipes',
       builder: (_, _) => const RecipesScreen(),
+      routes: [
+        // Die Detailseite nimmt eine Id, kein Rezept-Objekt: sie muss ein
+        // Rezept auch dann öffnen können, wenn es nicht in der geladenen Liste
+        // steht - aus dem Wochenplan etwa.
+        GoRoute(
+          path: ':id',
+          builder: (_, state) => RecipeDetailPage(
+            recipeId: int.parse(state.pathParameters['id']!),
+          ),
+        ),
+      ],
     ),
     GoRoute(
       path: '/finance',

@@ -7,9 +7,10 @@
     "Haelfte der Rezepte landet unter 'Auflauf & Ofen', die andere unter 'Auflauf', der",
     "Kategorienfilter zeigt beide, und niemand sieht, warum die Zahlen nicht aufgehen.",
     "",
-    "Die Reihenfolge ist die Anzeigereihenfolge und zugleich der Farbindex im Frontend -",
-    "eine Kategorie behaelt ihre Farbe nur, solange sie ihre Position behaelt. Neue",
-    "Kategorien deshalb hinten anhaengen, nicht einsortieren."
+    "Die Reihenfolge ist die Anzeigereihenfolge im Frontend - der Kategorienfilter zeigt sie",
+    "genau so. Eine Farbe bekommen Kategorien nicht: der Space ist einfarbig, auf dem",
+    "Bildschirm ist das Rezeptfoto das einzig Bunte, und zwoelf Toenungen daneben waeren",
+    "Dekoration. Unterschieden werden sie ueber Symbol und Beschriftung."
   ],
   "categories": [
     "Hauptgericht",

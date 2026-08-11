@@ -161,6 +161,49 @@ class RecipeControllerTest {
                 .andExpect(status().isBadRequest());
     }
 
+    // Der Textimport ist der Instagram-Weg: eingefuegte Bildunterschrift, kein Netzabruf.
+    @Test
+    void eineEingefuegteBildunterschriftWirdZuEinerVorschau() throws Exception {
+        String caption = "Zitronen-Pasta\\n\\nFür 2 Personen | 20 Minuten\\n\\n"
+                + "Zutaten:\\n- 250 g Spaghetti\\n- 200 ml Sahne\\n\\n"
+                + "Zubereitung:\\n1. Nudeln kochen.\\n2. Alles vermengen.\\n\\n#pasta";
+
+        mockMvc.perform(post("/api/recipes/import/text")
+                        .header("Authorization", "Bearer " + ownerToken)
+                        .contentType(APPLICATION_JSON)
+                        .content("{\"text\":\"" + caption + "\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.recipe.name").value("Zitronen-Pasta"))
+                .andExpect(jsonPath("$.recipe.servings").value(2))
+                .andExpect(jsonPath("$.recipe.prepTimeMinutes").value(20))
+                .andExpect(jsonPath("$.recipe.tags").value("pasta"))
+                .andExpect(jsonPath("$.recipe.ingredients[0].name").value("Spaghetti"))
+                .andExpect(jsonPath("$.recipe.steps[0].text").value("Nudeln kochen."))
+                .andExpect(jsonPath("$.recipe.sourceName").value("Instagram"))
+                // Die Kategorie wird nicht geraten - sie steht als Warnung in der Vorschau.
+                .andExpect(jsonPath("$.recipe.category").value("Sonstiges"))
+                .andExpect(jsonPath("$.warnings").isNotEmpty());
+
+        assertEquals(0, recipeRepository.findByUserId(owner.getId()).size());
+    }
+
+    @Test
+    void einLeererTextIst400() throws Exception {
+        mockMvc.perform(post("/api/recipes/import/text")
+                        .header("Authorization", "Bearer " + ownerToken)
+                        .contentType(APPLICATION_JSON)
+                        .content("{\"text\":\"   \"}"))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void derTextimportBrauchtEineAnmeldung() throws Exception {
+        mockMvc.perform(post("/api/recipes/import/text")
+                        .contentType(APPLICATION_JSON)
+                        .content("{\"text\":\"Pfannkuchen\"}"))
+                .andExpect(status().isForbidden());
+    }
+
     // Der Parse-Endpunkt schreibt nichts und laeuft durch denselben Parser wie der Import.
     @Test
     void eingefuegteZeilenWerdenZerlegtOhneEtwasZuSpeichern() throws Exception {
