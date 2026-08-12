@@ -206,4 +206,149 @@ class ShoppingListServiceTest {
         assertEquals(ShoppingItemSource.MEAL_PLAN, items.get(0).getSource());
         assertFalse(items.get(0).getIsChecked());
     }
+
+    // ── Ein einzelnes Rezept auf die Liste ────────────────────────────────────────────────
+
+    private Recipe recipe(int servings, RecipeIngredient... items) {
+        Recipe recipe = new Recipe();
+        recipe.setId(1L);
+        recipe.setName("Rezept");
+        recipe.setServings(servings);
+        recipe.replaceIngredients(new ArrayList<>(List.of(items)));
+        return recipe;
+    }
+
+    private ShoppingItem existing(String name, String amount, String unit,
+                                  ShoppingItemSource source, boolean checked) {
+        ShoppingItem item = new ShoppingItem();
+        item.setName(name);
+        item.setAmount(amount == null ? null : new BigDecimal(amount));
+        item.setUnit(unit);
+        item.setSource(source);
+        item.setIsChecked(checked);
+        return item;
+    }
+
+    /** Legt die offenen MANUAL-Zeilen als Zusammenlege-Kandidaten bereit. */
+    private List<ShoppingItem> addRecipeWith(Recipe recipe, Integer servings,
+                                             List<ShoppingItem> openManual) {
+        when(userRepository.findById(1L)).thenReturn(Optional.of(user()));
+        when(shoppingItemRepository.findByUserIdAndSourceAndIsChecked(
+                1L, ShoppingItemSource.MANUAL, false)).thenReturn(openManual);
+        when(shoppingItemRepository.save(any(ShoppingItem.class))).thenAnswer(i -> i.getArgument(0));
+
+        return service.addFromRecipe(1L, recipe, servings);
+    }
+
+    @Test
+    void rezeptzutatenLandenImPassendenRegal() {
+        List<ShoppingItem> items = addRecipeWith(recipe(4,
+                ingredient("Mehl", "200", "g"),
+                ingredient("Tomate", "3", null),
+                ingredient("Butter", null, null)), null, List.of());
+
+        assertEquals("Trockenware", byName(items, "Mehl").getCategory());
+        assertEquals("Obst & Gemüse", byName(items, "Tomate").getCategory());
+        assertEquals("Kühlregal", byName(items, "Butter").getCategory());
+    }
+
+    // Dasselbe Rezept ein zweites Mal darf keine zweite Zeile "200 g Mehl" erzeugen.
+    @Test
+    void offeneEigeneZeileWaechstStattSichZuVerdoppeln() {
+        ShoppingItem mehl = existing("Mehl", "200", "g", ShoppingItemSource.MANUAL, false);
+
+        List<ShoppingItem> items = addRecipeWith(
+                recipe(4, ingredient("Mehl", "300", "g")), null, List.of(mehl));
+
+        assertEquals(1, items.size());
+        assertSame(mehl, items.get(0));
+        assertEquals(0, new BigDecimal("500").compareTo(mehl.getAmount()));
+    }
+
+    // Die wichtigste Regel: eine Wochenplan-Zeile zu fuettern waere eine Falle - der naechste
+    // "Aus Wochenplan aufbauen" loescht genau diese Zeilen und naehme die Handzugabe mit.
+    @Test
+    void wochenplanZeilenWerdenNichtGefuettert() {
+        ShoppingItem ausDemPlan = existing("Mehl", "200", "g", ShoppingItemSource.MEAL_PLAN, false);
+
+        List<ShoppingItem> items = addRecipeWith(
+                recipe(4, ingredient("Mehl", "300", "g")), null, List.of());
+
+        assertEquals(0, new BigDecimal("200").compareTo(ausDemPlan.getAmount()));
+        assertEquals(1, items.size());
+        assertNotSame(ausDemPlan, items.get(0));
+        assertEquals(ShoppingItemSource.MANUAL, items.get(0).getSource());
+        assertEquals(0, new BigDecimal("300").compareTo(items.get(0).getAmount()));
+    }
+
+    // Abgehakt heisst "liegt im Wagen" - eine durchgestrichene Zeile wachsen zu lassen, waere
+    // Unsinn. Dann lieber eine neue, offene Zeile.
+    @Test
+    void abgehakteZeilenBleibenUnberuehrt() {
+        // Die Abfrage holt nur unerledigte Zeilen, die abgehakte taucht also gar nicht auf.
+        List<ShoppingItem> items = addRecipeWith(
+                recipe(4, ingredient("Mehl", "300", "g")), null, List.of());
+
+        assertEquals(1, items.size());
+        assertFalse(items.get(0).getIsChecked());
+        assertEquals(0, new BigDecimal("300").compareTo(items.get(0).getAmount()));
+        verify(shoppingItemRepository)
+                .findByUserIdAndSourceAndIsChecked(1L, ShoppingItemSource.MANUAL, false);
+    }
+
+    // Keine erfundene Zahl, keine zweite Zeile - wie beim Wochenplan-Aufbau.
+    @Test
+    void mengenloseZutatTrifftAufSichSelbstUndVerdoppeltSichNicht() {
+        ShoppingItem salz = existing("Salz", null, null, ShoppingItemSource.MANUAL, false);
+        // Ohne den Helfer, denn hier darf save() gar nicht erst gerufen werden.
+        when(userRepository.findById(1L)).thenReturn(Optional.of(user()));
+        when(shoppingItemRepository.findByUserIdAndSourceAndIsChecked(
+                1L, ShoppingItemSource.MANUAL, false)).thenReturn(List.of(salz));
+
+        List<ShoppingItem> items =
+                service.addFromRecipe(1L, recipe(4, ingredient("Salz", null, null)), null);
+
+        assertTrue(items.isEmpty());
+        assertNull(salz.getAmount());
+        verify(shoppingItemRepository, never()).save(any(ShoppingItem.class));
+    }
+
+    @Test
+    void portionenSkalierenDieMengenDesRezepts() {
+        List<ShoppingItem> items = addRecipeWith(
+                recipe(4, ingredient("Mehl", "200", "g")), 8, List.of());
+
+        assertEquals(0, new BigDecimal("400").compareTo(items.get(0).getAmount()));
+    }
+
+    @Test
+    void ohnePortionsangabeGiltDieGrundmengeDesRezepts() {
+        List<ShoppingItem> items = addRecipeWith(
+                recipe(4, ingredient("Mehl", "200", "g")), null, List.of());
+
+        assertEquals(0, new BigDecimal("200").compareTo(items.get(0).getAmount()));
+    }
+
+    @Test
+    void unvereinbareEinheitenLegenSichAuchHierNichtZusammen() {
+        ShoppingItem oel = existing("Öl", "100", "ml", ShoppingItemSource.MANUAL, false);
+
+        List<ShoppingItem> items = addRecipeWith(
+                recipe(4, ingredient("Öl", "2", "EL")), null, List.of(oel));
+
+        assertEquals(1, items.size());
+        assertNotSame(oel, items.get(0));
+        assertEquals(0, new BigDecimal("100").compareTo(oel.getAmount()));
+    }
+
+    // MANUAL ist der einzig wahre Wert: die Zeilen stammen nicht aus dem Plan und muessen
+    // einen Neuaufbau ueberleben.
+    @Test
+    void neueRezeptzeilenSindEigeneZeilen() {
+        List<ShoppingItem> items = addRecipeWith(
+                recipe(4, ingredient("Mehl", "200", "g")), null, List.of());
+
+        assertEquals(ShoppingItemSource.MANUAL, items.get(0).getSource());
+        assertFalse(items.get(0).getIsChecked());
+    }
 }

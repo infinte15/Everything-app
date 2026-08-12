@@ -88,24 +88,6 @@ void main() {
     });
   });
 
-  group('recipeOfTheDayFor', () {
-    test('ist am selben Tag stabil und am nächsten anders', () async {
-      await provider.load();
-      final today = DateTime(2026, 8, 11);
-
-      // Die alte Fassung nahm "den ersten Favoriten" - ein Rezept des Tages,
-      // das sich nie ändert.
-      expect(provider.recipeOfTheDayFor(today)!.id,
-          provider.recipeOfTheDayFor(today)!.id);
-      expect(provider.recipeOfTheDayFor(today)!.id,
-          isNot(provider.recipeOfTheDayFor(today.add(const Duration(days: 1)))!.id));
-    });
-
-    test('ohne Rezepte gibt es keins', () {
-      expect(provider.recipeOfTheDayFor(DateTime.now()), isNull);
-    });
-  });
-
   group('optimistische Änderungen', () {
     test('toggleFavorite schlägt sofort durch', () async {
       await provider.load();
@@ -186,6 +168,46 @@ void main() {
       // veraltete Zahl.
       expect(service.loadCount, greaterThan(loadsBefore));
       expect(provider.mealPlan.first.isCompleted, isTrue);
+    });
+
+    // Der Haken im Wochenplan soll dasselbe können wie der Knopf auf der
+    // Rezeptseite - vorher hakte er nur ab.
+    test('completeMeal reicht Portionen, Sterne und Notiz durch', () async {
+      await provider.load();
+      await provider.planMeal(
+          recipeId: 1, date: provider.weekStart, mealType: MealType.abendessen);
+
+      await provider.completeMeal(
+        provider.mealPlan.first.id!,
+        servings: 8,
+        rating: 5,
+        note: 'Mehr Butter',
+      );
+
+      expect(service.lastCompletedServings, 8);
+      expect(service.lastCompletedRating, 5);
+      expect(service.lastCompletedNote, 'Mehr Butter');
+    });
+
+    // Die Detailseite darf die Woche nicht überschreiben, die der Plan-Reiter
+    // gerade anzeigt - sonst springt er dem Nutzer unter den Fingern weg.
+    test('mealsForRecipeThisWeek filtert, ohne weekStart oder mealPlan anzufassen',
+        () async {
+      final monday = RecipeProvider.mondayOf(DateTime.now());
+      service.mealPlan.addAll([
+        MealPlan(id: 10, date: monday, mealType: MealType.abendessen, recipeId: 1),
+        MealPlan(id: 11, date: monday, mealType: MealType.mittagessen, recipeId: 2),
+      ]);
+      await provider.load();
+      await provider.nextWeek();
+      final weekBefore = provider.weekStart;
+      final planBefore = provider.mealPlan;
+
+      final meals = await provider.mealsForRecipeThisWeek(1);
+
+      expect(meals.map((m) => m.id), [10]);
+      expect(provider.weekStart, weekBefore);
+      expect(provider.mealPlan, same(planBefore));
     });
 
     test('deleteMeal entfernt optimistisch und stellt bei Fehler wieder her',

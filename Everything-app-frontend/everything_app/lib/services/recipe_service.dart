@@ -13,14 +13,24 @@ import 'api_service.dart';
 /// Ein Fehler, dessen Text angezeigt werden darf.
 ///
 /// [toString] gibt nur die Meldung zurück und nicht "Exception: …": die Sätze
-/// aus dem `ErrorResponse` des Backends ("Bisher werden nur Rezepte von
-/// chefkoch.de erkannt.") sind für den Nutzer geschrieben und sollen ihn
-/// unverändert erreichen.
+/// aus dem `ErrorResponse` des Backends ("Auf dieser Seite steckt kein Rezept.")
+/// sind für den Nutzer geschrieben und sollen ihn unverändert erreichen.
 class RecipeException implements Exception {
-  RecipeException(this.message, [this.statusCode]);
+  RecipeException(this.message, [this.statusCode, this.code]);
 
   final String message;
   final int? statusCode;
+
+  /// Kennung für die Fälle, in denen die Oberfläche auf den Fehler hin etwas
+  /// *tun* soll, statt ihn bloß anzuzeigen.
+  ///
+  /// Bisher genau einer: [instagramPasteCaption]. Auf den deutschen Wortlaut zu
+  /// prüfen wäre eine Falle beim nächsten Umformulieren.
+  final String? code;
+
+  /// Instagram hat den Text nicht herausgegeben - der Nutzer soll die
+  /// Bildunterschrift einfügen, und die Adresse bleibt als Herkunft erhalten.
+  static const String instagramPasteCaption = 'INSTAGRAM_PASTE_CAPTION';
 
   @override
   String toString() => message;
@@ -145,7 +155,11 @@ class RecipeService {
     throw _error(response, 'Die Seite ließ sich nicht lesen');
   }
 
-  /// Liest eingefügten Text - typisch eine Instagram-Bildunterschrift.
+  /// Liest eingefügten Text - eine Bildunterschrift oder abgetippte Zeilen.
+  ///
+  /// [sourceUrl] wird gespeichert und nie abgerufen: kommt der Text aus einem
+  /// Instagram-Beitrag, den der Server nicht lesen durfte, bleibt so trotzdem
+  /// die Herkunft am Rezept.
   Future<RecipeImportPreview> importFromText(
     String text, {
     String? sourceName,
@@ -204,8 +218,22 @@ class RecipeService {
     throw _error(response, 'Mahlzeit konnte nicht geändert werden');
   }
 
-  Future<MealPlan> completeMealPlan(int id) async {
-    final response = await _api.put(ApiConfig.mealPlanComplete(id), const {});
+  /// Hakt eine Mahlzeit ab und schreibt damit ins Kochprotokoll.
+  ///
+  /// Alle Felder sind freiwillig: ohne sie zählt die Mahlzeit mit ihren
+  /// geplanten Portionen, mit ihnen kann der Haken im Wochenplan dasselbe wie
+  /// der Knopf auf der Rezeptseite.
+  Future<MealPlan> completeMealPlan(
+    int id, {
+    int? servings,
+    int? rating,
+    String? note,
+  }) async {
+    final response = await _api.put(ApiConfig.mealPlanComplete(id), {
+      'servings': servings,
+      'rating': rating,
+      'note': note,
+    });
     if (response.statusCode == 200) {
       return MealPlan.fromJson(_decodeMap(response));
     }
@@ -297,6 +325,25 @@ class RecipeService {
     throw _error(response, 'Die Liste ließ sich nicht aufbauen');
   }
 
+  /// Übernimmt die Zutaten eines Rezepts und gibt die **ganze** Liste zurück.
+  ///
+  /// Ganz und nicht nur das Neue: der Server legt teils Zeilen an und lässt
+  /// teils vorhandene wachsen; eine Teilantwort ließe sich hier nicht wieder
+  /// zusammenfügen.
+  Future<List<ShoppingItem>> addRecipeToShoppingList(
+    int recipeId, {
+    int? servings,
+  }) async {
+    final response = await _api.post(
+        ApiConfig.shoppingListFromRecipe(recipeId, servings: servings), const {});
+    if (response.statusCode == 200) {
+      return _decodeList(response)
+          .map((json) => ShoppingItem.fromJson(json))
+          .toList();
+    }
+    throw _error(response, 'Die Zutaten ließen sich nicht übernehmen');
+  }
+
   // ── Gemeinsames ────────────────────────────────────────────────────────────
 
   Future<List<Recipe>> _recipeList(String url, String was) async {
@@ -331,8 +378,15 @@ class RecipeService {
     try {
       final body = json.decode(utf8.decode(response.bodyBytes));
       final message = body is Map ? body['message'] : null;
+      // `details` trägt die Kennung, wenn das Backend eine gesetzt hat - meist
+      // steht dort nichts.
+      final code = body is Map ? body['details'] : null;
       if (message is String && message.isNotEmpty) {
-        return RecipeException(message, response.statusCode);
+        return RecipeException(
+          message,
+          response.statusCode,
+          code is String && code.isNotEmpty ? code : null,
+        );
       }
     } catch (_) {
       // Ein unlesbarer Körper ist kein Grund, den Fehler zu verschlucken.

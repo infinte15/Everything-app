@@ -7,6 +7,7 @@ import '../../../theme/kinetic_theme.dart';
 import '../widgets/category_filter_bar.dart';
 import '../widgets/recipe_card.dart';
 import '../widgets/recipe_error_banner.dart';
+import '../widgets/recipe_quick_actions.dart';
 import '../widgets/recipe_section.dart';
 import 'recipe_detail_page.dart';
 import 'recipe_editor_page.dart';
@@ -66,6 +67,9 @@ class RecipeCookbookTab extends StatelessWidget {
                 recipe: recipe,
                 onTap: () => _openRecipe(context, recipe),
                 onToggleFavorite: () => provider.toggleFavorite(recipe.id!),
+                onPlan: () => planRecipeFlow(context, recipe: recipe),
+                onAddToShoppingList: () =>
+                    addToShoppingListFlow(context, recipeId: recipe.id!),
               ),
               const Divider(
                   height: 1, thickness: 1, color: KineticTheme.divider, indent: 20),
@@ -147,12 +151,12 @@ class RecipeCookbookTab extends StatelessWidget {
     return RecipeEmpty(
       icon: Icons.menu_book_outlined,
       title: 'Noch keine Rezepte',
-      message: 'Tipp eins ein oder hol dir eins von chefkoch.de.',
+      message: 'Tipp eins ein oder importier eins von einer Rezeptseite.',
       actionLabel: 'Rezept anlegen',
       onAction: () => Navigator.of(context).push(
         MaterialPageRoute(builder: (_) => const RecipeEditorPage()),
       ),
-      secondaryLabel: 'Von chefkoch importieren',
+      secondaryLabel: 'Rezept importieren',
       onSecondary: () => Navigator.of(context).push(
         MaterialPageRoute(builder: (_) => const RecipeImportPage()),
       ),

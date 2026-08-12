@@ -1,11 +1,12 @@
 package com.Finn.everything_app.controller;
 
 import com.Finn.everything_app.dto.*;
+import com.Finn.everything_app.exception.BadRequestException;
 import com.Finn.everything_app.mapper.*;
 import com.Finn.everything_app.model.*;
 import com.Finn.everything_app.security.CurrentUser;
 import com.Finn.everything_app.service.*;
-import com.Finn.everything_app.service.recipe.ChefkochImporter;
+import com.Finn.everything_app.service.recipe.RecipeUrlImporter;
 import com.Finn.everything_app.service.recipe.IngredientParser;
 import com.Finn.everything_app.service.recipe.TextRecipeImporter;
 import lombok.RequiredArgsConstructor;
@@ -38,7 +39,7 @@ public class RecipeController {
     private final RecipeService recipeService;
     private final MealPlanService mealPlanService;
     private final ShoppingListService shoppingListService;
-    private final ChefkochImporter chefkochImporter;
+    private final RecipeUrlImporter recipeUrlImporter;
     private final TextRecipeImporter textRecipeImporter;
     private final IngredientParser ingredientParser;
 
@@ -148,26 +149,30 @@ public class RecipeController {
     // ==================== IMPORT ====================
 
     /**
-     * Liest ein Rezept von einer chefkoch.de-Adresse - ohne es zu speichern.
+     * Liest ein Rezept von einer beliebigen Adresse - ohne es zu speichern.
      *
      * <p>Zwei Schritte statt einem: die App zeigt das Ergebnis samt Warnungen zur Ansicht, und
      * erst die Bestaetigung geht ueber {@code POST /api/recipes}. Ein Import, der still ein
      * halbfalsches Rezept anlegt, ist schlimmer als gar keiner.
+     *
+     * <p>Welche Adresse abgerufen werden darf, entscheidet der {@code SafeUrlValidator} - hier
+     * kommt jede an. Dass ein angemeldeter Nutzer dem Server damit sagen kann, was er abrufen
+     * soll, ist der Sinn der Sache und zugleich ihre Gefahr; die Pruefung dort ist deshalb kein
+     * Beiwerk.
      */
     @PostMapping("/import/preview")
     public ResponseEntity<RecipeImportPreviewDTO> previewImport(
             @Valid @RequestBody RecipeImportRequest request) {
 
-        return ResponseEntity.ok(chefkochImporter.importFrom(request.getUrl()));
+        return ResponseEntity.ok(recipeUrlImporter.importFrom(request.getUrl()));
     }
 
     /**
      * Liest ein Rezept aus eingefuegtem Text - typisch eine Instagram-Bildunterschrift.
      *
-     * <p>Kein Abruf von instagram.com: die Seite ist ohne Anmeldung nicht lesbar, und ein
-     * Server, der beliebige fremde Adressen abruft, ist genau die Luecke, die der
-     * {@link ChefkochImporter} mit seiner Host-Liste schliesst. Der Text kommt aus der
-     * Zwischenablage.
+     * <p>Der Weg, der immer funktioniert. Der {@code InstagramImporter} versucht zwar, sich den
+     * Text selbst zu holen, aber Instagram gibt ihn einem nicht angemeldeten Abrufer meist nicht
+     * heraus; dann schickt er den Nutzer mit der Kennung {@code INSTAGRAM_PASTE_CAPTION} hierher.
      */
     @PostMapping("/import/text")
     public ResponseEntity<RecipeImportPreviewDTO> previewTextImport(
@@ -255,12 +260,19 @@ public class RecipeController {
     }
 
 
+    /**
+     * Hakt eine geplante Mahlzeit ab.
+     *
+     * <p>Der Rumpf ist freiwillig: ohne ihn zaehlt die Mahlzeit mit den geplanten Portionen ins
+     * Kochprotokoll, mit ihm kommen Portionen, Bewertung und Notiz mit.
+     */
     @PutMapping("/meal-plan/{id}/complete")
     public ResponseEntity<MealPlanDTO> completeMealPlan(
             @CurrentUser Long userId,
-            @PathVariable Long id) {
+            @PathVariable Long id,
+            @Valid @RequestBody(required = false) RecipeCookLogDTO details) {
 
-        MealPlan completed = mealPlanService.completeMealPlan(userId, id);
+        MealPlan completed = mealPlanService.completeMealPlan(userId, id, details);
         return ResponseEntity.ok(mealPlanMapper.toDTO(completed));
     }
 
@@ -396,6 +408,34 @@ public class RecipeController {
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate endDate) {
 
         shoppingListService.rebuildFromMealPlan(userId, startDate, endDate);
+        return ResponseEntity.ok(toShoppingDTOs(shoppingListService.getList(userId)));
+    }
+
+    /**
+     * Setzt die Zutaten eines Rezepts auf die Liste - ohne es vorher einzuplanen.
+     *
+     * <p>Zurueck kommt die <em>ganze</em> Liste, nicht nur das Neue: der Server legt Zeilen teils
+     * an und zaehlt teils zu bestehenden dazu, und welche von beidem passiert ist, laesst sich
+     * aus einer Teilantwort nicht zusammensetzen.
+     *
+     * <p>{@code servings} ist die Portionszahl, auf die umgerechnet wird - ohne Angabe die des
+     * Rezepts.
+     */
+    @PostMapping("/shopping-list/from-recipe/{recipeId}")
+    public ResponseEntity<List<ShoppingItemDTO>> addRecipeToShoppingList(
+            @CurrentUser Long userId,
+            @PathVariable Long recipeId,
+            @RequestParam(required = false) Integer servings) {
+
+        if (servings != null && servings < 1) {
+            throw new BadRequestException("Für weniger als eine Portion gibt es nichts zu kaufen.");
+        }
+
+        // Ueber den Service und nicht ueber das Repository: die Eigentumspruefung kommt damit
+        // umsonst mit, und die Zutatenliste ist geladen.
+        Recipe recipe = recipeService.getRecipeById(userId, recipeId);
+        shoppingListService.addFromRecipe(userId, recipe, servings);
+
         return ResponseEntity.ok(toShoppingDTOs(shoppingListService.getList(userId)));
     }
 

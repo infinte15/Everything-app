@@ -121,22 +121,6 @@ class RecipeProvider with ChangeNotifier {
     return list;
   }
 
-  /// Das Rezept des Tages.
-  ///
-  /// Deterministisch aus dem Datum, damit es sich innerhalb eines Tages nicht
-  /// bei jedem Neuzeichnen ändert - und am nächsten Tag zuverlässig doch. Die
-  /// frühere Fassung nahm "den ersten Favoriten": ein Rezept des Tages, das
-  /// sich nie ändert.
-  Recipe? recipeOfTheDayFor(DateTime day) {
-    if (_recipes.isEmpty) return null;
-    final sorted = [..._recipes]
-      ..sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
-    final daysSinceEpoch = DateTime(day.year, day.month, day.day)
-        .difference(DateTime(1970, 1, 1))
-        .inDays;
-    return sorted[daysSinceEpoch % sorted.length];
-  }
-
   Recipe? byId(int id) {
     for (final recipe in _recipes) {
       if (recipe.id == id) return recipe;
@@ -150,6 +134,28 @@ class RecipeProvider with ChangeNotifier {
       .toList();
 
   List<RecipeCookLog> cookLogOf(int recipeId) => _cookLogs[recipeId] ?? const [];
+
+  /// Die Mahlzeiten der **laufenden** Woche für ein Rezept - frisch geholt.
+  ///
+  /// Nicht aus [mealPlan] gefiltert: dort liegt die Woche, die der
+  /// Wochenplan-Reiter gerade zeigt. Hat der Nutzer dort auf KW 40 geblättert,
+  /// wäre die Rezept-Detailseite blind und schriebe beim Abhaken stillschweigend
+  /// einen zweiten Kocheintrag neben die schon geplante Mahlzeit.
+  ///
+  /// Aus demselben Grund wird [_mealPlan] hier **nicht** zugewiesen: sonst
+  /// überschriebe das Öffnen einer Detailseite die Woche, die der Plan-Reiter
+  /// anzeigt.
+  Future<List<MealPlan>> mealsForRecipeThisWeek(int recipeId) async {
+    final monday = mondayOf(DateTime.now());
+    try {
+      final meals = await _service.getMealPlan(
+          monday, monday.add(const Duration(days: 6)));
+      return meals.where((meal) => meal.recipeId == recipeId).toList();
+    } catch (_) {
+      // Eine Zusatzzeile auf der Detailseite ist keine Fehlermeldung wert.
+      return const [];
+    }
+  }
 
   // ── Laden ──────────────────────────────────────────────────────────────────
 
@@ -484,9 +490,22 @@ class RecipeProvider with ChangeNotifier {
   /// dabei einen Kocheintrag an und zieht `cookCount` und `lastCookedAt` am
   /// Rezept hoch. Ohne das Nachladen zeigt das Kochbuch daneben eine veraltete
   /// Zahl.
-  Future<bool> completeMeal(int id) async {
+  ///
+  /// [servings], [rating] und [note] sind freiwillig und wandern unverändert
+  /// ins Kochprotokoll; die geplante Menge der Mahlzeit bleibt davon unberührt.
+  Future<bool> completeMeal(
+    int id, {
+    int? servings,
+    int? rating,
+    String? note,
+  }) async {
     try {
-      final updated = await _service.completeMealPlan(id);
+      final updated = await _service.completeMealPlan(
+        id,
+        servings: servings,
+        rating: rating,
+        note: note,
+      );
       _mealPlan = _mealPlan.map((m) => m.id == id ? updated : m).toList();
       _error = null;
       notifyListeners();
@@ -522,8 +541,15 @@ class RecipeProvider with ChangeNotifier {
   Future<RecipeImportPreview> importFromUrl(String url) =>
       _service.importFromUrl(url);
 
-  Future<RecipeImportPreview> importFromText(String text) =>
-      _service.importFromText(text);
+  /// [sourceName] und [sourceUrl] müssen durchgereicht werden: sonst verliert
+  /// ein Rezept, das nach einem gescheiterten Instagram-Abruf über den Text-Weg
+  /// hereinkommt, genau die Herkunft, die die Oberfläche sich gemerkt hat.
+  Future<RecipeImportPreview> importFromText(
+    String text, {
+    String? sourceName,
+    String? sourceUrl,
+  }) =>
+      _service.importFromText(text, sourceName: sourceName, sourceUrl: sourceUrl);
 
   Future<List<RecipeIngredient>> parseIngredients(String text) =>
       _service.parseIngredients(text);

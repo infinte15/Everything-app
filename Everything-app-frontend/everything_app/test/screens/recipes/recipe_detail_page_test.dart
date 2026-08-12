@@ -1,5 +1,8 @@
+import 'package:everything_app/models/meal_plan.dart';
+import 'package:everything_app/models/meal_type.dart';
 import 'package:everything_app/models/recipe.dart';
 import 'package:everything_app/providers/recipe_provider.dart';
+import 'package:everything_app/providers/recipe_space_provider.dart';
 import 'package:everything_app/providers/shopping_list_provider.dart';
 import 'package:everything_app/screens/recipes/pages/recipe_detail_page.dart';
 import 'package:everything_app/theme/kinetic_theme.dart';
@@ -10,7 +13,7 @@ import 'package:provider/provider.dart';
 
 import '../../support/fake_recipe_service.dart';
 
-Future<(RecipeProvider, ShoppingListProvider)> _pump(
+Future<(RecipeProvider, ShoppingListProvider, RecipeSpaceProvider)> _pump(
   WidgetTester tester,
   FakeRecipeService service, {
   int recipeId = 1,
@@ -20,6 +23,7 @@ Future<(RecipeProvider, ShoppingListProvider)> _pump(
 
   final recipes = RecipeProvider(service: service);
   final shopping = ShoppingListProvider(service: service);
+  final space = RecipeSpaceProvider();
   await recipes.load();
 
   await tester.pumpWidget(
@@ -27,6 +31,9 @@ Future<(RecipeProvider, ShoppingListProvider)> _pump(
       providers: [
         ChangeNotifierProvider<RecipeProvider>.value(value: recipes),
         ChangeNotifierProvider<ShoppingListProvider>.value(value: shopping),
+        // Hängt in der App über MaterialApp.router und ist damit auch über
+        // aufgeschobenen Routen erreichbar - die Detailseite ist eine.
+        ChangeNotifierProvider<RecipeSpaceProvider>.value(value: space),
       ],
       child: MaterialApp(
         theme: KineticTheme.darkTheme,
@@ -35,7 +42,7 @@ Future<(RecipeProvider, ShoppingListProvider)> _pump(
     ),
   );
   await tester.pumpAndSettle();
-  return (recipes, shopping);
+  return (recipes, shopping, space);
 }
 
 void main() {
@@ -138,19 +145,25 @@ void main() {
   });
 
   group('Einkaufsliste', () {
-    testWidgets('übernimmt die skalierten Zutaten', (tester) async {
+    // Skaliert und zusammengelegt wird jetzt auf dem Server: eine Anfrage mit
+    // den eingestellten Portionen statt N einzelner POSTs ohne Regal. Vorher
+    // rechnete der Client mit double und der Server mit BigDecimal, und
+    // dasselbe Rezept ergab je nach Weg andere Mengen.
+    testWidgets('schickt die eingestellten Portionen an den Server',
+        (tester) async {
       final service = serviceWith();
-      final (_, shopping) = await _pump(tester, service);
+      await _pump(tester, service);
 
       await tester.tap(find.bySemanticsLabel('Mehr Portionen'));
       await tester.pumpAndSettle();
       await tester.tap(find.text('Auf die Einkaufsliste'));
       await tester.pumpAndSettle();
 
-      expect(shopping.items, hasLength(3));
-      // 5 statt 4 Portionen: 250 g × 1,25.
-      expect(shopping.items.first.amount, closeTo(312.5, 0.01));
-      expect(find.text('3 Zutaten hinzugefügt'), findsOneWidget);
+      expect(service.lastFromRecipeId, 1);
+      expect(service.lastFromRecipeServings, 5);
+      // Keine Anzahl in der Meldung: zusammengelegte Zeilen tauchen in keiner
+      // Längendifferenz auf.
+      expect(find.text('Zutaten übernommen'), findsOneWidget);
     });
   });
 
@@ -169,6 +182,129 @@ void main() {
 
       expect(find.textContaining('Rezept nicht gefunden'), findsOneWidget);
       expect(find.text('Zurück'), findsOneWidget);
+    });
+  });
+
+  // "Gekocht" gab es zweimal, und die beiden wussten nichts voneinander: die
+  // Detailseite schrieb ein Kochprotokoll, der Wochenplan hakte ab (und schrieb
+  // serverseitig ebenfalls eins). Wer beides tat, zählte doppelt.
+  group('Gekocht', () {
+    /// Ein Rezept mit einer Mahlzeit im Wochenplan.
+    FakeRecipeService serviceWithMeal({
+      required DateTime date,
+      bool completed = false,
+    }) {
+      final service = serviceWith();
+      service.mealPlan.add(MealPlan(
+        id: 10,
+        date: date,
+        mealType: MealType.abendessen,
+        recipeId: 1,
+        recipeName: 'Bolognese',
+        plannedServings: 6,
+        isCompleted: completed,
+      ));
+      return service;
+    }
+
+    Future<void> tapCooked(WidgetTester tester) async {
+      await tester.tap(find.text('Gekocht'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Eintragen'));
+      await tester.pumpAndSettle();
+    }
+
+    testWidgets('mit einer heute offenen Mahlzeit wird abgehakt, nicht geloggt',
+        (tester) async {
+      final service = serviceWithMeal(date: DateTime.now());
+      await _pump(tester, service);
+
+      await tapCooked(tester);
+
+      expect(service.lastCompletedMealId, 10);
+      // Genau einer der beiden Wege geht raus - sonst stiege cookCount um zwei.
+      expect(service.logCookedCount, 0);
+    });
+
+    testWidgets('ohne passende Mahlzeit wird geloggt, nicht abgehakt',
+        (tester) async {
+      final service = serviceWith();
+      await _pump(tester, service);
+
+      await tapCooked(tester);
+
+      expect(service.logCookedCount, 1);
+      expect(service.lastCompletedMealId, isNull);
+    });
+
+    // Bewusst eng auf heute: eine Mahlzeit rückwirkend in eine Woche zu legen,
+    // die man gerade nicht ansieht, wäre eine Überraschung.
+    testWidgets('eine Mahlzeit an einem anderen Tag wird nicht abgehakt',
+        (tester) async {
+      final service = serviceWithMeal(
+          date: DateTime.now().add(const Duration(days: 2)));
+      await _pump(tester, service);
+
+      await tapCooked(tester);
+
+      expect(service.logCookedCount, 1);
+      expect(service.lastCompletedMealId, isNull);
+    });
+
+    testWidgets('eine schon abgehakte Mahlzeit wird nicht zweimal abgehakt',
+        (tester) async {
+      final service = serviceWithMeal(date: DateTime.now(), completed: true);
+      await _pump(tester, service);
+
+      await tapCooked(tester);
+
+      expect(service.lastCompletedMealId, isNull);
+      expect(service.logCookedCount, 1);
+    });
+  });
+
+  group('Diese Woche geplant', () {
+    testWidgets('nennt Tag und Platz und erscheint nur bei offenen Mahlzeiten',
+        (tester) async {
+      final service = serviceWith();
+      service.mealPlan.add(MealPlan(
+        id: 10,
+        date: RecipeProvider.mondayOf(DateTime.now()),
+        mealType: MealType.abendessen,
+        recipeId: 1,
+        recipeName: 'Bolognese',
+      ));
+      await _pump(tester, service);
+
+      expect(find.textContaining('Diese Woche geplant'), findsOneWidget);
+      expect(find.textContaining('Abendessen'), findsWidgets);
+    });
+
+    testWidgets('ohne geplante Mahlzeit steht dort nichts', (tester) async {
+      await _pump(tester, serviceWith());
+
+      expect(find.textContaining('Diese Woche geplant'), findsNothing);
+    });
+  });
+
+  group('Wochenplan', () {
+    // Die eingestellten Portionen gingen beim Einplanen verloren - das Sheet
+    // überschrieb sie mit der Grundmenge des Rezepts.
+    testWidgets('der Plan-Knopf reicht die Portionen des Steppers durch',
+        (tester) async {
+      final service = serviceWith();
+      await _pump(tester, service);
+
+      await tester.tap(find.bySemanticsLabel('Mehr Portionen'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Zum Wochenplan'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Einplanen'));
+      await tester.pumpAndSettle();
+
+      // 5 statt der Grundmenge 4: vorher überschrieb das Sheet den Wert.
+      expect(service.mealPlan.single.plannedServings, 5);
+      expect(find.text('Eingeplant'), findsOneWidget);
     });
   });
 }

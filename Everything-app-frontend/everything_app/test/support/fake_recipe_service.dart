@@ -39,6 +39,23 @@ class FakeRecipeService extends RecipeService {
   int? lastCompletedMealId;
   int nextId = 900;
 
+  /// Was beim Abhaken im Rumpf mitkam.
+  int? lastCompletedServings;
+  int? lastCompletedRating;
+  String? lastCompletedNote;
+
+  /// Wie oft `logCooked` gerufen wurde - der Doppelzähl-Wächter der
+  /// Detailseite prüft, dass genau **einer** der beiden Wege rausgeht.
+  int logCookedCount = 0;
+
+  /// Der rohe Eintrag, wie ihn `addShoppingItem` verschickt hätte. Nötig, um zu
+  /// prüfen, dass **kein** `category`-Schlüssel dabei ist - genau das hielt den
+  /// Regal-Klassifizierer des Servers jahrelang von der Arbeit ab.
+  Map<String, dynamic>? lastAddedShoppingJson;
+
+  int? lastFromRecipeId;
+  int? lastFromRecipeServings;
+
   void _guard() {
     if (failAll) throw RecipeException('Server nicht erreichbar');
   }
@@ -163,6 +180,7 @@ class FakeRecipeService extends RecipeService {
     DateTime? cookedAt,
   }) async {
     _guard();
+    logCookedCount++;
     final index = recipes.indexWhere((r) => r.id == id);
     final updated = recipes[index].copyWith(
       cookCount: recipes[index].cookCount + 1,
@@ -243,9 +261,17 @@ class FakeRecipeService extends RecipeService {
   }
 
   @override
-  Future<MealPlan> completeMealPlan(int id) async {
+  Future<MealPlan> completeMealPlan(
+    int id, {
+    int? servings,
+    int? rating,
+    String? note,
+  }) async {
     _guard();
     lastCompletedMealId = id;
+    lastCompletedServings = servings;
+    lastCompletedRating = rating;
+    lastCompletedNote = note;
     final index = mealPlan.indexWhere((m) => m.id == id);
     final updated = mealPlan[index].copyWith(isCompleted: true);
     mealPlan[index] = updated;
@@ -282,9 +308,28 @@ class FakeRecipeService extends RecipeService {
   @override
   Future<ShoppingItem> addShoppingItem(ShoppingItem item) async {
     _guard();
+    lastAddedShoppingJson = item.toJson();
     final created = item.copyWith(id: nextId++);
     shoppingList.add(created);
     return created;
+  }
+
+  /// Der Server legt zusammen und gibt die **ganze** Liste zurück; hier reicht
+  /// eine Zeile pro Rezept, um die Ersetzung sichtbar zu machen.
+  @override
+  Future<List<ShoppingItem>> addRecipeToShoppingList(
+    int recipeId, {
+    int? servings,
+  }) async {
+    _guard();
+    lastFromRecipeId = recipeId;
+    lastFromRecipeServings = servings;
+    shoppingList.add(ShoppingItem(
+      id: nextId++,
+      name: 'Zutat aus Rezept $recipeId',
+      category: 'Trockenware',
+    ));
+    return List.of(shoppingList);
   }
 
   @override

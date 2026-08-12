@@ -174,4 +174,71 @@ class RecipeJsonLdParserTest {
         assertTrue(preview.getWarnings().stream().anyMatch(w -> w.contains("Zutaten")),
                 preview.getWarnings().toString());
     }
+
+    // ── Fremde Seiten ─────────────────────────────────────────────────────────────────────
+    //
+    // Seit der Import jede Adresse liest, muessen die chefkoch-Eigenheiten an der Quelle
+    // haengen. Die Regex "\s+von\s+\S+$" ist der gefaehrlichste Fall: allgemein angewandt
+    // macht sie aus "Kartoffelsalat von Oma" ein "Kartoffelsalat", still und ohne Hinweis.
+
+    private RecipeDTO parse(String json, String sourceName) throws IOException {
+        return parser.parse(objectMapper.readTree(json), "https://" + sourceName + "/x",
+                sourceName).getRecipe();
+    }
+
+    @Test
+    void laesstDenTitelFremderSeitenInRuhe() throws IOException {
+        String json = """
+                {"@type":"Recipe","name":"Kartoffelsalat von Oma",
+                 "recipeIngredient":["500 g Kartoffeln"]}
+                """;
+
+        assertEquals("Kartoffelsalat von Oma", parse(json, "kochblog.example").getName());
+        // Bei chefkoch ist derselbe Anhang der Nutzername und muss weg.
+        assertEquals("Kartoffelsalat", parse(json, "chefkoch.de").getName());
+    }
+
+    // Bei chefkoch ist description Suchmaschinentext und abstract der echte Text. Ueberall sonst
+    // ist description das, was jemand geschrieben hat.
+    @Test
+    void bevorzugtAufFremdenSeitenDieBeschreibung() throws IOException {
+        String json = """
+                {"@type":"Recipe","name":"Suppe",
+                 "description":"Der echte Text.","abstract":"Nebenbei."}
+                """;
+
+        assertEquals("Der echte Text.", parse(json, "kochblog.example").getDescription());
+        assertEquals("Nebenbei.", parse(json, "chefkoch.de").getDescription());
+    }
+
+    @Test
+    void liestEnglischeRubrikenUndSagtWasEsNichtKennt() throws IOException {
+        assertEquals("Hauptgericht", parser.mapCategory("Main Course"));
+        assertEquals("Dessert", parser.mapCategory("dessert"));
+
+        RecipeImportPreviewDTO preview = parser.parse(objectMapper.readTree("""
+                {"@type":"Recipe","name":"X","recipeCategory":"Thanksgiving",
+                 "recipeIngredient":["1 Ei"]}
+                """), "https://kochblog.example/x", "kochblog.example");
+
+        assertEquals("Sonstiges", preview.getRecipe().getCategory());
+        assertTrue(preview.getWarnings().stream().anyMatch(w -> w.contains("Kategorie")),
+                preview.getWarnings().toString());
+    }
+
+    @Test
+    void liestDieSchwierigkeitWennSieDasteht() throws IOException {
+        assertEquals("Einfach", parse("""
+                {"@type":"Recipe","name":"X","difficulty":"easy"}
+                """, "kochblog.example").getDifficulty());
+    }
+
+    @Test
+    void kenntDenAltenNamenFuerZutaten() throws IOException {
+        RecipeDTO recipe = parse("""
+                {"@type":"Recipe","name":"X","ingredients":["200 g Mehl","1 Ei"]}
+                """, "kochblog.example");
+
+        assertEquals(2, recipe.getIngredients().size());
+    }
 }

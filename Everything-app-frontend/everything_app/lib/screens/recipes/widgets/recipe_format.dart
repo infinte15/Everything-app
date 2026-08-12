@@ -78,3 +78,24 @@ String formatServings(int portions) =>
 
 /// "3× gekocht" - oder nichts, solange es noch nie gekocht wurde.
 String formatCookCount(int count) => count <= 0 ? '' : '$count× gekocht';
+
+/// Kalenderwoche nach ISO 8601 - Woche 1 ist die mit dem ersten Donnerstag.
+///
+/// Hier und nicht im Wochenplan-Reiter, weil der Kopf der Einkaufsliste
+/// dieselbe Woche benennen muss. Zwei Zählungen nebeneinander wären zwei
+/// Gelegenheiten, unterschiedlich zu zählen.
+/// In UTC gerechnet, obwohl es um Ortsdaten geht: `difference` zählt echte
+/// Stunden, und zwischen Januar und August liegt die Sommerzeitumstellung. Über
+/// diese Grenze hinweg kam eine Stunde zu wenig heraus, `inDays` rundete
+/// ab - und der 17. August 2026 landete in KW 33 statt in KW 34.
+int isoWeek(DateTime date) {
+  final thursday = DateTime.utc(date.year, date.month, date.day)
+      .add(Duration(days: 4 - (date.weekday == 7 ? 7 : date.weekday)));
+  final firstDay = DateTime.utc(thursday.year, 1, 1);
+  return ((thursday.difference(firstDay).inDays) / 7).floor() + 1;
+}
+
+/// "11.–17. Aug".
+String formatWeekRange(DateTime start, DateTime end) =>
+    '${DateFormat('d.', 'de_DE').format(start)}'
+    '–${DateFormat('d. MMM', 'de_DE').format(end)}';

@@ -46,6 +46,9 @@ public class GlobalExceptionHandler {
         error.setError("Bad Request");
         error.setMessage(ex.getMessage());
         error.setPath(request.getDescription(false).replace("uri=", ""));
+        // Meist null. Gesetzt nur, wo die App auf den Fehler hin etwas tun soll, statt ihn
+        // bloss anzuzeigen - siehe BadRequestException#getCode.
+        error.setDetails(ex.getCode());
 
         return new ResponseEntity<>(error, HttpStatus.BAD_REQUEST);
     }

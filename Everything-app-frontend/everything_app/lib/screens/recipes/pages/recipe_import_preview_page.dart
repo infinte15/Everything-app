@@ -28,7 +28,7 @@ class _RecipeImportPreviewPageState extends State<RecipeImportPreviewPage> {
   late final Recipe _recipe = widget.preview.recipe;
   bool _saving = false;
 
-  bool get _canSave => _recipe.ingredients.isNotEmpty && _recipe.steps.isNotEmpty;
+  bool get _canSave => widget.preview.isSaveable;
 
   Future<void> _edit() async {
     // Der Editor speichert selbst, wenn das Rezept schon eine Id hat - hier hat

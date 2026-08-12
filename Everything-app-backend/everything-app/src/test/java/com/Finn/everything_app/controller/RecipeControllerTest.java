@@ -4,7 +4,10 @@ import com.Finn.everything_app.model.Recipe;
 import com.Finn.everything_app.model.RecipeIngredient;
 import com.Finn.everything_app.model.RecipeStep;
 import com.Finn.everything_app.model.User;
+import com.Finn.everything_app.repository.MealPlanRepository;
+import com.Finn.everything_app.repository.RecipeCookLogRepository;
 import com.Finn.everything_app.repository.RecipeRepository;
+import com.Finn.everything_app.repository.ShoppingItemRepository;
 import com.Finn.everything_app.repository.UserRepository;
 import com.Finn.everything_app.security.JwtUtil;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -18,6 +21,7 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.test.web.servlet.MockMvc;
 
 import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
@@ -43,6 +47,9 @@ class RecipeControllerTest {
     @Autowired ObjectMapper objectMapper;
     @Autowired UserRepository userRepository;
     @Autowired RecipeRepository recipeRepository;
+    @Autowired MealPlanRepository mealPlanRepository;
+    @Autowired RecipeCookLogRepository cookLogRepository;
+    @Autowired ShoppingItemRepository shoppingItemRepository;
     @Autowired PasswordEncoder passwordEncoder;
     @Autowired JwtUtil jwtUtil;
 
@@ -72,6 +79,20 @@ class RecipeControllerTest {
 
     @AfterEach
     void tearDown() {
+        // Wochenplan und Einkaufsliste zuerst: die Mahlzeit haelt einen Fremdschluessel auf
+        // das Rezept, das gleich geloescht wird.
+        for (User user : List.of(owner, stranger)) {
+            mealPlanRepository.deleteAll(mealPlanRepository.findByUserIdAndDateBetween(
+                    user.getId(), LocalDate.now().minusYears(1), LocalDate.now().plusYears(1)));
+            shoppingItemRepository.deleteAll(shoppingItemRepository
+                    .findByUserIdOrderByCategoryAscSortOrderAscIdAsc(user.getId()));
+            // Das Kochprotokoll haengt an keiner Sammlung des Rezepts - es kaskadiert nicht
+            // und muss von Hand weg, sonst scheitert das DELETE am Fremdschluessel.
+            for (Recipe recipe : recipeRepository.findByUserId(user.getId())) {
+                cookLogRepository.deleteAll(cookLogRepository
+                        .findByRecipeIdAndUserIdOrderByCookedAtDesc(recipe.getId(), user.getId()));
+            }
+        }
         recipeRepository.findByUserId(owner.getId()).forEach(recipeRepository::delete);
         recipeRepository.findByUserId(stranger.getId()).forEach(recipeRepository::delete);
     }
@@ -233,5 +254,85 @@ class RecipeControllerTest {
                         .contentType(APPLICATION_JSON)
                         .content(body))
                 .andExpect(status().isBadRequest());
+    }
+
+    // ── Wochenplan und Einkaufsliste ──────────────────────────────────────────────────────
+
+    private long plannedMeal(Recipe recipe) throws Exception {
+        String body = objectMapper.writeValueAsString(java.util.Map.of(
+                "recipeId", recipe.getId(),
+                "date", LocalDate.now().toString(),
+                "mealType", "ABENDESSEN",
+                "plannedServings", 6));
+
+        String created = mockMvc.perform(post("/api/recipes/meal-plan")
+                        .header("Authorization", "Bearer " + ownerToken)
+                        .contentType(APPLICATION_JSON)
+                        .content(body))
+                .andExpect(status().isCreated())
+                .andReturn().getResponse().getContentAsString();
+
+        return objectMapper.readTree(created).get("id").asLong();
+    }
+
+    // Der Rumpf ist freiwillig - der heutige Client schickt gar keinen, und das muss so
+    // bleiben.
+    @Test
+    void abhakenOhneRumpfBleibt200() throws Exception {
+        long mealId = plannedMeal(storedRecipe());
+
+        mockMvc.perform(put("/api/recipes/meal-plan/{id}/complete", mealId)
+                        .header("Authorization", "Bearer " + ownerToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.isCompleted").value(true));
+    }
+
+    @Test
+    void abhakenMitAngabenSchreibtSieInsKochprotokoll() throws Exception {
+        Recipe recipe = storedRecipe();
+        long mealId = plannedMeal(recipe);
+
+        mockMvc.perform(put("/api/recipes/meal-plan/{id}/complete", mealId)
+                        .header("Authorization", "Bearer " + ownerToken)
+                        .contentType(APPLICATION_JSON)
+                        .content("{\"servings\":8,\"rating\":5,\"note\":\"Mehr Butter\"}"))
+                .andExpect(status().isOk())
+                // Die Planmenge bleibt, wie sie war - sie steuert spaetere Einkaufslisten.
+                .andExpect(jsonPath("$.plannedServings").value(6));
+
+        mockMvc.perform(get("/api/recipes/{id}/cook-log", recipe.getId())
+                        .header("Authorization", "Bearer " + ownerToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[0].servings").value(8))
+                .andExpect(jsonPath("$[0].note").value("Mehr Butter"));
+    }
+
+    @Test
+    void zutatenEinesRezeptsLandenMitRegalAufDerListe() throws Exception {
+        Recipe recipe = storedRecipe();
+
+        mockMvc.perform(post("/api/recipes/shopping-list/from-recipe/{id}", recipe.getId())
+                        .header("Authorization", "Bearer " + ownerToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[?(@.name == 'Mehl')].category").value("Trockenware"));
+    }
+
+    @Test
+    void wenigerAlsEinePortionIst400() throws Exception {
+        Recipe recipe = storedRecipe();
+
+        mockMvc.perform(post("/api/recipes/shopping-list/from-recipe/{id}", recipe.getId())
+                        .param("servings", "0")
+                        .header("Authorization", "Bearer " + ownerToken))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void einFremdesRezeptKommtNichtAufDieEigeneListe() throws Exception {
+        Recipe recipe = storedRecipe();
+
+        mockMvc.perform(post("/api/recipes/shopping-list/from-recipe/{id}", recipe.getId())
+                        .header("Authorization", "Bearer " + strangerToken))
+                .andExpect(status().isNotFound());
     }
 }

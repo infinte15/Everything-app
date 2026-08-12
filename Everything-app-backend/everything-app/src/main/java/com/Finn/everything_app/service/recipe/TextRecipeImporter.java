@@ -20,13 +20,16 @@ import java.util.regex.Pattern;
 /**
  * Liest ein Rezept aus eingefuegtem Text - typisch eine Instagram-Bildunterschrift.
  *
- * <p><b>Warum eingefuegt und nicht abgerufen.</b> Instagram zeigt einem nicht angemeldeten
- * Abrufer keine Bildunterschrift, sondern eine Anmeldeseite; die oEmbed-Schnittstelle liefert
- * seit Jahren nur noch Einbettungs-HTML ohne Text und verlangt dafuer ein Facebook-App-Token.
- * Ein Importer, der es trotzdem versucht, waere nicht unzuverlaessig, sondern nutzlos - und er
- * wuerde die Luecke wieder aufreissen, die der {@link ChefkochImporter} mit seiner Host-Liste
- * schliesst. Der Text kommt deshalb aus der Zwischenablage: das kostet einen Handgriff und
- * keine Angriffsflaeche.
+ * <p><b>Warum eingefuegt und nicht nur abgerufen.</b> Der {@link InstagramImporter} versucht
+ * durchaus, sich die Bildunterschrift selbst zu holen - aber Instagram zeigt einem nicht
+ * angemeldeten Abrufer meist eine Anmeldeseite statt des Texts, und die oEmbed-Schnittstelle
+ * liefert seit Jahren nur Einbettungs-HTML ohne Text und verlangt dafuer ein Facebook-App-Token.
+ * Der Abruf ist deshalb die Abkuerzung und dieser Weg hier der tragende: eingefuegter Text
+ * kostet einen Handgriff und geht immer.
+ *
+ * <p>Dieselbe Klasse ist ausserdem die letzte Stufe des Adress-Imports - fuer Seiten, die ihr
+ * Rezept weder als {@code ld+json} noch als Microdata herausgeben, liest der
+ * {@link RecipeUrlImporter} den sichtbaren Seitentext und schickt ihn hier durch.
  *
  * <p>Aufgebaut wie {@link RecipeJsonLdParser}: keine Netzzugriffe, keine Datenbank, ein
  * {@link RecipeImportPreviewDTO} mit Warnungen als Ergebnis. Was nicht sicher zu erkennen ist,

@@ -5,8 +5,8 @@ import '../../../theme/kinetic_theme.dart';
 /// Das Bild eines Rezepts - oder die Kachel, die an seiner Stelle steht.
 ///
 /// **Der Platzhalter ist das Normalbild dieses Space, nicht der Fehlerfall.**
-/// Rezepte bekommen ein Foto nur beim Import von chefkoch; von Hand angelegte
-/// und alle Rezepte des Demo-Bestands haben keins. Deshalb eine gesetzte
+/// Rezepte bekommen ein Foto nur beim Import; von Hand angelegte und alle
+/// Rezepte des Demo-Bestands haben keins. Deshalb eine gesetzte
 /// Buchstabenkachel: die liest sich als Absicht. Ein durchgestrichenes
 /// Kamerasymbol würde bei jedem zweiten Rezept nach kaputter Leitung aussehen.
 ///

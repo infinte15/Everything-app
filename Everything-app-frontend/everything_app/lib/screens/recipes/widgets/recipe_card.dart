@@ -17,13 +17,11 @@ class RecipeTile extends StatelessWidget {
     required this.recipe,
     required this.onTap,
     this.width = 168,
-    this.onToggleFavorite,
   });
 
   final Recipe recipe;
   final VoidCallback onTap;
   final double width;
-  final VoidCallback? onToggleFavorite;
 
   @override
   Widget build(BuildContext context) {
@@ -83,24 +81,41 @@ class RecipeTile extends StatelessWidget {
 ///
 /// 72er-Bild links, Text in der Mitte, Herz rechts. Die Trennlinie zieht die
 /// Liste, nicht die Zeile.
+///
+/// [onPlan] und [onAddToShoppingList] hängen ein "⋮"-Menü rechts an. **Benannt
+/// und nicht ein generisches `trailing`:** so stehen Beschriftung und Symbol
+/// einmal hier, statt dass jeder Reiter sein eigenes Menü mit eigenen Worten
+/// baut.
 class RecipeRow extends StatelessWidget {
   const RecipeRow({
     super.key,
     required this.recipe,
     required this.onTap,
     this.onToggleFavorite,
+    this.onPlan,
+    this.onAddToShoppingList,
   });
 
   final Recipe recipe;
   final VoidCallback onTap;
   final VoidCallback? onToggleFavorite;
 
+  /// "Einplanen…" - öffnet das Sheet für den Wochenplan.
+  final VoidCallback? onPlan;
+
+  /// "Auf die Einkaufsliste" - übernimmt die Zutaten.
+  final VoidCallback? onAddToShoppingList;
+
   @override
   Widget build(BuildContext context) {
+    final hasMenu = onPlan != null || onAddToShoppingList != null;
+
     return InkWell(
       onTap: onTap,
       child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+        // Rechts enger, wenn das Menü da ist: zwei Knöpfe à 48 px neben einem
+        // 72er-Bild sind auf einem schmalen Gerät zu viel.
+        padding: EdgeInsets.fromLTRB(20, 8, hasMenu ? 4 : 20, 8),
         child: Row(
           children: [
             RecipeImage(
@@ -156,6 +171,49 @@ class RecipeRow extends StatelessWidget {
                 tooltip: recipe.isFavorite
                     ? 'Aus dem Kochbuch nehmen'
                     : 'Ins Kochbuch',
+              ),
+            if (hasMenu)
+              PopupMenuButton<int>(
+                icon: const Icon(Icons.more_vert,
+                    size: 20, color: KineticTheme.textTertiary),
+                color: KineticTheme.surfaceElevated,
+                tooltip: 'Mehr',
+                onSelected: (value) {
+                  if (value == 0) onPlan?.call();
+                  if (value == 1) onAddToShoppingList?.call();
+                },
+                itemBuilder: (_) => [
+                  if (onPlan != null)
+                    PopupMenuItem(
+                      value: 0,
+                      child: Row(
+                        children: [
+                          const Icon(Icons.calendar_view_week_outlined,
+                              size: 18, color: KineticTheme.textSecondary),
+                          const SizedBox(width: 12),
+                          Flexible(
+                            child: Text('Einplanen…',
+                                style: KineticTheme.subtitle),
+                          ),
+                        ],
+                      ),
+                    ),
+                  if (onAddToShoppingList != null)
+                    PopupMenuItem(
+                      value: 1,
+                      child: Row(
+                        children: [
+                          const Icon(Icons.shopping_basket_outlined,
+                              size: 18, color: KineticTheme.textSecondary),
+                          const SizedBox(width: 12),
+                          Flexible(
+                            child: Text('Auf die Einkaufsliste',
+                                style: KineticTheme.subtitle),
+                          ),
+                        ],
+                      ),
+                    ),
+                ],
               ),
           ],
         ),

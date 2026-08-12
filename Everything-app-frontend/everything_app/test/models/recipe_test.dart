@@ -174,6 +174,24 @@ void main() {
     });
   });
 
+  group('isoWeek', () {
+    test('zählt nach ISO 8601 - Woche 1 ist die mit dem ersten Donnerstag', () {
+      // 2026 beginnt an einem Donnerstag, der 1. Januar liegt also in KW 1.
+      expect(isoWeek(DateTime(2026, 1, 1)), 1);
+      expect(isoWeek(DateTime(2026, 1, 4)), 1);
+      expect(isoWeek(DateTime(2026, 1, 5)), 2);
+    });
+
+    test('die Sommerzeitumstellung verschiebt die Woche nicht', () {
+      // Gerechnet wurde mit `difference().inDays` auf Ortszeit: über die
+      // Umstellung im März hinweg fehlte eine Stunde, `inDays` rundete ab, und
+      // jede Woche danach war um eins zu klein.
+      expect(isoWeek(DateTime(2026, 8, 17)), 34);
+      expect(isoWeek(DateTime(2026, 8, 23)), 34);
+      expect(isoWeek(DateTime(2026, 8, 24)), 35);
+    });
+  });
+
   test('MealType.wire ist ASCII wie im Backend', () {
     // Der frühere Provider schickte BREAKFAST/LUNCH/DINNER - kein einziger
     // Wochenplan-Eintrag hat je die Mahlzeit getroffen, die er meinte.

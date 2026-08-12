@@ -10,6 +10,7 @@ import 'providers/calendar_provider.dart';
 import 'providers/study_provider.dart';
 import 'providers/sports_provider.dart';
 import 'providers/recipe_provider.dart';
+import 'providers/recipe_space_provider.dart';
 import 'providers/shopping_list_provider.dart';
 import 'providers/finance_provider.dart';
 import 'providers/habit_provider.dart';
@@ -36,6 +37,9 @@ class MyApp extends StatelessWidget {
         ChangeNotifierProvider(create: (_) => StudyProvider()),
         ChangeNotifierProvider(create: (_) => SportsProvider()),
         ChangeNotifierProvider(create: (_) => RecipeProvider()),
+        // Muss hier oben stehen und nicht im Rezepte-Space: die Detailseite ist
+        // eine aufgeschobene Route, also kein Kind der Reiter-Hülle.
+        ChangeNotifierProvider(create: (_) => RecipeSpaceProvider()),
         ChangeNotifierProvider(create: (_) => ShoppingListProvider()),
         ChangeNotifierProvider(create: (_) => FinanceProvider()),
         ChangeNotifierProvider(create: (_) => HabitProvider()),

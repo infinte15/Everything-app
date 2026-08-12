@@ -1,5 +1,6 @@
 package com.Finn.everything_app.service;
 
+import com.Finn.everything_app.dto.RecipeCookLogDTO;
 import com.Finn.everything_app.model.*;
 import com.Finn.everything_app.repository.*;
 import org.junit.jupiter.api.Test;
@@ -229,11 +230,75 @@ class MealPlanServiceTest {
         when(mealPlanRepository.findByIdAndUserId(5L, 1L)).thenReturn(Optional.of(plan));
         when(mealPlanRepository.save(any(MealPlan.class))).thenAnswer(i -> i.getArgument(0));
 
-        MealPlan completed = service.completeMealPlan(1L, 5L);
+        // Der heutige Client schickt einen leeren Rumpf - der wird zu einem DTO voller null.
+        MealPlan completed = service.completeMealPlan(1L, 5L, new RecipeCookLogDTO());
 
         assertTrue(completed.getIsCompleted());
         assertNotNull(completed.getCompletedAt());
         verify(recipeService).logCooked(eq(1L), eq(1L), argThat(e -> e.getServings() == 6));
+    }
+
+    // Ein fehlender Rumpf (null) muss dasselbe tun wie frueher die zweistellige Signatur.
+    @Test
+    void abhakenOhneRumpfNimmtDieGeplantenPortionen() {
+        MealPlan plan = new MealPlan();
+        plan.setId(5L);
+        plan.setRecipe(recipe(1L, "Lasagne", MealType.ABENDESSEN));
+        plan.setPlannedServings(6);
+        plan.setIsCompleted(false);
+        when(mealPlanRepository.findByIdAndUserId(5L, 1L)).thenReturn(Optional.of(plan));
+        when(mealPlanRepository.save(any(MealPlan.class))).thenAnswer(i -> i.getArgument(0));
+
+        service.completeMealPlan(1L, 5L, null);
+
+        verify(recipeService).logCooked(eq(1L), eq(1L), argThat(e -> e.getServings() == 6));
+    }
+
+    // Der Haken im Wochenplan soll dasselbe koennen wie der Knopf auf der Rezeptseite:
+    // Portionen, Bewertung und Notiz gehen unveraendert ins Kochprotokoll.
+    @Test
+    void angabenAusDemRumpfLandenImKochprotokoll() {
+        MealPlan plan = new MealPlan();
+        plan.setId(5L);
+        plan.setRecipe(recipe(1L, "Lasagne", MealType.ABENDESSEN));
+        plan.setPlannedServings(6);
+        plan.setIsCompleted(false);
+        when(mealPlanRepository.findByIdAndUserId(5L, 1L)).thenReturn(Optional.of(plan));
+        when(mealPlanRepository.save(any(MealPlan.class))).thenAnswer(i -> i.getArgument(0));
+
+        RecipeCookLogDTO details = new RecipeCookLogDTO();
+        details.setServings(8);
+        details.setRating((short) 5);
+        details.setNote("Mit mehr Bechamel");
+
+        service.completeMealPlan(1L, 5L, details);
+
+        ArgumentCaptor<RecipeCookLogDTO> entry = ArgumentCaptor.forClass(RecipeCookLogDTO.class);
+        verify(recipeService).logCooked(eq(1L), eq(1L), entry.capture());
+        assertEquals(8, entry.getValue().getServings().intValue());
+        assertEquals((short) 5, entry.getValue().getRating());
+        assertEquals("Mit mehr Bechamel", entry.getValue().getNote());
+    }
+
+    // "Ich habe fuer 8 gekocht" gehoert ins Protokoll, nicht in die Planzeile: der Aufbau der
+    // Einkaufsliste liest auch abgehakte Mahlzeiten, eine geaenderte Planmenge veraenderte also
+    // spaetere Einkaeufe.
+    @Test
+    void portionenAusDemRumpfVeraendernDenPlanNicht() {
+        MealPlan plan = new MealPlan();
+        plan.setId(5L);
+        plan.setRecipe(recipe(1L, "Lasagne", MealType.ABENDESSEN));
+        plan.setPlannedServings(6);
+        plan.setIsCompleted(false);
+        when(mealPlanRepository.findByIdAndUserId(5L, 1L)).thenReturn(Optional.of(plan));
+        when(mealPlanRepository.save(any(MealPlan.class))).thenAnswer(i -> i.getArgument(0));
+
+        RecipeCookLogDTO details = new RecipeCookLogDTO();
+        details.setServings(8);
+
+        MealPlan completed = service.completeMealPlan(1L, 5L, details);
+
+        assertEquals(6, completed.getPlannedServings().intValue());
     }
 
     // Zweimal abhaken darf nicht zweimal ins Protokoll wandern.
@@ -244,7 +309,7 @@ class MealPlanServiceTest {
         plan.setIsCompleted(true);
         when(mealPlanRepository.findByIdAndUserId(5L, 1L)).thenReturn(Optional.of(plan));
 
-        service.completeMealPlan(1L, 5L);
+        service.completeMealPlan(1L, 5L, new RecipeCookLogDTO());
 
         verify(recipeService, never()).logCooked(any(), any(), any());
         verify(mealPlanRepository, never()).save(any());

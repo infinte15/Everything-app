@@ -7,6 +7,7 @@ import '../../../models/meal_type.dart';
 import '../../../providers/recipe_provider.dart';
 import '../../../providers/shopping_list_provider.dart';
 import '../../../theme/kinetic_theme.dart';
+import '../widgets/cooked_sheet.dart';
 import '../widgets/plan_meal_sheet.dart';
 import '../widgets/recipe_error_banner.dart';
 import '../widgets/recipe_format.dart';
@@ -123,14 +124,6 @@ class _WeekHeader extends StatelessWidget {
 
   final RecipeProvider provider;
 
-  /// Kalenderwoche nach ISO 8601 - Woche 1 ist die mit dem ersten Donnerstag.
-  static int isoWeek(DateTime date) {
-    final thursday =
-        date.add(Duration(days: 4 - (date.weekday == 7 ? 7 : date.weekday)));
-    final firstDay = DateTime(thursday.year, 1, 1);
-    return ((thursday.difference(firstDay).inDays) / 7).floor() + 1;
-  }
-
   bool get _isCurrentWeek =>
       provider.weekStart == RecipeProvider.mondayOf(DateTime.now());
 
@@ -138,8 +131,7 @@ class _WeekHeader extends StatelessWidget {
   Widget build(BuildContext context) {
     final start = provider.weekStart;
     final end = provider.weekEnd;
-    final range = '${DateFormat('d.', 'de_DE').format(start)}'
-        '–${DateFormat('d. MMM', 'de_DE').format(end)}';
+    final range = formatWeekRange(start, end);
 
     return Padding(
       padding: const EdgeInsets.fromLTRB(8, 16, 8, 4),
@@ -295,6 +287,28 @@ class _MealCard extends StatelessWidget {
   final MealPlan meal;
   final RecipeProvider provider;
 
+  /// Abhaken über dasselbe Sheet wie der Knopf auf der Rezeptseite.
+  ///
+  /// Vorher hakte der Haken nur ab; eine Bewertung ging allein über die
+  /// Detailseite, und wer beides benutzte, zählte doppelt. Jetzt kann der
+  /// Wochenplan dasselbe, und der Server nimmt Portionen, Sterne und Notiz mit
+  /// ins Kochprotokoll.
+  Future<void> _cook(BuildContext context) async {
+    final entry = await CookedSheet.show(
+      context,
+      servings: meal.plannedServings,
+      rating: provider.byId(meal.recipeId)?.rating,
+    );
+    if (entry == null || !context.mounted) return;
+
+    await provider.completeMeal(
+      meal.id!,
+      servings: entry.servings,
+      rating: entry.rating,
+      note: entry.note,
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Dismissible(
@@ -356,8 +370,7 @@ class _MealCard extends StatelessWidget {
                 ),
               ),
               IconButton(
-                onPressed:
-                    meal.isCompleted ? null : () => provider.completeMeal(meal.id!),
+                onPressed: meal.isCompleted ? null : () => _cook(context),
                 icon: Icon(
                   meal.isCompleted
                       ? Icons.check_circle

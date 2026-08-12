@@ -1,4 +1,3 @@
-import 'package:everything_app/models/recipe.dart';
 import 'package:everything_app/models/shopping_item.dart';
 import 'package:everything_app/providers/shopping_list_provider.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -123,19 +122,112 @@ void main() {
     });
   });
 
-  group('addIngredients', () {
-    test('legt für jede Zutat eine Zeile an', () async {
+  group('addFromRecipe', () {
+    test('ersetzt die Liste durch die Antwort des Servers', () async {
+      await provider.load();
+      final before = provider.items.length;
+
+      final ok = await provider.addFromRecipe(7, servings: 6);
+
+      expect(ok, isTrue);
+      expect(service.lastFromRecipeId, 7);
+      expect(service.lastFromRecipeServings, 6);
+      // Der Server legt teils an und lässt teils wachsen - deshalb die ganze
+      // Liste und kein Anhängen von Hand.
+      expect(provider.items, hasLength(before + 1));
+      expect(provider.items.last.name, 'Zutat aus Rezept 7');
+    });
+
+    test('ohne Portionsangabe geht kein servings raus', () async {
       await provider.load();
 
-      final count = await provider.addIngredients(const [
-        RecipeIngredient(amount: 250, unit: 'g', name: 'Mehl'),
-        RecipeIngredient(name: 'Salz'),
-      ]);
+      await provider.addFromRecipe(7);
 
-      expect(count, 2);
-      expect(provider.items.any((i) => i.name == 'Mehl' && i.amount == 250),
-          isTrue);
-      expect(provider.items.any((i) => i.name == 'Salz'), isTrue);
+      expect(service.lastFromRecipeServings, isNull);
+    });
+
+    test('ein Fehler setzt error und lässt die Liste stehen', () async {
+      await provider.load();
+      final before = provider.items;
+      service.failAll = true;
+
+      final ok = await provider.addFromRecipe(7);
+
+      expect(ok, isFalse);
+      expect(provider.error, isNotNull);
+      expect(provider.items, before);
+    });
+  });
+
+  // Der Server ordnet **nur** dann selbst ins Regal ein, wenn die Kategorie
+  // leer ankommt. Solange der Client immer 'Sonstiges' mitschickte, ist der
+  // Klassifizierer mit acht Regalen und ~200 Stichwörtern nie gelaufen.
+  group('Regal-Zuordnung', () {
+    test('add ohne Regal schickt gar keinen category-Schlüssel', () async {
+      await provider.load();
+
+      await provider.add('Kokosmilch', amount: 400, unit: 'ml');
+
+      expect(service.lastAddedShoppingJson!.containsKey('category'), isFalse);
+    });
+
+    test('ein gewähltes Regal geht mit', () async {
+      await provider.load();
+
+      await provider.add('Kokosmilch', category: 'Konserven');
+
+      expect(service.lastAddedShoppingJson!['category'], 'Konserven');
+    });
+
+    test('eine Zeile ohne Regal wird als Sonstiges angezeigt', () {
+      const bare = ShoppingItem(name: 'Wunderpulver');
+
+      expect(bare.category, isNull);
+      expect(bare.aisle, 'Sonstiges');
+    });
+  });
+
+  group('Herkunft der Liste', () {
+    test('rebuildFromWeek merkt sich die Woche', () async {
+      final from = DateTime(2026, 8, 17);
+      final to = DateTime(2026, 8, 23);
+      await provider.load();
+
+      await provider.rebuildFromWeek(from, to);
+
+      expect(provider.builtFromStart, from);
+      expect(provider.builtFromEnd, to);
+    });
+
+    test('ein fehlgeschlagener Aufbau merkt sich nichts', () async {
+      await provider.load();
+      service.failAll = true;
+
+      await provider.rebuildFromWeek(DateTime(2026, 8, 17), DateTime(2026, 8, 23));
+
+      expect(provider.builtFromStart, isNull);
+    });
+
+    // Zutaten eines Rezepts sind keine Woche - der Kopf darf danach nicht
+    // behaupten, die Liste stamme aus einem Wochenplan.
+    test('addFromRecipe rührt die Woche nicht an', () async {
+      await provider.load();
+      await provider.rebuildFromWeek(DateTime(2026, 8, 17), DateTime(2026, 8, 23));
+
+      await provider.addFromRecipe(7);
+
+      expect(provider.builtFromStart, DateTime(2026, 8, 17));
+    });
+
+    test('hasMealPlanItems erkennt Zeilen aus dem Wochenplan', () async {
+      service.shoppingList.add(const ShoppingItem(
+        id: 6,
+        name: 'Hackfleisch',
+        source: ShoppingItemSource.mealPlan,
+      ));
+      await provider.load();
+
+      expect(provider.hasMealPlanItems, isTrue);
     });
   });
 }

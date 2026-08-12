@@ -145,9 +145,19 @@ public class MealPlanService {
      * <p>Eine geplante Mahlzeit abzuhaken <em>ist</em> gekocht zu haben. Ohne diese Kopplung
      * muesste man dasselbe zweimal melden, und die Reihe "lange nicht gekocht" waere falsch,
      * sobald man ueber den Wochenplan statt ueber die Rezeptseite arbeitet.
+     *
+     * <p>{@code details} darf {@code null} sein - dann bleibt es beim blossen Abhaken mit den
+     * geplanten Portionen, wie es immer war. Sind Angaben dabei, landen sie im Protokoll: der
+     * Haken im Wochenplan kann damit dasselbe wie der Knopf auf der Rezeptseite, statt eine
+     * aermere Kopie davon zu sein.
+     *
+     * <p>Was hier <b>nicht</b> passiert: {@code plannedServings} zu ueberschreiben. Der Aufbau
+     * der Einkaufsliste liest auch abgehakte Mahlzeiten - eine nachtraeglich geaenderte
+     * Planmenge veraenderte also spaetere Einkaeufe. "Ich habe fuer sechs gekocht" gehoert ins
+     * Protokoll, nicht in die Planzeile.
      */
     @Transactional
-    public MealPlan completeMealPlan(Long userId, Long id) {
+    public MealPlan completeMealPlan(Long userId, Long id, RecipeCookLogDTO details) {
         MealPlan mealPlan = getMealPlan(userId, id);
         if (Boolean.TRUE.equals(mealPlan.getIsCompleted())) {
             return mealPlan;
@@ -157,7 +167,13 @@ public class MealPlanService {
         mealPlan.setCompletedAt(LocalDateTime.now());
 
         RecipeCookLogDTO entry = new RecipeCookLogDTO();
-        entry.setServings(mealPlan.getPlannedServings());
+        entry.setServings(details != null && details.getServings() != null
+                ? details.getServings()
+                : mealPlan.getPlannedServings());
+        if (details != null) {
+            entry.setRating(details.getRating());
+            entry.setNote(details.getNote());
+        }
         recipeService.logCooked(userId, mealPlan.getRecipe().getId(), entry);
 
         return mealPlanRepository.save(mealPlan);

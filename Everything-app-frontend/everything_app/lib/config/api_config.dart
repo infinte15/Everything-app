@@ -151,7 +151,9 @@ class ApiConfig {
   static String recipeCookLog(int id) => '$baseUrl/recipes/$id/cook-log';
   static String cookLogById(int logId) => '$baseUrl/recipes/cook-log/$logId';
 
-  // Import. `importText` ruft nichts ab - der Text kommt aus der Zwischenablage.
+  // Import. `importPreview` nimmt jede Adresse; welche der Server abrufen darf,
+  // entscheidet er selbst. `importText` ruft nichts ab - der Text kommt aus der
+  // Zwischenablage.
   static const String recipeImportPreview = '$baseUrl/recipes/import/preview';
   static const String recipeImportText = '$baseUrl/recipes/import/text';
   static const String parseIngredients = '$baseUrl/recipes/ingredients/parse';
@@ -176,6 +178,12 @@ class ApiConfig {
   static String shoppingListFromMealPlan(DateTime from, DateTime to) =>
       '$baseUrl/recipes/shopping-list/from-meal-plan'
       '?startDate=${isoDay(from)}&endDate=${isoDay(to)}';
+
+  /// Zutaten eines einzelnen Rezepts übernehmen. Ohne [servings] gilt die
+  /// Grundmenge des Rezepts; skaliert und zusammengefasst wird auf dem Server.
+  static String shoppingListFromRecipe(int recipeId, {int? servings}) =>
+      '$baseUrl/recipes/shopping-list/from-recipe/$recipeId'
+      '${servings == null ? '' : '?servings=$servings'}';
 
   /// Datum ohne Zeitanteil für Query-Parameter - der Server bindet `LocalDate`.
   ///

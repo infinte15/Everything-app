@@ -16,23 +16,35 @@ class PlanMealSheet extends StatefulWidget {
     required this.date,
     this.mealType,
     this.recipe,
+    this.servings,
   });
 
   final DateTime date;
   final MealType? mealType;
   final Recipe? recipe;
 
+  /// Portionen, mit denen das Sheet aufgeht. Ohne Angabe die Grundmenge des
+  /// Rezepts. Die Rezept-Detailseite gibt hier ihren Stepper-Wert mit - vorher
+  /// ging "auf 6 Portionen einstellen und einplanen" still verloren.
+  final int? servings;
+
   static Future<bool?> show(
     BuildContext context, {
     required DateTime date,
     MealType? mealType,
     Recipe? recipe,
+    int? servings,
   }) {
     return showModalBottomSheet<bool>(
       context: context,
       backgroundColor: KineticTheme.surface,
       isScrollControlled: true,
-      builder: (_) => PlanMealSheet(date: date, mealType: mealType, recipe: recipe),
+      builder: (_) => PlanMealSheet(
+        date: date,
+        mealType: mealType,
+        recipe: recipe,
+        servings: servings,
+      ),
     );
   }
 
@@ -44,7 +56,7 @@ class _PlanMealSheetState extends State<PlanMealSheet> {
   late DateTime _date = widget.date;
   late MealType _mealType = widget.mealType ?? MealType.abendessen;
   late Recipe? _recipe = widget.recipe;
-  late int _servings = widget.recipe?.servings ?? 2;
+  late int _servings = widget.servings ?? widget.recipe?.servings ?? 2;
   bool _scheduleCooking = false;
   bool _saving = false;
 

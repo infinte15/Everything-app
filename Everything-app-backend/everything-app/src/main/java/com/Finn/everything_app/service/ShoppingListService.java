@@ -147,14 +147,86 @@ public class ShoppingListService {
     }
 
     /**
+     * Zutaten eines einzelnen Rezepts uebernehmen - ohne Umweg ueber den Wochenplan.
+     *
+     * <p>Wer im Kochbuch etwas sieht, das er heute kaufen will, soll es nicht erst als Mahlzeit
+     * einplanen muessen. Gerechnet wird mit demselben {@link #accumulate} wie beim Wochenplan,
+     * damit dieselbe Zutat nicht je nach Weg eine andere Menge ergibt.
+     *
+     * <p><b>Zusammengelegt wird nur mit offenen, selbst angelegten Zeilen.</b> Das ist keine
+     * Kleinigkeit: {@link #rebuildFromMealPlan} loescht alle offenen {@code MEAL_PLAN}-Zeilen.
+     * Wer 300 g Mehl in eine solche Zeile addierte, verloere sie beim naechsten "Aus Wochenplan
+     * aufbauen" stillschweigend. Und abgehakte Zeilen liegen schon im Wagen - sie wachsen zu
+     * lassen, waehrend sie durchgestrichen dastehen, hilft niemandem.
+     *
+     * <p>Aus demselben Grund tragen neue Zeilen {@code MANUAL}: sie stammen nicht aus dem Plan
+     * und muessen einen Neuaufbau ueberleben.
+     */
+    @Transactional
+    public List<ShoppingItem> addFromRecipe(Long userId, Recipe recipe, Integer servings) {
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new ResourceNotFoundException("User nicht gefunden"));
+
+        BigDecimal ratio = ratio(servings, recipe.getServings());
+
+        Map<MergeKey, MergedIngredient> merged = new LinkedHashMap<>();
+        for (RecipeIngredient ingredient : recipe.getIngredientList()) {
+            if (ingredient.getName() == null || ingredient.getName().isBlank()) {
+                continue;
+            }
+            accumulate(merged, ingredient, ratio);
+        }
+
+        Map<MergeKey, ShoppingItem> candidates = new HashMap<>();
+        for (ShoppingItem item : shoppingItemRepository
+                .findByUserIdAndSourceAndIsChecked(userId, ShoppingItemSource.MANUAL, false)) {
+            candidates.putIfAbsent(
+                    new MergeKey(item.getName().toLowerCase(Locale.GERMAN).trim(),
+                            UnitVocabulary.baseUnit(item.getUnit())),
+                    item);
+        }
+
+        List<ShoppingItem> touched = new ArrayList<>();
+        for (Map.Entry<MergeKey, MergedIngredient> entry : merged.entrySet()) {
+            MergedIngredient ingredient = entry.getValue();
+            ShoppingItem existing = candidates.get(entry.getKey());
+
+            if (existing != null) {
+                if (ingredient.amount != null && existing.getAmount() != null) {
+                    existing.setAmount(existing.getAmount().add(ingredient.amount)
+                            .stripTrailingZeros());
+                    touched.add(shoppingItemRepository.save(existing));
+                }
+                // Trifft eine mengenlose Zutat ("Salz") auf eine vorhandene Zeile, bleibt alles
+                // wie es ist - eine Menge zu erfinden waere schlimmer als nichts zu tun.
+                continue;
+            }
+
+            ShoppingItem item = new ShoppingItem();
+            item.setUser(user);
+            item.setName(ingredient.displayName);
+            item.setUnit(ingredient.unit);
+            item.setAmount(ingredient.amount == null ? null : ingredient.amount.stripTrailingZeros());
+            item.setCategory(aisleClassifier.classify(ingredient.displayName));
+            item.setIsChecked(false);
+            item.setSource(ShoppingItemSource.MANUAL);
+            touched.add(shoppingItemRepository.save(item));
+        }
+        return touched;
+    }
+
+    /**
      * Anteil der geplanten an den im Rezept angegebenen Portionen.
      *
      * <p>Die alte Fassung hat gar nicht skaliert: wer ein Vier-Personen-Rezept fuer acht
      * einplante, bekam die Zutaten fuer vier auf den Zettel.
      */
     private BigDecimal servingRatio(MealPlan mealPlan, Recipe recipe) {
-        Integer planned = mealPlan.getPlannedServings();
-        Integer base = recipe.getServings();
+        return ratio(mealPlan.getPlannedServings(), recipe.getServings());
+    }
+
+    /** Dieselbe Rechnung fuer beide Wege - sonst laufen sie mit der Zeit auseinander. */
+    private BigDecimal ratio(Integer planned, Integer base) {
         if (planned == null || base == null || base == 0 || planned.equals(base)) {
             return BigDecimal.ONE;
         }

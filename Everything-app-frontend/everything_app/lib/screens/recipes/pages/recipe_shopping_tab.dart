@@ -17,7 +17,10 @@ import '../widgets/recipe_section.dart';
 /// Häkchen, Hinzufügen und Löschen gehen jetzt an den Server. Vorher lebten sie
 /// nur im Speicher des Providers: gesetzt, und beim nächsten Laden weg.
 class RecipeShoppingTab extends StatelessWidget {
-  const RecipeShoppingTab({super.key});
+  const RecipeShoppingTab({super.key, this.onOpenPlan});
+
+  /// Der Rückweg in den Wochenplan - aus dem Kopf und aus dem Leerzustand.
+  final VoidCallback? onOpenPlan;
 
   @override
   Widget build(BuildContext context) {
@@ -41,11 +44,14 @@ class RecipeShoppingTab extends StatelessWidget {
             ),
           _header(context, provider),
           if (provider.items.isEmpty)
-            const RecipeEmpty(
+            RecipeEmpty(
               icon: Icons.shopping_basket_outlined,
               title: 'Die Liste ist leer',
               message: 'Setz etwas drauf, oder übernimm die Zutaten der Woche '
                   'aus dem Wochenplan.',
+              // Der Satz nannte den Wochenplan schon, führte aber nicht hin.
+              actionLabel: onOpenPlan == null ? null : 'Zum Wochenplan',
+              onAction: onOpenPlan,
             )
           else
             for (final entry in groups.entries) ...[
@@ -76,6 +82,7 @@ class RecipeShoppingTab extends StatelessWidget {
                           '${provider.checkedCount} erledigt',
                   style: KineticTheme.label,
                 ),
+                _origin(provider),
               ],
             ),
           ),
@@ -101,6 +108,52 @@ class RecipeShoppingTab extends StatelessWidget {
     );
   }
 
+  /// Woher die Liste stammt - und der Weg zurück in den Plan.
+  ///
+  /// Drei Stufen, absteigend nach Gewissheit: die Woche, aus der aufgebaut
+  /// wurde; sonst der unscharfe Satz, wenn irgendeine Zeile aus einem
+  /// Wochenplan kommt; sonst gar nichts. Bewusst **nicht**
+  /// `RecipeProvider.weekStart` - das ist die Woche, die der Plan-Reiter gerade
+  /// anzeigt, und blätterte der Nutzer dort weiter, behauptete dieser Kopf
+  /// sofort etwas Falsches über die Herkunft der Liste.
+  Widget _origin(ShoppingListProvider provider) {
+    final start = provider.builtFromStart;
+    final end = provider.builtFromEnd;
+
+    if (start == null || end == null) {
+      if (!provider.hasMealPlanItems) return const SizedBox.shrink();
+      return Padding(
+        padding: const EdgeInsets.only(top: 4),
+        child: Text('Enthält Zeilen aus einem Wochenplan',
+            style: KineticTheme.label),
+      );
+    }
+
+    return Padding(
+      padding: const EdgeInsets.only(top: 4),
+      child: InkWell(
+        onTap: onOpenPlan,
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              'Aus KW ${isoWeek(start)} · ${formatWeekRange(start, end)}',
+              style: KineticTheme.label.copyWith(
+                color: onOpenPlan == null
+                    ? KineticTheme.textTertiary
+                    : KineticTheme.primary,
+              ),
+            ),
+            if (onOpenPlan != null) ...[
+              const SizedBox(width: 2),
+              const Icon(Icons.chevron_right, size: 14, color: KineticTheme.primary),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+
   Future<void> _onMenu(
       BuildContext context, ShoppingListProvider provider, String value) async {
     if (value == 'clear') {
@@ -116,10 +169,13 @@ class RecipeShoppingTab extends StatelessWidget {
         child: AlertDialog(
           backgroundColor: KineticTheme.surfaceElevated,
           title: Text('Aus Wochenplan aufbauen?', style: KineticTheme.title),
+          // Konkret statt "der angezeigten Woche": der Nutzer steht auf dem
+          // Einkaufsreiter und kann sie gerade nicht sehen.
           content: Text(
-            'Nimmt die Zutaten der angezeigten Woche. Ersetzt die noch nicht '
-            'abgehakten Zeilen aus dem Wochenplan - eigene Einträge und '
-            'Abgehaktes bleiben stehen.',
+            'Zutaten der KW ${isoWeek(recipes.weekStart)} '
+            '(${formatWeekRange(recipes.weekStart, recipes.weekEnd)}) '
+            'übernehmen? Ersetzt die noch nicht abgehakten Zeilen aus dem '
+            'Wochenplan - eigene Einträge und Abgehaktes bleiben stehen.',
             style: KineticTheme.caption,
           ),
           actions: [

@@ -3,6 +3,7 @@ import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 
 import '../../providers/recipe_provider.dart';
+import '../../providers/recipe_space_provider.dart';
 import '../../providers/shopping_list_provider.dart';
 import '../../theme/kinetic_theme.dart';
 import 'pages/recipe_cookbook_tab.dart';
@@ -32,8 +33,6 @@ class RecipesScreen extends StatefulWidget {
 }
 
 class _RecipesScreenState extends State<RecipesScreen> {
-  int _tabIndex = 0;
-
   @override
   void initState() {
     super.initState();
@@ -46,12 +45,12 @@ class _RecipesScreenState extends State<RecipesScreen> {
     });
   }
 
-  void _goToTab(int index) => setState(() => _tabIndex = index);
+  void _goToTab(int index) => context.read<RecipeSpaceProvider>().openTab(index);
 
   /// Der FAB hängt am Reiter - und hier wird der tote "Neues Rezept"-Knopf
   /// lebendig, den es im Kochbuch schon gab.
   void _onAdd() {
-    switch (_tabIndex) {
+    switch (context.read<RecipeSpaceProvider>().tab) {
       case 2:
         PlanMealSheet.show(context, date: DateTime.now());
       case 3:
@@ -83,8 +82,9 @@ class _RecipesScreenState extends State<RecipesScreen> {
             ),
             ListTile(
               leading: const Icon(Icons.link, color: KineticTheme.primary),
-              title: Text('Von chefkoch.de', style: KineticTheme.title),
-              subtitle: Text('Adresse einfügen', style: KineticTheme.caption),
+              title: Text('Von einer Adresse', style: KineticTheme.title),
+              subtitle: Text('Link zu einer Rezeptseite einfügen',
+                  style: KineticTheme.caption),
               onTap: () {
                 Navigator.pop(sheetContext);
                 Navigator.of(context).push(MaterialPageRoute(
@@ -95,7 +95,7 @@ class _RecipesScreenState extends State<RecipesScreen> {
             ListTile(
               leading: const Icon(Icons.content_paste, color: KineticTheme.primary),
               title: Text('Aus Text', style: KineticTheme.title),
-              subtitle: Text('Bildunterschrift aus Instagram einfügen',
+              subtitle: Text('Bildunterschrift oder Rezepttext einfügen',
                   style: KineticTheme.caption),
               onTap: () {
                 Navigator.pop(sheetContext);
@@ -115,6 +115,7 @@ class _RecipesScreenState extends State<RecipesScreen> {
   Widget build(BuildContext context) {
     final recipes = context.watch<RecipeProvider>();
     final shopping = context.watch<ShoppingListProvider>();
+    final tabIndex = context.watch<RecipeSpaceProvider>().tab;
 
     return Theme(
       data: KineticTheme.darkTheme,
@@ -131,12 +132,12 @@ class _RecipesScreenState extends State<RecipesScreen> {
         body: Stack(
           children: [
             IndexedStack(
-              index: _tabIndex,
+              index: tabIndex,
               children: [
                 RecipeDiscoverTab(onOpenCookbook: () => _goToTab(1)),
                 const RecipeCookbookTab(),
                 RecipePlanTab(onOpenShopping: () => _goToTab(3)),
-                const RecipeShoppingTab(),
+                RecipeShoppingTab(onOpenPlan: () => _goToTab(2)),
               ],
             ),
             if (recipes.isLoading || shopping.isLoading || shopping.isRebuilding)
@@ -160,7 +161,7 @@ class _RecipesScreenState extends State<RecipesScreen> {
           child: const Icon(Icons.add),
         ),
         bottomNavigationBar: _RecipeBottomNav(
-          selectedIndex: _tabIndex,
+          selectedIndex: tabIndex,
           onSelect: _goToTab,
         ),
       ),

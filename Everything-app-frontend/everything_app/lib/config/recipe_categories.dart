@@ -54,8 +54,9 @@ const recipeDifficulties = <String>['Einfach', 'Mittel', 'Aufwendig'];
 /// Anzeigeform einer gespeicherten Schwierigkeit.
 ///
 /// Im Bestand stehen mehrere Vokabulare nebeneinander: der Demo-Seeder schrieb
-/// "einfach"/"mittel" klein, der chefkoch-Import "Normal", chefkoch selbst sagt
-/// "simpel" und "pfiffig". Das Backend schreibt inzwischen einheitlich
+/// "einfach"/"mittel" klein, ein früherer Import "Normal", chefkoch sagt
+/// "simpel" und "pfiffig", englische Seiten "easy". Das Backend bildet das
+/// inzwischen beim Import auf
 /// Einfach/Mittel/Aufwendig - aber Zeilen von gestern verschwinden nicht,
 /// weil man sich geeinigt hat. Also bildet die Oberfläche sie ab, statt sie
 /// stehenzulassen und den Filter in vier Hälften zu teilen.

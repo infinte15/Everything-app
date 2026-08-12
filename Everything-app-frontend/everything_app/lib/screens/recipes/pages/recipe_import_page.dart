@@ -4,13 +4,16 @@ import 'package:provider/provider.dart';
 
 import '../../../models/recipe_import_preview.dart';
 import '../../../providers/recipe_provider.dart';
+import '../../../services/recipe_service.dart';
 import '../../../theme/kinetic_theme.dart';
 import 'recipe_import_preview_page.dart';
 
 /// Rezept importieren - eine Seite mit zwei Wegen.
 ///
 /// Adresse und eingefügter Text sind zwei Wege in dieselbe Sache und gehören
-/// nicht in zwei Menüpunkte.
+/// nicht in zwei Menüpunkte. Der zweite ist nicht der schlechtere: bei Instagram
+/// und hinter Bezahlschranken ist er der einzige, der geht, und der Server
+/// schickt einen von dort aus hierher zurück.
 class RecipeImportPage extends StatefulWidget {
   const RecipeImportPage({super.key, this.initialTab = 0});
 
@@ -27,6 +30,16 @@ class _RecipeImportPageState extends State<RecipeImportPage> {
   bool _loading = false;
   String? _error;
 
+  /// Ob [_error] eine Anweisung ist und keine Panne.
+  bool _errorIsHint = false;
+
+  /// Die Adresse, zu der der eingefügte Text gehört.
+  ///
+  /// Gesetzt, wenn der Server eine Seite nicht lesen durfte und auf den
+  /// Text-Weg verwiesen hat. Sie wird nicht abgerufen, sondern nur als Herkunft
+  /// mitgespeichert - sonst steht das Rezept später ohne Quelle da.
+  String? _pendingSourceUrl;
+
   @override
   void initState() {
     super.initState();
@@ -40,13 +53,17 @@ class _RecipeImportPageState extends State<RecipeImportPage> {
     super.dispose();
   }
 
-  /// Liegt ein chefkoch-Link in der Zwischenablage, steht er gleich im Feld -
-  /// von dort kommt er in neun von zehn Fällen.
+  /// Liegt ein Link in der Zwischenablage, steht er gleich im Feld - von dort
+  /// kommt er in neun von zehn Fällen.
   Future<void> _prefillFromClipboard() async {
     final data = await Clipboard.getData(Clipboard.kTextPlain);
     final text = data?.text?.trim();
     if (text == null || !mounted) return;
-    if (text.contains('chefkoch.de') && text.startsWith('http')) {
+    // Keine Prüfung mehr auf eine bestimmte Seite - gelesen wird jede. Nur noch
+    // die Frage, ob das überhaupt eine Adresse ist.
+    if ((text.startsWith('http://') || text.startsWith('https://')) &&
+        text.length < 2000 &&
+        !text.contains(RegExp(r'\s'))) {
       setState(() {
         _urlController.text = text;
         _tab = 0;
@@ -58,13 +75,18 @@ class _RecipeImportPageState extends State<RecipeImportPage> {
     setState(() {
       _loading = true;
       _error = null;
+      _errorIsHint = false;
     });
 
     final provider = context.read<RecipeProvider>();
     try {
       final RecipeImportPreview preview = _tab == 0
           ? await provider.importFromUrl(_urlController.text.trim())
-          : await provider.importFromText(_textController.text);
+          : await provider.importFromText(
+              _textController.text,
+              sourceName: _hostOf(_pendingSourceUrl),
+              sourceUrl: _pendingSourceUrl,
+            );
 
       if (!mounted) return;
       setState(() => _loading = false);
@@ -77,12 +99,37 @@ class _RecipeImportPageState extends State<RecipeImportPage> {
       if (saved == true && mounted) Navigator.of(context).pop(true);
     } catch (e) {
       if (!mounted) return;
-      // Die Meldung des Servers unverändert - sie ist für Nutzer geschrieben.
-      setState(() {
-        _error = e.toString();
-        _loading = false;
-      });
+      _handleError(e);
     }
+  }
+
+  /// Der Server sagt mit einer Kennung, wenn die Oberfläche etwas tun soll.
+  ///
+  /// Bei Instagram ist das der Normalfall und keine Panne: der Beitrag ist ohne
+  /// Anmeldung nicht lesbar. Also in den Text-Tab wechseln, die Adresse merken -
+  /// und die Meldung nicht rot anzeigen, denn sie ist eine Anweisung.
+  void _handleError(Object e) {
+    final needsCaption = e is RecipeException &&
+        e.code == RecipeException.instagramPasteCaption;
+
+    setState(() {
+      // Die Meldung des Servers unverändert - sie ist für Nutzer geschrieben.
+      _error = e.toString();
+      _errorIsHint = needsCaption;
+      _loading = false;
+      if (needsCaption) {
+        _pendingSourceUrl = _urlController.text.trim();
+        _tab = 1;
+      }
+    });
+  }
+
+  /// "https://www.instagram.com/p/Abc/" → "instagram.com"
+  String? _hostOf(String? url) {
+    if (url == null) return null;
+    final host = Uri.tryParse(url)?.host;
+    if (host == null || host.isEmpty) return null;
+    return host.startsWith('www.') ? host.substring(4) : host;
   }
 
   bool get _canRead => _tab == 0
@@ -101,13 +148,14 @@ class _RecipeImportPageState extends State<RecipeImportPage> {
           children: [
             SegmentedButton<int>(
               segments: const [
-                ButtonSegment(value: 0, label: Text('chefkoch.de')),
+                ButtonSegment(value: 0, label: Text('Adresse')),
                 ButtonSegment(value: 1, label: Text('Text einfügen')),
               ],
               selected: {_tab},
               onSelectionChanged: (selection) => setState(() {
                 _tab = selection.first;
                 _error = null;
+                _errorIsHint = false;
               }),
               showSelectedIcon: false,
               style: SegmentedButton.styleFrom(
@@ -125,7 +173,11 @@ class _RecipeImportPageState extends State<RecipeImportPage> {
               const SizedBox(height: 16),
               Text(
                 _error!,
-                style: KineticTheme.caption.copyWith(color: KineticTheme.danger),
+                style: KineticTheme.caption.copyWith(
+                  color: _errorIsHint
+                      ? KineticTheme.textSecondary
+                      : KineticTheme.danger,
+                ),
               ),
             ],
             const SizedBox(height: 28),
@@ -147,17 +199,23 @@ class _RecipeImportPageState extends State<RecipeImportPage> {
           onChanged: (_) => setState(() {}),
           style: KineticTheme.subtitle.copyWith(color: KineticTheme.textPrimary),
           decoration: const InputDecoration(
-            hintText: 'https://www.chefkoch.de/rezepte/…',
+            hintText: 'https://…',
           ),
         ),
         const SizedBox(height: 10),
         Text(
-          'Es werden nur Adressen von chefkoch.de gelesen.',
+          'Adresse einer Rezeptseite einfügen - die meisten Kochseiten und Blogs '
+          'lassen sich lesen. Instagram wird versucht; klappt es nicht, kannst du '
+          'die Bildunterschrift einfügen.',
           style: KineticTheme.label,
         ),
       ];
 
   List<Widget> _textSection() => [
+        if (_pendingSourceUrl != null) ...[
+          _sourceChip(_pendingSourceUrl!),
+          const SizedBox(height: 12),
+        ],
         TextField(
           controller: _textController,
           maxLines: 12,
@@ -165,16 +223,46 @@ class _RecipeImportPageState extends State<RecipeImportPage> {
           onChanged: (_) => setState(() {}),
           style: KineticTheme.subtitle.copyWith(color: KineticTheme.textPrimary),
           decoration: const InputDecoration(
-            hintText: 'Bildunterschrift aus Instagram hier einfügen',
+            hintText: 'Bildunterschrift oder Rezepttext hier einfügen',
           ),
         ),
         const SizedBox(height: 10),
-        // Keine Entschuldigung, sondern die Erklärung, warum man kopieren muss.
         Text(
-          'Instagram wird nicht abgerufen — gelesen wird nur der Text, den du '
-          'einfügst. Überschriften wie "Zutaten:" und "Zubereitung:" helfen, '
-          'nötig sind sie nicht.',
+          'Gelesen wird nur der Text, den du einfügst. Überschriften wie '
+          '"Zutaten:" und "Zubereitung:" helfen, nötig sind sie nicht.',
           style: KineticTheme.label,
         ),
       ];
+
+  /// Zeigt die gemerkte Herkunft - und lässt sie wieder loswerden.
+  Widget _sourceChip(String url) {
+    return Container(
+      padding: const EdgeInsets.fromLTRB(12, 8, 6, 8),
+      decoration: BoxDecoration(
+        color: KineticTheme.surfaceElevated,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: KineticTheme.divider),
+      ),
+      child: Row(
+        children: [
+          const Icon(Icons.link, size: 16, color: KineticTheme.textSecondary),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              'Herkunft: $url',
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: KineticTheme.label,
+            ),
+          ),
+          IconButton(
+            icon: const Icon(Icons.close, size: 16),
+            color: KineticTheme.textSecondary,
+            tooltip: 'Herkunft verwerfen',
+            onPressed: () => setState(() => _pendingSourceUrl = null),
+          ),
+        ],
+      ),
+    );
+  }
 }

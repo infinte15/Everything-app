@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 
 import '../config/recipe_aisles.dart';
-import '../models/recipe.dart';
 import '../models/shopping_item.dart';
 import '../services/recipe_service.dart';
 
@@ -35,12 +34,34 @@ class ShoppingListProvider with ChangeNotifier {
   int get checkedCount => _items.where((i) => i.isChecked).length;
   bool get hasChecked => checkedCount > 0;
 
+  /// Aus welcher Woche die Liste aufgebaut wurde - gesetzt **nur** von
+  /// [rebuildFromWeek] und nur bei Erfolg.
+  ///
+  /// Bewusst nicht `RecipeProvider.weekStart`: das ist die Woche, die der
+  /// *Wochenplan-Reiter* gerade anzeigt. Blättert man dort auf KW 40,
+  /// behauptete der Einkaufskopf sofort, die Liste käme aus KW 40. Ein Kopf,
+  /// der lügt, ist schlimmer als einer, der schweigt.
+  ///
+  /// Sitzungszustand: nach einem Neustart ist die Angabe weg, die Liste selbst
+  /// bleibt richtig. Über den `PreferencesService` zu überdauern wären ~10
+  /// Zeilen - hier bewusst weggelassen, leicht nachzurüsten.
+  DateTime? _builtFromStart;
+  DateTime? _builtFromEnd;
+
+  DateTime? get builtFromStart => _builtFromStart;
+  DateTime? get builtFromEnd => _builtFromEnd;
+
+  /// Enthält die Liste überhaupt Zeilen aus irgendeinem Wochenplan? Der
+  /// unscharfe Rückfall, wenn die Woche nicht (mehr) bekannt ist.
+  bool get hasMealPlanItems =>
+      _items.any((i) => i.source == ShoppingItemSource.mealPlan);
+
   /// Nach Ladenregalen gruppiert, in Laufreihenfolge - und innerhalb einer
   /// Gruppe rutscht Abgehaktes ans Ende. Leere Gruppen kommen nicht vor.
   Map<String, List<ShoppingItem>> get byAisle {
     final grouped = <String, List<ShoppingItem>>{};
     for (final item in _items) {
-      grouped.putIfAbsent(item.category, () => []).add(item);
+      grouped.putIfAbsent(item.aisle, () => []).add(item);
     }
 
     final aisles = grouped.keys.toList()
@@ -85,8 +106,9 @@ class ShoppingListProvider with ChangeNotifier {
         name: name,
         amount: amount,
         unit: unit,
-        // Ohne Angabe sortiert der Server selbst ins Regal ein.
-        category: category ?? 'Sonstiges',
+        // Ohne Angabe sortiert der Server selbst ins Regal ein - deshalb hier
+        // kein `?? 'Sonstiges'`, das genau das verhinderte.
+        category: category,
       ));
       _items = [..._items, created];
       _error = null;
@@ -162,6 +184,8 @@ class ShoppingListProvider with ChangeNotifier {
     notifyListeners();
     try {
       _items = await _service.rebuildFromMealPlan(from, to);
+      _builtFromStart = from;
+      _builtFromEnd = to;
       _error = null;
       return _items.length;
     } catch (e) {
@@ -173,31 +197,28 @@ class ShoppingListProvider with ChangeNotifier {
     }
   }
 
-  /// Zutaten einer Rezeptseite übernehmen.
+  /// Zutaten eines Rezepts übernehmen - in einer Anfrage, vom Server gerechnet.
   ///
-  /// Einzelne POSTs über `Future.wait`: der Controller hat keinen
-  /// Sammel-Endpunkt, und für fünfzehn Zeilen über WLAN ist das in Ordnung. Ein
-  /// `POST /shopping-list/batch` wäre sauberer, lohnt aber erst, wenn es
-  /// messbar stört.
-  Future<int> addIngredients(List<RecipeIngredient> ingredients) async {
+  /// Der Vorgänger schickte N einzelne POSTs ohne Regal und ohne
+  /// Zusammenfassen: dasselbe Rezept zweimal ergab zwei Zeilen "200 g Mehl",
+  /// eine fehlgeschlagene Anfrage hinterließ eine halb gefüllte Liste, und die
+  /// Mengen wichen von denen des Wochenplan-Wegs ab, weil hier mit `double`
+  /// und dort mit `BigDecimal` skaliert wurde.
+  ///
+  /// Gibt **true/false** zurück und keine Anzahl: der Server legt teils neue
+  /// Zeilen an und lässt teils vorhandene wachsen, eine Längendifferenz zählt
+  /// das nicht. Die Oberfläche sagt deshalb "Zutaten übernommen" - ein wahrer
+  /// unscharfer Satz schlägt eine präzise falsche Zahl.
+  Future<bool> addFromRecipe(int recipeId, {int? servings}) async {
     try {
-      final created = await Future.wait(ingredients.map(
-        (ingredient) => _service.addShoppingItem(ShoppingItem(
-          name: ingredient.name,
-          amount: ingredient.amount,
-          unit: ingredient.unit,
-        )),
-      ));
-      _items = [..._items, ...created];
+      _items = await _service.addRecipeToShoppingList(recipeId, servings: servings);
       _error = null;
       notifyListeners();
-      return created.length;
+      return true;
     } catch (e) {
       _error = e.toString();
       notifyListeners();
-      // Ein Teil kann durchgegangen sein - deshalb neu laden statt raten.
-      await load();
-      return -1;
+      return false;
     }
   }
 

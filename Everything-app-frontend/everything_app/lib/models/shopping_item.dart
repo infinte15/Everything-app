@@ -28,7 +28,18 @@ class ShoppingItem {
   final String? unit;
 
   /// Das Ladenregal, vom Server über `IngredientAisleClassifier` bestimmt.
-  final String category;
+  ///
+  /// **Muss nullbar sein und darf nicht mitgeschickt werden, wenn nichts
+  /// dasteht.** Der Server ordnet nur dann selbst ein, wenn das Feld leer
+  /// ankommt (`ShoppingListService.addManualItem`). Solange hier `'Sonstiges'`
+  /// als Vorgabe stand und `toJson` sie mitschickte, hat der Klassifizierer mit
+  /// seinen acht Regalen und ~200 Stichwörtern für keinen einzigen Eintrag je
+  /// gelaufen - weder für eine Zutat von der Rezeptseite noch für einen von Hand
+  /// angelegten Eintrag ohne gewähltes Regal. Alles landete unter "Sonstiges",
+  /// während der Kommentar hier das Gegenteil behauptete.
+  ///
+  /// Für die Anzeige gibt es [aisle].
+  final String? category;
   final bool isChecked;
   final DateTime? checkedAt;
   final ShoppingItemSource source;
@@ -39,7 +50,7 @@ class ShoppingItem {
     required this.name,
     this.amount,
     this.unit,
-    this.category = 'Sonstiges',
+    this.category,
     this.isChecked = false,
     this.checkedAt,
     this.source = ShoppingItemSource.manual,
@@ -52,7 +63,7 @@ class ShoppingItem {
       name: json['name'] ?? '',
       amount: (json['amount'] as num?)?.toDouble(),
       unit: json['unit'],
-      category: json['category'] ?? 'Sonstiges',
+      category: json['category'],
       isChecked: json['isChecked'] ?? false,
       checkedAt:
           json['checkedAt'] is String ? DateTime.tryParse(json['checkedAt']) : null,
@@ -62,12 +73,17 @@ class ShoppingItem {
     );
   }
 
+  /// Das Regal für die Anzeige - unsortiertes gehört unter "Sonstiges".
+  String get aisle => category ?? 'Sonstiges';
+
   Map<String, dynamic> toJson() => {
         if (id != null) 'id': id,
         'name': name,
         'amount': amount,
         'unit': unit,
-        'category': category,
+        // Weglassen, nicht null schicken: nur ein fehlender Schlüssel lässt den
+        // Server selbst einsortieren.
+        if (category != null) 'category': category,
         'isChecked': isChecked,
         'source': source.wire,
       };
@@ -96,5 +112,5 @@ class ShoppingItem {
   }
 
   @override
-  String toString() => 'ShoppingItem($name, $category, checked: $isChecked)';
+  String toString() => 'ShoppingItem($name, $aisle, checked: $isChecked)';
 }

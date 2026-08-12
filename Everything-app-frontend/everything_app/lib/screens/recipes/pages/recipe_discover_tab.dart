@@ -7,16 +7,13 @@ import '../../../models/recipe.dart';
 import '../../../providers/recipe_provider.dart';
 import '../../../theme/kinetic_theme.dart';
 import '../widgets/category_filter_bar.dart';
-import '../widgets/rating_stars.dart';
 import '../widgets/recipe_card.dart';
 import '../widgets/recipe_error_banner.dart';
-import '../widgets/recipe_format.dart';
-import '../widgets/recipe_image.dart';
+import '../widgets/recipe_quick_actions.dart';
 import '../widgets/recipe_section.dart';
 import 'recipe_detail_page.dart';
 
-/// Chefkochs Startseite, entfärbt: Suche, Rezept des Tages, Kategorien und
-/// darunter die Reihen.
+/// Chefkochs Startseite, entfärbt: Suche, Kategorien und darunter die Reihen.
 ///
 /// Die vier Reihen kommen aus Endpunkten, die es längst gibt und die bisher
 /// niemand aufgerufen hat. `/recently-cooked` ist bewusst keine fünfte Reihe,
@@ -163,6 +160,11 @@ class _RecipeDiscoverTabState extends State<RecipeDiscoverTab> {
           recipe: recipe,
           onTap: () => _openRecipe(recipe),
           onToggleFavorite: () => provider.toggleFavorite(recipe.id!),
+          // Suchtreffer sind genau die Stelle, an der man findet, was man
+          // Donnerstag kochen will.
+          onPlan: () => planRecipeFlow(context, recipe: recipe),
+          onAddToShoppingList: () =>
+              addToShoppingListFlow(context, recipeId: recipe.id!),
         ),
     ];
   }
@@ -175,23 +177,18 @@ class _RecipeDiscoverTabState extends State<RecipeDiscoverTab> {
         RecipeEmpty(
           icon: Icons.restaurant_outlined,
           title: 'Noch keine Rezepte',
-          message: 'Leg ein Rezept an oder hol dir eins von chefkoch.de - '
+          message: 'Leg ein Rezept an oder importier eins - '
               'über den Knopf unten rechts.',
         ),
       ];
     }
 
-    final ofTheDay = provider.recipeOfTheDayFor(DateTime.now());
     final counts = <String, int>{};
     for (final recipe in provider.recipes) {
       counts[recipe.category] = (counts[recipe.category] ?? 0) + 1;
     }
 
     return [
-      if (ofTheDay != null) ...[
-        const RecipeSection(title: 'Rezept des Tages'),
-        _HeroCard(recipe: ofTheDay, onTap: () => _openRecipe(ofTheDay)),
-      ],
       const RecipeSection(title: 'Kategorien'),
       CategoryFilterBar(
         selected: provider.categoryFilter,
@@ -228,54 +225,6 @@ class _RecipeDiscoverTabState extends State<RecipeDiscoverTab> {
           ),
         ),
       ],
-    );
-  }
-}
-
-/// Das Rezept des Tages - großes Bild über die volle Breite.
-class _HeroCard extends StatelessWidget {
-  const _HeroCard({required this.recipe, required this.onTap});
-
-  final Recipe recipe;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      behavior: HitTestBehavior.opaque,
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 20),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            AspectRatio(
-              aspectRatio: 16 / 9,
-              child: RecipeImage(url: recipe.imageUrl, name: recipe.name, height: 200),
-            ),
-            const SizedBox(height: 12),
-            Text(
-              recipe.name,
-              style: KineticTheme.headline.copyWith(fontSize: 22),
-              maxLines: 2,
-              overflow: TextOverflow.ellipsis,
-            ),
-            const SizedBox(height: 6),
-            Row(
-              children: [
-                Text(
-                  '${recipe.category} · ${formatDuration(recipe.totalTimeMinutes)}',
-                  style: KineticTheme.caption,
-                ),
-                if (recipe.rating != null) ...[
-                  const SizedBox(width: 10),
-                  RatingStars(rating: recipe.rating, size: 13),
-                ],
-              ],
-            ),
-          ],
-        ),
-      ),
     );
   }
 }

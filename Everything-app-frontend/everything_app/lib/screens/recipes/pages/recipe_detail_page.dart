@@ -4,15 +4,16 @@ import 'package:provider/provider.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../../config/recipe_categories.dart';
+import '../../../models/meal_plan.dart';
 import '../../../models/recipe.dart';
 import '../../../providers/recipe_provider.dart';
-import '../../../providers/shopping_list_provider.dart';
+import '../../../providers/recipe_space_provider.dart';
 import '../../../theme/kinetic_theme.dart';
 import '../widgets/cooked_sheet.dart';
 import '../widgets/ingredient_table.dart';
-import '../widgets/plan_meal_sheet.dart';
 import '../widgets/rating_stars.dart';
 import '../widgets/recipe_format.dart';
+import '../widgets/recipe_quick_actions.dart';
 import '../widgets/recipe_image.dart';
 import '../widgets/recipe_section.dart';
 import '../widgets/servings_stepper.dart';
@@ -37,6 +38,14 @@ class _RecipeDetailPageState extends State<RecipeDetailPage> {
   int? _servings;
   String? _error;
   bool _loading = true;
+
+  /// Die Mahlzeiten der laufenden Woche für dieses Rezept.
+  ///
+  /// Eigene Kopie und nicht `RecipeProvider.mealPlan`: dort liegt die Woche,
+  /// die der Wochenplan-Reiter gerade zeigt. Hätte der Nutzer dort weitergeblättert,
+  /// wäre diese Seite blind und schriebe beim Abhaken einen zweiten Kocheintrag
+  /// neben die längst geplante Mahlzeit.
+  List<MealPlan> _plannedThisWeek = const [];
 
   @override
   void initState() {
@@ -68,6 +77,7 @@ class _RecipeDetailPageState extends State<RecipeDetailPage> {
         _loading = false;
       });
       provider.loadCookLog(widget.recipeId);
+      _loadPlanned();
     } catch (e) {
       if (!mounted) return;
       setState(() {
@@ -75,6 +85,12 @@ class _RecipeDetailPageState extends State<RecipeDetailPage> {
         _loading = false;
       });
     }
+  }
+
+  Future<void> _loadPlanned() async {
+    final meals =
+        await context.read<RecipeProvider>().mealsForRecipeThisWeek(widget.recipeId);
+    if (mounted) setState(() => _plannedThisWeek = meals);
   }
 
   // ── Aktionen ───────────────────────────────────────────────────────────────
@@ -95,44 +111,102 @@ class _RecipeDetailPageState extends State<RecipeDetailPage> {
     if (updated != null && mounted) setState(() => _recipe = updated);
   }
 
+  /// Die heute geplante, noch offene Mahlzeit für dieses Rezept - falls es eine
+  /// gibt.
+  MealPlan? get _openMealToday {
+    final today = DateTime.now();
+    for (final meal in _plannedThisWeek) {
+      if (!meal.isCompleted && meal.isOn(today)) return meal;
+    }
+    return null;
+  }
+
+  /// "Gekocht" - genau **einer** von zwei Wegen, nie beide.
+  ///
+  /// Steht für heute eine offene Mahlzeit im Plan, wird sie abgehakt; der
+  /// Server schreibt dabei selbst ins Kochprotokoll. Sonst entsteht ein
+  /// gewöhnlicher Eintrag. Vorher gab es "Gekocht" zweimal, die beiden wussten
+  /// nichts voneinander, und wer beides benutzte, zählte doppelt.
+  ///
+  /// Bewusst eng auf **heute**: eine Mahlzeit rückwirkend in eine Woche zu
+  /// legen, die man gerade nicht ansieht, wäre eine Überraschung. Wer Dienstag
+  /// kocht, was für Donnerstag geplant ist, bekommt einen normalen Eintrag -
+  /// die Zeile "Diese Woche geplant" direkt darüber erklärt, warum.
   Future<void> _logCooked() async {
+    final planned = _openMealToday;
     final entry = await CookedSheet.show(
       context,
-      servings: _servings ?? _recipe!.servings,
+      servings: planned?.plannedServings ?? _servings ?? _recipe!.servings,
       rating: _recipe!.rating,
     );
     if (entry == null || !mounted) return;
 
-    final updated = await context.read<RecipeProvider>().logCooked(
-          widget.recipeId,
-          servings: entry.servings,
-          rating: entry.rating,
-          note: entry.note,
-        );
+    final provider = context.read<RecipeProvider>();
+
+    if (planned != null) {
+      final ok = await provider.completeMeal(
+        planned.id!,
+        servings: entry.servings,
+        rating: entry.rating,
+        note: entry.note,
+      );
+      if (!mounted || !ok) return;
+
+      final fresh = provider.byId(widget.recipeId);
+      setState(() {
+        if (fresh != null) _recipe = fresh;
+      });
+      provider.loadCookLog(widget.recipeId);
+      _loadPlanned();
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text('Abgehakt · ${_describe(planned)}'),
+        backgroundColor: KineticTheme.surfaceElevated,
+      ));
+      return;
+    }
+
+    final updated = await provider.logCooked(
+      widget.recipeId,
+      servings: entry.servings,
+      rating: entry.rating,
+      note: entry.note,
+    );
 
     if (!mounted) return;
     if (updated != null) {
       setState(() => _recipe = updated);
-      context.read<RecipeProvider>().loadCookLog(widget.recipeId);
+      provider.loadCookLog(widget.recipeId);
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Eingetragen · ${formatCookCount(updated.cookCount)}')),
       );
     }
   }
 
-  Future<void> _addToShoppingList() async {
-    final scaled = _recipe!.scaledTo(_servings ?? _recipe!.servings);
-    final count =
-        await context.read<ShoppingListProvider>().addIngredients(scaled);
+  /// "Do, Abendessen".
+  String _describe(MealPlan meal) =>
+      '${DateFormat('E', 'de_DE').format(meal.date)}, ${meal.mealType.label}';
 
-    if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-      content: Text(count < 0
-          ? 'Hat nicht geklappt'
-          : count == 1
-              ? '1 Zutat hinzugefügt'
-              : '$count Zutaten hinzugefügt'),
-    ));
+  Future<void> _addToShoppingList() async {
+    // Der Server skaliert und legt zusammen - `scaledTo` fällt hier weg, sonst
+    // rechneten zwei Seiten dasselbe unterschiedlich.
+    await addToShoppingListFlow(
+      context,
+      recipeId: widget.recipeId,
+      servings: _servings,
+      popAfterJump: true,
+    );
+  }
+
+  Future<void> _plan() async {
+    await planRecipeFlow(
+      context,
+      recipe: _recipe!,
+      servings: _servings,
+      popAfterJump: true,
+    );
+    // Die neue Mahlzeit gehört sofort in die Zeile "Diese Woche geplant" - und
+    // in den Abgleich beim nächsten "Gekocht".
+    if (mounted) _loadPlanned();
   }
 
   Future<void> _openSource() async {
@@ -409,11 +483,7 @@ class _RecipeDetailPageState extends State<RecipeDetailPage> {
               const SizedBox(width: 12),
               Expanded(
                 child: OutlinedButton(
-                  onPressed: () => PlanMealSheet.show(
-                    context,
-                    date: DateTime.now(),
-                    recipe: recipe,
-                  ),
+                  onPressed: _plan,
                   style: _outlined,
                   child: const Text('Zum Wochenplan'),
                 ),
@@ -421,7 +491,43 @@ class _RecipeDetailPageState extends State<RecipeDetailPage> {
             ],
           ),
         ),
+        _plannedLine(),
       ],
+    );
+  }
+
+  /// "Diese Woche geplant: Do, Abendessen" - antippbar, führt in den Plan.
+  ///
+  /// Erklärt nebenbei, warum "Gekocht" mal abhakt und mal einen gewöhnlichen
+  /// Eintrag schreibt.
+  Widget _plannedLine() {
+    if (_plannedThisWeek.isEmpty) return const SizedBox.shrink();
+
+    final open = _plannedThisWeek.where((m) => !m.isCompleted).toList()
+      ..sort((a, b) => a.date.compareTo(b.date));
+    if (open.isEmpty) return const SizedBox.shrink();
+
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(20, 12, 20, 0),
+      child: InkWell(
+        onTap: () {
+          context.read<RecipeSpaceProvider>().openTab(2);
+          Navigator.of(context).pop();
+        },
+        child: Row(
+          children: [
+            const Icon(Icons.calendar_view_week_outlined,
+                size: 14, color: KineticTheme.primary),
+            const SizedBox(width: 6),
+            Expanded(
+              child: Text(
+                'Diese Woche geplant: ${open.map(_describe).join(' · ')}',
+                style: KineticTheme.label.copyWith(color: KineticTheme.primary),
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 
