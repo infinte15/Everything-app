@@ -25,6 +25,8 @@ public class UserPreferencesMapper {
         dto.setDarkMode(prefs.getDarkMode());
         dto.setBufferMinutes(prefs.getBufferMinutes());
         dto.setMaxTaskMinutesPerDay(prefs.getMaxTaskMinutesPerDay());
+        dto.setMaxScheduledMinutesPerDay(prefs.getMaxScheduledMinutesPerDay());
+        dto.setCoreHoursEnd(prefs.getCoreHoursEnd());
         dto.setDefaultMinChunkMinutes(prefs.getDefaultMinChunkMinutes());
         dto.setDefaultMaxChunkMinutes(prefs.getDefaultMaxChunkMinutes());
         dto.setAutoScheduleEnabled(prefs.getAutoScheduleEnabled());
@@ -52,6 +54,8 @@ public class UserPreferencesMapper {
         prefs.setDarkMode(dto.getDarkMode());
         prefs.setBufferMinutes(dto.getBufferMinutes());
         prefs.setMaxTaskMinutesPerDay(dto.getMaxTaskMinutesPerDay());
+        prefs.setMaxScheduledMinutesPerDay(dto.getMaxScheduledMinutesPerDay());
+        prefs.setCoreHoursEnd(dto.getCoreHoursEnd());
         prefs.setDefaultMinChunkMinutes(dto.getDefaultMinChunkMinutes());
         prefs.setDefaultMaxChunkMinutes(dto.getDefaultMaxChunkMinutes());
         prefs.setAutoScheduleEnabled(dto.getAutoScheduleEnabled());

@@ -24,7 +24,8 @@ class ScheduleRegenerationCoordinatorTest {
 
     private ScheduleRegenerationCoordinator coordinator(long quietMs, long maxDelayMs) {
         lenient().when(userService.getOrCreatePreferences(anyLong())).thenReturn(enabledPrefs());
-        lenient().when(scheduler.defaultHorizonEnd(any())).thenAnswer(i -> i.<LocalDate>getArgument(0).plusDays(84));
+        lenient().when(scheduler.defaultHorizonEnd(any())).thenAnswer(i -> i.<LocalDate>getArgument(0).plusDays(28));
+        lenient().when(scheduler.classHorizonEnd(any())).thenAnswer(i -> i.<LocalDate>getArgument(0).plusDays(120));
         return new ScheduleRegenerationCoordinator(scheduler, userService, quietMs, maxDelayMs);
     }
 
@@ -41,7 +42,8 @@ class ScheduleRegenerationCoordinatorTest {
         for (int i = 0; i < 5; i++) coord.request(1L);
 
         verify(scheduler, timeout(2000).times(1))
-                .generateOptimalSchedule(eq(1L), any(LocalDate.class), any(LocalDate.class));
+                .generateOptimalSchedule(eq(1L), any(LocalDate.class), any(LocalDate.class),
+                        any(LocalDate.class));
         // ignoreStubs blendet den gestubbten Horizont-Aufruf aus; geprüft wird nur, dass keine
         // ZWEITE Neuplanung stattgefunden hat.
         verifyNoMoreInteractions(ignoreStubs(scheduler));
@@ -54,8 +56,8 @@ class ScheduleRegenerationCoordinatorTest {
         coord.request(1L);
         coord.request(2L);
 
-        verify(scheduler, timeout(2000)).generateOptimalSchedule(eq(1L), any(), any());
-        verify(scheduler, timeout(2000)).generateOptimalSchedule(eq(2L), any(), any());
+        verify(scheduler, timeout(2000)).generateOptimalSchedule(eq(1L), any(), any(), any());
+        verify(scheduler, timeout(2000)).generateOptimalSchedule(eq(2L), any(), any(), any());
     }
 
     @Test
@@ -71,7 +73,7 @@ class ScheduleRegenerationCoordinatorTest {
         }
 
         verify(scheduler, timeout(2000).atLeastOnce())
-                .generateOptimalSchedule(eq(1L), any(), any());
+                .generateOptimalSchedule(eq(1L), any(), any(), any());
     }
 
     @Test
@@ -79,14 +81,15 @@ class ScheduleRegenerationCoordinatorTest {
         UserPreferences off = new UserPreferences();
         off.setAutoScheduleEnabled(false);
         when(userService.getOrCreatePreferences(1L)).thenReturn(off);
-        when(scheduler.defaultHorizonEnd(any())).thenAnswer(i -> i.<LocalDate>getArgument(0).plusDays(84));
+        // Auf diesem Pfad wird nur der Stundenplan gespiegelt, also zählt allein sein Fenster.
+        when(scheduler.classHorizonEnd(any())).thenAnswer(i -> i.<LocalDate>getArgument(0).plusDays(120));
         ScheduleRegenerationCoordinator coord =
                 new ScheduleRegenerationCoordinator(scheduler, userService, 50L, 5000L);
 
         coord.request(1L);
 
         verify(userService, timeout(2000)).getOrCreatePreferences(1L);
-        verify(scheduler, never()).generateOptimalSchedule(any(), any(), any());
+        verify(scheduler, never()).generateOptimalSchedule(any(), any(), any(), any());
 
         // Der Stundenplan wird nicht geplant, sondern abgebildet: er muss auch bei
         // abgeschalteter Autoplanung stimmen, sonst verschwände eine gelöschte Vorlesung
@@ -94,18 +97,47 @@ class ScheduleRegenerationCoordinatorTest {
         verify(scheduler, timeout(2000)).syncClassEvents(eq(1L), any(), any());
     }
 
+    /**
+     * Ein langer Lauf für einen Nutzer darf einen anderen nicht aufhalten.
+     *
+     * Vorher lagen Entprell-Timer und Rechenlauf auf demselben Single-Thread-Executor: solange
+     * für Nutzer 1 gerechnet wurde, konnte der Timer von Nutzer 2 nicht einmal feuern. Mit dem
+     * nächtlichen Rundlauf über ALLE Nutzer wäre daraus eine Warteschlange geworden, in der der
+     * letzte minutenlang hinten steht.
+     */
+    @Test
+    void einLangerLaufBlockiertAndereNutzerNicht() throws Exception {
+        ScheduleRegenerationCoordinator coord = coordinator(50L, 5000L);
+        java.util.concurrent.CountDownLatch haelt = new java.util.concurrent.CountDownLatch(1);
+        doAnswer(inv -> {
+            haelt.await();
+            return null;
+        }).when(scheduler).generateOptimalSchedule(eq(1L), any(), any(), any());
+
+        coord.request(1L);
+        // Kurz warten, damit der Lauf für Nutzer 1 wirklich angefangen hat.
+        Thread.sleep(200);
+        coord.request(2L);
+
+        try {
+            verify(scheduler, timeout(2000)).generateOptimalSchedule(eq(2L), any(), any(), any());
+        } finally {
+            haelt.countDown();
+        }
+    }
+
     @Test
     void aFailingRegenerationDoesNotKillTheExecutor() {
         ScheduleRegenerationCoordinator coord = coordinator(50L, 5000L);
         doThrow(new RuntimeException("Solver kaputt"))
-                .when(scheduler).generateOptimalSchedule(eq(1L), any(), any());
+                .when(scheduler).generateOptimalSchedule(eq(1L), any(), any(), any());
 
         coord.request(1L);
-        verify(scheduler, timeout(2000)).generateOptimalSchedule(eq(1L), any(), any());
+        verify(scheduler, timeout(2000)).generateOptimalSchedule(eq(1L), any(), any(), any());
 
         // Der Executor muss danach weiterhin Aufträge annehmen.
         reset(scheduler);
         coord.request(2L);
-        verify(scheduler, timeout(2000)).generateOptimalSchedule(eq(2L), any(), any());
+        verify(scheduler, timeout(2000)).generateOptimalSchedule(eq(2L), any(), any(), any());
     }
 }

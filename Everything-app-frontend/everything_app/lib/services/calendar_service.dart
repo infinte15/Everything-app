@@ -1,5 +1,6 @@
 import 'package:flutter/foundation.dart';
 import '../config/api_config.dart';
+import '../models/at_risk_item.dart';
 import '../models/calendar_event.dart';
 import 'api_service.dart';
 
@@ -191,4 +192,51 @@ class CalendarService {
       };
     }
   }
+
+  /// Ergebnis des letzten Scheduler-Laufs.
+  ///
+  /// Bewusst klein gehalten: der Kalender fragt das nach jeder Aenderung mehrfach ab, bis die
+  /// Neuplanung durch ist. Erst wenn sich `lastRunAt` aendert, lohnt sich das Nachladen des
+  /// ganzen Monats.
+  ///
+  /// Wirft nicht: ein fehlgeschlagener Statusabruf ist kein Fehler, den der Nutzer sehen muesste
+  /// — dann bleibt es eben beim naechsten regulaeren Poll.
+  Future<ScheduleStatus?> getScheduleStatus() async {
+    try {
+      final response = await _apiService.get(ApiConfig.scheduleStatus);
+      if (!_apiService.isSuccess(response)) return null;
+      final data = _apiService.parseResponse(response);
+      if (data is! Map<String, dynamic>) return null;
+      return ScheduleStatus.fromJson(data);
+    } catch (e) {
+      debugPrint('Error loading schedule status: $e');
+      return null;
+    }
+  }
+}
+
+/// Momentaufnahme des letzten Scheduler-Laufs.
+class ScheduleStatus {
+  final DateTime? lastRunAt;
+  final String? solverStatus;
+  final int scheduledBlocks;
+  final List<AtRiskItem> atRisk;
+
+  const ScheduleStatus({
+    this.lastRunAt,
+    this.solverStatus,
+    this.scheduledBlocks = 0,
+    this.atRisk = const [],
+  });
+
+  factory ScheduleStatus.fromJson(Map<String, dynamic> json) => ScheduleStatus(
+        lastRunAt: json['lastRunAt'] != null
+            ? DateTime.tryParse(json['lastRunAt'] as String)
+            : null,
+        solverStatus: json['solverStatus'] as String?,
+        scheduledBlocks: (json['scheduledBlocks'] as int?) ?? 0,
+        atRisk: ((json['atRisk'] as List<dynamic>?) ?? const [])
+            .map((e) => AtRiskItem.fromJson(e as Map<String, dynamic>))
+            .toList(growable: false),
+      );
 }

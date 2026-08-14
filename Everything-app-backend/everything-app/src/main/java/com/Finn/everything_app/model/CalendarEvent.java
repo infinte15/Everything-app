@@ -7,8 +7,25 @@ import lombok.AllArgsConstructor;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 
+/**
+ * Die Indizes sind kein Feinschliff, sondern Grundausstattung: die Tabelle wächst pro Nutzer und
+ * Scheduler-Lauf um mehrere hundert Zeilen, und jeder Lauf liest sie mehrfach. Ohne sie ist jede
+ * dieser Abfragen ein Seq Scan über den gesamten Bestand.
+ *
+ * Auf einer bestehenden Datenbank legt {@code ddl-auto=update} sie NICHT nachträglich an — dafür
+ * gibt es {@code db/manual/2026-08-14-calendar-events-indexes.sql}. Hier stehen sie, damit eine
+ * frisch aufgebaute Datenbank sie von Anfang an hat.
+ */
 @Entity
-@Table(name = "calendar_events")
+@Table(name = "calendar_events", indexes = {
+        @Index(name = "idx_calendar_events_user_start", columnList = "user_id, start_time"),
+        @Index(name = "idx_calendar_events_user_type_fixed_start",
+               columnList = "user_id, event_type, is_fixed, start_time"),
+        @Index(name = "idx_calendar_events_related_task",    columnList = "related_task_id"),
+        @Index(name = "idx_calendar_events_related_habit",   columnList = "related_habit_id"),
+        @Index(name = "idx_calendar_events_related_workout", columnList = "related_workout_id"),
+        @Index(name = "idx_calendar_events_related_project", columnList = "related_project_id")
+})
 @Data
 @NoArgsConstructor
 @AllArgsConstructor

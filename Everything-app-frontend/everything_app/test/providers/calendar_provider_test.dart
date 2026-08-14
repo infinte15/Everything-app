@@ -1,6 +1,8 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:everything_app/models/at_risk_item.dart';
 import 'package:everything_app/models/calendar_event.dart';
 import 'package:everything_app/providers/calendar_provider.dart';
+import 'package:everything_app/services/calendar_service.dart';
 import '../support/fake_calendar_service.dart';
 
 CalendarEvent _event({
@@ -170,12 +172,55 @@ void main() {
 
       final before = fake.getEventsInRangeCallCount;
       await provider.updateEvent(original.copyWith(startTime: original.startTime));
-      // reconcileDelay ist zero — der Timer feuert im nächsten Event-Loop-Durchlauf.
-      await Future<void>.delayed(Duration.zero);
-      await Future<void>.delayed(Duration.zero);
+      // reconcileDelay ist zero — der Timer feuert im nächsten Event-Loop-Durchlauf. Der Nachlauf
+      // fragt seither erst den Scheduler-Status ab und lädt den Monat nur nach, wenn tatsächlich
+      // neu geplant wurde; das sind ein paar Mikrotask-Runden mehr als früher.
+      for (var i = 0; i < 6; i++) {
+        await Future<void>.delayed(Duration.zero);
+      }
 
       expect(fake.getEventsInRangeCallCount, greaterThan(before),
           reason: 'the provider must refetch after a mutation, not wait for the 30s poll');
+      expect(fake.getScheduleStatusCallCount, greaterThan(0),
+          reason: 'der Nachlauf soll den billigen Status abfragen, nicht blind den ganzen Monat');
+    });
+
+    test('der Indikator geht wieder aus, wenn die Neuplanung durch ist', () async {
+      final original = _event();
+      final fake = FakeCalendarService([original]);
+      final provider = await _loadedProvider(fake);
+
+      await provider.updateEvent(original.copyWith(startTime: original.startTime));
+      expect(provider.isReplanning, isTrue,
+          reason: 'unmittelbar nach der Mutation wartet der Kalender auf den Server');
+
+      for (var i = 0; i < 6; i++) {
+        await Future<void>.delayed(Duration.zero);
+      }
+
+      expect(provider.isReplanning, isFalse,
+          reason: 'nach dem gemeldeten Lauf darf die Anzeige nicht hängen bleiben');
+    });
+
+    test('at-risk aus dem Status landet im Provider', () async {
+      final fake = FakeCalendarService([_event()]);
+      fake.scheduleStatus = ScheduleStatus(
+        lastRunAt: DateTime.now(),
+        solverStatus: 'OPTIMAL',
+        atRisk: const [
+          AtRiskItem(taskId: 7, title: 'Regal bauen', minutes: 240, reason: 'NO_ROOM'),
+        ],
+      );
+      final provider = await _loadedProvider(fake);
+
+      await provider.updateEvent(_event().copyWith(startTime: _event().startTime));
+      for (var i = 0; i < 6; i++) {
+        await Future<void>.delayed(Duration.zero);
+      }
+
+      expect(provider.atRisk, hasLength(1));
+      expect(provider.atRisk.first.title, 'Regal bauen');
+      expect(provider.atRisk.first.reasonText, 'kein Platz im Zeitplan');
     });
   });
 }

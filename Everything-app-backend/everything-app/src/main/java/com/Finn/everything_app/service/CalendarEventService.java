@@ -412,27 +412,28 @@ public class CalendarEventService {
         }
     }
 
+    /**
+     * Räumt die generierten Blöcke eines Zeitraums weg — in einer einzigen Anweisung.
+     *
+     * Erledigte Blöcke bleiben stehen. Sie sind Protokoll, keine Planung — die entprellte
+     * Neuplanung soll sie nicht zwei Sekunden nach dem Haken wieder wegräumen.
+     *
+     * Übersprungene ebenso, und aus einem zweiten Grund: sie sind der einzige Beleg dafür,
+     * dass diese Ausführung bereits vom Wochenpensum abgezogen ist. Würden sie hier weggeräumt,
+     * stünde die Woche wieder unter Pensum und bekäme prompt Ersatz — also genau das Verhalten,
+     * gegen das das Überspringen gebaut ist.
+     *
+     * Beide Bedingungen stehen jetzt in der Abfrage statt in einem Java-Filter: vorher wurden
+     * alle Blöcke geladen, gefiltert und einzeln gelöscht, was bei einem vollen Horizont mehrere
+     * hundert Anweisungen pro Lauf bedeutete.
+     */
     @Transactional
     public void clearScheduledEvents(Long userId, LocalDateTime start, LocalDateTime end) {
-        List<CalendarEvent> events = calendarEventRepository.findByUserIdAndEventTypeInAndIsFixedAndStartTimeBetween(
+        calendarEventRepository.deleteGeneratedEvents(
                 userId,
                 List.of(EventType.TASK, EventType.HABIT, EventType.WORKOUT, EventType.PROJECT),
-                false,
                 start,
                 end);
-        // Erledigte Blöcke bleiben stehen. Sie sind Protokoll, keine Planung — die entprellte
-        // Neuplanung soll sie nicht zwei Sekunden nach dem Haken wieder wegräumen.
-        //
-        // Übersprungene ebenso, und aus einem zweiten Grund: sie sind der einzige Beleg dafür,
-        // dass diese Ausführung bereits vom Wochenpensum abgezogen ist. Würden sie hier
-        // weggeräumt, stünde die Woche wieder unter Pensum und bekäme prompt Ersatz — also
-        // genau das Verhalten, gegen das das Überspringen gebaut ist.
-        //
-        // Gefiltert in eine neue Liste statt removeIf: was das Repository zurückgibt, muss
-        // nicht veränderbar sein.
-        calendarEventRepository.deleteAll(events.stream()
-                .filter(e -> e.getCompletedAt() == null && e.getSkippedAt() == null)
-                .toList());
     }
 
     /**
@@ -444,8 +445,6 @@ public class CalendarEventService {
      */
     @Transactional
     public void clearClassEvents(Long userId, LocalDateTime start, LocalDateTime end) {
-        calendarEventRepository.deleteAll(
-                calendarEventRepository.findByUserIdAndEventTypeInAndIsFixedAndStartTimeBetween(
-                        userId, List.of(EventType.CLASS), false, start, end));
+        calendarEventRepository.deleteGeneratedEventsOfType(userId, EventType.CLASS, start, end);
     }
 }

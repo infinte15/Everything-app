@@ -131,4 +131,27 @@ class FakeCalendarService extends CalendarService {
     }
     return {'success': true, 'data': {}};
   }
+
+  /// Pflicht-Override wie oben — ohne ihn liefe im Test die echte Netzwerkfassung, und der
+  /// Nachlauf nach einer Mutation bräche an der fehlenden Binding-Initialisierung ab.
+  ///
+  /// Vorgabe ist "ein neuer Lauf bei jedem Abruf": der Nachlauf im Provider bricht ab, sobald der
+  /// Server einen neueren Lauf meldet, und genau dieser Normalfall soll in den Tests gelten. Wer
+  /// das Gegenteil braucht (Nachlauf läuft ins Leere), setzt [scheduleStatus] auf einen festen
+  /// Wert oder null.
+  int getScheduleStatusCallCount = 0;
+  ScheduleStatus? scheduleStatus;
+  bool scheduleStatusAdvances = true;
+
+  @override
+  Future<ScheduleStatus?> getScheduleStatus() async {
+    getScheduleStatusCallCount++;
+    if (!scheduleStatusAdvances) return scheduleStatus;
+    return scheduleStatus ??
+        ScheduleStatus(
+          lastRunAt: DateTime.now().add(Duration(seconds: getScheduleStatusCallCount)),
+          solverStatus: 'OPTIMAL',
+          scheduledBlocks: events.length,
+        );
+  }
 }

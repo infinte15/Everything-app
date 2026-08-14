@@ -4,8 +4,8 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:everything_app/utils/note_markup.dart';
 
 /// Reines Dart, keine Widgets — der Auszeichner ist eine Funktion und soll auch so geprueft
-/// werden. Die startLine-Treue ist der wichtigste Punkt: davon haengt ab, welche Zeile eine
-/// angeklickte Checkbox umschreibt.
+/// werden. Das bearbeitbare Blockmodell, das der Editor daraus baut, hat seine eigenen Tests
+/// in note_blocks_test.dart.
 void main() {
   const base = TextStyle(fontSize: 14);
   List<InlineSpan> spans(String text) => inlineSpans(
@@ -134,23 +134,38 @@ void main() {
     });
   });
 
-  group('toggleTodoLine', () {
-    const doc = '- [ ] erste\n- [x] zweite\nkein Todo';
+  group('Einrueckung', () {
+    test('je zwei Leerzeichen sind eine Stufe', () {
+      final blocks = parseBlocks([
+        '- oben',
+        '  - eine Stufe tiefer',
+        '    - zwei Stufen tiefer',
+      ].join('\n'));
 
-    test('kippt offen zu erledigt und zurueck', () {
-      expect(toggleTodoLine(doc, 0), '- [x] erste\n- [x] zweite\nkein Todo');
-      expect(toggleTodoLine(doc, 1), '- [ ] erste\n- [ ] zweite\nkein Todo');
+      expect(blocks.map((b) => b.indent), [0, 1, 2]);
+      // Frueher wurde das Praefix gegen den links nicht getrimmten String geprueft — aus
+      // eingerueckten Aufzaehlungen wurden stillschweigend Absaetze.
+      expect(blocks.every((b) => b is BulletBlock), isTrue);
     });
 
-    test('die Altform wird zu erledigt', () {
-      expect(toggleTodoLine('- [] alt', 0), '- [x] alt');
+    test('Bestandsnotizen ohne Einrueckung landen auf 0', () {
+      final blocks = parseBlocks('# Titel\n- Punkt\nText');
+      expect(blocks.every((b) => b.indent == 0), isTrue);
     });
 
-    // Der Rohtext kann sich seit dem Rendern geaendert haben.
-    test('eine Zeile ohne Checkbox bleibt unberuehrt', () {
-      expect(toggleTodoLine(doc, 2), isNull);
-      expect(toggleTodoLine(doc, 99), isNull);
-      expect(toggleTodoLine(doc, -1), isNull);
+    test('ein eingerueckter Codeblock behaelt seinen Rumpf woertlich', () {
+      final blocks = parseBlocks([
+        '  ```',
+        '  if (x) {',
+        '    return 1;',
+        '  }',
+        '  ```',
+      ].join('\n'));
+
+      final code = blocks.whereType<CodeBlock>().single;
+      expect(code.indent, 1);
+      // Die Einrueckung des Zauns faellt weg, die des Codes selbst bleibt.
+      expect(code.lines, ['if (x) {', '  return 1;', '}']);
     });
   });
 }

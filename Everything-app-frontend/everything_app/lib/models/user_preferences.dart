@@ -22,6 +22,16 @@ class UserPreferences {
   // --- Scheduling ---
   final int? bufferMinutes;
   final int? maxTaskMinutesPerDay;
+
+  /// Deckel ueber ALLES, was pro Tag automatisch geplant wird — nicht nur ueber die Aufgaben.
+  /// Ohne ihn konnten Gewohnheiten, Trainings und Projektzeit einen Tag fuellen, bevor die
+  /// Aufgaben ueberhaupt an die Reihe kamen.
+  final int? maxScheduledMinutesPerDay;
+
+  /// Ende der Kernzeit. Aufgaben danach sind erlaubt, kosten den Scheduler aber etwas — sonst
+  /// waere 21:00 bei einem Arbeitsende von 22:00 eine gleichwertige Lage.
+  final TimeOfDay? coreHoursEnd;
+
   final int? defaultMinChunkMinutes;
   final int? defaultMaxChunkMinutes;
   final bool? autoScheduleEnabled;
@@ -41,6 +51,8 @@ class UserPreferences {
     this.darkMode,
     this.bufferMinutes,
     this.maxTaskMinutesPerDay,
+    this.maxScheduledMinutesPerDay,
+    this.coreHoursEnd,
     this.defaultMinChunkMinutes,
     this.defaultMaxChunkMinutes,
     this.autoScheduleEnabled,
@@ -80,6 +92,8 @@ class UserPreferences {
       darkMode: json['darkMode'],
       bufferMinutes: json['bufferMinutes'],
       maxTaskMinutesPerDay: json['maxTaskMinutesPerDay'],
+      maxScheduledMinutesPerDay: json['maxScheduledMinutesPerDay'],
+      coreHoursEnd: _parseTime(json['coreHoursEnd']),
       defaultMinChunkMinutes: json['defaultMinChunkMinutes'],
       defaultMaxChunkMinutes: json['defaultMaxChunkMinutes'],
       autoScheduleEnabled: json['autoScheduleEnabled'],
@@ -101,6 +115,8 @@ class UserPreferences {
       'darkMode': darkMode,
       'bufferMinutes': bufferMinutes,
       'maxTaskMinutesPerDay': maxTaskMinutesPerDay,
+      'maxScheduledMinutesPerDay': maxScheduledMinutesPerDay,
+      'coreHoursEnd': _formatTime(coreHoursEnd),
       'defaultMinChunkMinutes': defaultMinChunkMinutes,
       'defaultMaxChunkMinutes': defaultMaxChunkMinutes,
       'autoScheduleEnabled': autoScheduleEnabled,
@@ -121,6 +137,8 @@ class UserPreferences {
     bool? darkMode,
     int? bufferMinutes,
     int? maxTaskMinutesPerDay,
+    int? maxScheduledMinutesPerDay,
+    TimeOfDay? coreHoursEnd,
     int? defaultMinChunkMinutes,
     int? defaultMaxChunkMinutes,
     bool? autoScheduleEnabled,
@@ -140,6 +158,8 @@ class UserPreferences {
       darkMode: darkMode ?? this.darkMode,
       bufferMinutes: bufferMinutes ?? this.bufferMinutes,
       maxTaskMinutesPerDay: maxTaskMinutesPerDay ?? this.maxTaskMinutesPerDay,
+      maxScheduledMinutesPerDay: maxScheduledMinutesPerDay ?? this.maxScheduledMinutesPerDay,
+      coreHoursEnd: coreHoursEnd ?? this.coreHoursEnd,
       defaultMinChunkMinutes: defaultMinChunkMinutes ?? this.defaultMinChunkMinutes,
       defaultMaxChunkMinutes: defaultMaxChunkMinutes ?? this.defaultMaxChunkMinutes,
       autoScheduleEnabled: autoScheduleEnabled ?? this.autoScheduleEnabled,

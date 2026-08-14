@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../../providers/task_provider.dart';
+import '../../providers/calendar_provider.dart';
 import '../../config/app_theme.dart';
 import '../../models/task.dart';
 import '../../widgets/create_task_sheet.dart';
@@ -297,6 +298,18 @@ class _TaskTile extends StatelessWidget {
 
     final isCompleted = task.status == 'COMPLETED';
 
+    // Hat der Scheduler diese Aufgabe beim letzten Lauf nicht mehr untergebracht?
+    //
+    // select statt watch: sonst baut jede Kachel neu, sobald sich irgendetwas im Kalender regt.
+    // Die Quelle ist bewusst der CalendarProvider — dort landet das Ergebnis des Laufs, und eine
+    // zweite Kopie derselben Liste im TaskProvider würde nur auseinanderlaufen.
+    final atRiskGrund = context.select<CalendarProvider, String?>((cal) {
+      for (final item in cal.atRisk) {
+        if (item.taskId != null && item.taskId == task.id) return item.reasonText;
+      }
+      return null;
+    });
+
     return Dismissible(
       key: Key('task_${task.id}'),
       background: Container(
@@ -394,6 +407,30 @@ class _TaskTile extends StatelessWidget {
                         overflow: TextOverflow.ellipsis,
                         style: theme.textTheme.bodySmall?.copyWith(color: Colors.grey),
                       ),
+                    // Der Grund, warum die Aufgabe keinen Termin hat. Ohne diese Zeile blieb sie
+                    // ohne jede Erklärung liegen — sie sah aus wie jede andere offene Aufgabe.
+                    if (atRiskGrund != null && !isCompleted) ...[
+                      const SizedBox(height: 4),
+                      Row(
+                        children: [
+                          const Icon(Icons.warning_amber_rounded,
+                              size: 12, color: Color(0xFFFF9F1C)),
+                          const SizedBox(width: 4),
+                          Expanded(
+                            child: Text(
+                              'Nicht eingeplant — $atRiskGrund',
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(
+                                fontSize: 11,
+                                color: Color(0xFFFF9F1C),
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
                     const SizedBox(height: 4),
                     Row(
                       children: [

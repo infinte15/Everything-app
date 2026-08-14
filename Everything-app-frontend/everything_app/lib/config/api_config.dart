@@ -27,6 +27,8 @@ class ApiConfig {
   static String calendarEventComplete(int id) => '$baseUrl/calendar/events/$id/complete';
   static String calendarEventSkip(int id) => '$baseUrl/calendar/events/$id/skip';
   static const String generateSchedule = '$baseUrl/calendar/generate-schedule';
+  /// Ergebnis des letzten Scheduler-Laufs — klein genug, um danach zu pollen.
+  static const String scheduleStatus = '$baseUrl/calendar/schedule-status';
 
   //USER / PREFERENCES ENDPOINTS
   static const String userPreferences = '$baseUrl/user/preferences';

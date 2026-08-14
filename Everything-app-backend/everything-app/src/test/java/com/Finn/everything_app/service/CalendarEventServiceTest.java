@@ -36,21 +36,19 @@ class CalendarEventServiceTest {
 
     // Guards the bug fix: repeated schedule regeneration must not duplicate HABIT/WORKOUT
     // calendar events, since the old query only ever cleared TASK-typed events.
+    //
+    // Seit der Umstellung auf eine Massenlöschung prüft dieser Test nur noch die Delegation —
+    // WELCHE Zeilen die Abfrage trifft (erledigt, übersprungen, gepinnt, fremder Nutzer, fremder
+    // Zeitraum), steht in CalendarEventCleanupRepositoryTest gegen eine echte Datenbank.
     @Test
     void clearScheduledEventsCoversTaskHabitWorkoutAndProjectWithinBounds() {
         LocalDateTime start = LocalDateTime.of(2026, 8, 3, 0, 0);
         LocalDateTime end = LocalDateTime.of(2026, 8, 9, 23, 59, 59);
         List<EventType> owned = List.of(EventType.TASK, EventType.HABIT, EventType.WORKOUT, EventType.PROJECT);
 
-        when(calendarEventRepository.findByUserIdAndEventTypeInAndIsFixedAndStartTimeBetween(
-                eq(1L), eq(owned), eq(false), eq(start), eq(end)))
-                .thenReturn(List.of());
-
         service.clearScheduledEvents(1L, start, end);
 
-        verify(calendarEventRepository).findByUserIdAndEventTypeInAndIsFixedAndStartTimeBetween(
-                1L, owned, false, start, end);
-        verify(calendarEventRepository).deleteAll(List.of());
+        verify(calendarEventRepository).deleteGeneratedEvents(1L, owned, start, end);
     }
 
     // ------------------------------------------------------------------
@@ -263,27 +261,25 @@ class CalendarEventServiceTest {
         verify(calendarEventRepository, never()).save(any());
     }
 
+    /**
+     * Das Aufräumen darf NICHT mehr über den alten Lade-und-Filter-Weg laufen.
+     *
+     * Die Zusicherung selbst — übersprungene und erledigte Blöcke überleben — steht seit der
+     * Massenlöschung in CalendarEventCleanupRepositoryTest, weil sie in der WHERE-Klausel lebt
+     * und ein Mock sie nicht mehr sehen kann. Hier bleibt der Wächter dagegen, dass jemand
+     * versehentlich zum zeilenweisen Löschen zurückkehrt: dabei ginge der Filter verloren, und
+     * mit ihm der Beleg für das verbrauchte Wochenpensum.
+     */
     @Test
     void uebersprungeneBloeckeUeberlebenDasAufraeumen() {
         LocalDateTime start = LocalDateTime.of(2026, 8, 3, 0, 0);
         LocalDateTime end = LocalDateTime.of(2026, 8, 9, 23, 59, 59);
 
-        CalendarEvent offen = new CalendarEvent();
-        offen.setId(1L);
-        CalendarEvent uebersprungen = new CalendarEvent();
-        uebersprungen.setId(2L);
-        uebersprungen.setSkippedAt(LocalDateTime.of(2026, 8, 4, 9, 0));
-
-        when(calendarEventRepository.findByUserIdAndEventTypeInAndIsFixedAndStartTimeBetween(
-                eq(1L), anyList(), eq(false), any(), any()))
-                .thenReturn(List.of(offen, uebersprungen));
-
         service.clearScheduledEvents(1L, start, end);
 
-        ArgumentCaptor<List<CalendarEvent>> deleted = ArgumentCaptor.forClass(List.class);
-        verify(calendarEventRepository).deleteAll(deleted.capture());
-        assertEquals(List.of(offen), deleted.getValue(),
-                "würde der übersprungene Block hier verschwinden, käme sofort Ersatz");
+        verify(calendarEventRepository).deleteGeneratedEvents(eq(1L), anyList(), eq(start), eq(end));
+        verify(calendarEventRepository, never()).deleteAll(anyList());
+        verify(calendarEventRepository, never()).delete(any());
     }
 
     /** Ein vom Scheduler verwalteter Block des Testnutzers. */
@@ -320,16 +316,12 @@ class CalendarEventServiceTest {
         LocalDateTime start = LocalDateTime.of(2026, 8, 3, 0, 0);
         LocalDateTime end = LocalDateTime.of(2026, 8, 9, 23, 59, 59);
 
-        when(calendarEventRepository.findByUserIdAndEventTypeInAndIsFixedAndStartTimeBetween(
-                1L, List.of(EventType.CLASS), false, start, end)).thenReturn(List.of());
-
         service.clearClassEvents(1L, start, end);
 
         // Getrennt von clearScheduledEvents: die Vorlesungen werden auch synchronisiert, wenn
         // der Solver gar nicht läuft, und dürfen dessen Aufräumabfrage nicht mitbenutzen.
-        verify(calendarEventRepository).findByUserIdAndEventTypeInAndIsFixedAndStartTimeBetween(
-                1L, List.of(EventType.CLASS), false, start, end);
-        verify(calendarEventRepository).deleteAll(List.of());
+        verify(calendarEventRepository).deleteGeneratedEventsOfType(
+                1L, EventType.CLASS, start, end);
     }
 
     // ------------------------------------------------------------------
@@ -381,20 +373,13 @@ class CalendarEventServiceTest {
         LocalDateTime start = LocalDateTime.of(2026, 8, 3, 0, 0);
         LocalDateTime end = LocalDateTime.of(2026, 8, 9, 23, 59, 59);
 
-        CalendarEvent offen = new CalendarEvent();
-        offen.setId(1L);
-        CalendarEvent erledigt = new CalendarEvent();
-        erledigt.setId(2L);
-        erledigt.setCompletedAt(LocalDateTime.of(2026, 8, 5, 12, 0));
-
-        when(calendarEventRepository.findByUserIdAndEventTypeInAndIsFixedAndStartTimeBetween(
-                eq(1L), any(), eq(false), eq(start), eq(end)))
-                .thenReturn(List.of(offen, erledigt));
-
         service.clearScheduledEvents(1L, start, end);
 
-        // Nur der offene Block faellt weg — der erledigte ist Protokoll, keine Planung.
-        verify(calendarEventRepository).deleteAll(List.of(offen));
+        // Nur der offene Block faellt weg — der erledigte ist Protokoll, keine Planung. Dass die
+        // Abfrage genau so schneidet, prueft CalendarEventCleanupRepositoryTest gegen eine echte
+        // Datenbank; hier zaehlt, dass ueberhaupt der gefilterte Weg benutzt wird.
+        verify(calendarEventRepository).deleteGeneratedEvents(eq(1L), anyList(), eq(start), eq(end));
+        verify(calendarEventRepository, never()).deleteAll(anyList());
     }
 
     @Test

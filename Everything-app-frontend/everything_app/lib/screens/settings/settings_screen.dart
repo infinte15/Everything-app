@@ -139,6 +139,19 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       step: 30,
                       onChanged: (v) => _patch((p) => p.copyWith(maxTaskMinutesPerDay: v)),
                     ),
+                    // Deckelt ALLES, was pro Tag automatisch geplant wird. Ohne diese Grenze
+                    // konnten Gewohnheiten, Trainings und Projektzeit einen Tag füllen, bevor die
+                    // Aufgaben überhaupt an die Reihe kamen — "Max task time per day" gilt nur
+                    // für die Aufgaben selbst.
+                    _Stepper(
+                      label: 'Max scheduled time per day',
+                      suffix: 'min',
+                      value: draft.maxScheduledMinutesPerDay ?? 600,
+                      min: 60,
+                      max: 1440,
+                      step: 30,
+                      onChanged: (v) => _patch((p) => p.copyWith(maxScheduledMinutesPerDay: v)),
+                    ),
                     _Stepper(
                       label: 'Shortest task block',
                       suffix: 'min',

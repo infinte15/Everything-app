@@ -50,6 +50,14 @@ public class UserPreferencesDTO {
     @Max(value = 1440, message = "Tageslimit darf höchstens 24 Stunden sein")
     private Integer maxTaskMinutesPerDay;
 
+    /** Deckel über ALLES, was pro Tag automatisch geplant wird — nicht nur über die Aufgaben. */
+    @Min(value = 60,   message = "Tagesdeckel muss mindestens 60 Minuten sein")
+    @Max(value = 1440, message = "Tagesdeckel darf höchstens 24 Stunden sein")
+    private Integer maxScheduledMinutesPerDay;
+
+    /** Ende der Kernzeit; danach geplante Aufgaben kosten im Ziel (Abendstrafe). */
+    private LocalTime coreHoursEnd;
+
     @Min(value = 5,   message = "Mindestblock muss mindestens 5 Minuten sein")
     @Max(value = 480, message = "Mindestblock darf höchstens 8 Stunden sein")
     private Integer defaultMinChunkMinutes;

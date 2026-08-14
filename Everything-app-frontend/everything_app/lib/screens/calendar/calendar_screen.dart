@@ -5,6 +5,7 @@ import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
 import '../../providers/calendar_provider.dart';
 import '../../config/app_theme.dart';
+import '../../models/at_risk_item.dart';
 import '../../models/calendar_event.dart';
 import '../../utils/deadline_urgency.dart';
 import '../../widgets/create_event_sheet.dart';
@@ -165,6 +166,12 @@ void _navigate(int delta) {
                 _pageController.jumpToPage(10000);
               },
             ),
+            // Zwei schmale Bänder direkt unter dem Kopf: "wird gerade neu geplant" und
+            // "das hier passt nicht mehr rein". Beides war vorher unsichtbar — der Kalender
+            // sortierte sich irgendwann still um, und liegen gebliebene Aufgaben verschwanden
+            // wortlos.
+            if (cal.isReplanning) const _ReplanIndicator(),
+            if (cal.atRisk.isNotEmpty) _AtRiskBanner(items: cal.atRisk),
             if (_view == _CalView.week)
               _WeekStrip(
                 selected: selected,
@@ -259,6 +266,148 @@ void _navigate(int delta) {
     );
   }
 
+}
+
+// ─── Neuplanung läuft ────────────────────────────────────────────────────────
+
+/// Zwei Pixel Fortschrittsbalken unter dem Kopf, solange auf eine Neuplanung gewartet wird.
+///
+/// Bewusst so unauffällig: der Lauf dauert typisch etwa eine Sekunde, blockiert nichts und
+/// verlangt keine Entscheidung. Ein Spinner über dem halben Bildschirm wäre für einen
+/// Hintergrundvorgang die falsche Lautstärke — sichtbar muss er trotzdem sein, sonst wirkt der
+/// Kalender, der sich gleich umsortiert, wie ein Fehler.
+class _ReplanIndicator extends StatelessWidget {
+  const _ReplanIndicator();
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return SizedBox(
+      height: 2,
+      child: LinearProgressIndicator(
+        minHeight: 2,
+        backgroundColor: Colors.transparent,
+        valueColor: AlwaysStoppedAnimation<Color>(
+          theme.colorScheme.primary.withValues(alpha: 0.7),
+        ),
+      ),
+    );
+  }
+}
+
+// ─── Nicht eingeplant ────────────────────────────────────────────────────────
+
+/// Was der Scheduler nicht mehr unterbringen konnte.
+///
+/// Diese Liste rechnet das Backend seit jeher bei jedem Lauf aus — angezeigt wurde sie nie. Für
+/// den Nutzer sah es dadurch so aus, als hätte die App die Aufgabe schlicht vergessen.
+class _AtRiskBanner extends StatelessWidget {
+  final List<AtRiskItem> items;
+
+  const _AtRiskBanner({required this.items});
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    const warnColor = Color(0xFFFF9F1C);
+
+    return Material(
+      color: warnColor.withValues(alpha: 0.12),
+      child: InkWell(
+        onTap: () => _zeigeListe(context),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+          child: Row(
+            children: [
+              const Icon(Icons.warning_amber_rounded, size: 18, color: warnColor),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  items.length == 1
+                      ? '1 Aufgabe passt nicht in den Plan'
+                      : '${items.length} Aufgaben passen nicht in den Plan',
+                  style: theme.textTheme.bodyMedium?.copyWith(
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+              const Icon(Icons.chevron_right, size: 18, color: warnColor),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  void _zeigeListe(BuildContext context) {
+    showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (ctx) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(20, 20, 20, 12),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('Nicht eingeplant',
+                  style: Theme.of(ctx).textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.bold,
+                      )),
+              const SizedBox(height: 4),
+              Text(
+                'Für diese Aufgaben war im Planungsfenster kein Platz mehr.',
+                style: Theme.of(ctx).textTheme.bodySmall?.copyWith(
+                      color: Theme.of(ctx).textTheme.bodySmall?.color?.withValues(alpha: 0.7),
+                    ),
+              ),
+              const SizedBox(height: 16),
+              ...items.map(
+                (e) => Padding(
+                  padding: const EdgeInsets.only(bottom: 14),
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Padding(
+                        padding: EdgeInsets.only(top: 2),
+                        child: Icon(Icons.warning_amber_rounded,
+                            size: 16, color: Color(0xFFFF9F1C)),
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(e.title,
+                                style: Theme.of(ctx).textTheme.bodyMedium?.copyWith(
+                                      fontWeight: FontWeight.w600,
+                                    )),
+                            Text(
+                              '${e.reasonText} · ${e.minutes} min',
+                              style: Theme.of(ctx).textTheme.bodySmall?.copyWith(
+                                    color: Theme.of(ctx)
+                                        .textTheme
+                                        .bodySmall
+                                        ?.color
+                                        ?.withValues(alpha: 0.7),
+                                  ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
 }
 
 // ─── Calendar Header ─────────────────────────────────────────────────────────

@@ -2,6 +2,7 @@ package com.Finn.everything_app.model;
 
 import jakarta.persistence.*;
 import lombok.Data;
+import java.time.LocalDate;
 import java.time.LocalTime;
 
 @Entity
@@ -53,6 +54,27 @@ public class UserPreferences {
     @Column(name = "max_task_minutes_per_day")
     private Integer maxTaskMinutesPerDay;
 
+    /**
+     * Obergrenze für ALLE automatisch verplante Zeit pro Kalendertag — Aufgaben, Gewohnheiten,
+     * Trainings und Projektzeit zusammen.
+     *
+     * {@link #maxTaskMinutesPerDay} deckelt nur die Aufgaben. Gewohnheiten, Trainings und
+     * Projektsitzungen liefen bisher an jedem Deckel vorbei und konnten einen Tag füllen, bevor
+     * die Aufgaben überhaupt an die Reihe kamen.
+     */
+    @Column(name = "max_scheduled_minutes_per_day")
+    private Integer maxScheduledMinutesPerDay;
+
+    /**
+     * Ende der Kernzeit. Aufgaben dahinter sind erlaubt, kosten aber im Ziel (Abendstrafe).
+     *
+     * Abgrenzung zu {@code workdayEnd}: das ist die harte Grenze, hinter der gar nichts mehr
+     * geplant wird. Wer bis 22 Uhr arbeiten KANN, will nicht, dass um 21 Uhr geplant wird, solange
+     * vormittags noch Platz ist.
+     */
+    @Column(name = "core_hours_end")
+    private LocalTime coreHoursEnd;
+
     /** Untergrenze für einen einzelnen Task-Block beim Aufteilen. */
     @Column(name = "default_min_chunk_minutes")
     private Integer defaultMinChunkMinutes;
@@ -64,5 +86,17 @@ public class UserPreferences {
     /** Schaltet die automatische Neuplanung komplett ab. */
     @Column(name = "auto_schedule_enabled")
     private Boolean autoScheduleEnabled;
+
+    /**
+     * Tag des letzten Scheduler-Laufs, damit das rollierende Planungsfenster nachgeholt werden
+     * kann (siehe ScheduleRollForwardScheduler).
+     *
+     * Der nächtliche Cron allein reicht nicht: läuft der Rechner um drei Uhr nicht, wird das
+     * Fenster nie weitergeschoben und die letzte Woche des Plans läuft still leer. Mit diesem
+     * Datum erkennt der Nachzügler-Sweep genau den Fall — unabhängig davon, wie lange die
+     * Anwendung aus war.
+     */
+    @Column(name = "last_schedule_run_date")
+    private LocalDate lastScheduleRunDate;
 }
 

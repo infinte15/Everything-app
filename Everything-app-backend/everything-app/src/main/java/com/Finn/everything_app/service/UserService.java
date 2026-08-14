@@ -11,6 +11,7 @@ import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
 
@@ -115,6 +116,8 @@ public class UserService {
         if (newPrefs.getDarkMode() != null)             existing.setDarkMode(newPrefs.getDarkMode());
         if (newPrefs.getBufferMinutes() != null)        existing.setBufferMinutes(newPrefs.getBufferMinutes());
         if (newPrefs.getMaxTaskMinutesPerDay() != null) existing.setMaxTaskMinutesPerDay(newPrefs.getMaxTaskMinutesPerDay());
+        if (newPrefs.getMaxScheduledMinutesPerDay() != null) existing.setMaxScheduledMinutesPerDay(newPrefs.getMaxScheduledMinutesPerDay());
+        if (newPrefs.getCoreHoursEnd() != null)         existing.setCoreHoursEnd(newPrefs.getCoreHoursEnd());
         if (newPrefs.getDefaultMinChunkMinutes() != null) existing.setDefaultMinChunkMinutes(newPrefs.getDefaultMinChunkMinutes());
         if (newPrefs.getDefaultMaxChunkMinutes() != null) existing.setDefaultMaxChunkMinutes(newPrefs.getDefaultMaxChunkMinutes());
         if (newPrefs.getAutoScheduleEnabled() != null)  existing.setAutoScheduleEnabled(newPrefs.getAutoScheduleEnabled());
@@ -123,5 +126,19 @@ public class UserService {
         // Geänderte Arbeitszeiten oder Puffer müssen den Kalender neu fließen lassen.
         eventPublisher.publishEvent(new ScheduleChangedEvent(this, userId));
         return saved;
+    }
+
+    /**
+     * Hält fest, dass für diesen Nutzer heute geplant wurde.
+     *
+     * Bewusst OHNE {@link ScheduleChangedEvent}: der Aufrufer ist der Scheduler selbst, ein Event
+     * hier wäre eine Endlosschleife. Aus demselben Grund geht das auch nicht über
+     * {@link #updatePreferences} — das patcht nicht nur, es meldet auch.
+     */
+    @Transactional
+    public void markScheduleRun(Long userId, LocalDate runDate) {
+        UserPreferences prefs = getOrCreatePreferences(userId);
+        prefs.setLastScheduleRunDate(runDate);
+        userPreferencesRepository.save(prefs);
     }
 }

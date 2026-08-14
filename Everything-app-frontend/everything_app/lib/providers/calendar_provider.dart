@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
+import '../models/at_risk_item.dart';
 import '../models/calendar_event.dart';
 import '../services/calendar_service.dart';
 
@@ -22,40 +23,89 @@ class CalendarProvider with ChangeNotifier {
   // calendarService is injectable so tests can supply a fake instead of hitting the network.
   CalendarProvider({
     CalendarService? calendarService,
-    this.reconcileDelay = const Duration(milliseconds: 600),
+    this.reconcileDelay = const Duration(milliseconds: 2200),
   }) : _calendarService = calendarService ?? CalendarService() {
     _startPolling();
   }
 
-  /// Der Backend-Scheduler plant nach jeder Mutation den kompletten Zeitraum neu
-  /// (0,4s Entprellung + Solve). Ohne diesen Nachlauf sieht der Nutzer die Umplanung
-  /// erst beim 30s-Poll — nach einem Drag-and-Drop fühlt sich das kaputt an.
+  /// Der Backend-Scheduler plant nach jeder Mutation neu. Ohne diesen Nachlauf sieht der Nutzer
+  /// die Umplanung erst beim 30s-Poll — nach einem Drag-and-Drop fühlt sich das kaputt an.
   ///
-  /// Mehrere kurze Versuche statt eines langen Wartens: wann das Ergebnis vorliegt, hängt am
-  /// Solver (Zeitbudget 2s) und an der Entprellung, lässt sich hier also nicht vorhersagen.
-  /// Ein einzelner Poll zum falschen Zeitpunkt zeigt den alten Stand und der Kalender springt
-  /// erst Sekunden später um. Die Leiter deckt den ganzen erwartbaren Bereich ab; ein Poll ist
-  /// ein einzelnes GET über den sichtbaren Monat und damit billig.
+  /// Das Zeitfenster ist an den echten Ablauf angelegt, nicht geschätzt:
+  /// `scheduler.debounce-ms` = 2000 ms Ruhephase, danach ein Lauf von rund einer Sekunde
+  /// (Zeitbudget `scheduler.solver-time-limit-seconds` = 2.0 als harte Obergrenze). Der erste
+  /// Versuch startet deshalb erst nach der Entprellung — vorher kann sich gar nichts geändert
+  /// haben, und der alte erste Poll nach 600 ms war schlicht verschwendet.
+  ///
+  /// Abgebrochen wird, sobald der Server einen neuen Lauf meldet: die Leiter ist eine
+  /// Obergrenze, kein Fahrplan.
   static const List<Duration> _reconcileRetries = [
-    Duration(milliseconds: 900),
-    Duration(milliseconds: 1000),
+    Duration(milliseconds: 800),
     Duration(milliseconds: 1200),
+    Duration(milliseconds: 1600),
+    Duration(milliseconds: 2400),
+    Duration(milliseconds: 3000),
   ];
+
+  /// Zeitpunkt des letzten vom Server gemeldeten Laufs — der Abbruchgrund für die Leiter.
+  DateTime? _lastRunAt;
+  bool _replanning = false;
+
+  /// Läuft gerade eine Neuplanung, auf deren Ergebnis wir warten?
+  bool get isReplanning => _replanning;
+
+  /// Aufgaben, die der Scheduler beim letzten Lauf nicht mehr unterbringen konnte.
+  List<AtRiskItem> get atRisk => List.unmodifiable(_atRisk);
+  List<AtRiskItem> _atRisk = const [];
 
   void scheduleReconcile() {
     _reconcileTimer?.cancel();
-    _reconcileTimer = Timer(reconcileDelay, () async {
-      await _pollEventsSilent();
-      _scheduleReconcileRetry(0);
-    });
+    _replanning = true;
+    notifyListeners();
+    _reconcileTimer = Timer(reconcileDelay, () => _reconcileStep(0));
   }
 
-  void _scheduleReconcileRetry(int index) {
-    if (index >= _reconcileRetries.length) return;
-    _reconcileTimer = Timer(_reconcileRetries[index], () async {
+  Future<void> _reconcileStep(int index) async {
+    final fertig = await _pollScheduleStatus();
+    if (fertig) {
+      // Der Server hat neu geplant — jetzt lohnt sich der teure Abruf, und die Leiter ist zu Ende.
       await _pollEventsSilent();
-      _scheduleReconcileRetry(index + 1);
-    });
+      _replanning = false;
+      notifyListeners();
+      return;
+    }
+
+    if (index >= _reconcileRetries.length) {
+      // Aufgegeben: entweder war gar keine Neuplanung nötig, oder sie dauert ungewöhnlich lang.
+      // Der 30s-Poll fängt den Rest auf; hängen bleiben darf die Anzeige dabei nicht.
+      await _pollEventsSilent();
+      _replanning = false;
+      notifyListeners();
+      return;
+    }
+    _reconcileTimer = Timer(_reconcileRetries[index], () => _reconcileStep(index + 1));
+  }
+
+  /// True, sobald der Server einen Lauf meldet, der neuer ist als der zuletzt gesehene.
+  ///
+  /// Die allererste Antwort setzt nur den Ausgangswert und gilt NICHT als Neuplanung: sonst
+  /// bräche die Leiter direkt nach dem App-Start ab ("neuer als gar nichts"), noch bevor der
+  /// Server angefangen hat.
+  Future<bool> _pollScheduleStatus() async {
+    final status = await _calendarService.getScheduleStatus();
+    if (status == null) return false;
+
+    _atRisk = status.atRisk;
+    final laufZeit = status.lastRunAt;
+    if (laufZeit == null) return false;
+
+    if (_lastRunAt == null) {
+      _lastRunAt = laufZeit;
+      return false;
+    }
+    final neu = laufZeit.isAfter(_lastRunAt!);
+    _lastRunAt = laufZeit;
+    return neu;
   }
 
   void _startPolling() {
@@ -145,6 +195,10 @@ class CalendarProvider with ChangeNotifier {
       
       _events = await _calendarService.getEventsInRange(firstDay, lastDay);
       _error = null;
+      // Nebenbei den Ausgangswert für den Nachlauf setzen. Ohne ihn kostet die erste Umplanung
+      // nach dem App-Start eine zusätzliche Runde: der Nachlauf müsste erst herausfinden, welcher
+      // Lauf der "alte" war, bevor er einen neuen erkennen kann.
+      await _pollScheduleStatus();
     } catch (e) {
       _error = 'Fehler beim Laden der Events: $e';
     }

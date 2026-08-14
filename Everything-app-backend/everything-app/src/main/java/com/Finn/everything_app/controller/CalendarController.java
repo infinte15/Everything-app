@@ -5,6 +5,7 @@ import com.Finn.everything_app.mapper.CalendarEventMapper;
 import com.Finn.everything_app.model.CalendarEvent;
 import com.Finn.everything_app.security.CurrentUser;
 import com.Finn.everything_app.service.CalendarEventService;
+import com.Finn.everything_app.service.LastScheduleRunStore;
 import com.Finn.everything_app.service.SmartSchedulerService;
 import com.Finn.everything_app.service.ScheduleResult;
 import lombok.RequiredArgsConstructor;
@@ -26,6 +27,7 @@ public class CalendarController {
     private final CalendarEventService calendarEventService;
     private final SmartSchedulerService smartSchedulerService;
     private final CalendarEventMapper calendarEventMapper;
+    private final LastScheduleRunStore lastScheduleRunStore;
 
     //GET /api/calendar/events --> Events in Zeitraum
     @GetMapping("/events")
@@ -116,14 +118,23 @@ public class CalendarController {
             @CurrentUser Long userId,
             @Valid @RequestBody ScheduleRequest request) {
 
-        LocalDate endDate = request.getEndDate() != null
+        boolean eigenerZeitraum = request.getEndDate() != null;
+        LocalDate endDate = eigenerZeitraum
                 ? request.getEndDate()
                 : smartSchedulerService.defaultHorizonEnd(request.getStartDate());
+
+        // Der Stundenplan reicht weiter als das Planungsfenster — aber nur, wenn der Aufrufer
+        // keinen eigenen Zeitraum verlangt hat. Wer "plane mir diese Woche" schickt, soll keine
+        // Vorlesungstermine bis in den übernächsten Monat zurückbekommen.
+        LocalDate classEndDate = eigenerZeitraum
+                ? endDate
+                : smartSchedulerService.classHorizonEnd(request.getStartDate());
 
         ScheduleResult result = smartSchedulerService.generateOptimalSchedule(
                 userId,
                 request.getStartDate(),
-                endDate
+                endDate,
+                classEndDate
         );
 
         ScheduleResultDTO resultDTO = new ScheduleResultDTO();
@@ -138,6 +149,36 @@ public class CalendarController {
                 .collect(Collectors.toList()));
 
         return ResponseEntity.ok(resultDTO);
+    }
+
+    /**
+     * GET /api/calendar/schedule-status --> Ergebnis des letzten Laufs.
+     *
+     * Billiger Endpunkt zum Nachfassen: nach einer Änderung plant der Scheduler entprellt im
+     * Hintergrund neu, und das Frontend muss wissen, wann es so weit ist. Den ganzen Monat dafür
+     * neu zu laden wäre Verschwendung — hier ändert sich {@code lastRunAt}, und erst dann lohnt
+     * der teure Abruf.
+     *
+     * Zugleich der einzige Weg, an die At-Risk-Liste eines HINTERGRUND-Laufs zu kommen: die
+     * Antwort von /generate-schedule sieht nur, wer selbst geplant hat.
+     */
+    @GetMapping("/schedule-status")
+    public ResponseEntity<ScheduleStatusDTO> getScheduleStatus(@CurrentUser Long userId) {
+        LastScheduleRunStore.Entry letzter = lastScheduleRunStore.get(userId);
+        if (letzter == null) {
+            // Noch kein Lauf in dieser Laufzeit — kein Fehler, nur nichts zu berichten.
+            return ResponseEntity.ok(new ScheduleStatusDTO());
+        }
+
+        ScheduleStatusDTO dto = new ScheduleStatusDTO();
+        dto.setLastRunAt(letzter.getFinishedAt());
+        dto.setSolverStatus(letzter.getSolverStatus());
+        dto.setScheduledBlocks(letzter.getScheduledBlocks());
+        dto.setAtRisk(letzter.getAtRisk().stream()
+                .map(a -> new AtRiskItemDTO(a.getTaskId(), a.getHabitId(), a.getTitle(),
+                        a.getMinutes(), a.getReason() != null ? a.getReason().name() : null))
+                .collect(Collectors.toList()));
+        return ResponseEntity.ok(dto);
     }
 
     // DELETE /api/calendar/events/{id}  --> Lösche Event

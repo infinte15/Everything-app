@@ -46,12 +46,27 @@ class SmartSchedulerServiceTest {
     @Mock CalendarEventService      calendarEventService;
     @Mock TaskService               taskService;
     @Mock WorkoutPlanService        workoutPlanService;
+    @Mock LastScheduleRunStore      lastRunStore;
 
     @InjectMocks
     SmartSchedulerService service;
 
     private UserPreferences prefs;
     private final LocalDate TODAY = LocalDate.now();
+
+    /**
+     * Muss mit {@code scheduler.solver-time-limit-seconds} in application.properties übereinstimmen.
+     *
+     * Als hier eine veraltete Zahl stand, sicherte der Zeitbudget-Test ein Budget ab, das im
+     * Betrieb längst nicht mehr galt — ein grüner Test über einen Zustand, den es nicht gab.
+     */
+    private static final double PRODUKTIONS_ZEITBUDGET_SEKUNDEN = 2.0;
+
+    /**
+     * Obergrenze für die Laufzeit-Tests. Der Löser schöpft sein Budget in Phase 2 immer aus, also
+     * ist die erwartbare Laufzeit das Budget plus Aufbau — mit Luft für eine langsame Maschine.
+     */
+    private static final long ZEITSCHRANKE_MS = 6_000;
 
     @BeforeEach
     void setUp() {
@@ -310,8 +325,16 @@ class SmartSchedulerServiceTest {
     // Test 7 – clearScheduledEvents invoked with correct bounds on every regeneration
     // (guards against re-runs duplicating HABIT/WORKOUT calendar events)
     // ------------------------------------------------------------------
+    /**
+     * Das Aufräumfenster reicht bewusst WEITER als der geplante Zeitraum.
+     *
+     * Der Abgleich fasst nur an, was innerhalb der übergebenen Grenzen liegt. Stünde hier das
+     * Planungsende, überlebten die Blöcke aus früheren, längeren Läufen dahinter für immer —
+     * geplant wird dort nichts mehr, weggeräumt aber auch nicht. Erst diese Trennung erlaubt es,
+     * den Planungshorizont überhaupt zu verkürzen.
+     */
     @Test
-    void clearScheduledEventsInvokedWithBoundsOnEveryRegeneration() {
+    void abgleichLaeuftUeberDasWeitereAufraeumfenster() {
         LocalDate tomorrow = TODAY.plusDays(1);
         Task task = makeTask(70L, "Repeatable", 60, 3, tomorrow.plusDays(2).atTime(23, 59));
         when(taskService.getSchedulableTasks(1L)).thenReturn(List.of(task));
@@ -320,9 +343,45 @@ class SmartSchedulerServiceTest {
         service.generateOptimalSchedule(1L, tomorrow, tomorrow);
         service.generateOptimalSchedule(1L, tomorrow, tomorrow);
 
-        verify(calendarEventService, times(2)).clearScheduledEvents(
-                eq(1L), eq(tomorrow.atStartOfDay()), eq(tomorrow.atTime(23, 59, 59)));
+        // Der Bestand wird über das WEITE Fenster gelesen, nicht nur über den Planungshorizont.
+        verify(calendarEventRepository, times(2))
+                .findByUserIdAndEventTypeInAndIsFixedAndStartTimeBetween(
+                        eq(1L), anyList(), eq(false), eq(tomorrow.atStartOfDay()),
+                        eq(service.cleanupHorizonEnd(tomorrow).atTime(23, 59, 59)));
         verify(calendarEventRepository, times(2)).save(any(CalendarEvent.class));
+    }
+
+    /**
+     * Der rollierende Horizont: geplant wird das kurze Fenster, alles dahinter bleibt liegen.
+     *
+     * Das ist die Gegenprobe zum Aufräumfenster — zusammen ergeben beide erst ein vollständiges
+     * Bild. Eine tägliche Gewohnheit bekommt IM Fenster ihre Blöcke und dahinter keinen einzigen;
+     * dass sie dort trotzdem irgendwann geplant wird, besorgt ScheduleRollForwardScheduler.
+     */
+    @Test
+    void rollierenderHorizontLaesstFerneWiederholungenLiegen() {
+        org.springframework.test.util.ReflectionTestUtils.setField(service, "horizonDays", 28);
+        when(taskService.getSchedulableTasks(1L)).thenReturn(new ArrayList<>());
+        when(calendarEventService.getFixedEvents(eq(1L), any(), any())).thenReturn(new ArrayList<>());
+        when(habitRepository.findHabitsActiveInRange(eq(1L), any(), any()))
+                .thenReturn(List.of(makeDailyHabit(900L, "Dehnen", 15)));
+
+        LocalDate ende = service.defaultHorizonEnd(TODAY);
+        ScheduleResult result = service.generateOptimalSchedule(1L, TODAY, ende);
+
+        assertFalse(result.getScheduledHabits().isEmpty(), "im Fenster wird geplant");
+        assertTrue(result.getScheduledHabits().stream()
+                        .noneMatch(i -> i.getStartTime().toLocalDate().isAfter(ende)),
+                "jenseits des Planungsfensters darf nichts geplant werden");
+    }
+
+    /** Das Aufräumfenster muss den Planungshorizont überragen, sonst bleiben Altblöcke stehen. */
+    @Test
+    void aufraeumfensterReichtWeiterAlsDasPlanungsfenster() {
+        assertTrue(service.cleanupHorizonEnd(TODAY).isAfter(service.defaultHorizonEnd(TODAY)),
+                "Aufräumfenster muss über den Planungshorizont hinausreichen");
+        assertTrue(service.classHorizonEnd(TODAY).isAfter(service.defaultHorizonEnd(TODAY)),
+                "Vorlesungen sollen über das Planungsfenster hinaus im Kalender stehen");
     }
 
     // ==================================================================
@@ -349,8 +408,7 @@ class SmartSchedulerServiceTest {
         assertEquals("Machbar", result.getScheduledTasks().get(0).getTask().getTitle());
         assertTrue(result.getAtRisk().stream().anyMatch(a -> "Unmöglich".equals(a.getTitle())),
                 "Der unmögliche Task muss als at-risk gemeldet werden");
-        // Der Kalender wird trotzdem geschrieben — nicht gelöscht und leer gelassen.
-        verify(calendarEventService).clearScheduledEvents(any(), any(), any());
+        // Der Kalender wird trotzdem geschrieben — nicht geleert und leer gelassen.
         verify(calendarEventRepository, atLeastOnce()).save(any(CalendarEvent.class));
     }
 
@@ -1232,7 +1290,7 @@ class SmartSchedulerServiceTest {
 
         assertNotNull(result.getSolverStatus());
         assertFalse(result.getScheduledTasks().isEmpty(), "der Bestand muss planbar sein");
-        assertTrue(millis < 15_000,
+        assertTrue(millis < ZEITSCHRANKE_MS,
                 "ein realistischer Bestand soll deutlich im Zeitbudget bleiben, brauchte aber "
                         + millis + " ms");
     }
@@ -1806,13 +1864,17 @@ class SmartSchedulerServiceTest {
 
         service.generateOptimalSchedule(1L, yesterday, TODAY.plusDays(1));
 
-        // Gelöscht werden darf frühestens ab jetzt — sonst verschwindet der Vormittag
+        // Angefasst werden darf frühestens ab jetzt — sonst verschwindet der Vormittag
         // aus dem Kalender, sobald irgendetwas eine Neuplanung auslöst.
         org.mockito.ArgumentCaptor<LocalDateTime> from =
                 org.mockito.ArgumentCaptor.forClass(LocalDateTime.class);
-        verify(calendarEventService).clearScheduledEvents(eq(1L), from.capture(), any());
-        assertFalse(from.getValue().isBefore(TODAY.atStartOfDay()),
-                "gestrige Blöcke dürfen nicht mehr im Löschfenster liegen, war: " + from.getValue());
+        verify(calendarEventRepository, atLeastOnce())
+                .findByUserIdAndEventTypeInAndIsFixedAndStartTimeBetween(
+                        eq(1L), anyList(), eq(false), from.capture(), any());
+        assertFalse(from.getAllValues().get(from.getAllValues().size() - 1)
+                        .isBefore(TODAY.atStartOfDay()),
+                "gestrige Blöcke dürfen nicht mehr im Abgleichfenster liegen, war: "
+                        + from.getValue());
     }
 
     // ------------------------------------------------------------------
@@ -2251,6 +2313,77 @@ class SmartSchedulerServiceTest {
 
         assertEquals(describe(first), describe(second),
                 "ohne Änderung an den Eingaben darf sich der Plan nicht bewegen");
+    }
+
+    /**
+     * Drei Läufe hintereinander, jeweils mit dem Ergebnis des vorherigen als Vorzustand: der Plan
+     * muss ab dem zweiten Lauf stillstehen.
+     *
+     * Die schärfere Fassung des Tests darüber, und zwar in der Richtung, die im Betrieb zählt.
+     * Denn der Löser selbst ist NICHT reproduzierbar: sein Zeitbudget ist eine Wanduhr-Grenze,
+     * und welcher Worker zuerst fertig ist, hängt an der Maschinenlast — fünf Läufe über
+     * denselben Bestand lieferten fünf verschiedene Zielwerte. Ein Test, der zwei Läufe ohne
+     * jeden Vorzustand vergleicht, prüft deshalb eine Eigenschaft, die es gar nicht gibt.
+     *
+     * Was es gibt, ist der Stabilitätsanker: er zieht jeden Block auf seine bisherige Lage
+     * zurück. Genau das wird hier geprüft — und zwar mehrfach hintereinander, denn ein einzelner
+     * Wiederholungslauf könnte auch zufällig gleich ausgehen.
+     *
+     * Das Zeitbudget ist bewusst klein: nur wenn Phase 2 ihr Budget reißt und mit der bis dahin
+     * besten Lösung abbricht, hängt das Ergebnis überhaupt am Suchverlauf. Bei einem Modell, das
+     * sie zu Ende beweist, wäre der Test trivial grün und würde nichts absichern.
+     */
+    @Test
+    void dreiLaeufeHintereinanderLiefernIdentischePlatzierungen() throws Exception {
+        java.lang.reflect.Field budget =
+                SmartSchedulerService.class.getDeclaredField("solverTimeLimitSeconds");
+        budget.setAccessible(true);
+        budget.setDouble(service, 0.3);
+
+        LocalDate monday = TODAY.plusDays(1).with(TemporalAdjusters.next(DayOfWeek.MONDAY));
+        prefs.setWorkdayEnd(LocalTime.of(22, 0));
+
+        List<Task> tasks = new ArrayList<>();
+        for (int i = 0; i < 8; i++) {
+            tasks.add(makeTask(1800L + i, "T" + i, 60 + i * 30, 1 + (i % 5),
+                    monday.plusDays(2 + (i % 5)).atTime(20, 0)));
+        }
+        when(taskService.getSchedulableTasks(1L)).thenReturn(tasks);
+        when(habitRepository.findHabitsActiveInRange(eq(1L), any(), any()))
+                .thenReturn(List.of(makeDailyHabit(1810L, "Dehnen", 20),
+                                    makeDailyHabit(1811L, "Lesen", 30)));
+        when(calendarEventService.getFixedEvents(eq(1L), any(), any())).thenReturn(new ArrayList<>());
+
+        ScheduleResult ersterLauf = service.generateOptimalSchedule(1L, monday, monday.plusDays(13));
+        assertFalse(ersterLauf.getScheduledTasks().isEmpty(), "der Bestand muss planbar sein");
+
+        // Was der erste Lauf geschrieben hat, ist ab jetzt der Bestand. Er bleibt über alle
+        // weiteren Läufe derselbe — denn genau das ist die Behauptung: es ändert sich nichts mehr.
+        ArgumentCaptor<CalendarEvent> saved = ArgumentCaptor.forClass(CalendarEvent.class);
+        verify(calendarEventRepository, atLeastOnce()).save(saved.capture());
+        List<CalendarEvent> bestand = new ArrayList<>(saved.getAllValues());
+        when(calendarEventRepository.findByUserIdAndEventTypeInAndIsFixedAndStartTimeBetween(
+                eq(1L), anyList(), eq(false), any(), any())).thenReturn(bestand);
+
+        List<String> vorher = null;
+        for (int lauf = 2; lauf <= 4; lauf++) {
+            clearInvocations(calendarEventRepository);
+
+            List<String> jetzt =
+                    describe(service.generateOptimalSchedule(1L, monday, monday.plusDays(13)));
+            if (vorher != null) {
+                assertEquals(vorher, jetzt,
+                        "Lauf " + lauf + " hat den Plan bewegt, obwohl sich nichts geändert hat");
+            }
+            vorher = jetzt;
+
+            // Und er darf dafür auch nichts geschrieben haben. Vorher wurde bei jedem Lauf der
+            // gesamte Kalender gelöscht und neu eingefügt — mehrere hundert Anweisungen, um
+            // exakt dasselbe noch einmal hinzuschreiben, und jeder Block bekam dabei eine neue
+            // ID. Genau daran konnte das Frontend nicht erkennen, dass sich nichts geändert hat.
+            verify(calendarEventRepository, never()).save(any(CalendarEvent.class));
+            verify(calendarEventRepository, never()).deleteAllByIdInBatch(anyList());
+        }
     }
 
     // ------------------------------------------------------------------
@@ -2852,29 +2985,35 @@ class SmartSchedulerServiceTest {
         long millis = (System.nanoTime() - startedAt) / 1_000_000;
 
         assertFalse(result.getScheduledTasks().isEmpty(), "der Bestand muss planbar sein");
-        assertTrue(millis < 15_000,
+        assertTrue(millis < ZEITSCHRANKE_MS,
                 "ein Monat voller Deadlines soll im Zeitbudget bleiben, brauchte aber " + millis + " ms");
     }
 
     /**
      * Voller Monat, echtes Zeitbudget: es muss trotzdem fast alles eingeplant werden.
      *
-     * Die übrigen Tests laufen mit dem großzügigen Feld-Default von 10 Sekunden und hätten den
-     * teuersten Fehler dieser Änderung nicht bemerkt: Aufgaben mit Deadline in vier oder fünf
-     * Wochen bekamen zwischenzeitlich Fenster über den ganzen Horizont, und Phase 1 fand in ihrem
-     * Anteil an den 1.5 Sekunden keine brauchbare Menge mehr — 16 von 17 Aufgaben blieben
-     * ungeplant, im Betrieb kam zeitweise gar keine Lösung mehr zustande.
+     * Die übrigen Tests laufen mit dem Feld-Default und hätten den teuersten Fehler jener Änderung
+     * nicht bemerkt: Aufgaben mit Deadline in vier oder fünf Wochen bekamen zwischenzeitlich
+     * Fenster über den ganzen Horizont, und Phase 1 fand in ihrem knappen Anteil keine brauchbare
+     * Menge mehr — 16 von 17 Aufgaben blieben ungeplant, im Betrieb kam zeitweise gar keine Lösung
+     * mehr zustande.
      *
      * Der Bestand ist der echte Entwicklungsdatenbestand: gemischte Prioritäten, Deadlines von
      * überfällig bis in sechs Wochen, geteilte Aufgaben mit Tagesdeckel, notBefore, dazu acht
      * tägliche Gewohnheiten und vier Wochen Training.
+     *
+     * Das Budget wird hier auf den ECHTEN Produktionswert gesetzt. Der Kommentar an dieser Stelle
+     * behauptete das schon vorher, stimmte aber nicht mehr (er nannte 1.5, produktiv liefen 10) —
+     * womit der Test genau das Gegenteil dessen absicherte, was er zu prüfen vorgab. Steht der
+     * Wert richtig, ist dieser Test das eigentliche Qualitätsgatter: hält der Plan unter der Zeit,
+     * die der Nutzer tatsächlich wartet?
      */
     @Test
     void vollerMonatMitEchtemZeitbudgetPlantFastAlles() throws Exception {
         java.lang.reflect.Field budget =
                 SmartSchedulerService.class.getDeclaredField("solverTimeLimitSeconds");
         budget.setAccessible(true);
-        budget.setDouble(service, 1.5);   // Produktionswert aus application.properties
+        budget.setDouble(service, PRODUKTIONS_ZEITBUDGET_SEKUNDEN);
 
         // Einstellungen wie im Entwicklungsbestand. Jede davon vergrößert das Modell, und in
         // Summe waren sie es, die den Lauf kippen ließen — allen voran das Leistungshoch: es
@@ -3030,5 +3169,205 @@ class SmartSchedulerServiceTest {
         ev.setEndTime(end);
         ev.setEventType(EventType.OTHER);
         return ev;
+    }
+
+    // ==================================================================
+    // Drop-Gewichte: Aufgabe schlägt Wiederkehrendes
+    // ==================================================================
+
+    /**
+     * Reine Arithmetik über alle Prioritäts- und Deadline-Stufen, ohne Löser — und damit der
+     * billigste Test der ganzen Datei.
+     *
+     * Er hält die Invariante fest, die vorher nirgends stand und deshalb auch niemandem auffiel,
+     * als sie verletzt war: eine Aufgabe ohne Deadline kam auf 100..500 und verlor gegen jedes
+     * Training (300) und die meisten Gewohnheiten. Wer die Gewichte das nächste Mal anfasst,
+     * bekommt es hier gesagt — und nicht erst, wenn eine wichtige Aufgabe still liegen bleibt.
+     */
+    @Test
+    void dropGewichteInvarianteAufgabeSchlaegtWiederkehrendes() throws Exception {
+        long maxWiederkehrend = Math.max(
+                Math.max(feldWert("W_DROP_WORKOUT"), feldWert("W_DROP_PROJECT")),
+                5 * feldWert("W_DROP_HABIT_PRIO"));   // Gewohnheit mit höchster Priorität
+
+        java.lang.reflect.Method taskWeight = SmartSchedulerService.class
+                .getDeclaredMethod("calculateTaskWeight", Task.class, LocalDate.class);
+        taskWeight.setAccessible(true);
+
+        for (int prio = 1; prio <= 5; prio++) {
+            // Alle Deadline-Stufen: keine, weit weg, diese Woche, in drei Tagen, morgen, überfällig.
+            List<LocalDateTime> deadlines = new ArrayList<>();
+            deadlines.add(null);
+            deadlines.add(TODAY.plusDays(30).atTime(12, 0));
+            deadlines.add(TODAY.plusDays(5).atTime(12, 0));
+            deadlines.add(TODAY.plusDays(2).atTime(12, 0));
+            deadlines.add(TODAY.plusDays(1).atTime(12, 0));
+            deadlines.add(TODAY.minusDays(1).atTime(12, 0));
+
+            for (LocalDateTime deadline : deadlines) {
+                Task t = makeTask(1L, "T", 60, prio, deadline);
+                long gewicht = (long) taskWeight.invoke(service, t, TODAY);
+                assertTrue(gewicht > maxWiederkehrend,
+                        "Aufgabe (Prio " + prio + ", Deadline " + deadline + ") wiegt " + gewicht
+                                + " und damit nicht mehr als das schwerste wiederkehrende Item ("
+                                + maxWiederkehrend + ")");
+            }
+        }
+    }
+
+    /** Innerhalb der Aufgaben muss die alte, inversionsfreie Ordnung erhalten bleiben. */
+    @Test
+    void dropGewichteBleibenInnerhalbDerAufgabenGeordnet() throws Exception {
+        java.lang.reflect.Method taskWeight = SmartSchedulerService.class
+                .getDeclaredMethod("calculateTaskWeight", Task.class, LocalDate.class);
+        taskWeight.setAccessible(true);
+
+        long hochPrioSpaeteDeadline = (long) taskWeight.invoke(service,
+                makeTask(1L, "wichtig", 60, 5, TODAY.plusDays(5).atTime(12, 0)), TODAY);
+        long niedrigPrioFrueheDeadline = (long) taskWeight.invoke(service,
+                makeTask(2L, "nebensächlich", 60, 1, TODAY.plusDays(1).atTime(12, 0)), TODAY);
+        assertTrue(hochPrioSpaeteDeadline > niedrigPrioFrueheDeadline,
+                "Priorität darf nicht von einer näheren Deadline überstimmt werden");
+
+        long gleichePrioFrueher = (long) taskWeight.invoke(service,
+                makeTask(3L, "früher", 60, 3, TODAY.plusDays(1).atTime(12, 0)), TODAY);
+        long gleichePrioSpaeter = (long) taskWeight.invoke(service,
+                makeTask(4L, "später", 60, 3, TODAY.plusDays(10).atTime(12, 0)), TODAY);
+        assertTrue(gleichePrioFrueher > gleichePrioSpaeter,
+                "bei gleicher Priorität gewinnt die nähere Deadline");
+    }
+
+    /**
+     * Eine Aufgabe verdrängt ein Training, wenn nur noch eines von beiden passt.
+     *
+     * Die Gegenprobe zur reinen Rechnung oben, diesmal durch den Löser. Vorher gewann hier das
+     * Training: es wog pauschal 300, eine Aufgabe der Priorität 2 ohne Deadline nur 200.
+     */
+    @Test
+    void taskSchlaegtWorkoutBeimVerdraengen() {
+        LocalDate montag = TODAY.plusDays(1).with(TemporalAdjusters.next(DayOfWeek.MONDAY));
+        // Nur eine Stunde Arbeitszeit am Tag: es passt genau ein Block von 60 Minuten.
+        prefs.setWorkdayStart(LocalTime.of(8, 0));
+        prefs.setWorkdayEnd(LocalTime.of(9, 0));
+
+        Task aufgabe = makeTask(1900L, "Wichtig, ohne Termin", 60, 2, null);
+        when(taskService.getSchedulableTasks(1L)).thenReturn(List.of(aufgabe));
+        when(calendarEventService.getFixedEvents(eq(1L), any(), any())).thenReturn(new ArrayList<>());
+        when(workoutSessionRepository.findByUserIdAndIsFlexibleTrue(eq(1L)))
+                .thenReturn(List.of(makeFlexibleWorkout(1901L, "Beine", 60, montag)));
+
+        ScheduleResult result = service.generateOptimalSchedule(1L, montag, montag);
+
+        assertEquals(1, result.getScheduledTasks().size(),
+                "die Aufgabe muss den Platz bekommen — ein Training kommt nächste Woche wieder");
+        assertTrue(result.getScheduledHabits().isEmpty(),
+                "für das Training ist kein Platz mehr");
+    }
+
+    /**
+     * Der Stabilitätsanker darf eine Deadline nicht überstimmen.
+     *
+     * Der Wächter gegen ein zu hoch gewähltes W_MOVE_FIXED: die Totzone soll den Kalender
+     * ruhigstellen, aber niemals einen Termin reißen lassen. Wird der feste Umzugspreis eines
+     * Tages größer als die Deadline-Strafe, bleibt der Block liegen und die Aufgabe kommt zu spät.
+     */
+    @Test
+    void deadlineErzwingtBewegungTrotzStabilitaetsanker() {
+        LocalDate morgen = TODAY.plusDays(1);
+        prefs.setWorkdayStart(LocalTime.of(8, 0));
+        prefs.setWorkdayEnd(LocalTime.of(18, 0));
+
+        // Deadline morgen um 10:00 — der alte Block lag am Tag darauf und ist damit zu spät.
+        Task task = makeTask(1950L, "Abgabe", 60, 4, morgen.atTime(10, 0));
+        when(taskService.getSchedulableTasks(1L)).thenReturn(List.of(task));
+        when(calendarEventService.getFixedEvents(eq(1L), any(), any())).thenReturn(new ArrayList<>());
+
+        CalendarEvent alterBlock = new CalendarEvent();
+        alterBlock.setId(1951L);
+        alterBlock.setEventType(EventType.TASK);
+        alterBlock.setIsFixed(false);
+        alterBlock.setRelatedTask(task);
+        alterBlock.setStartTime(morgen.plusDays(1).atTime(14, 0));
+        alterBlock.setEndTime(morgen.plusDays(1).atTime(15, 0));
+        when(calendarEventRepository.findByUserIdAndEventTypeInAndIsFixedAndStartTimeBetween(
+                eq(1L), anyList(), eq(false), any(), any())).thenReturn(List.of(alterBlock));
+
+        ScheduleResult result = service.generateOptimalSchedule(1L, morgen, morgen.plusDays(3));
+
+        assertEquals(1, result.getScheduledTasks().size());
+        assertFalse(result.getScheduledTasks().get(0).getEndTime().isAfter(morgen.atTime(10, 0)),
+                "die Deadline muss den Anker überstimmen — sonst hält die Totzone einen Termin auf");
+    }
+
+    /** Abendstunden werden gemieden, solange tagsüber Platz ist. */
+    @Test
+    void abendstundenWerdenVermieden() {
+        LocalDate morgen = TODAY.plusDays(1);
+        prefs.setWorkdayStart(LocalTime.of(8, 0));
+        prefs.setWorkdayEnd(LocalTime.of(22, 0));
+        prefs.setCoreHoursEnd(LocalTime.of(18, 0));
+
+        when(taskService.getSchedulableTasks(1L))
+                .thenReturn(List.of(makeTask(1960L, "Irgendwann heute", 60, 3, null)));
+        when(calendarEventService.getFixedEvents(eq(1L), any(), any())).thenReturn(new ArrayList<>());
+
+        ScheduleResult result = service.generateOptimalSchedule(1L, morgen, morgen);
+
+        assertEquals(1, result.getScheduledTasks().size());
+        assertFalse(result.getScheduledTasks().get(0).getEndTime().isAfter(morgen.atTime(18, 0)),
+                "ein freier Tag hat genug Platz vor der Kernzeitgrenze");
+    }
+
+    /** Der Tagesdeckel gilt auch für Gewohnheiten, nicht nur für Aufgaben. */
+    @Test
+    void tagesLastdeckelGiltAuchFuerGewohnheiten() {
+        LocalDate morgen = TODAY.plusDays(1);
+        prefs.setWorkdayStart(LocalTime.of(8, 0));
+        prefs.setWorkdayEnd(LocalTime.of(22, 0));
+        prefs.setMaxScheduledMinutesPerDay(120);
+
+        when(taskService.getSchedulableTasks(1L)).thenReturn(new ArrayList<>());
+        when(calendarEventService.getFixedEvents(eq(1L), any(), any())).thenReturn(new ArrayList<>());
+        // Vier tägliche Gewohnheiten à 60 Minuten wollen zusammen 240 Minuten — erlaubt sind 120.
+        when(habitRepository.findHabitsActiveInRange(eq(1L), any(), any()))
+                .thenReturn(List.of(makeDailyHabit(1970L, "A", 60), makeDailyHabit(1971L, "B", 60),
+                                    makeDailyHabit(1972L, "C", 60), makeDailyHabit(1973L, "D", 60)));
+
+        ScheduleResult result = service.generateOptimalSchedule(1L, morgen, morgen);
+
+        long minuten = result.getScheduledHabits().stream()
+                .mapToLong(i -> ChronoUnit.MINUTES.between(i.getStartTime(), i.getEndTime()))
+                .sum();
+        assertTrue(minuten <= 120,
+                "der Gesamtdeckel muss auch für Gewohnheiten gelten, geplant waren " + minuten + " min");
+    }
+
+    /** maxTasksPerDay wurde vom Löser bisher überhaupt nicht gelesen. */
+    @Test
+    void maxTasksProTagWirdEingehalten() {
+        LocalDate morgen = TODAY.plusDays(1);
+        prefs.setWorkdayStart(LocalTime.of(8, 0));
+        prefs.setWorkdayEnd(LocalTime.of(20, 0));
+        prefs.setMaxTasksPerDay(2);
+
+        List<Task> tasks = new ArrayList<>();
+        for (int i = 0; i < 4; i++) {
+            tasks.add(makeTask(1980L + i, "T" + i, 60, 3, morgen.atTime(23, 59)));
+        }
+        when(taskService.getSchedulableTasks(1L)).thenReturn(tasks);
+        when(calendarEventService.getFixedEvents(eq(1L), any(), any())).thenReturn(new ArrayList<>());
+
+        ScheduleResult result = service.generateOptimalSchedule(1L, morgen, morgen);
+
+        long amTag = result.getScheduledTasks().stream()
+                .filter(i -> i.getStartTime().toLocalDate().equals(morgen))
+                .count();
+        assertTrue(amTag <= 2, "höchstens zwei Aufgaben-Blöcke am Tag, es waren " + amTag);
+    }
+
+    private long feldWert(String name) throws Exception {
+        java.lang.reflect.Field f = SmartSchedulerService.class.getDeclaredField(name);
+        f.setAccessible(true);
+        return f.getLong(null);
     }
 }

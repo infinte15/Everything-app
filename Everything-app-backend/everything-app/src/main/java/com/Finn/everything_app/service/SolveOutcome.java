@@ -1,7 +1,6 @@
 package com.Finn.everything_app.service;
 
 import com.google.ortools.sat.CpSolverStatus;
-import lombok.AllArgsConstructor;
 import lombok.Data;
 
 import java.util.List;
@@ -13,12 +12,31 @@ import java.util.List;
  * ein leerer Kalender ist schlechter als ein veralteter.
  */
 @Data
-@AllArgsConstructor
 public class SolveOutcome {
 
     private CpSolverStatus status;
     private List<ScheduledItem> items;
     private List<AtRiskItem> atRisk;
+
+    // ---- Messwerte des Laufs ----
+    //
+    // Bewusst am Ergebnis und nicht in einem Feld des Service: der Solve läuft pro User und soll
+    // später (Phase 3) aus der Transaktion heraus nebenläufig werden. Ein Zähler am Service wäre
+    // dann nicht mehr eindeutig einem Lauf zuzuordnen.
+    private long phase1Ms;
+    private long phase2Ms;
+    private int  intervals;
+    private int  placeables;
+    private long drop;
+    private double placementObjective = Double.NaN;
+    /** Phase 2 hat ihr Budget gerissen und Phase 1 musste erneut gelöst werden. */
+    private boolean phase2Retried;
+
+    public SolveOutcome(CpSolverStatus status, List<ScheduledItem> items, List<AtRiskItem> atRisk) {
+        this.status = status;
+        this.items  = items;
+        this.atRisk = atRisk;
+    }
 
     public boolean isUsable() {
         return status == CpSolverStatus.OPTIMAL || status == CpSolverStatus.FEASIBLE;
