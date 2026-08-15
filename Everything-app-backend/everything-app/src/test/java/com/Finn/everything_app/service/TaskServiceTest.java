@@ -6,10 +6,13 @@ import com.Finn.everything_app.repository.*;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 
@@ -101,6 +104,36 @@ class TaskServiceTest {
         verify(projectService).recalculateProjectStats(10L);
     }
 
+    /**
+     * Erledigen muss die Aufgabe aus dem Kalender nehmen — sofort und vollstaendig.
+     *
+     * Der entprellte Scheduler-Lauf raeumt zwar auch auf, kommt aber weder an gepinnte Bloecke
+     * noch an die Vergangenheit noch ueberhaupt zum Zug, wenn die Auto-Planung aus ist. Genau
+     * diese Bloecke standen bisher fuer immer im Kalender.
+     */
+    @Test
+    void completeTaskRaeumtDieOffenenBloeckeWeg() {
+        Task task = storedTask(5L, null);
+        CalendarEvent gepinnt   = block(60L, true,  null);
+        CalendarEvent vergangen = block(61L, false, null);
+        CalendarEvent abgehakt  = block(62L, false, LocalDateTime.now().minusHours(2));
+        when(calendarEventRepository.findByRelatedTaskId(5L))
+                .thenReturn(List.of(gepinnt, vergangen, abgehakt));
+
+        service.completeTask(5L);
+
+        @SuppressWarnings("unchecked")
+        ArgumentCaptor<Iterable<CalendarEvent>> captor = ArgumentCaptor.forClass(Iterable.class);
+        verify(calendarEventRepository).deleteAll(captor.capture());
+        List<CalendarEvent> geloescht = new ArrayList<>();
+        captor.getValue().forEach(geloescht::add);
+
+        assertEquals(List.of(gepinnt, vergangen), geloescht,
+                "gepinnte und vergangene Bloecke muessen mit weg — abgehakte bleiben als Beleg");
+        assertNull(task.getScheduledStartTime(), "ein erledigter Task hat keinen Termin mehr");
+        assertNull(task.getScheduledEndTime());
+    }
+
     @Test
     void deleteTaskAktualisiertDenProjektfortschritt() {
         Task task = storedTask(5L, project(10L));
@@ -127,6 +160,15 @@ class TaskServiceTest {
     // ------------------------------------------------------------------
     // Helpers
     // ------------------------------------------------------------------
+
+    private CalendarEvent block(Long id, boolean gepinnt, LocalDateTime completedAt) {
+        CalendarEvent ev = new CalendarEvent();
+        ev.setId(id);
+        ev.setEventType(EventType.TASK);
+        ev.setIsFixed(gepinnt);
+        ev.setCompletedAt(completedAt);
+        return ev;
+    }
 
     private Task storedTask(Long id, Project project) {
         Task t = new Task();

@@ -33,6 +33,11 @@ class _HomeScreenState extends State<HomeScreen> {
     WidgetsBinding.instance.addPostFrameCallback((_) => _loadData());
   }
 
+  static bool _istHeute(DateTime d) {
+    final now = DateTime.now();
+    return d.year == now.year && d.month == now.month && d.day == now.day;
+  }
+
   Future<void> _loadData() async {
     final taskProvider = context.read<TaskProvider>();
     final calendarProvider = context.read<CalendarProvider>();
@@ -45,8 +50,9 @@ class _HomeScreenState extends State<HomeScreen> {
     final auth = context.watch<AuthProvider>();
     final tasks = context.watch<TaskProvider>();
     final calendar = context.watch<CalendarProvider>();
-    final now = DateTime.now();
-    final todayEvents = calendar.getEventsForDay(_selectedDate);
+    // Bewusst nicht getEventsForDay: hier steht nur, was noch kommt — siehe
+    // CalendarProvider.getUpcomingEventsForDay.
+    final todayEvents = calendar.getUpcomingEventsForDay(_selectedDate);
 
     return Scaffold(
       backgroundColor: _backgroundColor,
@@ -98,18 +104,39 @@ class _HomeScreenState extends State<HomeScreen> {
               sliver: SliverList(
                 delegate: SliverChildListDelegate([
                   
-                  // Today's Schedule Section
+                  // Tagesplan. Titel und Datum folgen der Auswahl im Streifen darunter — sonst
+                  // stand über einem Mittwoch weiter "TODAY'S SCHEDULE" und daneben das heutige
+                  // Datum, und die Liste sah aus, als zeige sie den falschen Tag.
                   _SectionTitle(
-                    title: "TODAY'S SCHEDULE",
-                    rightLabel: DateFormat('E d').format(now).toUpperCase(),
+                    title: _istHeute(_selectedDate) ? "TODAY'S SCHEDULE" : 'TAGESPLAN',
+                    rightLabel: DateFormat('E d').format(_selectedDate).toUpperCase(),
                   ),
                   const SizedBox(height: 24),
-                  _HorizontalDateSelector(  selectedDate: _selectedDate, onDateSelected: (date) => setState(() => _selectedDate = date),),
+                  _HorizontalDateSelector(
+                    selectedDate: _selectedDate,
+                    onDateSelected: (date) {
+                      setState(() => _selectedDate = date);
+                      // Der Provider haelt genau einen Monat. Die Wochenleiste reicht am Monatsende
+                      // in den naechsten hinein — ohne das Nachladen waeren diese Tage leer, und
+                      // zwar wortlos.
+                      final geladen = calendar.focusedDay;
+                      if (date.month != geladen.month || date.year != geladen.year) {
+                        calendar.loadEventsForMonth(date);
+                      }
+                    },
+                  ),
                   const SizedBox(height: 24),
                   if (todayEvents.isEmpty)
-                    const _EmptyState(message: 'Keine Termine heute.')
+                    _EmptyState(
+                      message: _istHeute(_selectedDate)
+                          ? 'Für heute steht nichts mehr an.'
+                          : 'Keine Termine an diesem Tag.',
+                    )
                   else
-                    ...todayEvents.take(4).map((e) => _EventItem(event: e)),
+                    // Ohne Deckel: hier stand .take(4), und damit fehlte an einem normalen Tag
+                    // die Haelfte. Die Seite scrollt ohnehin — ein abgeschnittener Tagesplan,
+                    // dem man das Abschneiden nicht ansieht, ist schlimmer als eine lange Liste.
+                    ...todayEvents.map((e) => _EventItem(event: e)),
 
                   const SizedBox(height: 48),
 
@@ -278,6 +305,23 @@ class _EventItem extends StatelessWidget {
 
   const _EventItem({required this.event});
 
+  /// Die Zeile unter dem Titel: die Beschreibung, sonst die Zeit selbst.
+  ///
+  /// Hier stand fest verdrahtet 'Ongoing • 45m left' — an jedem Termin ohne Beschreibung, egal
+  /// ob er in vier Stunden anfing. Eine erfundene Angabe ist schlechter als gar keine.
+  static String _untertitel(CalendarEvent event) {
+    final beschreibung = event.description;
+    if (beschreibung != null && beschreibung.isNotEmpty) return beschreibung;
+
+    if (event.isOngoing) {
+      final rest = event.endTime.difference(DateTime.now()).inMinutes;
+      return 'Läuft • noch ${rest < 1 ? '<1' : rest} min';
+    }
+    return '${DateFormat('HH:mm').format(event.startTime)}'
+        '–${DateFormat('HH:mm').format(event.endTime)}'
+        ' • ${event.durationInMinutes} min';
+  }
+
   @override
   Widget build(BuildContext context) {
     return Container(
@@ -319,7 +363,7 @@ class _EventItem extends StatelessWidget {
                   ),
                   const SizedBox(height: 4),
                   Text(
-                    (event.description?.isNotEmpty == true) ? event.description! : 'Ongoing • 45m left', // Fallback context
+                    _untertitel(event),
                     style: GoogleFonts.inter(
                       fontSize: 12,
                       color: _primaryLight, // Using lighter primary for subtle metadata

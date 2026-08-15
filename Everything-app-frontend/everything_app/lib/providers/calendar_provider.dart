@@ -58,6 +58,21 @@ class CalendarProvider with ChangeNotifier {
   List<AtRiskItem> get atRisk => List.unmodifiable(_atRisk);
   List<AtRiskItem> _atRisk = const [];
 
+  /// Davon nur die, bei denen wirklich eine Deadline auf dem Spiel steht.
+  ///
+  /// Die Quelle fuers Warnband. Alles andere in [atRisk] heisst nur "noch nicht eingeplant" und
+  /// gehoert an die Aufgabe selbst, nicht in ein Warnband ueber dem Kalender.
+  List<AtRiskItem> get atRiskDeadlines =>
+      _atRisk.where((e) => e.isDeadlineRisk).toList(growable: false);
+
+  /// Bereits gerissene Termine — die schaerfere Haelfte von [atRiskDeadlines], eigenes rotes Band.
+  List<AtRiskItem> get atRiskOverdue =>
+      _atRisk.where((e) => e.isOverdue).toList(growable: false);
+
+  /// Termine, die noch ausstehen, vor denen aber kein Platz mehr ist.
+  List<AtRiskItem> get atRiskUpcoming =>
+      _atRisk.where((e) => e.isDeadlineRisk && !e.isOverdue).toList(growable: false);
+
   void scheduleReconcile() {
     _reconcileTimer?.cancel();
     _replanning = true;
@@ -125,6 +140,10 @@ class CalendarProvider with ChangeNotifier {
       final newEvents = await _calendarService.getEventsInRange(firstDay, lastDay);
       // We could check if events changed before notifying, but for now just update
       _events = newEvents;
+      // Die At-Risk-Liste gehoert zum selben Bestand. Sie wurde bisher nur im Nachlauf nach einer
+      // eigenen Aenderung aktualisiert — ein Warnband, das ein Hintergrundlauf laengst aufgeloest
+      // hatte, blieb deshalb bis zum naechsten Screenwechsel stehen.
+      await _pollScheduleStatus();
       notifyListeners();
     } catch (e) {
       // ignore silently
@@ -149,8 +168,18 @@ class CalendarProvider with ChangeNotifier {
   /// Der Block selbst bleibt serverseitig erhalten (er ist der Beleg fuer das verbrauchte
   /// Wochenpensum); zurueckholen laesst er sich direkt nach dem Ueberspringen ueber das
   /// Rueckgaengig im Hinweis.
-  List<CalendarEvent> get events =>
-      _events.where((e) => !e.isSkipped).toList(growable: false);
+  /// Immer nach Startzeit sortiert.
+  ///
+  /// Die Serverantwort ist es seit `findByUserIdAndStartTimeBetweenOrderByStartTimeAsc` zwar
+  /// auch, aber das allein reicht nicht: die optimistischen Aenderungen hier ersetzen einen
+  /// Eintrag AN ORT UND STELLE (`_events[i] = updated`) und `addEvent` haengt hinten an. Ein
+  /// verschobener Termin behielte sonst seine alte Position in der Liste — und genau die zeigt
+  /// der Homescreen an.
+  List<CalendarEvent> get events {
+    final sichtbar = _events.where((e) => !e.isSkipped).toList();
+    sichtbar.sort((a, b) => a.startTime.compareTo(b.startTime));
+    return List.unmodifiable(sichtbar);
+  }
   bool get isLoading => _isLoading;
   String? get error => _error;
   DateTime get focusedDay => _focusedDay;
@@ -165,7 +194,30 @@ class CalendarProvider with ChangeNotifier {
     }).toList();
   }
 
-  
+  /// Was an einem Tag noch bevorsteht — die Sicht des Homescreens.
+  ///
+  /// Dort steht eine kurze Liste ("die naechsten vier"), und die war am Nachmittag regelmaessig
+  /// mit dem Vormittag gefuellt: chronologisch sortiert und oben abgeschnitten zeigte sie genau
+  /// das, was schon vorbei war. Gefiltert wird deshalb auf das Ende, nicht auf den Beginn — ein
+  /// gerade laufender Block gehoert weiter dazu, bis er wirklich vorbei ist.
+  ///
+  /// Nur fuer HEUTE. Ein anderer Tag im Datumsstreifen liefert unveraendert den ganzen Tag: dort
+  /// ist "was kommt noch" entweder alles (Zukunft) oder nichts (Vergangenheit), und ein leerer
+  /// Montag waere keine Antwort, sondern ein Fehler.
+  ///
+  /// Der Kalender-Screen benutzt das bewusst NICHT — dort bleiben abgehakte Bloecke als Protokoll
+  /// sichtbar (durchgestrichen und zurueckgenommen).
+  List<CalendarEvent> getUpcomingEventsForDay(DateTime day) {
+    final alle = getEventsForDay(day);
+    final now = DateTime.now();
+    final istHeute = day.year == now.year && day.month == now.month && day.day == now.day;
+    if (!istHeute) return alle;
+
+    return alle
+        .where((e) => !e.isCompleted && e.endTime.isAfter(now))
+        .toList(growable: false);
+  }
+
   List<CalendarEvent> get selectedDayEvents {
     if (_selectedDay == null) return [];
     return getEventsForDay(_selectedDay!);
@@ -195,6 +247,10 @@ class CalendarProvider with ChangeNotifier {
       
       _events = await _calendarService.getEventsInRange(firstDay, lastDay);
       _error = null;
+      // Der geladene Monat IST ab jetzt der fokussierte. Ohne diese Zeile laed der 30s-Poll
+      // (_pollEventsSilent rechnet aus _focusedDay) gleich wieder einen anderen Monat nach und
+      // der gerade geholte Bestand waere nach spaetestens einer halben Minute wieder weg.
+      _focusedDay = month;
       // Nebenbei den Ausgangswert für den Nachlauf setzen. Ohne ihn kostet die erste Umplanung
       // nach dem App-Start eine zusätzliche Runde: der Nachlauf müsste erst herausfinden, welcher
       // Lauf der "alte" war, bevor er einen neuen erkennen kann.

@@ -145,7 +145,8 @@ public class CalendarController {
         resultDTO.setSolverStatus(result.getSolverStatus());
         resultDTO.setAtRisk(result.getAtRisk().stream()
                 .map(a -> new AtRiskItemDTO(a.getTaskId(), a.getHabitId(), a.getTitle(),
-                        a.getMinutes(), a.getReason() != null ? a.getReason().name() : null))
+                        a.getMinutes(), a.getReason() != null ? a.getReason().name() : null,
+                        a.getPlannedStart()))
                 .collect(Collectors.toList()));
 
         return ResponseEntity.ok(resultDTO);
@@ -176,7 +177,8 @@ public class CalendarController {
         dto.setScheduledBlocks(letzter.getScheduledBlocks());
         dto.setAtRisk(letzter.getAtRisk().stream()
                 .map(a -> new AtRiskItemDTO(a.getTaskId(), a.getHabitId(), a.getTitle(),
-                        a.getMinutes(), a.getReason() != null ? a.getReason().name() : null))
+                        a.getMinutes(), a.getReason() != null ? a.getReason().name() : null,
+                        a.getPlannedStart()))
                 .collect(Collectors.toList()));
         return ResponseEntity.ok(dto);
     }

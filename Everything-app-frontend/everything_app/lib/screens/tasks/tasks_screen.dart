@@ -5,6 +5,7 @@ import 'package:google_fonts/google_fonts.dart';
 import '../../providers/task_provider.dart';
 import '../../providers/calendar_provider.dart';
 import '../../config/app_theme.dart';
+import '../../models/at_risk_item.dart';
 import '../../models/task.dart';
 import '../../widgets/create_task_sheet.dart';
 
@@ -290,6 +291,26 @@ class _TaskTile extends StatelessWidget {
   final Task task;
   const _TaskTile({required this.task});
 
+  static Color _atRiskFarbe(bool ueberfaellig, bool deadlineRisiko) {
+    if (ueberfaellig) return const Color(0xFFE5484D);
+    if (deadlineRisiko) return const Color(0xFFFF9F1C);
+    return Colors.grey;
+  }
+
+  /// Bei Überfälligem steht hier der Nachholtermin statt einer Fehlmenge: die Frage ist nicht
+  /// mehr „wie schlimm", sondern „wann jetzt". Die Minutenzahl ist dort ohnehin meist 0, weil
+  /// der Plan die Aufgabe untergebracht hat — nur eben zu spät.
+  static String _atRiskText(AtRiskItem item, bool ueberfaellig, bool deadlineRisiko) {
+    if (ueberfaellig) {
+      final wann = item.plannedStartText;
+      return wann == null
+          ? 'Überfällig — kein Nachholtermin gefunden'
+          : 'Überfällig — Nachholtermin $wann';
+    }
+    if (deadlineRisiko) return 'Deadline in Gefahr — ${item.reasonText}';
+    return 'Noch nicht eingeplant — ${item.reasonText}';
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -303,12 +324,20 @@ class _TaskTile extends StatelessWidget {
     // select statt watch: sonst baut jede Kachel neu, sobald sich irgendetwas im Kalender regt.
     // Die Quelle ist bewusst der CalendarProvider — dort landet das Ergebnis des Laufs, und eine
     // zweite Kopie derselben Liste im TaskProvider würde nur auseinanderlaufen.
-    final atRiskGrund = context.select<CalendarProvider, String?>((cal) {
+    //
+    // Drei Tonlagen, nicht eine: ein bereits gerissener Termin ist rot und nennt den
+    // Nachholtermin, eine gefährdete Deadline ist amber, und eine Aufgabe, die nur noch nicht im
+    // Planungsfenster liegt, ist eine graue Randnotiz. Vorher stand alles in Amber mit
+    // Warndreieck — jede unverplante Aufgabe sah nach einem Problem aus, und ein überfälliger
+    // Termin nach nicht mehr als das.
+    final atRiskItem = context.select<CalendarProvider, AtRiskItem?>((cal) {
       for (final item in cal.atRisk) {
-        if (item.taskId != null && item.taskId == task.id) return item.reasonText;
+        if (item.taskId != null && item.taskId == task.id) return item;
       }
       return null;
     });
+    final istUeberfaellig = atRiskItem?.isOverdue ?? false;
+    final istDeadlineRisiko = atRiskItem?.isDeadlineRisk ?? false;
 
     return Dismissible(
       key: Key('task_${task.id}'),
@@ -409,22 +438,33 @@ class _TaskTile extends StatelessWidget {
                       ),
                     // Der Grund, warum die Aufgabe keinen Termin hat. Ohne diese Zeile blieb sie
                     // ohne jede Erklärung liegen — sie sah aus wie jede andere offene Aufgabe.
-                    if (atRiskGrund != null && !isCompleted) ...[
+                    if (atRiskItem != null && !isCompleted) ...[
                       const SizedBox(height: 4),
                       Row(
                         children: [
-                          const Icon(Icons.warning_amber_rounded,
-                              size: 12, color: Color(0xFFFF9F1C)),
+                          Icon(
+                            istUeberfaellig
+                                ? Icons.error_outline_rounded
+                                : istDeadlineRisiko
+                                    ? Icons.warning_amber_rounded
+                                    : Icons.schedule_rounded,
+                            size: 12,
+                            color: _atRiskFarbe(istUeberfaellig, istDeadlineRisiko),
+                          ),
                           const SizedBox(width: 4),
                           Expanded(
                             child: Text(
-                              'Nicht eingeplant — $atRiskGrund',
+                              _atRiskText(atRiskItem, istUeberfaellig, istDeadlineRisiko),
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
-                              style: const TextStyle(
+                              style: TextStyle(
                                 fontSize: 11,
-                                color: Color(0xFFFF9F1C),
-                                fontWeight: FontWeight.w600,
+                                color: _atRiskFarbe(istUeberfaellig, istDeadlineRisiko),
+                                fontWeight: istUeberfaellig
+                                    ? FontWeight.w800
+                                    : istDeadlineRisiko
+                                        ? FontWeight.w600
+                                        : FontWeight.w500,
                               ),
                             ),
                           ),

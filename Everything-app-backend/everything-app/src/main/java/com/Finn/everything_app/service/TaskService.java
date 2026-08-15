@@ -1,6 +1,7 @@
 package com.Finn.everything_app.service;
 
 import com.Finn.everything_app.exception.ResourceNotFoundException;
+import com.Finn.everything_app.model.CalendarEvent;
 import com.Finn.everything_app.model.Project;
 import com.Finn.everything_app.model.Task;
 import com.Finn.everything_app.model.TaskStatus;
@@ -201,11 +202,37 @@ public class TaskService {
         Task task = getTaskById(taskId);
         task.setStatus(TaskStatus.COMPLETED);
         task.setCompletedAt(LocalDateTime.now());
+        // Ein erledigter Task hat keinen Termin mehr. writeBackTaskSpans im Scheduler läuft nur
+        // über offene Tasks und würde den alten Termin sonst für immer stehen lassen.
+        task.setScheduledStartTime(null);
+        task.setScheduledEndTime(null);
+        clearOpenBlocks(taskId);
         Task savedTask = taskRepository.save(task);
         // Der wichtigste Treiber des Projektfortschritts.
         recalcProject(savedTask.getProject());
         eventPublisher.publishEvent(new ScheduleChangedEvent(this, task.getUser().getId()));
         return savedTask;
+    }
+
+    /**
+     * Räumt beim Erledigen alle offenen Blöcke des Tasks weg — Vergangenheit wie Zukunft.
+     *
+     * Der entprellte Scheduler-Lauf, den {@link ScheduleChangedEvent} anstößt, tut das über
+     * {@code reconcileScheduledEvents} eigentlich schon. Er kommt aber an drei Sorten Block
+     * nicht heran: an gepinnte ({@code isFixed=true}), an alles vor dem Umplanzeitpunkt, und
+     * überhaupt an keinen, wenn die automatische Planung für den Nutzer aus ist. Genau die
+     * blieben bisher für immer im Kalender stehen, obwohl die Aufgabe erledigt war.
+     *
+     * Abgehakte Blöcke ({@code completedAt != null}) bleiben bewusst stehen. Sie sind der Beleg
+     * für die geleistete Zeit — und {@code CalendarEventService.creditBlock} schließt den Task
+     * automatisch ab, sobald der letzte Block abgehakt ist: ohne diese Ausnahme würde sich
+     * ausgerechnet der gerade angetippte Block selbst löschen.
+     */
+    private void clearOpenBlocks(Long taskId) {
+        List<CalendarEvent> offen = calendarEventRepository.findByRelatedTaskId(taskId).stream()
+                .filter(e -> e.getCompletedAt() == null)
+                .toList();
+        if (!offen.isEmpty()) calendarEventRepository.deleteAll(offen);
     }
 
     @Transactional

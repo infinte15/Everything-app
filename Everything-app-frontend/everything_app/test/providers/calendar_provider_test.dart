@@ -222,6 +222,154 @@ void main() {
       expect(provider.atRisk.first.title, 'Regal bauen');
       expect(provider.atRisk.first.reasonText, 'kein Platz im Zeitplan');
     });
+
+    test('nur echte Deadline-Risiken kommen ins Warnband', () async {
+      final fake = FakeCalendarService([_event()]);
+      fake.scheduleStatus = ScheduleStatus(
+        lastRunAt: DateTime.now(),
+        solverStatus: 'OPTIMAL',
+        atRisk: const [
+          AtRiskItem(taskId: 7, title: 'Regal bauen', minutes: 240, reason: 'OUTSIDE_HORIZON'),
+          AtRiskItem(taskId: 8, title: 'Abgabe', minutes: 60, reason: 'WOULD_MISS_DEADLINE'),
+        ],
+      );
+      final provider = await _loadedProvider(fake);
+
+      await provider.updateEvent(_event().copyWith(startTime: _event().startTime));
+      for (var i = 0; i < 6; i++) {
+        await Future<void>.delayed(Duration.zero);
+      }
+
+      expect(provider.atRisk, hasLength(2), reason: 'die Kachel zeigt beides an');
+      expect(provider.atRiskDeadlines.map((e) => e.title), ['Abgabe'],
+          reason: 'eine Aufgabe ohne Deadline kann keinen Termin reißen — kein Warnband');
+    });
+
+    test('überfällig und gefährdet landen in getrennten Bändern', () async {
+      // Fest auf heute, nicht "in drei Stunden": sonst faellt der Test um, sobald er spaet
+      // abends laeuft und die drei Stunden ueber Mitternacht reichen.
+      final jetzt = DateTime.now();
+      final nachholtermin = DateTime(jetzt.year, jetzt.month, jetzt.day, 21, 30);
+      final fake = FakeCalendarService([_event()]);
+      fake.scheduleStatus = ScheduleStatus(
+        lastRunAt: DateTime.now(),
+        solverStatus: 'OPTIMAL',
+        atRisk: [
+          AtRiskItem(
+            taskId: 8,
+            title: 'Abgabe',
+            minutes: 60,
+            reason: 'WOULD_MISS_DEADLINE',
+          ),
+          AtRiskItem(
+            taskId: 9,
+            title: 'Steuererklärung',
+            minutes: 0,
+            reason: 'PAST_DEADLINE',
+            plannedStart: nachholtermin,
+          ),
+        ],
+      );
+      final provider = await _loadedProvider(fake);
+
+      await provider.updateEvent(_event().copyWith(startTime: _event().startTime));
+      for (var i = 0; i < 6; i++) {
+        await Future<void>.delayed(Duration.zero);
+      }
+
+      expect(provider.atRiskOverdue.map((e) => e.title), ['Steuererklärung']);
+      expect(provider.atRiskUpcoming.map((e) => e.title), ['Abgabe']);
+      expect(provider.atRiskOverdue.first.plannedStartText, startsWith('heute '),
+          reason: 'die überfällige Aufgabe muss ihren Nachholtermin nennen');
+    });
+  });
+
+  group('CalendarProvider.getUpcomingEventsForDay', () {
+    // Ein Homescreen-Tag hat drei Sorten Block, und nur eine davon interessiert am Nachmittag.
+    test('heute bleibt nur, was noch nicht vorbei und nicht abgehakt ist', () async {
+      final now = DateTime.now();
+      final vorbei = _event(
+        id: 1,
+        start: now.subtract(const Duration(hours: 3)),
+        end: now.subtract(const Duration(hours: 2)),
+      );
+      final laeuft = _event(
+        id: 2,
+        start: now.subtract(const Duration(minutes: 20)),
+        end: now.add(const Duration(minutes: 40)),
+      );
+      final kommt = _event(
+        id: 3,
+        start: now.add(const Duration(hours: 2)),
+        end: now.add(const Duration(hours: 3)),
+      );
+      final abgehakt = _event(
+        id: 4,
+        start: now.add(const Duration(hours: 4)),
+        end: now.add(const Duration(hours: 5)),
+      ).copyWith(completedAt: now);
+
+      final provider = await _loadedProvider(
+          FakeCalendarService([vorbei, laeuft, kommt, abgehakt]));
+
+      expect(provider.getUpcomingEventsForDay(now).map((e) => e.id), [2, 3],
+          reason: 'der laufende Block gehört dazu, der beendete und der abgehakte nicht');
+    });
+
+    test('sortiert nach Startzeit, egal wie der Server liefert', () async {
+      final now = DateTime.now();
+      final morgen = DateTime(now.year, now.month, now.day).add(const Duration(days: 1));
+      // Absichtlich verdreht: ohne ORDER BY liefert Postgres die Zeilen in Speicherreihenfolge,
+      // und die aendert sich bei jedem Scheduler-Lauf.
+      final spaet = _event(id: 1, start: morgen.add(const Duration(hours: 16)));
+      final frueh = _event(id: 2, start: morgen.add(const Duration(hours: 8)));
+      final mittag = _event(id: 3, start: morgen.add(const Duration(hours: 12)));
+
+      final provider = await _loadedProvider(FakeCalendarService([spaet, frueh, mittag]));
+
+      expect(provider.getUpcomingEventsForDay(morgen).map((e) => e.id), [2, 3, 1]);
+    });
+
+    test('ein verschobener Termin rutscht in der Liste an seine neue Stelle', () async {
+      final now = DateTime.now();
+      final morgen = DateTime(now.year, now.month, now.day).add(const Duration(days: 1));
+      final frueh = _event(id: 1, start: morgen.add(const Duration(hours: 8)));
+      final spaet = _event(id: 2, start: morgen.add(const Duration(hours: 16)));
+
+      final provider = await _loadedProvider(FakeCalendarService([frueh, spaet]));
+
+      // Der optimistische Pfad ersetzt den Eintrag an Ort und Stelle — ohne Sortierung stuende
+      // der nach hinten geschobene Termin weiterhin oben.
+      final verschoben = morgen.add(const Duration(hours: 20));
+      await provider.updateEvent(frueh.copyWith(
+        startTime: verschoben,
+        endTime: verschoben.add(const Duration(hours: 1)),
+      ));
+
+      expect(provider.getUpcomingEventsForDay(morgen).map((e) => e.id), [2, 1]);
+    });
+
+    test('ein anderer Tag zeigt unverändert alles', () async {
+      final now = DateTime.now();
+      // Ein Tag desselben Monats, der sicher nicht heute ist.
+      final andererTag = now.day == 1 ? DateTime(now.year, now.month, 2)
+                                      : DateTime(now.year, now.month, 1);
+      final frueh = _event(
+        id: 1,
+        start: andererTag.add(const Duration(hours: 8)),
+        end: andererTag.add(const Duration(hours: 9)),
+      );
+      final spaet = _event(
+        id: 2,
+        start: andererTag.add(const Duration(hours: 18)),
+        end: andererTag.add(const Duration(hours: 19)),
+      );
+
+      final provider = await _loadedProvider(FakeCalendarService([frueh, spaet]));
+
+      expect(provider.getUpcomingEventsForDay(andererTag).map((e) => e.id), [1, 2],
+          reason: '"was kommt noch" ergibt nur für heute Sinn — sonst wäre der Tag leer');
+    });
   });
 }
 

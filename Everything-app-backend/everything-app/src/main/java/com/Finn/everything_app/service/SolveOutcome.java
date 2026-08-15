@@ -31,6 +31,14 @@ public class SolveOutcome {
     private double placementObjective = Double.NaN;
     /** Phase 2 hat ihr Budget gerissen und Phase 1 musste erneut gelöst werden. */
     private boolean phase2Retried;
+    /**
+     * Wie viele Blöcke die beiden Nachläufe noch gerettet haben (nachgerückt / gequetscht).
+     *
+     * Im Log, weil die Pässe sonst unsichtbar sind: sie laufen nur, wenn der Hauptlauf etwas
+     * liegen gelassen hat, und ein Bestand ohne Engpass zeigt dauerhaft 0+0.
+     */
+    private int reliefCatchUp;
+    private int reliefSqueeze;
 
     public SolveOutcome(CpSolverStatus status, List<ScheduledItem> items, List<AtRiskItem> atRisk) {
         this.status = status;

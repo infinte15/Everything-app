@@ -32,8 +32,16 @@ class MyApp extends StatelessWidget {
       
       providers: [
         ChangeNotifierProvider(create: (_) => AuthProvider()),
-        ChangeNotifierProvider(create: (_) => TaskProvider()),
+        // Der Kalender muss VOR den Aufgaben stehen: der TaskProvider haengt an ihm.
         ChangeNotifierProvider(create: (_) => CalendarProvider()),
+        // Jede Aufgaben-Mutation stoesst serverseitig eine Neuplanung an. Ohne diese Verdrahtung
+        // erfaehrt der Kalender davon erst beim 30-Sekunden-Poll — eine abgehakte Aufgabe blieb
+        // so lange als Block stehen. update() legt keine neue Instanz an, es setzt nur denselben
+        // Haken erneut.
+        ChangeNotifierProxyProvider<CalendarProvider, TaskProvider>(
+          create: (_) => TaskProvider(),
+          update: (_, calendar, task) => task!..onScheduleAffected = calendar.scheduleReconcile,
+        ),
         ChangeNotifierProvider(create: (_) => StudyProvider()),
         ChangeNotifierProvider(create: (_) => SportsProvider()),
         ChangeNotifierProvider(create: (_) => RecipeProvider()),

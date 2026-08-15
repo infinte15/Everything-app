@@ -9,6 +9,19 @@ class TaskProvider with ChangeNotifier {
   bool _isLoading = false;
   String? _error;
 
+  /// Wird nach jeder Aenderung gerufen, die den Zeitplan betrifft.
+  ///
+  /// Jede der vier Mutationen hier loest serverseitig ein ScheduleChangedEvent aus: der Scheduler
+  /// plant entprellt neu, und beim Erledigen raeumt schon TaskService.completeTask die offenen
+  /// Bloecke weg. Der TaskProvider bekam davon bisher nichts mit — er kennt den CalendarProvider
+  /// nicht —, also blieb der abgehakte Block auf Homescreen und im Kalender stehen, bis der
+  /// 30-Sekunden-Poll ihn zufaellig einsammelte. Fuer den Nutzer sah das aus, als waere das
+  /// Abhaken wirkungslos gewesen.
+  ///
+  /// Verdrahtet wird der Haken in main.dart auf CalendarProvider.scheduleReconcile; bleibt er
+  /// null (Tests, Screens ohne Kalender), aendert sich nichts.
+  VoidCallback? onScheduleAffected;
+
   // Getters
   List<Task> get tasks => _tasks;
   bool get isLoading => _isLoading;
@@ -62,6 +75,7 @@ class TaskProvider with ChangeNotifier {
       if (created != null) {
         _tasks.add(created);
         notifyListeners();
+        onScheduleAffected?.call();
         return true;
       }
       return false;
@@ -83,6 +97,7 @@ class TaskProvider with ChangeNotifier {
           _tasks[index] = updated;
           notifyListeners();
         }
+        onScheduleAffected?.call();
         return true;
       }
       return false;
@@ -100,6 +115,7 @@ class TaskProvider with ChangeNotifier {
       
       if (success) {
         await loadTasks(); // Reload to get updated data
+        onScheduleAffected?.call();
         return true;
       }
       return false;
@@ -118,6 +134,7 @@ class TaskProvider with ChangeNotifier {
       if (success) {
         _tasks.removeWhere((t) => t.id == id);
         notifyListeners();
+        onScheduleAffected?.call();
         return true;
       }
       return false;

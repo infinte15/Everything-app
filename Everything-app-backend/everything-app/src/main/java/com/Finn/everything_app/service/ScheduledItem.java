@@ -42,6 +42,15 @@ public class ScheduledItem {
      * {@code CalendarEvent.targetDate}. Bei flexiblen Gewohnheiten null, dort trägt die Woche.
      */
     private LocalDate targetDate;
+
+    /**
+     * Nur für TASK: aus welchem Pass dieser Block stammt. 0 = Hauptlauf, 1 = nachgerückt (hinter
+     * dem Nahbereich, aber noch vor der Deadline), 2 = in die gelockerten Zeiten gequetscht.
+     *
+     * Gebraucht wird nur die 2: so ein Block liegt bewusst außerhalb der Arbeitszeit oder ohne
+     * Pause davor, und ohne eine Notiz daran sähe das im Kalender nach einem Fehler aus.
+     */
+    private int reliefLevel;
 }
 
 enum ScheduledItemType {

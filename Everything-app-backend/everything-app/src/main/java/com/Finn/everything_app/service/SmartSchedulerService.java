@@ -217,6 +217,9 @@ public class SmartSchedulerService {
      */
     private static final int  CATCHUP_DAYS = 3;
 
+    /** Steht an jedem Block, den erst der Quetsch-Nachlauf untergebracht hat. */
+    private static final String NOTE_SQUEEZED = "Eng geplant, um die Deadline zu halten.";
+
     /**
      * Drop-Gewichte der wiederkehrenden Items — und die Invariante, die sie zusammenhält.
      *
@@ -300,6 +303,31 @@ public class SmartSchedulerService {
      */
     @Value("${scheduler.horizon-days:28}")
     private int horizonDays = 28;
+
+    /**
+     * Zeitbudget je Nachlauf; siehe {@link #solveReliefPass}.
+     *
+     * Kommt ZUSÄTZLICH zu {@code solver-time-limit-seconds} — im Regelfall aber gar nicht zum
+     * Tragen: die Nachläufe starten nur, wenn der Hauptlauf eine Aufgabe mit Deadline nicht
+     * unterbringen konnte, und ihr Modell umfasst dann eine Handvoll Chunks statt zweihundert
+     * Intervalle. Eine Sekunde reicht dafür weit; gemessen wird die Wanduhr, nicht das Modell.
+     */
+    @Value("${scheduler.relief-time-limit-seconds:1.0}")
+    private double reliefTimeLimitSeconds = 1.0;
+
+    /**
+     * Das gelockerte Tagesfenster des zweiten Nachlaufs ("Reinquetschen").
+     *
+     * Bewusst NICHT die Arbeitszeit des Nutzers: dieser Pass läuft erst, wenn eine Deadline sonst
+     * reißt, und dann ist ein Block um halb neun abends das kleinere Übel. Nach oben bleibt es
+     * trotzdem begrenzt — die Nacht ist keine Reserve, und ohne Deckel würde der Löser jede
+     * Deadline mit einem Block um vier Uhr morgens "retten".
+     */
+    @Value("${scheduler.relief-day-start:07:00}")
+    private String reliefDayStart = "07:00";
+
+    @Value("${scheduler.relief-day-end:22:00}")
+    private String reliefDayEnd = "22:00";
 
     /** Aufräumfenster für generierte Blöcke; siehe {@link #cleanupHorizonEnd}. */
     @Value("${scheduler.cleanup-horizon-days:120}")
@@ -521,12 +549,13 @@ public class SmartSchedulerService {
         long statements = statementsStart < 0 ? -1 : statementCount() - statementsStart;
         log.info("SCHED user={} tage={} totalMs={} collectMs={} solveMs={} p1Ms={} p2Ms={} "
                         + "persistMs={} intervalle={} placeables={} bloecke={}+{} drop={} obj={} "
-                        + "status={} p2Retry={} statements={} atRisk={}",
+                        + "status={} p2Retry={} relief={}+{} statements={} atRisk={}",
                 userId, ChronoUnit.DAYS.between(startDate, endDate) + 1, totalMs, collectMs,
                 solveMs, outcome.getPhase1Ms(), outcome.getPhase2Ms(), persistMs,
                 outcome.getIntervals(), outcome.getPlaceables(), taskBlocks, restBlocks,
                 outcome.getDrop(), Math.round(outcome.getPlacementObjective()),
-                outcome.getStatus(), outcome.isPhase2Retried(), statements,
+                outcome.getStatus(), outcome.isPhase2Retried(),
+                outcome.getReliefCatchUp(), outcome.getReliefSqueeze(), statements,
                 outcome.getAtRisk().size());
     }
 
@@ -939,6 +968,17 @@ public class SmartSchedulerService {
         Task task;
         int  durationMinutes;
         Placeable placeable;
+        /**
+         * Wo dieser Chunk gelandet ist, oder {@code null}, wenn ihn kein Pass unterbringen konnte.
+         *
+         * Getrennt vom {@link Placeable}, weil ihn nicht nur der Hauptlauf füllt: die Nachläufe
+         * ({@link #solveReliefPass}) arbeiten mit einem eigenen Modell und schreiben ihr Ergebnis
+         * in dasselbe Feld. Erst danach steht fest, was wirklich fehlt — deshalb entscheidet auch
+         * {@link #classifyAtRisk} erst am Ende und nicht mehr beim Auslesen des Hauptlaufs.
+         */
+        Integer placedStartSlot;
+        /** 0 = Hauptlauf, 1 = nachgerückt, 2 = in die gelockerten Zeiten gequetscht. */
+        int reliefLevel;
     }
 
     /**
@@ -2046,7 +2086,37 @@ public class SmartSchedulerService {
                 Math.round(placementObjective));
 
         SolveOutcome outcome = extract(solver, effective, chunks, habitSlots, flexibleWorkouts,
-                workoutPlaceables, projectSlots, axis, cutoff);
+                workoutPlaceables, projectSlots, axis);
+
+        // ---- Nachläufe: was der Hauptlauf liegen gelassen hat, doch noch vor die Deadline ----
+        //
+        // Der Hauptlauf hat die Zeit verteilt; hier wird nur noch aufgefüllt. Alles, was schon
+        // liegt, geht als festes Intervall in ein eigenes, winziges Modell — die Nachläufe können
+        // deshalb nichts umsortieren, sondern ausschließlich ergänzen.
+        // blocked bringt seinen Puffer schon mit (collectBlockedSlots); bei den frisch geplanten
+        // Blöcken steckt die Pause dagegen im Intervall des Placeables und geht hier verloren.
+        // Deshalb wird sie hier angehängt: auch ein Nachlauf soll sich nicht direkt an einen
+        // gerade erst geplanten Block klemmen. Der gerettete Block bringt seine eigene Pause mit
+        // (bzw. beim Quetschen bewusst keine).
+        List<int[]> belegt = new ArrayList<>(blocked);
+        for (ScheduledItem i : outcome.getItems()) {
+            int s = axis.floorSlot(i.getStartTime());
+            belegt.add(new int[]{ s, s + Axis.slotsFor(
+                    (int) ChronoUnit.MINUTES.between(i.getStartTime(), i.getEndTime())) + gapSlots });
+        }
+        for (TaskChunk c : chunks) {
+            if (c.placedStartSlot == null) continue;
+            belegt.add(new int[]{ c.placedStartSlot,
+                    c.placedStartSlot + Axis.slotsFor(c.durationMinutes) + gapSlots });
+        }
+
+        int relief1 = solveReliefPass(ReliefMode.CATCH_UP, chunks, belegt, axis, prefs, nowSlot, gapSlots);
+        int relief2 = solveReliefPass(ReliefMode.SQUEEZE, chunks, belegt, axis, prefs, nowSlot, gapSlots);
+
+        outcome.getItems().addAll(buildTaskItems(chunks, axis));
+        outcome.getAtRisk().addAll(classifyAtRisk(chunks, axis, cutoff));
+        outcome.setReliefCatchUp(relief1);
+        outcome.setReliefSqueeze(relief2);
         outcome.setPhase1Ms(phase1Ms);
         outcome.setPhase2Ms(phase2Ms);
         outcome.setIntervals(allIntervals.size());
@@ -2444,68 +2514,26 @@ public class SmartSchedulerService {
     // LÖSUNG AUSLESEN
     // =========================================================================
 
+    /**
+     * Liest die Lösung des HAUPTLAUFS aus.
+     *
+     * Die Task-Blöcke entstehen hier bewusst noch nicht: was ein Task-Chunk bekommen hat, kann
+     * sich in den Nachläufen ({@link #solveReliefPass}) noch ändern, und erst danach steht fest,
+     * was wirklich fehlt. Deshalb landet die Platzierung nur im Chunk selbst; die Items baut
+     * {@link #buildTaskItems}, die Meldungen {@link #classifyAtRisk} — beides nach allen Pässen.
+     */
     private SolveOutcome extract(CpSolver solver, CpSolverStatus status, List<TaskChunk> chunks,
                                  List<HabitSlot> habitSlots, List<WorkoutSession> flexibleWorkouts,
                                  Map<Long, Placeable> workoutPlaceables,
-                                 List<ProjectSlot> projectSlots, Axis axis, LocalDateTime cutoff) {
+                                 List<ProjectSlot> projectSlots, Axis axis) {
         List<ScheduledItem> items  = new ArrayList<>();
         List<AtRiskItem>    atRisk = new ArrayList<>();
 
-        // --- Tasks: platzierte Chunks je Task sammeln, angrenzende verschmelzen, dann nummerieren ---
-        Map<Long, List<TaskChunk>> byTask = chunks.stream()
-                .collect(Collectors.groupingBy(c -> c.task.getId(), LinkedHashMap::new, Collectors.toList()));
-
-        for (List<TaskChunk> group : byTask.values()) {
-            Task task = group.get(0).task;
-            List<int[]> placed = new ArrayList<>();   // [startSlot, realMinutes]
-            int missingMinutes = 0;
-
-            for (TaskChunk c : group) {
-                if (c.placeable != null && Boolean.TRUE.equals(solver.booleanValue(c.placeable.present))) {
-                    placed.add(new int[]{ (int) solver.value(c.placeable.start), c.durationMinutes });
-                } else {
-                    missingMinutes += c.durationMinutes;
-                }
-            }
-            // Genau EIN Eintrag pro Task. Vorher konnte ein Task mit drei Chunks bis zu vier
-            // Meldungen erzeugen (einmal "kein Platz" plus je eine pro Block hinter der Deadline);
-            // in der Oberfläche las sich das wie vier verschiedene Probleme.
-            //
-            // Ein überfälliger Task wird auch dann gemeldet, wenn jeder Block untergebracht ist:
-            // seine Deadline ist bereits gerissen, das bleibt der wichtigere Befund. Seit die
-            // Deadline das Fenster hart begrenzt (taskBounds), ist der Nachhol-Fall die einzige
-            // Lage, in der überhaupt noch ein Block hinter einer Deadline stehen kann.
-            AtRiskReason reason = null;
-            if (task.getDeadline() != null && task.getDeadline().isBefore(cutoff)) {
-                reason = AtRiskReason.PAST_DEADLINE;
-            } else if (missingMinutes > 0) {
-                reason = task.getDeadline() != null
-                        ? AtRiskReason.WOULD_MISS_DEADLINE   // Deadline noch vor uns, passt aber nicht mehr davor
-                        : AtRiskReason.NO_ROOM;
-            }
-            if (reason != null) {
-                atRisk.add(AtRiskItem.forTask(task.getId(), task.getTitle(), missingMinutes, reason));
-            }
-            if (placed.isEmpty()) continue;
-
-            placed.sort(Comparator.comparingInt(a -> a[0]));
-
-            // Blöcke werden bewusst NICHT zusammengefasst, auch wenn sie exakt aneinandergrenzen.
-            // Bei leerem Kalender packt der Solver alle Chunks hintereinander; würde man die dann
-            // verschmelzen, wäre vom Chunking genau im häufigsten Fall nichts mehr zu sehen.
-            // Reclaim zeigt ebenfalls einzelne Sessions statt eines Monolithen.
-            for (int i = 0; i < placed.size(); i++) {
-                LocalDateTime start = axis.timeOf(placed.get(i)[0]);
-                LocalDateTime end   = start.plusMinutes(placed.get(i)[1]);   // echte Dauer
-
-                ScheduledItem item = new ScheduledItem();
-                item.setTask(task);
-                item.setStartTime(start);
-                item.setEndTime(end);
-                item.setType(ScheduledItemType.TASK);
-                item.setChunkIndex(i + 1);
-                item.setChunkCount(placed.size());
-                items.add(item);
+        // --- Tasks: nur festhalten, wo der Hauptlauf sie hingelegt hat ---
+        for (TaskChunk c : chunks) {
+            if (c.placeable != null && Boolean.TRUE.equals(solver.booleanValue(c.placeable.present))) {
+                c.placedStartSlot = (int) solver.value(c.placeable.start);
+                c.reliefLevel = 0;
             }
         }
 
@@ -2565,6 +2593,361 @@ public class SmartSchedulerService {
         }
 
         return new SolveOutcome(status, items, atRisk);
+    }
+
+    /**
+     * Baut aus den platzierten Chunks die Task-Blöcke — nach allen Pässen, nicht vorher.
+     *
+     * Blöcke werden bewusst NICHT zusammengefasst, auch wenn sie exakt aneinandergrenzen. Bei
+     * leerem Kalender packt der Solver alle Chunks hintereinander; würde man die dann verschmelzen,
+     * wäre vom Chunking genau im häufigsten Fall nichts mehr zu sehen.
+     */
+    private List<ScheduledItem> buildTaskItems(List<TaskChunk> chunks, Axis axis) {
+        List<ScheduledItem> items = new ArrayList<>();
+        Map<Long, List<TaskChunk>> byTask = chunks.stream()
+                .filter(c -> c.placedStartSlot != null)
+                .collect(Collectors.groupingBy(c -> c.task.getId(), LinkedHashMap::new, Collectors.toList()));
+
+        for (List<TaskChunk> group : byTask.values()) {
+            group.sort(Comparator.comparingInt(c -> c.placedStartSlot));
+            for (int i = 0; i < group.size(); i++) {
+                TaskChunk c = group.get(i);
+                LocalDateTime start = axis.timeOf(c.placedStartSlot);
+
+                ScheduledItem item = new ScheduledItem();
+                item.setTask(c.task);
+                item.setStartTime(start);
+                item.setEndTime(start.plusMinutes(c.durationMinutes));   // echte Dauer
+                item.setType(ScheduledItemType.TASK);
+                item.setChunkIndex(i + 1);
+                item.setChunkCount(group.size());
+                item.setReliefLevel(c.reliefLevel);
+                items.add(item);
+            }
+        }
+        return items;
+    }
+
+    /**
+     * Was der Nutzer über seine Aufgaben erfahren muss — genau ein Eintrag pro Task.
+     *
+     * Vorher konnte ein Task mit drei Chunks bis zu vier Meldungen erzeugen; in der Oberfläche
+     * las sich das wie vier verschiedene Probleme.
+     *
+     * Die Einstufung läuft erst NACH den Nachläufen und unterscheidet drei Lagen, die vorher in
+     * einem Topf lagen und alle als "passt nicht in den Plan" beim Nutzer ankamen:
+     * <ul>
+     *   <li>{@code PAST_DEADLINE} — die Deadline ist bereits gerissen. Wird auch dann gemeldet,
+     *       wenn jeder Block untergebracht ist: der Termin ist vorbei, das bleibt der wichtigere
+     *       Befund. Die Blöcke liegen dann im Nachhol-Fenster (siehe {@link #CATCHUP_DAYS}).</li>
+     *   <li>{@code WOULD_MISS_DEADLINE} — es fehlen Minuten und es gibt eine Deadline in der
+     *       Zukunft. Das ist jetzt eine ECHTE Aussage: bis dorthin war weder in der Arbeitszeit
+     *       noch in den gelockerten Zeiten des Quetsch-Nachlaufs noch Platz.</li>
+     *   <li>{@code OUTSIDE_HORIZON} — es fehlen Minuten, aber es gibt keine Deadline. Hier ist
+     *       gar nichts in Gefahr: die Aufgabe hat im Nahbereich ({@link #taskHorizonDays}) keinen
+     *       Platz gefunden und kommt schlicht später dran. Vorher stand hier {@code NO_ROOM} und
+     *       damit ein Warnband für eine Aufgabe, die keinen Termin reißen kann.</li>
+     * </ul>
+     */
+    private List<AtRiskItem> classifyAtRisk(List<TaskChunk> chunks, Axis axis, LocalDateTime cutoff) {
+        List<AtRiskItem> out = new ArrayList<>();
+        Map<Long, List<TaskChunk>> byTask = chunks.stream()
+                .collect(Collectors.groupingBy(c -> c.task.getId(), LinkedHashMap::new, Collectors.toList()));
+
+        for (List<TaskChunk> group : byTask.values()) {
+            Task task = group.get(0).task;
+            int missingMinutes = group.stream()
+                    .filter(c -> c.placedStartSlot == null)
+                    .mapToInt(c -> c.durationMinutes)
+                    .sum();
+
+            AtRiskReason reason = null;
+            if (task.getDeadline() != null && task.getDeadline().isBefore(cutoff)) {
+                reason = AtRiskReason.PAST_DEADLINE;
+            } else if (missingMinutes > 0) {
+                reason = task.getDeadline() != null
+                        ? AtRiskReason.WOULD_MISS_DEADLINE
+                        : AtRiskReason.OUTSIDE_HORIZON;
+            }
+            if (reason == null) continue;
+
+            // Der früheste Block, den dieser Lauf für die Aufgabe vorgesehen hat. Bei einer
+            // überfälligen Aufgabe ist das der Nachholtermin — die eigentliche Antwort auf
+            // "und was jetzt?".
+            Integer ersterSlot = group.stream()
+                    .map(c -> c.placedStartSlot)
+                    .filter(Objects::nonNull)
+                    .min(Integer::compare)
+                    .orElse(null);
+            LocalDateTime plannedStart = ersterSlot == null ? null : axis.timeOf(ersterSlot);
+
+            out.add(AtRiskItem.forTask(task.getId(), task.getTitle(), missingMinutes, reason,
+                    plannedStart));
+        }
+        return out;
+    }
+
+    // =========================================================================
+    // NACHLÄUFE
+    // =========================================================================
+
+    /**
+     * Die beiden Stufen, mit denen eine sonst gerissene Deadline noch gerettet wird.
+     *
+     * @see #solveReliefPass
+     */
+    private enum ReliefMode {
+        /**
+         * Hinter den Nahbereich, aber in ganz normale Arbeitszeit. Das behebt den häufigsten
+         * Fehlalarm: {@link #taskBounds} deckelt jeden Task auf {@link #taskHorizonDays}, auch
+         * wenn seine Deadline weiter draußen liegt — eine Aufgabe mit Termin in drei Wochen
+         * konkurrierte deshalb um die nächsten 14 Tage und wurde gemeldet, obwohl Tag 15 bis 21
+         * völlig frei waren.
+         */
+        CATCH_UP,
+        /**
+         * Gelockerte Tageszeiten und keine Pausen. Der ausdrückliche Wunsch: lieber ein Block um
+         * halb neun abends als eine gerissene Deadline.
+         *
+         * Die Tagesdeckel bleiben trotzdem stehen (siehe {@link #addReliefDayCaps}) — sie sind
+         * keine Kalenderregel, sondern eine Aussage darüber, wie viel an einem Tag überhaupt geht.
+         */
+        SQUEEZE
+    }
+
+    /**
+     * Bringt Chunks unter, die der Hauptlauf liegen gelassen hat — ohne irgendetwas zu bewegen.
+     *
+     * Warum ein eigener Pass und nicht einfach ein weiteres Fenster im Hauptmodell: der
+     * 14-Tage-Deckel aus {@link #taskBounds} ist der dokumentierte Laufzeit-Hebel. Macht man ihn
+     * für ALLE Tasks mit Deadline auf, wächst das Modell um eine Tages-Boolean pro Chunk und
+     * Horizonttag, und Phase 1 fand am echten Bestand nichts Brauchbares mehr (Drop 28200 statt
+     * 800). Hier bekommt das weite Fenster dagegen nur, wer es nachweislich braucht — meist
+     * niemand, dann läuft der Pass gar nicht erst.
+     *
+     * Alles Bestehende (Blockiertes plus alle bereits platzierten Blöcke) geht als festes
+     * Intervall ein. Der Pass kann deshalb nur hinzufügen, nie umsortieren: die Arbeit des
+     * Hauptlaufs — Leistungshoch, Abendstrafe, Stabilitätsanker — bleibt unangetastet.
+     *
+     * @param occupied wird um die neu belegten Slots ERWEITERT, damit die zweite Stufe die erste sieht
+     * @return wie viele Chunks dieser Pass untergebracht hat
+     */
+    private int solveReliefPass(ReliefMode mode, List<TaskChunk> chunks, List<int[]> occupied,
+                                Axis axis, UserPreferences prefs, int nowSlot, int gapSlots) {
+        // Alles mit Deadline — die künftigen wie die bereits gerissenen. Ohne Deadline ist nichts
+        // in Gefahr; die Aufgabe kommt beim nächsten Lauf wieder dran.
+        //
+        // Überfällige gehören ausdrücklich dazu. Sie hatten im Hauptlauf zwar ihr Nachhol-Fenster
+        // (siehe taskBounds), aber innerhalb der Arbeitszeit und unter den Tagesdeckeln — war die
+        // dicht, bekamen sie GAR KEINEN Block und standen nur als Meldung da. Genau das ist der
+        // schlimmste Fall: der Termin ist schon gerissen, und die App verplant nicht einmal einen
+        // Nachholtermin.
+        List<TaskChunk> offen = chunks.stream()
+                .filter(c -> c.placedStartSlot == null)
+                .filter(c -> c.task.getDeadline() != null)
+                .collect(Collectors.toList());
+        if (offen.isEmpty()) return 0;
+
+        int dayStartSlot;
+        int dayEndSlot;
+        int gap;
+        if (mode == ReliefMode.CATCH_UP) {
+            dayStartSlot = minuteOfDay(workStart(prefs)) / GRID;
+            dayEndSlot   = minuteOfDay(workEnd(prefs)) / GRID;
+            gap          = gapSlots;
+        } else {
+            dayStartSlot = minuteOfDay(parseZeit(reliefDayStart, LocalTime.of(7, 0))) / GRID;
+            dayEndSlot   = minuteOfDay(parseZeit(reliefDayEnd, LocalTime.of(22, 0))) / GRID;
+            gap          = 0;
+        }
+        if (dayEndSlot <= dayStartSlot) {   // defensiv gegen Fehlkonfiguration
+            dayStartSlot = 0;
+            dayEndSlot   = SLOTS_PER_DAY;
+        }
+
+        CpModel model = new CpModel();
+        List<IntervalVar> intervals = new ArrayList<>();
+        for (int i = 0; i < occupied.size(); i++) {
+            int[] b = occupied.get(i);
+            intervals.add(model.newFixedInterval(b[0], Math.max(1, b[1] - b[0]), "belegt_" + i));
+        }
+
+        LinearExprBuilder dropB = LinearExpr.newBuilder();
+        long dropConst = 0;
+        // Zweitrangiges Ziel: so früh wie möglich. Skaliert wird unten so, dass es das Platzieren
+        // niemals überstimmt — ein Block am Freitag ist besser als gar keiner am Dienstag.
+        List<IntVar> qVars    = new ArrayList<>();
+        List<Long>   qWeights = new ArrayList<>();
+        List<Placeable> placeables = new ArrayList<>();
+        for (int i = 0; i < offen.size(); i++) {
+            TaskChunk c = offen.get(i);
+            int sizeSlots    = Axis.slotsFor(c.durationMinutes);
+            int deadlineSlot = axis.floorSlot(c.task.getDeadline());
+
+            int lastDay;
+            Integer latestEnd;
+            if (istUeberfaellig(c, axis, nowSlot)) {
+                // Dasselbe Nachhol-Fenster wie im Hauptlauf. Eine scharfe Endzeit gäbe es hier
+                // nicht: die Deadline liegt hinter uns, jede Lage ist zu spät — als Obergrenze
+                // wäre sie leer und der Task bekäme wieder kein Fenster.
+                lastDay   = Math.min(axis.totalDays - 1, nowSlot / SLOTS_PER_DAY + CATCHUP_DAYS);
+                latestEnd = null;
+            } else {
+                // Hier fällt der Deckel: bis zur Deadline, nicht bis zum Nahbereich.
+                lastDay   = Math.min(axis.totalDays - 1, deadlineSlot / SLOTS_PER_DAY);
+                latestEnd = deadlineSlot;
+            }
+
+            int earliest = nowSlot;
+            if (c.task.getNotBefore() != null) {
+                earliest = Math.max(earliest, axis.ceilSlot(c.task.getNotBefore()));
+            }
+
+            List<DayWindow> windows = dayWindows(axis, dayStartSlot, dayEndSlot, sizeSlots,
+                    earliest, null, lastDay, latestEnd);
+            if (windows.isEmpty()) {
+                placeables.add(null);
+                continue;
+            }
+            Placeable p = makePlaceable(model, mode + "_" + i, sizeSlots, c.durationMinutes,
+                    windows, gap);
+            placeables.add(p);
+            intervals.add(p.interval);
+
+            // Priorität als Gewicht, für Überfälliges das Zehnfache: konkurrieren hier zwei
+            // Aufgaben um denselben letzten Platz, gewinnt die, deren Termin schon gerissen ist.
+            // Die Abwägung gegen Gewohnheiten und Trainings hat der Hauptlauf längst getroffen —
+            // hier wird nichts mehr verdrängt, nur aufgefüllt.
+            long weight = Math.max(1, nz(c.task.getPriority(), 3))
+                    * (istUeberfaellig(c, axis, nowSlot) ? 10 : 1);
+            dropB.addTerm(p.present, -weight);
+            dropConst += weight;
+
+            // So früh wie möglich. Im Hauptlauf besorgt das der late-Term; hier gäbe es sonst
+            // keinen Grund, den Nachholtermin auf heute Abend statt auf übermorgen zu legen.
+            qVars.add(p.start);
+            qWeights.add(weight);
+        }
+        if (placeables.stream().allMatch(Objects::isNull)) return 0;
+
+        model.addNoOverlap(intervals.toArray(new IntervalVar[0]));
+        addReliefDayCaps(model, prefs, chunks, offen, placeables, axis, nowSlot);
+
+        // Lexikografisch über EIN Ziel: Platzieren schlägt Frühsein immer. Der Faktor ist die
+        // exakte Obergrenze des Frühseins-Terms plus eins, also nicht geschätzt — ein zweiter
+        // Solver-Lauf wäre für ein Modell aus drei Variablen die teurere Lösung.
+        long qMax = 0;
+        for (long w : qWeights) qMax += w * axis.horizonSlots;
+        LinearExprBuilder ziel = LinearExpr.newBuilder();
+        ziel.addTerm(dropB.add(dropConst).build(), qMax + 1);
+        for (int i = 0; i < qVars.size(); i++) ziel.addTerm(qVars.get(i), qWeights.get(i));
+        model.minimize(ziel.build());
+
+        CpSolver solver = new CpSolver();
+        solver.getParameters().setLogSearchProgress(false);
+        solver.getParameters().setRandomSeed(42);
+        solver.getParameters().setNumSearchWorkers(solverWorkersPhase1);
+        solver.getParameters().setMaxTimeInSeconds(Math.max(0.05, reliefTimeLimitSeconds));
+        CpSolverStatus status = solver.solve(model);
+        if (status != CpSolverStatus.OPTIMAL && status != CpSolverStatus.FEASIBLE) {
+            log.warn("Nachlauf {} ohne Lösung: {}", mode, status);
+            return 0;
+        }
+
+        int platziert = 0;
+        for (int i = 0; i < offen.size(); i++) {
+            Placeable p = placeables.get(i);
+            if (p == null || !Boolean.TRUE.equals(solver.booleanValue(p.present))) continue;
+
+            TaskChunk c = offen.get(i);
+            int start = (int) solver.value(p.start);
+            c.placedStartSlot = start;
+            c.reliefLevel = mode == ReliefMode.CATCH_UP ? 1 : 2;
+            occupied.add(new int[]{ start, start + Axis.slotsFor(c.durationMinutes) + gap });
+            platziert++;
+        }
+        if (platziert > 0) log.info("Nachlauf {}: {} von {} Blöcken gerettet", mode, platziert, offen.size());
+        return platziert;
+    }
+
+    /**
+     * Die Aufgaben-Tagesdeckel für einen Nachlauf, um das schon Verplante gekürzt.
+     *
+     * {@link #addDailyLoadLimits} lässt sich hier nicht wiederverwenden: es rechnet über die
+     * Placeables des Hauptmodells, und die gibt es in diesem Modell nicht mehr. Was ein Tag
+     * bereits an Aufgaben trägt, steht aber exakt in den Chunks — mehr braucht die Grenze nicht.
+     *
+     * Gilt für BEIDE Nachläufe, auch für den quetschenden. Gelockert werden dort die Tageszeiten
+     * und die Pausen — also das, was der Kalender vorgibt. {@code maxTaskMinutesPerDay} und
+     * {@code maxTasksPerDay} sind dagegen eine Aussage des Nutzers darüber, wie viel er an einem
+     * Tag überhaupt schafft; die zu überschreiten würde die Deadline nicht retten, sondern nur
+     * die Überlastung in den Kalender schreiben.
+     *
+     * <b>Ausgenommen ist Überfälliges.</b> Dort ist der Termin schon gerissen, und die Alternative
+     * zum überzogenen Tagesdeckel ist kein entspannter Tag, sondern ein Nachholtermin, den es gar
+     * nicht gibt. Ein Tag, an dem eine überfällige Aufgabe nachgeholt wird, ist ohnehin ein voller.
+     */
+    private void addReliefDayCaps(CpModel model, UserPreferences prefs, List<TaskChunk> alleChunks,
+                                  List<TaskChunk> offen, List<Placeable> placeables,
+                                  Axis axis, int nowSlot) {
+        int capSlots = Axis.slotsFor(nz(prefs.getMaxTaskMinutesPerDay(), FALLBACK_MAX_TASK_MIN_PER_DAY));
+        Integer maxTasksPerDay = prefs.getMaxTasksPerDay();
+
+        Map<Integer, Integer> slotsProTag = new HashMap<>();
+        Map<Integer, Integer> bloeckeProTag = new HashMap<>();
+        for (TaskChunk c : alleChunks) {
+            if (c.placedStartSlot == null) continue;
+            int tag = c.placedStartSlot / SLOTS_PER_DAY;
+            slotsProTag.merge(tag, Axis.slotsFor(c.durationMinutes), Integer::sum);
+            bloeckeProTag.merge(tag, 1, Integer::sum);
+        }
+
+        Map<Integer, LinearExprBuilder> lastProTag  = new LinkedHashMap<>();
+        Map<Integer, LinearExprBuilder> anzahlProTag = new LinkedHashMap<>();
+        for (int i = 0; i < offen.size(); i++) {
+            Placeable p = placeables.get(i);
+            if (p == null) continue;
+            if (istUeberfaellig(offen.get(i), axis, nowSlot)) continue;
+            int slots = Axis.slotsFor(offen.get(i).durationMinutes);
+            for (Map.Entry<Integer, BoolVar> e : p.inDay.entrySet()) {
+                lastProTag.computeIfAbsent(e.getKey(), k -> LinearExpr.newBuilder())
+                          .addTerm(e.getValue(), slots);
+                anzahlProTag.computeIfAbsent(e.getKey(), k -> LinearExpr.newBuilder())
+                            .addTerm(e.getValue(), 1);
+            }
+        }
+
+        for (Map.Entry<Integer, LinearExprBuilder> e : lastProTag.entrySet()) {
+            int rest = capSlots - slotsProTag.getOrDefault(e.getKey(), 0);
+            model.addLessOrEqual(e.getValue().build(), Math.max(0, rest));
+        }
+        if (maxTasksPerDay != null && maxTasksPerDay > 0) {
+            for (Map.Entry<Integer, LinearExprBuilder> e : anzahlProTag.entrySet()) {
+                int rest = maxTasksPerDay - bloeckeProTag.getOrDefault(e.getKey(), 0);
+                model.addLessOrEqual(e.getValue().build(), Math.max(0, rest));
+            }
+        }
+    }
+
+    /**
+     * Ist der Termin dieses Chunks bereits verstrichen?
+     *
+     * Nach derselben Uhr wie {@link #taskBounds} und {@link #classifyAtRisk} — dem Umplanzeitpunkt,
+     * nicht einem frisch gelesenen {@code now}. Sonst könnten Fensterwahl und Meldung an der
+     * Sekundengrenze auseinanderfallen.
+     */
+    private boolean istUeberfaellig(TaskChunk c, Axis axis, int nowSlot) {
+        return c.task.getDeadline() != null && axis.floorSlot(c.task.getDeadline()) <= nowSlot;
+    }
+
+    /** Uhrzeit aus der Konfiguration, mit Rückfallwert statt Ausnahme bei Unsinn. */
+    private static LocalTime parseZeit(String wert, LocalTime fallback) {
+        if (wert == null || wert.isBlank()) return fallback;
+        try {
+            return LocalTime.parse(wert.trim());
+        } catch (java.time.format.DateTimeParseException e) {
+            return fallback;
+        }
     }
 
     // =========================================================================
@@ -2805,14 +3188,22 @@ public class SmartSchedulerService {
      */
     private boolean uebernimmAenderungen(CalendarEvent alt, ScheduledItem neu) {
         String titel = titelFuer(neu);
+        // Die Quetsch-Notiz gehört zum Abgleich: rutscht ein Block beim nächsten Lauf wieder in
+        // die normale Arbeitszeit, muss die Begründung mit verschwinden — sonst steht sie für
+        // immer an einem völlig unauffälligen Termin. Nur bei TASK, denn nur dort schreibt der
+        // Scheduler die Notiz überhaupt; an einem Habit-Block gehört sie dem Nutzer.
+        boolean istTask = neu.getType() == ScheduledItemType.TASK;
+        String notiz = istTask && neu.getReliefLevel() >= 2 ? NOTE_SQUEEZED : null;
         boolean geaendert = !Objects.equals(alt.getStartTime(), neu.getStartTime())
                 || !Objects.equals(alt.getEndTime(), neu.getEndTime())
-                || !Objects.equals(alt.getTitle(), titel);
+                || !Objects.equals(alt.getTitle(), titel)
+                || (istTask && !Objects.equals(alt.getNotes(), notiz));
         if (!geaendert) return false;
 
         alt.setStartTime(neu.getStartTime());
         alt.setEndTime(neu.getEndTime());
         alt.setTitle(titel);
+        if (istTask) alt.setNotes(notiz);
         return true;
     }
 
@@ -2842,6 +3233,9 @@ public class SmartSchedulerService {
                     ev.setEventType(EventType.TASK);
                     ev.setRelatedTask(item.getTask());
                     ev.setColor(getColorForTask(item.getTask()));
+                    // Ein Block aus dem Quetsch-Nachlauf liegt außerhalb der Arbeitszeit oder ohne
+                    // die übliche Pause davor. Ohne diesen Satz liest sich das wie ein Fehler.
+                    if (item.getReliefLevel() >= 2) ev.setNotes(NOTE_SQUEEZED);
                 }
                 case HABIT -> {
                     ev.setTitle(item.getHabit().getName());

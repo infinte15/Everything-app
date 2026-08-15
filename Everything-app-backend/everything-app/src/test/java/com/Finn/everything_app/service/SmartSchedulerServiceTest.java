@@ -1540,6 +1540,15 @@ class SmartSchedulerServiceTest {
         return lecture;
     }
 
+    /**
+     * Eine Vorlesung, die den Tag WIRKLICH dichtmacht.
+     *
+     * Sie geht bewusst über die Arbeitszeit hinaus bis ans Ende des Quetsch-Fensters
+     * ({@code scheduler.relief-day-end}): der Nachlauf darf für eine sonst gerissene Deadline in
+     * den Abend ausweichen, und mit 08:00–17:00 wäre "der Tag ist dicht" schlicht nicht mehr
+     * wahr. Was diese drei Tests prüfen, ist die Gültigkeit des Stundenplans (Semester läuft /
+     * ist vorbei), nicht die Frage, wie weit der Scheduler in den Abend darf.
+     */
     private CourseSchedule fullDayLecture(DayOfWeek day, Semester semester) {
         Course course = new Course();
         course.setId(700L);
@@ -1550,8 +1559,8 @@ class SmartSchedulerServiceTest {
         lecture.setId(701L);
         lecture.setCourse(course);
         lecture.setDayOfWeek(day);
-        lecture.setStartTime(LocalTime.of(8, 0));
-        lecture.setEndTime(LocalTime.of(17, 0));
+        lecture.setStartTime(LocalTime.of(7, 0));
+        lecture.setEndTime(LocalTime.of(22, 0));
         return lecture;
     }
 
@@ -1636,6 +1645,10 @@ class SmartSchedulerServiceTest {
     void vorlesungenLandenAlsKalendereintraege() {
         LocalDate monday = TODAY.plusDays(1).with(TemporalAdjusters.next(DayOfWeek.MONDAY));
         CourseSchedule lecture = fullDayLecture(DayOfWeek.MONDAY, semester(TODAY.minusMonths(2), TODAY.plusMonths(2)));
+        // Hier geht es um die Abbildung Stundenplan -> Kalendereintrag, nicht ums Blockieren:
+        // eigene Zeiten statt der bewusst extremen des Fixtures.
+        lecture.setStartTime(LocalTime.of(8, 0));
+        lecture.setEndTime(LocalTime.of(17, 0));
         lecture.setLocation("HS 1");
         lecture.getCourse().setColor("#3B82F6");
         lecture.getCourse().setInstructor("Prof. Meier");
@@ -3147,6 +3160,204 @@ class SmartSchedulerServiceTest {
                 .min(LocalDateTime::compareTo)
                 .orElseThrow(() -> new AssertionError("Task " + taskId + " wurde nicht geplant"));
     }
+
+    // ------------------------------------------------------------------
+    // Nachläufe – alles vor der Deadline unterbringen, statt zu warnen
+    //
+    // Die Beschwerde dahinter: "eine Aufgabe passt nicht rein" stand im Kalender, obwohl vor der
+    // Deadline noch reichlich Platz war. Ursache war der Nahbereich aus taskBounds — er deckelt
+    // JEDEN Task auf taskHorizonDays, auch wenn seine Deadline weiter draußen liegt.
+    // ------------------------------------------------------------------
+
+    /** Belegt an jedem Tag von {@code vonTag} bis {@code bisTag} die komplette Arbeitszeit. */
+    private List<CalendarEvent> arbeitszeitDicht(LocalDate start, int vonTag, int bisTag,
+                                                 LocalTime von, LocalTime bis) {
+        List<CalendarEvent> events = new ArrayList<>();
+        for (int d = vonTag; d <= bisTag; d++) {
+            LocalDate tag = start.plusDays(d);
+            events.add(makeFixedEvent(90000L + d, tag.atTime(von), tag.atTime(bis)));
+        }
+        return events;
+    }
+
+    /**
+     * Der Kern des Fehlalarms: Deadline hinter dem Nahbereich, davor ist es eng, dahinter frei.
+     *
+     * Vor dem Nachlauf fiel dieser Task heraus und wurde als WOULD_MISS_DEADLINE gemeldet —
+     * obwohl zwischen Tag 15 und der Deadline an Tag 20 kein einziger Termin stand.
+     */
+    @Test
+    void aufgabeRuecktHinterDenNahbereichStattGemeldetZuWerden() {
+        LocalDate morgen = TODAY.plusDays(1);
+
+        Task task = makeTask(2100L, "Hausarbeit", 120, 3, morgen.plusDays(20).atTime(23, 59));
+        when(taskService.getSchedulableTasks(1L)).thenReturn(List.of(task));
+        // Tag 0 bis 14 — der komplette Nahbereich (taskHorizonDays) — ist dicht.
+        when(calendarEventService.getFixedEvents(eq(1L), any(), any()))
+                .thenReturn(arbeitszeitDicht(morgen, 0, 14, LocalTime.of(7, 0), LocalTime.of(22, 0)));
+
+        ScheduleResult result = service.generateOptimalSchedule(1L, morgen, morgen.plusDays(25));
+
+        assertEquals(1, result.getScheduledTasks().size(), "die Aufgabe muss einen Block bekommen");
+        LocalDate wann = result.getScheduledTasks().get(0).getStartTime().toLocalDate();
+        assertTrue(wann.isAfter(morgen.plusDays(14)),
+                "der Nahbereich ist dicht, der Block gehört dahinter — er lag am " + wann);
+        assertFalse(wann.isAfter(morgen.plusDays(20)), "aber vor der Deadline, er lag am " + wann);
+        assertTrue(result.getAtRisk().isEmpty(),
+                "nichts ist in Gefahr — gemeldet wurde trotzdem: " + result.getAtRisk());
+    }
+
+    /**
+     * Wenn die Arbeitszeit vor der Deadline voll ist, wird in den Abend gequetscht.
+     *
+     * Ausdrücklicher Wunsch: lieber ein Block um 17:30 als eine gerissene Deadline.
+     */
+    @Test
+    void engerTagWirdInDenAbendGequetscht() {
+        LocalDate morgen = TODAY.plusDays(1);
+        prefs.setWorkdayStart(LocalTime.of(8, 0));
+        prefs.setWorkdayEnd(LocalTime.of(17, 0));
+
+        Task task = makeTask(2110L, "Abgabe", 60, 4, morgen.atTime(23, 59));
+        when(taskService.getSchedulableTasks(1L)).thenReturn(List.of(task));
+        // Die gesamte Arbeitszeit ist belegt, das Quetsch-Fenster (07:00–22:00) aber nicht.
+        when(calendarEventService.getFixedEvents(eq(1L), any(), any()))
+                .thenReturn(List.of(makeFixedEvent(2111L, morgen.atTime(8, 0), morgen.atTime(17, 0))));
+
+        ScheduleResult result = service.generateOptimalSchedule(1L, morgen, morgen);
+
+        assertEquals(1, result.getScheduledTasks().size(),
+                "vor der Deadline war außerhalb der Arbeitszeit noch Platz");
+        ScheduledItem block = result.getScheduledTasks().get(0);
+        assertEquals(2, block.getReliefLevel(), "der Block stammt aus dem Quetsch-Nachlauf");
+        assertTrue(block.getStartTime().toLocalTime().isBefore(LocalTime.of(8, 0))
+                        || !block.getStartTime().toLocalTime().isBefore(LocalTime.of(17, 0)),
+                "er muss außerhalb der Arbeitszeit liegen, lag aber um " + block.getStartTime());
+        assertTrue(result.getAtRisk().isEmpty(), "die Deadline ist gehalten, es gibt nichts zu melden");
+    }
+
+    /**
+     * Und wenn wirklich nichts mehr geht, ist die Meldung endlich eine echte Aussage.
+     */
+    @Test
+    void wirklichVollerTagMeldetGenauEinmalDeadlineInGefahr() {
+        LocalDate morgen = TODAY.plusDays(1);
+
+        Task task = makeTask(2120L, "Abgabe", 60, 4, morgen.atTime(23, 59));
+        when(taskService.getSchedulableTasks(1L)).thenReturn(List.of(task));
+        // Auch das Quetsch-Fenster ist zu.
+        when(calendarEventService.getFixedEvents(eq(1L), any(), any()))
+                .thenReturn(List.of(makeFixedEvent(2121L, morgen.atTime(7, 0), morgen.atTime(22, 0))));
+
+        ScheduleResult result = service.generateOptimalSchedule(1L, morgen, morgen);
+
+        assertTrue(result.getScheduledTasks().isEmpty(), "es ist wirklich kein Platz mehr");
+        assertEquals(1, result.getAtRisk().size(), "genau eine Meldung pro Aufgabe");
+        assertEquals(AtRiskReason.WOULD_MISS_DEADLINE, result.getAtRisk().get(0).getReason());
+    }
+
+    /**
+     * Eine Aufgabe ohne Deadline kann keinen Termin reißen — sie kommt später dran.
+     *
+     * Vorher stand hier NO_ROOM und damit dasselbe Warnband wie bei einer echt gefährdeten
+     * Deadline. Für den Nutzer sah jede unverplante Aufgabe nach einem Problem aus.
+     */
+    @Test
+    void aufgabeOhneDeadlineIstNichtInGefahrSondernSpaeterDran() {
+        LocalDate morgen = TODAY.plusDays(1);
+        prefs.setWorkdayStart(LocalTime.of(8, 0));
+        prefs.setWorkdayEnd(LocalTime.of(9, 0));
+
+        Task task = makeTask(2130L, "Irgendwann mal aufräumen", 60, 3, null);
+        when(taskService.getSchedulableTasks(1L)).thenReturn(List.of(task));
+        when(calendarEventService.getFixedEvents(eq(1L), any(), any()))
+                .thenReturn(List.of(makeFixedEvent(2131L, morgen.atTime(8, 0), morgen.atTime(9, 0))));
+
+        ScheduleResult result = service.generateOptimalSchedule(1L, morgen, morgen);
+
+        assertTrue(result.getScheduledTasks().isEmpty(), "der einzige Slot ist belegt");
+        assertEquals(1, result.getAtRisk().size());
+        assertEquals(AtRiskReason.OUTSIDE_HORIZON, result.getAtRisk().get(0).getReason(),
+                "ohne Deadline ist nichts in Gefahr — die Aufgabe ist nur noch nicht eingeplant");
+    }
+
+    /**
+     * Überfällig heißt: Nachholtermin, notfalls außerhalb der Arbeitszeit.
+     *
+     * Vorher bekam so eine Aufgabe GAR KEINEN Block, sobald die Arbeitszeit im Nachhol-Fenster
+     * dicht war — die Nachläufe übersprangen alles, dessen Deadline schon vorbei war. Im Kalender
+     * stand dann nichts und daneben eine Meldung; das ist genau der Fall, in dem der Nutzer eine
+     * Ansage braucht und keine Notiz.
+     */
+    @Test
+    void ueberfaelligBekommtEinenNachholterminAuchAusserhalbDerArbeitszeit() {
+        LocalDate heute = TODAY;
+        prefs.setWorkdayStart(LocalTime.of(8, 0));
+        prefs.setWorkdayEnd(LocalTime.of(17, 0));
+
+        Task ueberfaellig = makeTask(3400L, "Steuererklärung", 60, 3, heute.minusDays(2).atTime(12, 0));
+        when(taskService.getSchedulableTasks(1L)).thenReturn(List.of(ueberfaellig));
+        // Die Arbeitszeit des gesamten Nachhol-Fensters ist belegt, der Abend nicht.
+        when(calendarEventService.getFixedEvents(eq(1L), any(), any()))
+                .thenReturn(arbeitszeitDicht(heute, 0, 4, LocalTime.of(8, 0), LocalTime.of(17, 0)));
+
+        ScheduleResult result = service.generateOptimalSchedule(1L, heute, heute.plusDays(6));
+
+        assertEquals(1, result.getScheduledTasks().size(),
+                "eine überfällige Aufgabe muss einen Nachholtermin bekommen");
+        ScheduledItem block = result.getScheduledTasks().get(0);
+        assertFalse(block.getStartTime().toLocalDate().isAfter(heute.plusDays(CATCHUP_TAGE)),
+                "und zwar zeitnah, nicht irgendwann — er lag am " + block.getStartTime());
+
+        assertEquals(1, result.getAtRisk().size(), "gemeldet wird die gerissene Deadline trotzdem");
+        AtRiskItem meldung = result.getAtRisk().get(0);
+        assertEquals(AtRiskReason.PAST_DEADLINE, meldung.getReason());
+        assertEquals(block.getStartTime(), meldung.getPlannedStart(),
+                "die Meldung muss den Nachholtermin mitliefern, sonst bleibt sie eine Sackgasse");
+    }
+
+    /**
+     * Überfälliges kommt zuerst — auch wenn dafür ein Tagesdeckel gesprengt werden muss.
+     *
+     * Der Deckel lässt genau einen Block pro Tag zu, und beide Aufgaben wollen ihn. Die
+     * überfällige muss ihn bekommen UND die andere darf trotzdem nicht liegen bleiben: der
+     * Nachlauf hebt für Überfälliges den Deckel auf, statt es auf morgen zu vertagen.
+     */
+    @Test
+    void ueberfaelligKommtZuerstUndSprengtNotfallsDenTagesdeckel() {
+        LocalDate heute = TODAY;
+        prefs.setWorkdayStart(LocalTime.of(8, 0));
+        prefs.setWorkdayEnd(LocalTime.of(23, 30));   // damit "heute" unabhängig von der Uhrzeit Platz hat
+        prefs.setMaxTaskMinutesPerDay(60);
+        prefs.setMaxTasksPerDay(1);
+
+        Task ueberfaellig = makeTask(3410L, "Abgabe von gestern", 60, 3, heute.minusDays(1).atTime(12, 0));
+        Task laufend = makeTask(3411L, "Läuft noch", 60, 5, heute.plusDays(3).atTime(23, 59));
+        when(taskService.getSchedulableTasks(1L)).thenReturn(List.of(ueberfaellig, laufend));
+        when(calendarEventService.getFixedEvents(eq(1L), any(), any())).thenReturn(new ArrayList<>());
+
+        ScheduleResult result = service.generateOptimalSchedule(1L, heute, heute.plusDays(6));
+
+        assertEquals(2, result.getScheduledTasks().size(),
+                "beide müssen liegen — der Deckel darf den Nachholtermin nicht verhindern");
+        LocalDateTime nachhol = blockVon(result, 3410L);
+        LocalDateTime andere  = blockVon(result, 3411L);
+        assertTrue(nachhol.isBefore(andere),
+                "die überfällige Aufgabe gehört an den nächstmöglichen Termin, lag aber "
+                        + nachhol + " gegen " + andere);
+        assertEquals(heute, nachhol.toLocalDate(), "und zwar sofort, nicht morgen");
+    }
+
+    private LocalDateTime blockVon(ScheduleResult result, long taskId) {
+        return result.getScheduledTasks().stream()
+                .filter(i -> i.getTask().getId() == taskId)
+                .map(ScheduledItem::getStartTime)
+                .min(LocalDateTime::compareTo)
+                .orElseThrow(() -> new AssertionError("kein Block für Task " + taskId));
+    }
+
+    /** {@link SmartSchedulerService} CATCHUP_DAYS — hier gespiegelt, damit der Test lesbar bleibt. */
+    private static final int CATCHUP_TAGE = 3;
 
     private Task makeTask(Long id, String title, int durationMin, int priority, LocalDateTime deadline) {
         Task t = new Task();

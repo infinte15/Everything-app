@@ -27,7 +27,7 @@ public class CalendarEventService {
     private final ApplicationEventPublisher eventPublisher;
 
     public List<CalendarEvent> getEventsInRange(Long userId, LocalDateTime start, LocalDateTime end) {
-        return calendarEventRepository.findByUserIdAndStartTimeBetween(userId, start, end);
+        return calendarEventRepository.findByUserIdAndStartTimeBetweenOrderByStartTimeAsc(userId, start, end);
     }
 
     public List<CalendarEvent> getFixedEvents(Long userId, LocalDateTime start, LocalDateTime end) {
@@ -305,10 +305,15 @@ public class CalendarEventService {
             return event;
         }
 
-        creditBlock(event, userId, completed);
-
+        // Erst abhaken, dann gutschreiben — die Reihenfolge ist nicht beliebig: creditBlock kann
+        // den Task abschließen, und TaskService.completeTask räumt dabei alle NICHT abgehakten
+        // Blöcke des Tasks weg. Andersherum würde sich der gerade angetippte Block selbst
+        // löschen und gleich danach wieder eingefügt.
         event.setCompletedAt(completed ? LocalDateTime.now() : null);
         CalendarEvent saved = calendarEventRepository.save(event);
+
+        creditBlock(saved, userId, completed);
+
         eventPublisher.publishEvent(new ScheduleChangedEvent(this, userId));
         return saved;
     }

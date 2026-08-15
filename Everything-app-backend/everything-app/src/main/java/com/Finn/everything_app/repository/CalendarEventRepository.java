@@ -18,8 +18,14 @@ public interface CalendarEventRepository extends JpaRepository<CalendarEvent, Lo
     // Frontend gibt (Dringlichkeits-Optik im Kalender). Ohne den EntityGraph wäre relatedTask ein
     // LAZY-Proxy und jeder Task-Block löste beim Mappen eine eigene Abfrage aus — bei einem
     // Monat sind das schnell dreistellig viele.
+    // Sortiert, und zwar hier und nicht beim Aufrufer: ohne ORDER BY liefert Postgres die Zeilen
+    // in Speicherreihenfolge, und die aendert sich bei jedem Scheduler-Lauf, weil der Abgleich
+    // Zeilen aktualisiert statt sie neu zu schreiben. Im Kalender fiel das nie auf (dort werden
+    // die Bloecke nach Uhrzeit auf eine Zeitachse gelegt), in jeder LISTE dagegen sofort — auf
+    // dem Homescreen standen die Termine eines Tages durcheinander.
     @EntityGraph(attributePaths = "relatedTask")
-    List<CalendarEvent> findByUserIdAndStartTimeBetween(Long userId, LocalDateTime start, LocalDateTime end);
+    List<CalendarEvent> findByUserIdAndStartTimeBetweenOrderByStartTimeAsc(
+            Long userId, LocalDateTime start, LocalDateTime end);
 
     // Fixe Events. Bewusst eine Überlappungs-Prüfung statt "startTime BETWEEN": ein Termin, der
     // vor dem Fenster beginnt und hineinragt (Nachtschicht, mehrtägiger Block), muss den Scheduler

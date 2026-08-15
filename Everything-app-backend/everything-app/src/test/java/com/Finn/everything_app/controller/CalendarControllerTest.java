@@ -60,7 +60,7 @@ class CalendarControllerTest {
 
     @AfterEach
     void tearDown() {
-        calendarEventRepository.findByUserIdAndStartTimeBetween(
+        calendarEventRepository.findByUserIdAndStartTimeBetweenOrderByStartTimeAsc(
                 testUser.getId(), LocalDateTime.now().minusDays(1), LocalDateTime.now().plusDays(365)
         ).forEach(calendarEventRepository::delete);
     }

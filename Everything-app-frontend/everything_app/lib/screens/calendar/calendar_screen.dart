@@ -167,11 +167,18 @@ void _navigate(int delta) {
               },
             ),
             // Zwei schmale Bänder direkt unter dem Kopf: "wird gerade neu geplant" und
-            // "das hier passt nicht mehr rein". Beides war vorher unsichtbar — der Kalender
-            // sortierte sich irgendwann still um, und liegen gebliebene Aufgaben verschwanden
-            // wortlos.
+            // "diese Deadline ist nicht mehr zu halten". Beides war vorher unsichtbar — der
+            // Kalender sortierte sich irgendwann still um, und liegen gebliebene Aufgaben
+            // verschwanden wortlos.
+            //
+            // Das Warnband hängt bewusst an atRiskDeadlines und nicht an atRisk: eine Aufgabe,
+            // die nur noch nicht eingeplant ist, gefährdet nichts (siehe AtRiskItem.isDeadlineRisk).
             if (cal.isReplanning) const _ReplanIndicator(),
-            if (cal.atRisk.isNotEmpty) _AtRiskBanner(items: cal.atRisk),
+            // Überfälliges zuerst und in Rot: ein gerissener Termin ist die schärfere Lage.
+            if (cal.atRiskOverdue.isNotEmpty)
+              _AtRiskBanner(items: cal.atRiskOverdue, overdue: true),
+            if (cal.atRiskUpcoming.isNotEmpty)
+              _AtRiskBanner(items: cal.atRiskUpcoming, overdue: false),
             if (_view == _CalView.week)
               _WeekStrip(
                 selected: selected,
@@ -295,43 +302,97 @@ class _ReplanIndicator extends StatelessWidget {
   }
 }
 
-// ─── Nicht eingeplant ────────────────────────────────────────────────────────
+// ─── Überfällig und nicht eingeplant ─────────────────────────────────────────
 
-/// Was der Scheduler nicht mehr unterbringen konnte.
+/// Aufgaben, bei denen ein Termin auf dem Spiel steht — in zwei Schärfegraden.
 ///
-/// Diese Liste rechnet das Backend seit jeher bei jedem Lauf aus — angezeigt wurde sie nie. Für
-/// den Nutzer sah es dadurch so aus, als hätte die App die Aufgabe schlicht vergessen.
+/// Diese Liste rechnet das Backend seit jeher bei jedem Lauf aus; angezeigt wurde sie nie, für
+/// den Nutzer sah es aus, als hätte die App die Aufgabe schlicht vergessen. Seit den Nachläufen
+/// im Scheduler ist sie eine echte Aussage und kein Rauschen mehr.
+///
+/// Getrennt wird bewusst nach [AtRiskItem.isOverdue]:
+///
+/// * **überfällig** — rot. Der Termin ist bereits gerissen; das ist nichts, was noch abgewendet
+///   werden kann, sondern etwas, das jetzt nachgeholt wird. Das Band nennt deshalb den
+///   Nachholtermin statt einer Klage.
+/// * **in Gefahr** — amber. Die Deadline steht noch aus, aber davor war auch mit gelockerten
+///   Arbeitszeiten kein Platz.
+///
+/// Vorher lagen beide in einem Band mit dem Text „schafft ihre Deadline nicht" — in der falschen
+/// Zeitform für etwas, das längst passiert ist, und in derselben Farbe wie eine bloße Warnung.
 class _AtRiskBanner extends StatelessWidget {
   final List<AtRiskItem> items;
 
-  const _AtRiskBanner({required this.items});
+  /// Rot für Überfälliges, Amber für Gefährdetes.
+  final bool overdue;
+
+  const _AtRiskBanner({required this.items, required this.overdue});
+
+  static const _rot   = Color(0xFFE5484D);
+  static const _amber = Color(0xFFFF9F1C);
+
+  Color get _farbe => overdue ? _rot : _amber;
+
+  IconData get _symbol =>
+      overdue ? Icons.error_outline_rounded : Icons.warning_amber_rounded;
+
+  String get _titel {
+    if (!overdue) {
+      return items.length == 1
+          ? '1 Aufgabe schafft ihre Deadline nicht'
+          : '${items.length} Aufgaben schaffen ihre Deadline nicht';
+    }
+    return items.length == 1
+        ? '1 Aufgabe ist überfällig'
+        : '${items.length} Aufgaben sind überfällig';
+  }
+
+  /// Bei genau einer überfälligen Aufgabe steht der Nachholtermin schon im Band — dafür muss
+  /// niemand erst tippen. Bei mehreren wäre die Zeile eine Aufzählung, die nicht mehr passt.
+  String? get _untertitel {
+    if (!overdue || items.length != 1) return null;
+    final wann = items.first.plannedStartText;
+    return wann == null ? 'Kein Nachholtermin gefunden' : 'Nachholtermin $wann';
+  }
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    const warnColor = Color(0xFFFF9F1C);
+    final untertitel = _untertitel;
 
     return Material(
-      color: warnColor.withValues(alpha: 0.12),
+      color: _farbe.withValues(alpha: overdue ? 0.18 : 0.12),
       child: InkWell(
         onTap: () => _zeigeListe(context),
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
           child: Row(
             children: [
-              const Icon(Icons.warning_amber_rounded, size: 18, color: warnColor),
+              Icon(_symbol, size: 18, color: _farbe),
               const SizedBox(width: 10),
               Expanded(
-                child: Text(
-                  items.length == 1
-                      ? '1 Aufgabe passt nicht in den Plan'
-                      : '${items.length} Aufgaben passen nicht in den Plan',
-                  style: theme.textTheme.bodyMedium?.copyWith(
-                    fontWeight: FontWeight.w600,
-                  ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      _titel,
+                      style: theme.textTheme.bodyMedium?.copyWith(
+                        fontWeight: overdue ? FontWeight.w800 : FontWeight.w600,
+                        color: overdue ? _rot : null,
+                      ),
+                    ),
+                    if (untertitel != null)
+                      Text(
+                        untertitel,
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          color: theme.textTheme.bodySmall?.color?.withValues(alpha: 0.8),
+                        ),
+                      ),
+                  ],
                 ),
               ),
-              const Icon(Icons.chevron_right, size: 18, color: warnColor),
+              Icon(Icons.chevron_right, size: 18, color: _farbe),
             ],
           ),
         ),
@@ -353,13 +414,16 @@ class _AtRiskBanner extends StatelessWidget {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text('Nicht eingeplant',
+              Text(overdue ? 'Überfällig' : 'Deadline in Gefahr',
                   style: Theme.of(ctx).textTheme.titleMedium?.copyWith(
                         fontWeight: FontWeight.bold,
+                        color: overdue ? _rot : null,
                       )),
               const SizedBox(height: 4),
               Text(
-                'Für diese Aufgaben war im Planungsfenster kein Platz mehr.',
+                overdue
+                    ? 'Der Termin ist vorbei. Der Plan holt diese Aufgaben so früh wie möglich nach.'
+                    : 'Vor der Deadline war auch mit gelockerten Arbeitszeiten kein Platz mehr.',
                 style: Theme.of(ctx).textTheme.bodySmall?.copyWith(
                       color: Theme.of(ctx).textTheme.bodySmall?.color?.withValues(alpha: 0.7),
                     ),
@@ -371,10 +435,9 @@ class _AtRiskBanner extends StatelessWidget {
                   child: Row(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      const Padding(
-                        padding: EdgeInsets.only(top: 2),
-                        child: Icon(Icons.warning_amber_rounded,
-                            size: 16, color: Color(0xFFFF9F1C)),
+                      Padding(
+                        padding: const EdgeInsets.only(top: 2),
+                        child: Icon(_symbol, size: 16, color: _farbe),
                       ),
                       const SizedBox(width: 10),
                       Expanded(
@@ -386,7 +449,7 @@ class _AtRiskBanner extends StatelessWidget {
                                       fontWeight: FontWeight.w600,
                                     )),
                             Text(
-                              '${e.reasonText} · ${e.minutes} min',
+                              _zeile(e),
                               style: Theme.of(ctx).textTheme.bodySmall?.copyWith(
                                     color: Theme.of(ctx)
                                         .textTheme
@@ -407,6 +470,18 @@ class _AtRiskBanner extends StatelessWidget {
         ),
       ),
     );
+  }
+
+  /// Die Zeile unter dem Titel. Bei Überfälligem ist die interessante Angabe der Nachholtermin,
+  /// nicht die fehlende Minutenzahl — die ist dort meist 0, weil alles eingeplant ist.
+  static String _zeile(AtRiskItem e) {
+    if (e.isOverdue) {
+      final wann = e.plannedStartText;
+      return wann == null
+          ? '${e.reasonText} · kein Nachholtermin gefunden'
+          : '${e.reasonText} · Nachholtermin $wann';
+    }
+    return '${e.reasonText} · ${e.minutes} min';
   }
 }
 
