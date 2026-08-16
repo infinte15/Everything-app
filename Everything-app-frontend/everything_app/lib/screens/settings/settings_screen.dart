@@ -47,6 +47,24 @@ class _SettingsScreenState extends State<SettingsScreen> {
     _patch((p) => isStart ? p.copyWith(workdayStart: picked) : p.copyWith(workdayEnd: picked));
   }
 
+  /// Gegenstueck zu [_pickTime] fuer die Privatzeiten.
+  ///
+  /// Bewusst eine eigene Methode statt eines dritten Parameters an [_pickTime]: die beiden
+  /// Zeitpaare haben unterschiedliche Rueckfallwerte, und ein `bool isPersonal` neben dem
+  /// bestehenden `bool isStart` waere an der Aufrufstelle nicht mehr zu lesen.
+  Future<void> _pickPersonalTime(BuildContext context, bool isStart) async {
+    final current = _draft;
+    if (current == null) return;
+    final initial = (isStart ? current.personalHoursStart : current.personalHoursEnd) ??
+        TimeOfDay(hour: isStart ? 6 : 23, minute: 0);
+
+    final picked = await showTimePicker(context: context, initialTime: initial);
+    if (picked == null) return;
+    _patch((p) => isStart
+        ? p.copyWith(personalHoursStart: picked)
+        : p.copyWith(personalHoursEnd: picked));
+  }
+
   Future<void> _save() async {
     final draft = _draft;
     if (draft == null) return;
@@ -108,6 +126,22 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       label: 'Day ends',
                       value: _formatTime(draft.workdayEnd) ?? '22:00',
                       onTap: () => _pickTime(context, false),
+                    ),
+
+                    const SizedBox(height: 24),
+                    // Getrennt von den Arbeitszeiten: hier liegen Gewohnheiten und Trainings.
+                    // Ohne diesen Rahmen waren beide auf den Arbeitstag geklemmt — eine
+                    // Abend-Gewohnheit konnte gar nicht am Abend liegen.
+                    _SectionTitle('Personal hours'),
+                    _SettingRow(
+                      label: 'Habits & workouts from',
+                      value: _formatTime(draft.personalHoursStart) ?? '06:00',
+                      onTap: () => _pickPersonalTime(context, true),
+                    ),
+                    _SettingRow(
+                      label: 'Habits & workouts until',
+                      value: _formatTime(draft.personalHoursEnd) ?? '23:00',
+                      onTap: () => _pickPersonalTime(context, false),
                     ),
 
                     const SizedBox(height: 24),

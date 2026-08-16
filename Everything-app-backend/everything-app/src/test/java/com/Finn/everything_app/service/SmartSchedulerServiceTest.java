@@ -315,8 +315,10 @@ class SmartSchedulerServiceTest {
 
         assertEquals(1, workoutItems.size());
         LocalDateTime start = workoutItems.get(0).getStartTime();
-        assertFalse(start.isBefore(tomorrow.atTime(8, 0)), "Workout must not start before work hours");
-        assertFalse(workoutItems.get(0).getEndTime().isAfter(tomorrow.atTime(17, 0)), "Workout must end within work hours");
+        // Trainings hängen an der Privatzeit (06:00–23:00), nicht an der Arbeitszeit — sonst
+        // müsste man sich zum Sport freinehmen.
+        assertFalse(start.isBefore(tomorrow.atTime(6, 0)), "Workout must not start before personal hours");
+        assertFalse(workoutItems.get(0).getEndTime().isAfter(tomorrow.atTime(23, 0)), "Workout must end within personal hours");
         assertEquals(start, placeholder.getStartTime(), "Solved time must be written back onto the session entity");
         verify(workoutSessionRepository).save(placeholder);
     }
@@ -700,8 +702,11 @@ class SmartSchedulerServiceTest {
 
         for (ScheduledItem i : habits) {
             LocalTime t = i.getStartTime().toLocalTime();
-            assertFalse(t.isBefore(LocalTime.of(8, 0)),
-                    "Arbeitszeit beginnt 08:00, davor darf nichts liegen");
+            // Nicht die Arbeitszeit, sondern die Privatzeit ist hier die Schranke: eine
+            // Gewohnheit mit MORNING-Fenster (ab 06:00) darf ausdrücklich vor Arbeitsbeginn
+            // liegen. Solange hier 08:00 stand, war der Test die Absicherung eines Fehlers.
+            assertFalse(t.isBefore(LocalTime.of(6, 0)),
+                    "Privatzeit beginnt 06:00, davor darf nichts liegen");
             assertTrue(t.isBefore(LocalTime.of(12, 0)),
                     "MORNING-Fenster endet 12:00, lag aber bei " + t);
         }
@@ -3457,9 +3462,16 @@ class SmartSchedulerServiceTest {
     @Test
     void taskSchlaegtWorkoutBeimVerdraengen() {
         LocalDate montag = TODAY.plusDays(1).with(TemporalAdjusters.next(DayOfWeek.MONDAY));
-        // Nur eine Stunde Arbeitszeit am Tag: es passt genau ein Block von 60 Minuten.
+        // Nur eine Stunde am Tag: es passt genau ein Block von 60 Minuten.
+        //
+        // Die Privatzeit muss hier MIT eingeschnürt werden, sonst geht es um nichts: das Training
+        // hängt an ihr (nicht an der Arbeitszeit), und mit den vollen 06:00–23:00 hätte es reichlich
+        // eigenen Platz — beide bekämen ihren Block und der Test könnte gar nichts mehr über die
+        // Rangfolge beim Verdrängen aussagen.
         prefs.setWorkdayStart(LocalTime.of(8, 0));
         prefs.setWorkdayEnd(LocalTime.of(9, 0));
+        prefs.setPersonalHoursStart(LocalTime.of(8, 0));
+        prefs.setPersonalHoursEnd(LocalTime.of(9, 0));
 
         Task aufgabe = makeTask(1900L, "Wichtig, ohne Termin", 60, 2, null);
         when(taskService.getSchedulableTasks(1L)).thenReturn(List.of(aufgabe));
@@ -3581,4 +3593,165 @@ class SmartSchedulerServiceTest {
         f.setAccessible(true);
         return f.getLong(null);
     }
+
+    // ==================================================================
+    // Privatzeiten: Gewohnheiten und Trainings hängen nicht an der Arbeitszeit
+    // ==================================================================
+
+    /**
+     * Eine Abend-Gewohnheit muss am Abend landen — auch wenn der Arbeitstag um 17:00 endet.
+     *
+     * Der Kern des gemeldeten Fehlers "plant nicht gut". Habit-Slots waren hart auf
+     * workdayStart..workdayEnd geklemmt, womit {@link HabitWindow#EVENING} (17:00–22:00) bei einem
+     * Arbeitstag von 08:00–17:00 VOLLSTÄNDIG ausserhalb des Erlaubten lag. "Vor dem Schlafen
+     * lesen" wurde deshalb mitten in den Nachmittag geplant, und der Abweichungsterm konnte nichts
+     * dagegen tun: er ist weich, die Arbeitszeit war hart.
+     */
+    @Test
+    void abendGewohnheitLandetAmAbendUndNichtImArbeitstag() {
+        LocalDate morgen = TODAY.plusDays(1);
+        prefs.setWorkdayStart(LocalTime.of(8, 0));
+        prefs.setWorkdayEnd(LocalTime.of(17, 0));
+
+        Habit lesen = new Habit();
+        lesen.setId(4100L);
+        lesen.setName("Vor dem Schlafen lesen");
+        lesen.setDurationMinutes(30);
+        lesen.setPriority(3);
+        lesen.setIdealWindow(HabitWindow.EVENING);   // 17:00–22:00
+        lesen.setStartDate(morgen);
+        lesen.setMonday(true); lesen.setTuesday(true); lesen.setWednesday(true);
+        lesen.setThursday(true); lesen.setFriday(true); lesen.setSaturday(true); lesen.setSunday(true);
+
+        when(habitRepository.findHabitsActiveInRange(eq(1L), any(), any())).thenReturn(List.of(lesen));
+        when(taskService.getSchedulableTasks(1L)).thenReturn(new ArrayList<>());
+        when(calendarEventService.getFixedEvents(eq(1L), any(), any())).thenReturn(new ArrayList<>());
+
+        ScheduleResult result = service.generateOptimalSchedule(1L, morgen, morgen);
+
+        assertEquals(1, result.getScheduledHabits().size());
+        LocalTime start = result.getScheduledHabits().get(0).getStartTime().toLocalTime();
+        assertFalse(start.isBefore(LocalTime.of(17, 0)),
+                "eine Abend-Gewohnheit gehört in ihr Wunschfenster ab 17:00, lag aber bei " + start);
+        assertTrue(start.plusMinutes(30).compareTo(LocalTime.of(22, 0)) <= 0,
+                "und soll ihr Fenster um 22:00 auch wieder verlassen haben, lag aber bei " + start);
+    }
+
+    /**
+     * Eine Morgen-Gewohnheit darf vor Arbeitsbeginn liegen.
+     *
+     * Die Gegenrichtung desselben Fehlers: MORNING beginnt um 06:00, die Klemmung liess aber
+     * nichts vor 08:00 zu.
+     */
+    @Test
+    void morgenGewohnheitDarfVorArbeitsbeginnLiegen() {
+        LocalDate morgen = TODAY.plusDays(1);
+        prefs.setWorkdayStart(LocalTime.of(8, 0));
+        prefs.setWorkdayEnd(LocalTime.of(17, 0));
+
+        Habit meditation = new Habit();
+        meditation.setId(4101L);
+        meditation.setName("Meditation");
+        meditation.setDurationMinutes(30);
+        meditation.setPriority(3);
+        meditation.setIdealWindow(HabitWindow.CUSTOM);
+        meditation.setIdealWindowStart(LocalTime.of(6, 0));
+        meditation.setIdealWindowEnd(LocalTime.of(7, 0));
+        meditation.setStartDate(morgen);
+        meditation.setMonday(true); meditation.setTuesday(true); meditation.setWednesday(true);
+        meditation.setThursday(true); meditation.setFriday(true);
+        meditation.setSaturday(true); meditation.setSunday(true);
+
+        when(habitRepository.findHabitsActiveInRange(eq(1L), any(), any())).thenReturn(List.of(meditation));
+        when(taskService.getSchedulableTasks(1L)).thenReturn(new ArrayList<>());
+        when(calendarEventService.getFixedEvents(eq(1L), any(), any())).thenReturn(new ArrayList<>());
+
+        ScheduleResult result = service.generateOptimalSchedule(1L, morgen, morgen);
+
+        assertEquals(1, result.getScheduledHabits().size());
+        LocalTime start = result.getScheduledHabits().get(0).getStartTime().toLocalTime();
+        assertTrue(start.isBefore(LocalTime.of(8, 0)),
+                "das Wunschfenster 06:00–07:00 liegt vor Arbeitsbeginn, lag aber bei " + start);
+    }
+
+    /**
+     * Aufgaben bleiben auf der Arbeitszeit — die Privatzeit öffnet den Tag nur für Gewohnheiten.
+     *
+     * Die Absicherung gegen die naheliegende Fehlerweiterung: würde die Hülle aus Arbeits- und
+     * Privatzeit auch für Task-Chunks gelten, stünde die Arbeit plötzlich bis 23 Uhr im Kalender.
+     */
+    @Test
+    void aufgabenBleibenTrotzPrivatzeitInDerArbeitszeit() {
+        LocalDate morgen = TODAY.plusDays(1);
+        prefs.setWorkdayStart(LocalTime.of(8, 0));
+        prefs.setWorkdayEnd(LocalTime.of(17, 0));
+        prefs.setPersonalHoursStart(LocalTime.of(6, 0));
+        prefs.setPersonalHoursEnd(LocalTime.of(23, 0));
+
+        when(taskService.getSchedulableTasks(1L))
+                .thenReturn(List.of(makeTask(4102L, "Bericht", 120, 3, null)));
+        when(calendarEventService.getFixedEvents(eq(1L), any(), any())).thenReturn(new ArrayList<>());
+
+        ScheduleResult result = service.generateOptimalSchedule(1L, morgen, morgen);
+
+        assertFalse(result.getScheduledTasks().isEmpty(), "die Aufgabe muss geplant werden");
+        for (ScheduledItem i : result.getScheduledTasks()) {
+            assertFalse(i.getStartTime().toLocalTime().isBefore(LocalTime.of(8, 0)),
+                    "Aufgaben beginnen frühestens zum Arbeitsbeginn, lagen aber bei " + i.getStartTime());
+            assertFalse(i.getEndTime().toLocalTime().isAfter(LocalTime.of(17, 0)),
+                    "Aufgaben enden spätestens zum Arbeitsende, lagen aber bei " + i.getEndTime());
+        }
+    }
+
+    /**
+     * Phase 2 bricht ab, sobald sie nichts Nennenswertes mehr findet.
+     *
+     * Ohne den Stillstandsabbruch lief JEDER Lauf bis zur Zeitgrenze — Phase 2 beweist nie
+     * Optimalität und hatte damit keinen Grund, je vorher aufzuhören. Die alte Schranke von
+     * 6000ms sicherte das nicht ab: sie lag über dem Budget und war deshalb auch dann grün, wenn
+     * jeder Lauf sein Budget voll ausschöpfte.
+     *
+     * Gemessen wird bewusst gegen das Budget und nicht gegen eine absolute Millisekundenzahl —
+     * sonst hinge der Test an der Geschwindigkeit der Maschine.
+     */
+    @Test
+    void phase2BrichtAufDemPlateauAbUndSchoepftDasBudgetNichtAus() {
+        LocalDate morgen = TODAY.plusDays(1);
+
+        List<Task> tasks = new ArrayList<>();
+        for (int i = 0; i < 20; i++) {
+            tasks.add(makeTask(4200L + i, "Aufgabe " + i, 60 + (i % 4) * 30, 1 + (i % 5),
+                    morgen.plusDays(2 + (i % 10)).atTime(20, 0)));
+        }
+        List<Habit> habits = new ArrayList<>();
+        for (int i = 0; i < 5; i++) habits.add(makeDailyHabit(4300L + i, "Gewohnheit " + i, 15 + i * 5));
+
+        when(taskService.getSchedulableTasks(1L)).thenReturn(tasks);
+        when(habitRepository.findHabitsActiveInRange(eq(1L), any(), any())).thenReturn(habits);
+        when(calendarEventService.getFixedEvents(eq(1L), any(), any())).thenReturn(new ArrayList<>());
+
+        // Ein absichtlich grosszuegiges Budget: schoepft der Lauf es trotzdem aus, greift der
+        // Abbruch nicht. Mit ihm bleibt er weit darunter.
+        setzeFeld("solverTimeLimitSeconds", 8.0);
+
+        long t0 = System.nanoTime();
+        ScheduleResult result = service.generateOptimalSchedule(1L, morgen, morgen.plusDays(14));
+        long millis = (System.nanoTime() - t0) / 1_000_000;
+
+        assertFalse(result.getScheduledTasks().isEmpty(), "der Bestand muss planbar sein");
+        assertTrue(millis < 4_000,
+                "Phase 2 soll auf dem Plateau abbrechen statt das 8s-Budget auszuschoepfen, "
+                        + "brauchte aber " + millis + " ms");
+    }
+
+    private void setzeFeld(String name, double wert) {
+        try {
+            java.lang.reflect.Field f = SmartSchedulerService.class.getDeclaredField(name);
+            f.setAccessible(true);
+            f.setDouble(service, wert);
+        } catch (ReflectiveOperationException e) {
+            throw new IllegalStateException(e);
+        }
+    }
+
 }

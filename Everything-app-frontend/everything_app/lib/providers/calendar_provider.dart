@@ -23,7 +23,7 @@ class CalendarProvider with ChangeNotifier {
   // calendarService is injectable so tests can supply a fake instead of hitting the network.
   CalendarProvider({
     CalendarService? calendarService,
-    this.reconcileDelay = const Duration(milliseconds: 2200),
+    this.reconcileDelay = const Duration(milliseconds: 500),
   }) : _calendarService = calendarService ?? CalendarService() {
     _startPolling();
   }
@@ -32,19 +32,24 @@ class CalendarProvider with ChangeNotifier {
   /// die Umplanung erst beim 30s-Poll — nach einem Drag-and-Drop fühlt sich das kaputt an.
   ///
   /// Das Zeitfenster ist an den echten Ablauf angelegt, nicht geschätzt:
-  /// `scheduler.debounce-ms` = 2000 ms Ruhephase, danach ein Lauf von rund einer Sekunde
-  /// (Zeitbudget `scheduler.solver-time-limit-seconds` = 2.0 als harte Obergrenze). Der erste
-  /// Versuch startet deshalb erst nach der Entprellung — vorher kann sich gar nichts geändert
-  /// haben, und der alte erste Poll nach 600 ms war schlicht verschwendet.
+  /// `scheduler.debounce-ms` = 400 ms Ruhephase, danach ein Lauf von rund einer Sekunde
+  /// (Zeitbudget `scheduler.solver-time-limit-seconds` = 2.0 als harte Obergrenze, der
+  /// Stillstandsabbruch `scheduler.solver-stall-ms` beendet den Lauf im Regelfall früher). Der
+  /// erste Versuch startet deshalb erst nach der Entprellung — vorher kann sich gar nichts
+  /// geändert haben.
+  ///
+  /// Die Werte MÜSSEN mitwandern, wenn `scheduler.debounce-ms` sich ändert: als die Ruhephase
+  /// von 2000 auf 400 ms fiel, wartete die Oberfläche sonst weiter 2.2 s auf einen Lauf, der
+  /// längst fertig war — der Server war schneller, die App merkte es nur nicht.
   ///
   /// Abgebrochen wird, sobald der Server einen neuen Lauf meldet: die Leiter ist eine
   /// Obergrenze, kein Fahrplan.
   static const List<Duration> _reconcileRetries = [
-    Duration(milliseconds: 800),
-    Duration(milliseconds: 1200),
-    Duration(milliseconds: 1600),
-    Duration(milliseconds: 2400),
-    Duration(milliseconds: 3000),
+    Duration(milliseconds: 400),
+    Duration(milliseconds: 600),
+    Duration(milliseconds: 900),
+    Duration(milliseconds: 1400),
+    Duration(milliseconds: 2000),
   ];
 
   /// Zeitpunkt des letzten vom Server gemeldeten Laufs — der Abbruchgrund für die Leiter.

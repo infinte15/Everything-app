@@ -118,6 +118,8 @@ public class UserService {
         if (newPrefs.getMaxTaskMinutesPerDay() != null) existing.setMaxTaskMinutesPerDay(newPrefs.getMaxTaskMinutesPerDay());
         if (newPrefs.getMaxScheduledMinutesPerDay() != null) existing.setMaxScheduledMinutesPerDay(newPrefs.getMaxScheduledMinutesPerDay());
         if (newPrefs.getCoreHoursEnd() != null)         existing.setCoreHoursEnd(newPrefs.getCoreHoursEnd());
+        if (newPrefs.getPersonalHoursStart() != null)   existing.setPersonalHoursStart(newPrefs.getPersonalHoursStart());
+        if (newPrefs.getPersonalHoursEnd() != null)     existing.setPersonalHoursEnd(newPrefs.getPersonalHoursEnd());
         if (newPrefs.getDefaultMinChunkMinutes() != null) existing.setDefaultMinChunkMinutes(newPrefs.getDefaultMinChunkMinutes());
         if (newPrefs.getDefaultMaxChunkMinutes() != null) existing.setDefaultMaxChunkMinutes(newPrefs.getDefaultMaxChunkMinutes());
         if (newPrefs.getAutoScheduleEnabled() != null)  existing.setAutoScheduleEnabled(newPrefs.getAutoScheduleEnabled());

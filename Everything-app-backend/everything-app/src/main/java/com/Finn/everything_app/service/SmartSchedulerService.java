@@ -329,6 +329,66 @@ public class SmartSchedulerService {
     @Value("${scheduler.relief-day-end:22:00}")
     private String reliefDayEnd = "22:00";
 
+    /**
+     * Wie lange Phase 2 ohne nennenswerten Fortschritt weitersuchen darf, bevor abgebrochen wird.
+     *
+     * Phase 2 beweist nie Optimalität und lief deshalb bisher IMMER bis zur Zeitgrenze — auch dann,
+     * wenn längst nichts mehr zu holen war. An einem Bestand von 103 Intervallen sah die Zeitachse
+     * der verbessernden Lösungen typischerweise so aus:
+     *
+     * <pre>
+     *   0.123s=33498  0.375s=29230  0.822s=26629  0.861s=26620
+     *   1.500s=26618  1.796s=26602  1.825s=26596
+     * </pre>
+     *
+     * Nach 0.861s waren 99.65% der Gesamtverbesserung erreicht; die restliche Sekunde brachte 24
+     * von 6902 Einheiten.
+     *
+     * <p><b>Die Höhe ist gemessen, nicht geschätzt.</b> Kürzere Fenster sehen verlockend aus,
+     * schneiden aber mitten in den Abstieg: CP-SAT verbessert sich stoßweise, mit Lücken bis
+     * ~170ms zwischen zwei echten Fortschritten. Vier Läufe je Einstellung über denselben
+     * Kaltstart-Bestand (Zielwert kleiner = besser):
+     *
+     * <pre>
+     *   Fenster    Laufzeit        Zielwert
+     *   aus        2018..2021      25522..25811   (Referenz)
+     *   300ms       669..1510      26444..30038   — bis 16% schlechter
+     *   500ms       910..1789      24902..28687
+     *   700ms      1576..1798      25048..26614   — deckungsgleich mit der Referenz
+     * </pre>
+     *
+     * 700ms ist damit die kleinste Einstellung, deren Zielwerte sich noch mit der Referenz
+     * überlappen. Der Gewinn ist bewusst der bescheidenere: ~350ms auf dem Kaltstart plus eine
+     * Deckelung der Ausreißer — Qualität wird hier nicht gegen Tempo eingetauscht.
+     *
+     * <p>Im Regelfall wiegt der Abbruch schwerer, als diese Zahlen vermuten lassen: bei einem
+     * Wiederholungslauf mit Stabilitätsanker (der Normalfall, siehe {@link #addStabilityTerm})
+     * ist die Suche nach wenigen hundert Millisekunden durch, und genau dort greift das Fenster.
+     */
+    @Value("${scheduler.solver-stall-ms:700}")
+    private long solverStallMs = 700;
+
+    /**
+     * Mindestlaufzeit von Phase 2, bevor der Stillstandsabbruch überhaupt greifen darf.
+     *
+     * Schützt den langsamen Start: die erste Lösung kam oben erst nach 123ms, und bis dahin steht
+     * die Stillstandsuhr bereits. Ohne diese Untergrenze bräche ein Lauf, dessen erste Lösung
+     * länger auf sich warten lässt, ab, bevor er überhaupt eine hat.
+     */
+    @Value("${scheduler.solver-min-ms:500}")
+    private long solverMinMs = 500;
+
+    /**
+     * Ab welcher RELATIVEN Verbesserung eine neue Lösung als Fortschritt zählt.
+     *
+     * Nötig, weil die letzten Lösungen oben um 0.008% besser waren (26618 → 26616). Würde das als
+     * Fortschritt gelten, hielte ein Tropfen solcher Rauschlösungen die Stillstandsuhr endlos am
+     * Laufen und der Abbruch käme nie. Gemeint ist "es geht noch spürbar voran", nicht "es hat
+     * sich irgendeine Ziffer bewegt".
+     */
+    @Value("${scheduler.solver-improvement-epsilon:0.005}")
+    private double solverImprovementEpsilon = 0.005;
+
     /** Aufräumfenster für generierte Blöcke; siehe {@link #cleanupHorizonEnd}. */
     @Value("${scheduler.cleanup-horizon-days:120}")
     private int cleanupHorizonDays = 120;
@@ -407,6 +467,21 @@ public class SmartSchedulerService {
         return startDate.plusDays(Math.max(1, Math.max(classHorizonDays, horizonDays)));
     }
 
+    /**
+     * Bekannte Grenze: der Löser läuft INNERHALB der Transaktion des Aufrufers.
+     *
+     * Einlesen, Rechnen und Schreiben hängen an derselben {@code @Transactional}-Klammer, die
+     * Datenbankverbindung bleibt also über den kompletten Lauf belegt — beim Kaltstart bis zu zwei
+     * Sekunden. Bei Einzelnutzung ist das folgenlos; erst mit mehreren gleichzeitig rechnenden
+     * Nutzern (zwei Rechen-Threads im {@link ScheduleRegenerationCoordinator} plus der nächtliche
+     * Rundlauf) wird der Verbindungspool zum Nadelöhr.
+     *
+     * Die Auftrennung wäre: einlesen (Tx) → rechnen (ohne Tx) → schreiben (Tx). Sie ist bewusst
+     * NICHT gemacht — der Löser arbeitet auf geladenen Entitäten ({@code Task}, {@code Habit},
+     * {@code CalendarEvent}), die außerhalb der Transaktion detached wären, und ein übersehener
+     * Lazy-Zugriff fiele erst im Betrieb auf. Das gehört hinter einen Integrationstest gegen eine
+     * echte Datenbank, nicht hinter die Mockito-Tests dieser Klasse.
+     */
     private ScheduleResult doGenerateOptimalSchedule(Long userId, LocalDate startDate, LocalDate endDate,
                                                      LocalDate classEndDate) {
         log.info("Generiere CP-SAT Schedule für User {} | {} – {}", userId, startDate, endDate);
@@ -1601,6 +1676,12 @@ public class SmartSchedulerService {
         // liegt, schaltet die Abendstrafe schlicht ab, statt sie überall greifen zu lassen.
         int coreEndSlot = Math.min(workEndSlot, minuteOfDay(coreHoursEnd(prefs)) / GRID);
 
+        // Rahmen für Gewohnheiten und Trainings. Aufgaben und Projektzeit bleiben auf der
+        // Arbeitszeit — siehe privateDayBounds.
+        int[] privat = privateDayBounds(prefs);
+        int privateStartSlot = privat[0];
+        int privateEndSlot   = privat[1];
+
         int bufferSlots = slotsAufgerundet(nz(prefs.getBufferMinutes(), 0));
         // Derselbe Zeitpunkt, ab dem auch gelöscht und neu geschrieben wird — nicht ein zweites,
         // minimal späteres LocalDateTime.now(). Sonst entscheidet das Modell "überfällig" nach
@@ -1810,8 +1891,11 @@ public class SmartSchedulerService {
             int sizeSlots = Axis.slotsFor(s.durationMinutes);
             String name = "habit" + s.habit.getId() + "_" + i;
 
-            List<DayWindow> windows = dayWindows(axis, workStartSlot, workEndSlot, sizeSlots, nowSlot,
-                    s.allowedDays, axis.totalDays - 1);
+            // Privatzeiten statt Arbeitszeit: eine Gewohnheit ist kein Termin des Arbeitstags.
+            // Vorher war ihr Wunschfenster bei einem Arbeitstag von 08:00–17:00 unerreichbar —
+            // EVENING (17:00–22:00) lag vollständig dahinter, MORNING beginnt um 06:00.
+            List<DayWindow> windows = dayWindows(axis, privateStartSlot, privateEndSlot, sizeSlots,
+                    nowSlot, s.allowedDays, axis.totalDays - 1);
             Placeable p = makePlaceable(model, name, sizeSlots, s.durationMinutes, windows, gapSlots);
             s.placeable = p;
             allPlaceables.add(p);
@@ -1903,8 +1987,9 @@ public class SmartSchedulerService {
             // aussichtsloses Intervall im Modell zu stehen.
             if (days.isEmpty()) continue;
 
-            List<DayWindow> windows = dayWindows(axis, workStartSlot, workEndSlot, sizeSlots, nowSlot,
-                    days, axis.totalDays - 1);
+            // Wie bei den Gewohnheiten: Training ist Privatzeit, nicht Arbeitszeit.
+            List<DayWindow> windows = dayWindows(axis, privateStartSlot, privateEndSlot, sizeSlots,
+                    nowSlot, days, axis.totalDays - 1);
             Placeable p = makePlaceable(model, name, sizeSlots, duration, windows, gapSlots);
             allPlaceables.add(p);
             allIntervals.add(p.interval);
@@ -2054,8 +2139,13 @@ public class SmartSchedulerService {
         // Verschiebung: derselbe Projektblock landete ohne jede Änderung am Bestand einmal um
         // 08:15 und im nächsten Lauf um 08:00. Für den Nutzer sieht das aus wie ein Kalender, der
         // von selbst herumspringt — genau dagegen gibt es den Stabilitätsterm.
+        //
+        // Stattdessen wird auf STILLSTAND abgebrochen (siehe StallProbe): nicht "nah genug am
+        // Optimum", sondern "seit einer Weile nichts Nennenswertes mehr gefunden". Das ist der
+        // Unterschied, an dem der Gap-Limit-Versuch gescheitert ist — die Feinarbeit findet
+        // weiterhin statt, nur das Warten danach entfällt.
         long p2Start = System.nanoTime();
-        CpSolverStatus s2 = solver.solve(model);
+        CpSolverStatus s2 = solveMitStillstandsabbruch(solver, model);
         long phase2Ms = (System.nanoTime() - p2Start) / 1_000_000;
         // Der Zielwert der Platzierung, fürs Log. Er ist die einzige Möglichkeit, die Wirkung des
         // Zeitbudgets zu beurteilen: der Status bleibt bei realistischem Bestand immer FEASIBLE,
@@ -2125,6 +2215,102 @@ public class SmartSchedulerService {
         outcome.setPlacementObjective(placementObjective);
         outcome.setPhase2Retried(phase2Retried);
         return outcome;
+    }
+
+    /**
+     * Löst Phase 2 und bricht ab, sobald nichts Nennenswertes mehr gefunden wird.
+     *
+     * Der Abbruch braucht ZWEI Teile, und beide sind nötig:
+     * <ul>
+     *   <li>{@link StallProbe} sieht jede verbessernde Lösung und merkt sich, wann zuletzt eine
+     *       kam, die die Schwelle {@link #solverImprovementEpsilon} überschritten hat.</li>
+     *   <li>Der Wachhund unten zieht daraus die Konsequenz. Aus dem Callback heraus ginge das
+     *       nicht: im Plateau-Fall — genau dem, um den es geht — kommt überhaupt keine Lösung
+     *       mehr, der Callback feuert also nie wieder und könnte nie abbrechen.</li>
+     * </ul>
+     *
+     * {@code setMaxTimeInSeconds} bleibt daneben als harte Decke bestehen. Der Stillstandsabbruch
+     * senkt den Regelfall, er ersetzt die Obergrenze nicht.
+     *
+     * {@link CpSolver#stopSearch()} ist {@code synchronized} und ausdrücklich dafür da, von einem
+     * anderen Thread gerufen zu werden.
+     */
+    private CpSolverStatus solveMitStillstandsabbruch(CpSolver solver, CpModel model) {
+        StallProbe probe = new StallProbe(solverImprovementEpsilon);
+        long start = System.nanoTime();
+
+        Thread wachhund = new Thread(() -> {
+            try {
+                while (!Thread.currentThread().isInterrupted()) {
+                    Thread.sleep(WACHHUND_TAKT_MS);
+                    long jetzt = System.nanoTime();
+                    if ((jetzt - start) / 1_000_000 < solverMinMs) continue;
+                    if ((jetzt - probe.lastImprovementNanos(start)) / 1_000_000 > solverStallMs) {
+                        solver.stopSearch();
+                        return;
+                    }
+                }
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+            }
+        }, "schedule-solver-wachhund");
+        wachhund.setDaemon(true);
+        wachhund.start();
+
+        try {
+            return solver.solve(model, probe);
+        } finally {
+            wachhund.interrupt();
+        }
+    }
+
+    /** Taktrate des Wachhunds — fein genug gegenüber {@link #solverStallMs}, ohne zu pollen. */
+    private static final long WACHHUND_TAKT_MS = 25;
+
+    /**
+     * Merkt sich, wann Phase 2 zuletzt spürbar besser wurde.
+     *
+     * Bewusst nur BEOBACHTEND: das Abbrechen macht der Wachhund (siehe
+     * {@link #solveMitStillstandsabbruch}). Die Felder werden aus dem Solver-Thread geschrieben
+     * und aus dem Wachhund-Thread gelesen, sind deshalb {@code volatile}.
+     */
+    private static final class StallProbe extends CpSolverSolutionCallback {
+        private final double epsilon;
+        /**
+         * Zielwert, gegen den die Schwelle gemessen wird — der letzte, der sie gerissen hat.
+         *
+         * Bewusst NICHT der laufend beste. Gegen den besten gemessen zählt jede einzelne Lösung
+         * für sich, und ein Rinnsal aus Schritten knapp unterhalb der Schwelle setzt die Uhr dann
+         * nie zurück: der Abbruch schlug mitten im steilen Abstieg zu und der Zielwert wurde
+         * schlechter statt gleich (gemessen 30038 statt 26620). Gegen den letzten signifikanten
+         * Wert SUMMIEREN sich die kleinen Schritte dagegen auf, bis sie die Schwelle gemeinsam
+         * überschreiten — dann ist es echter Fortschritt und die Uhr läuft neu.
+         */
+        private volatile double referenz = Double.MAX_VALUE;
+        private volatile long   lastImprovementNanos;
+
+        StallProbe(double epsilon) {
+            this.epsilon = epsilon;
+        }
+
+        @Override
+        public void onSolutionCallback() {
+            double obj = objectiveValue();
+            // Die erste Lösung zählt immer als Fortschritt. Bei einem Zielwert von 0 fällt der
+            // Nenner weg — dann ist ohnehin nichts mehr zu holen und alles Weitere ist Stillstand.
+            boolean fortschritt = referenz == Double.MAX_VALUE
+                    || (referenz - obj) > Math.abs(referenz) * epsilon;
+            if (fortschritt) {
+                referenz = obj;
+                lastImprovementNanos = System.nanoTime();
+            }
+        }
+
+        /** Zeitpunkt des letzten Fortschritts, oder {@code fallback}, solange es keinen gab. */
+        long lastImprovementNanos(long fallback) {
+            long t = lastImprovementNanos;
+            return t == 0L ? fallback : t;
+        }
     }
 
     /**
@@ -3452,6 +3638,46 @@ public class SmartSchedulerService {
 
     private LocalTime workEnd(UserPreferences p) {
         return p.getWorkdayEnd() != null ? p.getWorkdayEnd() : LocalTime.of(22, 0);
+    }
+
+    /**
+     * Privatzeiten — der Rahmen für Gewohnheiten und Trainings.
+     *
+     * Die Rückfallwerte sind bewusst weit (06:00–23:00): sie sollen die Wunschfenster aus
+     * {@link HabitWindow} vollständig umschließen, sonst bleibt genau der Fehler bestehen, für den
+     * es die Privatzeit gibt.
+     */
+    private LocalTime personalStart(UserPreferences p) {
+        return p.getPersonalHoursStart() != null ? p.getPersonalHoursStart() : LocalTime.of(6, 0);
+    }
+
+    private LocalTime personalEnd(UserPreferences p) {
+        return p.getPersonalHoursEnd() != null ? p.getPersonalHoursEnd() : LocalTime.of(23, 0);
+    }
+
+    /**
+     * Der Tagesrahmen für ein wiederkehrendes, privates Item (Gewohnheit, Training), in Slots.
+     *
+     * Geliefert wird die HÜLLE aus Arbeits- und Privatzeit, nicht deren exakte Vereinigung. Zwei
+     * Gründe:
+     * <ol>
+     *   <li><b>Struktur.</b> {@link Placeable#inDay} ist eine Map von Tag auf Boolean. Zwei
+     *       getrennte Fenster am selben Tag würden sich beim {@code put} gegenseitig
+     *       überschreiben und damit Tagesdeckel, "höchstens eines pro Tag", Ruhetagregel und
+     *       {@link #gatedDayIndex} still beschädigen — ein Fehler, den niemand sieht, bis der
+     *       Kalender falsch ist. Die Hülle kommt ohne Strukturänderung aus.</li>
+     *   <li><b>Sicherheit.</b> Die Hülle kann das Erlaubte nur erweitern, nie einschränken. Damit
+     *       kann keine heute planbare Gewohnheit durch diese Änderung unplanbar werden.</li>
+     * </ol>
+     * Eine etwaige Lücke zwischen den beiden Fenstern bleibt damit erlaubt. Das ist verschmerzbar:
+     * WELCHE Uhrzeit es innerhalb des Rahmens wird, entscheidet ohnehin das Wunschfenster der
+     * Gewohnheit über {@link #windowDeviation}, nicht die harte Schranke.
+     */
+    private int[] privateDayBounds(UserPreferences prefs) {
+        int lo = Math.min(minuteOfDay(workStart(prefs)), minuteOfDay(personalStart(prefs))) / GRID;
+        int hi = Math.max(minuteOfDay(workEnd(prefs)),   minuteOfDay(personalEnd(prefs)))   / GRID;
+        if (hi <= lo) hi = SLOTS_PER_DAY;   // defensiv gegen Fehlkonfiguration, wie bei der Arbeitszeit
+        return new int[]{ lo, hi };
     }
 
     /**

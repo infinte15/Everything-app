@@ -28,6 +28,19 @@ import java.util.concurrent.TimeUnit;
  * Ruhephase nach hinten, aber nie länger als maxDelay ab der ersten Meldung, damit ein
  * Dauerstrom von Änderungen die Neuplanung nicht verhungern lässt.
  *
+ * <p><b>Zur Länge der Ruhephase.</b> Sie stand lange auf 2000ms und war damit der größte einzelne
+ * Posten der spürbaren Wartezeit: der Solver braucht für einen Wiederholungslauf rund eine
+ * Sekunde, davor lagen aber zwei Sekunden, in denen schlicht nichts geschah. Die Ruhephase soll
+ * einen SCHWALL zusammenfassen — und ein Schwall aus einer einzelnen Nutzeraktion ist nach
+ * Millisekunden vorbei, nicht nach zwei Sekunden. 400ms fassen ihn weiterhin vollständig
+ * zusammen und nehmen 1.6s aus jeder einzelnen Interaktion heraus.
+ *
+ * <p>Bewusst KEINE Entprellung auf der Vorderflanke ("die erste Änderung startet sofort"): sie
+ * bräche die Zusage "ein Schwall = genau ein Lauf" (siehe
+ * {@code aBurstOfChangesTriggersExactlyOneRegeneration}), weil auf den Sofortlauf immer noch ein
+ * nachlaufender folgen müsste. Für die verbleibenden 400ms ist ein zweiter vollständiger
+ * CP-SAT-Lauf der schlechtere Tausch.
+ *
  * Bewusst eine eigene Komponente statt zusätzlicher Felder in {@link SmartSchedulerService}:
  * dessen Konstruktor-Argumentliste ist über @InjectMocks an die Tests gekoppelt.
  */
@@ -72,7 +85,7 @@ public class ScheduleRegenerationCoordinator {
     public ScheduleRegenerationCoordinator(
             SmartSchedulerService scheduler,
             UserService userService,
-            @Value("${scheduler.debounce-ms:2000}")   long quietPeriodMs,
+            @Value("${scheduler.debounce-ms:400}")    long quietPeriodMs,
             @Value("${scheduler.max-delay-ms:15000}") long maxDelayMs) {
         this.scheduler     = scheduler;
         this.userService   = userService;

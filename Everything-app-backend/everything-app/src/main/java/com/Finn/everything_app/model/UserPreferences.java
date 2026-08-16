@@ -21,6 +21,26 @@ public class UserPreferences {
     private LocalTime workdayStart;
     private LocalTime workdayEnd;
 
+    /**
+     * Privatzeiten — der Rahmen für Gewohnheiten und Trainings (Reclaims "Personal Hours").
+     *
+     * Getrennt von {@code workdayStart}/{@code workdayEnd}, weil beides verschiedene Fragen
+     * beantwortet: die Arbeitszeit sagt, wann Aufgaben liegen dürfen, die Privatzeit, wann der Tag
+     * überhaupt für einen selbst verfügbar ist.
+     *
+     * Ohne diese Trennung waren Gewohnheiten hart auf die Arbeitszeit geklemmt, und damit war ihr
+     * Wunschfenster für einen normalen Arbeitstag von 08:00–17:00 schlicht unerreichbar:
+     * {@link HabitWindow#MORNING} beginnt um 06:00, {@link HabitWindow#EVENING} liegt mit
+     * 17:00–22:00 vollständig dahinter. "Vor dem Schlafen lesen" wurde deshalb um 15 Uhr geplant.
+     *
+     * {@code null} heißt Rückfall auf 06:00–23:00 (siehe {@code SmartSchedulerService}).
+     */
+    @Column(name = "personal_hours_start")
+    private LocalTime personalHoursStart;
+
+    @Column(name = "personal_hours_end")
+    private LocalTime personalHoursEnd;
+
 
     @Enumerated(EnumType.STRING)
     private ProductivityPeakTime peakProductivityTime;

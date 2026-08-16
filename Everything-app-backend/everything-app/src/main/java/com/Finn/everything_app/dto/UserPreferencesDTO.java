@@ -58,6 +58,13 @@ public class UserPreferencesDTO {
     /** Ende der Kernzeit; danach geplante Aufgaben kosten im Ziel (Abendstrafe). */
     private LocalTime coreHoursEnd;
 
+    /**
+     * Privatzeiten — der Rahmen für Gewohnheiten und Trainings, getrennt von der Arbeitszeit.
+     * {@code null} heißt Rückfall auf 06:00–23:00 im Scheduler.
+     */
+    private LocalTime personalHoursStart;
+    private LocalTime personalHoursEnd;
+
     @Min(value = 5,   message = "Mindestblock muss mindestens 5 Minuten sein")
     @Max(value = 480, message = "Mindestblock darf höchstens 8 Stunden sein")
     private Integer defaultMinChunkMinutes;

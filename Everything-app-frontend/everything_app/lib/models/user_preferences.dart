@@ -32,6 +32,14 @@ class UserPreferences {
   /// waere 21:00 bei einem Arbeitsende von 22:00 eine gleichwertige Lage.
   final TimeOfDay? coreHoursEnd;
 
+  /// Privatzeiten — der Rahmen fuer Gewohnheiten und Trainings ("Personal Hours").
+  ///
+  /// Getrennt von den Arbeitszeiten, weil beides verschiedene Fragen beantwortet. Solange
+  /// Gewohnheiten an der Arbeitszeit hingen, war ihr Wunschfenster bei 08:00–17:00 unerreichbar:
+  /// eine Abend-Gewohnheit landete mitten im Nachmittag.
+  final TimeOfDay? personalHoursStart;
+  final TimeOfDay? personalHoursEnd;
+
   final int? defaultMinChunkMinutes;
   final int? defaultMaxChunkMinutes;
   final bool? autoScheduleEnabled;
@@ -53,6 +61,8 @@ class UserPreferences {
     this.maxTaskMinutesPerDay,
     this.maxScheduledMinutesPerDay,
     this.coreHoursEnd,
+    this.personalHoursStart,
+    this.personalHoursEnd,
     this.defaultMinChunkMinutes,
     this.defaultMaxChunkMinutes,
     this.autoScheduleEnabled,
@@ -94,6 +104,8 @@ class UserPreferences {
       maxTaskMinutesPerDay: json['maxTaskMinutesPerDay'],
       maxScheduledMinutesPerDay: json['maxScheduledMinutesPerDay'],
       coreHoursEnd: _parseTime(json['coreHoursEnd']),
+      personalHoursStart: _parseTime(json['personalHoursStart']),
+      personalHoursEnd: _parseTime(json['personalHoursEnd']),
       defaultMinChunkMinutes: json['defaultMinChunkMinutes'],
       defaultMaxChunkMinutes: json['defaultMaxChunkMinutes'],
       autoScheduleEnabled: json['autoScheduleEnabled'],
@@ -117,6 +129,8 @@ class UserPreferences {
       'maxTaskMinutesPerDay': maxTaskMinutesPerDay,
       'maxScheduledMinutesPerDay': maxScheduledMinutesPerDay,
       'coreHoursEnd': _formatTime(coreHoursEnd),
+      'personalHoursStart': _formatTime(personalHoursStart),
+      'personalHoursEnd': _formatTime(personalHoursEnd),
       'defaultMinChunkMinutes': defaultMinChunkMinutes,
       'defaultMaxChunkMinutes': defaultMaxChunkMinutes,
       'autoScheduleEnabled': autoScheduleEnabled,
@@ -139,6 +153,8 @@ class UserPreferences {
     int? maxTaskMinutesPerDay,
     int? maxScheduledMinutesPerDay,
     TimeOfDay? coreHoursEnd,
+    TimeOfDay? personalHoursStart,
+    TimeOfDay? personalHoursEnd,
     int? defaultMinChunkMinutes,
     int? defaultMaxChunkMinutes,
     bool? autoScheduleEnabled,
@@ -160,6 +176,8 @@ class UserPreferences {
       maxTaskMinutesPerDay: maxTaskMinutesPerDay ?? this.maxTaskMinutesPerDay,
       maxScheduledMinutesPerDay: maxScheduledMinutesPerDay ?? this.maxScheduledMinutesPerDay,
       coreHoursEnd: coreHoursEnd ?? this.coreHoursEnd,
+      personalHoursStart: personalHoursStart ?? this.personalHoursStart,
+      personalHoursEnd: personalHoursEnd ?? this.personalHoursEnd,
       defaultMinChunkMinutes: defaultMinChunkMinutes ?? this.defaultMinChunkMinutes,
       defaultMaxChunkMinutes: defaultMaxChunkMinutes ?? this.defaultMaxChunkMinutes,
       autoScheduleEnabled: autoScheduleEnabled ?? this.autoScheduleEnabled,

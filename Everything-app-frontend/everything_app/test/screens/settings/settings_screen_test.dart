@@ -45,6 +45,8 @@ void main() {
     final fake = FakePreferencesService(const UserPreferences(
       workdayStart: TimeOfDay(hour: 9, minute: 0),
       workdayEnd: TimeOfDay(hour: 17, minute: 30),
+      personalHoursStart: TimeOfDay(hour: 6, minute: 30),
+      personalHoursEnd: TimeOfDay(hour: 22, minute: 30),
       bufferMinutes: 10,
     ));
     final calendar = await _pumpSettings(tester, fake: fake);
@@ -52,6 +54,10 @@ void main() {
     expect(find.text('09:00'), findsOneWidget);
     expect(find.text('17:30'), findsOneWidget);
     expect(find.text('10 min'), findsOneWidget);
+    // Die Privatzeiten sind ein eigenes Zeitpaar und duerfen nicht mit den Arbeitszeiten
+    // verwechselt werden: an ihnen haengen Gewohnheiten und Trainings.
+    expect(find.text('06:30'), findsOneWidget);
+    expect(find.text('22:30'), findsOneWidget);
 
     calendar.dispose();
   });
