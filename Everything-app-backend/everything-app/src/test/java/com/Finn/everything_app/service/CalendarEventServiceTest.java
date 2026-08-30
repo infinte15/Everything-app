@@ -213,7 +213,7 @@ class CalendarEventServiceTest {
 
     @Test
     void eineGewohnheitLaesstSichUeberspringenUndZurueckholen() {
-        CalendarEvent block = storedOwned(EventType.HABIT);
+        storedOwned(EventType.HABIT);
 
         CalendarEvent skipped = service.setSkipped(5L, 1L, true);
         assertNotNull(skipped.getSkippedAt(), "der Block muss als übersprungen markiert sein");
@@ -252,7 +252,7 @@ class CalendarEventServiceTest {
 
     @Test
     void zweimalUeberspringenSchreibtNichtZweimal() {
-        CalendarEvent block = storedOwned(EventType.PROJECT);
+        storedOwned(EventType.PROJECT);
 
         service.setSkipped(5L, 1L, true);
         clearInvocations(calendarEventRepository);

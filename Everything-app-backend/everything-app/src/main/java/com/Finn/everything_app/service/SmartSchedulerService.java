@@ -1157,11 +1157,11 @@ public class SmartSchedulerService {
      * Seine Minuten dürfen deshalb nicht als geleistet zählen: sonst bleibt in {@link #chunkSizes}
      * nichts mehr übrig ({@code remaining <= 0}), der Task erzeugt keinen einzigen Chunk, erreicht
      * den Solver nie und {@link #writeBackTaskSpans} schreibt ihm seinen alten Termin von gestern
-     * zurück — er verharrt für immer auf TODO mit einem Block in der Vergangenheit.
+     * zurück — er verharrt für immer im offenen Status, mit einem Block in der Vergangenheit.
      *
      * Bewusst NUR bei abgelaufener Deadline: solange sie in der Zukunft liegt, bleibt es bei der
      * bisherigen Annahme "vergangener Block = gelaufene Zeit". Der Task-Status muss nicht geprüft
-     * werden, findSchedulableTasks liefert ohnehin nur TODO.
+     * werden, findSchedulableTasks liefert ohnehin nur offene Aufgaben.
      *
      * <p><b>Maßgeblich ist das ENDE, nicht der Start.</b> Ein Block, der gerade läuft, ist nicht
      * verpasst — er läuft. Über den Start gemessen war das ein Selbstläufer, seit der Vorlauf

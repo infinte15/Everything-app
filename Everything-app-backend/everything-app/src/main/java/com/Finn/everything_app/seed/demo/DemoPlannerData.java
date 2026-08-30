@@ -240,8 +240,8 @@ public class DemoPlannerData {
     /**
      * Schon angefangen, aber noch offen — der Solver plant nur die Restzeit ein.
      *
-     * <p>Der Status bleibt bewusst TODO: {@code TaskRepository.findSchedulableTasks} liest
-     * ausschließlich {@code status = 'TODO'}, eine auf IN_PROGRESS gesetzte Aufgabe fällt also
+     * <p>Der Status bleibt bewusst offen: {@code TaskRepository.findSchedulableTasks} liest
+     * ausschließlich Aufgaben im offenen Status, eine auf IN_PROGRESS gesetzte Aufgabe fällt also
      * komplett aus der Planung. Für den Demo-Bestand heißt das: angefangene Arbeit wird über
      * {@code completedMinutes} abgebildet, nicht über den Status.
      */
