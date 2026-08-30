@@ -29,6 +29,7 @@ public class RoutineService {
     private final ExerciseRepository exerciseRepository;
     private final WorkoutPlanRepository workoutPlanRepository;
     private final UserRepository userRepository;
+    private final RoutineHabitService routineHabitService;
     private final ApplicationEventPublisher eventPublisher;
 
     @Transactional(readOnly = true)
@@ -59,6 +60,7 @@ public class RoutineService {
         replaceExercises(routine, request.getExercises());
 
         Routine saved = routineRepository.save(routine);
+        routineHabitService.sync(saved);
         // Der Scheduler rotiert die Routinen eines Plans in die Wochen-Platzhalter ein.
         if (saved.getWorkoutPlan() != null) {
             eventPublisher.publishEvent(new ScheduleChangedEvent(this, userId));
@@ -75,6 +77,7 @@ public class RoutineService {
         replaceExercises(routine, request.getExercises());
 
         Routine saved = routineRepository.save(routine);
+        routineHabitService.sync(saved);
         if (planBefore || saved.getWorkoutPlan() != null) {
             eventPublisher.publishEvent(new ScheduleChangedEvent(this, userId));
         }
@@ -88,6 +91,9 @@ public class RoutineService {
 
         // Bereits trainierte Einheiten behalten ihre Historie, verlieren aber den Bezug.
         routineExerciseRepository.detachSessionsFromRoutine(routineId);
+        // Anders als beim blossen Abwaehlen des Wochentags verschwindet die Routine hier ganz;
+        // eine Gewohnheit, die auf nichts mehr zeigt, waere ein Fremdkoerper im Habit-Space.
+        routineHabitService.remove(routineId);
         routineRepository.delete(routine);
 
         if (hadPlan) {
@@ -114,6 +120,7 @@ public class RoutineService {
         routine.setImageUrl(request.getImageUrl());
         routine.setColorHex(request.getColorHex());
         routine.setDayLabel(request.getDayLabel());
+        routine.setPreferredWeekday(request.getPreferredWeekday());
         routine.setEstimatedDurationMinutes(request.getEstimatedDurationMinutes());
         if (request.getIsArchived() != null) {
             routine.setIsArchived(request.getIsArchived());
@@ -167,6 +174,9 @@ public class RoutineService {
                     : exercise.getDefaultRestSeconds());
             re.setNotes(dto.getNotes());
             re.setSupersetGroup(dto.getSupersetGroup());
+            re.setProgressionPolicy(dto.getProgressionPolicy());
+            re.setIncrementKg(dto.getIncrementKg());
+            re.setIsBodyweight(dto.getIsBodyweight());
             rebuilt.add(re);
         }
 

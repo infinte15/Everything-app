@@ -16,6 +16,25 @@ class Task {
   final DateTime? completedAt;
   final String category;
 
+  /// Darf der Scheduler die Aufgabe in mehrere Bloecke zerlegen? `null` = Vorgabe des Backends.
+  ///
+  /// Das Feld gab es im Backend von Anfang an, im Modell hier aber nicht — die Checkbox "Split up"
+  /// im Anlege-Dialog wurde gesetzt und dann stillschweigend weggeworfen.
+  final bool? splittable;
+
+  /// Frühestens ab diesem Zeitpunkt einplanen (Reclaims "start after"). Gleiche Geschichte.
+  final DateTime? notBefore;
+
+  /// Unter-/Obergrenze fuer einen einzelnen Block; `null` = Vorgabe aus den Einstellungen.
+  final int? minChunkMinutes;
+  final int? maxChunkMinutes;
+
+  /// Hoechstens so viele Bloecke dieser Aufgabe an einem Tag; `null` = unbegrenzt.
+  final int? maxChunksPerDay;
+
+  /// Bereits geleistete Minuten — nur gelesen, geplant wird nur der Rest.
+  final int? completedMinutes;
+
   Task({
     this.id,
     required this.title,
@@ -31,7 +50,13 @@ class Task {
     this.createdAt,
     this.updatedAt,
     this.completedAt,
-    this.category = 'Personal'
+    this.category = 'Personal',
+    this.splittable,
+    this.notBefore,
+    this.minChunkMinutes,
+    this.maxChunkMinutes,
+    this.maxChunksPerDay,
+    this.completedMinutes,
   });
 
   // JSON zu Task
@@ -64,6 +89,14 @@ class Task {
           ? DateTime.parse(json['completedAt'])
           : null,
       category: json['category'] ?? 'Personal',
+      splittable: json['splittable'],
+      notBefore: json['notBefore'] != null
+          ? DateTime.parse(json['notBefore'])
+          : null,
+      minChunkMinutes: json['minChunkMinutes'],
+      maxChunkMinutes: json['maxChunkMinutes'],
+      maxChunksPerDay: json['maxChunksPerDay'],
+      completedMinutes: json['completedMinutes'],
     );
   }
 
@@ -82,6 +115,12 @@ class Task {
       'spaceType': spaceType,
       'projectId': projectId,
       'category': category,
+      'splittable': splittable,
+      'notBefore': notBefore?.toIso8601String(),
+      'minChunkMinutes': minChunkMinutes,
+      'maxChunkMinutes': maxChunkMinutes,
+      'maxChunksPerDay': maxChunksPerDay,
+      'completedMinutes': completedMinutes,
     };
   }
 
@@ -102,6 +141,12 @@ class Task {
     DateTime? updatedAt,
     DateTime? completedAt,
     String? category,
+    bool? splittable,
+    DateTime? notBefore,
+    int? minChunkMinutes,
+    int? maxChunkMinutes,
+    int? maxChunksPerDay,
+    int? completedMinutes,
   }) {
     return Task(
       id: id ?? this.id,
@@ -119,6 +164,12 @@ class Task {
       updatedAt: updatedAt ?? this.updatedAt,
       completedAt: completedAt ?? this.completedAt,
       category: category ?? this.category,
+      splittable: splittable ?? this.splittable,
+      notBefore: notBefore ?? this.notBefore,
+      minChunkMinutes: minChunkMinutes ?? this.minChunkMinutes,
+      maxChunkMinutes: maxChunkMinutes ?? this.maxChunkMinutes,
+      maxChunksPerDay: maxChunksPerDay ?? this.maxChunksPerDay,
+      completedMinutes: completedMinutes ?? this.completedMinutes,
     );
   }
 

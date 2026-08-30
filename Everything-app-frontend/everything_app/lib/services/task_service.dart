@@ -99,7 +99,19 @@ class TaskService {
   }
 
   /// Update task
-  Future<Task?> updateTask(Task task) async {
+  /// [clear] nennt die Felder, die ausdruecklich GELEERT werden sollen.
+  ///
+  /// Der Backend-Endpunkt patcht mit "null heisst unveraendert" — sonst raeumte das Abhaken eines
+  /// Kalenderblocks die halbe Aufgabe leer. Eine Deadline zu ENTFERNEN laesst sich darin nicht
+  /// ausdruecken; dafuer ist diese Liste da. Erlaubte Werte spiegeln das Enum
+  /// `TaskClearableField` im Backend: DEADLINE, NOT_BEFORE, MIN_CHUNK_MINUTES,
+  /// MAX_CHUNK_MINUTES, MAX_CHUNKS_PER_DAY, DESCRIPTION. Ein unbekannter Wert wird mit 400
+  /// abgewiesen, nicht stillschweigend geschluckt.
+  ///
+  /// Bewusst ein Parameter der ANFRAGE und kein Feld am Modell: [Task.toJson] soll weiterhin alle
+  /// Felder senden. Ein toJson, das Nullen weglaesst, loeste das Problem nicht (weggelassen =
+  /// abwesend = unveraendert) und verschoebe still die Bedeutung beim Anlegen.
+  Future<Task?> updateTask(Task task, {Set<String> clear = const {}}) async {
     try {
       if (task.id == null) {
         throw Exception('Task ID is required for update');
@@ -107,7 +119,10 @@ class TaskService {
 
       final response = await _apiService.put(
         ApiConfig.taskById(task.id!),
-        task.toJson(),
+        {
+          ...task.toJson(),
+          if (clear.isNotEmpty) 'clearFields': clear.toList(),
+        },
       );
 
       if (_apiService.isSuccess(response)) {

@@ -66,6 +66,15 @@ public class ExerciseSet {
     @Column(name = "routine_exercise_id")
     private Long routineExerciseId;
 
+    /**
+     * Der Arbeitssatz, an dem dieser Satz haengt - Abfallsatz oder Rest-Pause-Cluster.
+     * Wie {@link #routineExerciseId} absichtlich nur die ID und kein Fremdschluessel: eine
+     * Kaskade wuerde beim Loeschen eines Satzes stillschweigend mehr mitnehmen als gedacht.
+     * {@code null} heisst: eigenstaendiger Satz.
+     */
+    @Column(name = "parent_set_id")
+    private Long parentSetId;
+
     // Relationships
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "exercise_id", nullable = false)

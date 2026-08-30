@@ -120,7 +120,6 @@ public class DemoDataSeeder implements ApplicationRunner {
         prefs.setWorkdayEnd(LocalTime.of(22, 0));
         prefs.setPeakProductivityTime(com.Finn.everything_app.model.ProductivityPeakTime.MORNING);
         prefs.setBreakDurationMinutes(15);
-        prefs.setHoursBeforeBreak(2);
         prefs.setBufferMinutes(10);
         prefs.setMaxTaskMinutesPerDay(360);
         prefs.setDefaultMinChunkMinutes(30);

@@ -53,6 +53,17 @@ public class Routine {
     @Column(name = "day_label", length = 50)
     private String dayLabel;
 
+    /**
+     * Wunsch-Wochentag nach ISO (1 = Montag ... 7 = Sonntag), oder null fuer "egal".
+     *
+     * <p>Bewusst ein Wunsch und keine Festlegung: der Smart Scheduler sucht die Einheit weiter
+     * selbst einen freien Platz, zieht sie aber zu diesem Tag hin. Eine harte Zuordnung wuerde
+     * das Training an einem vollen Tag ersatzlos ausfallen lassen - schlechter als einen Tag
+     * daneben zu trainieren.
+     */
+    @Column(name = "preferred_weekday")
+    private Integer preferredWeekday;
+
     @Column(name = "estimated_duration_minutes")
     private Integer estimatedDurationMinutes;
 

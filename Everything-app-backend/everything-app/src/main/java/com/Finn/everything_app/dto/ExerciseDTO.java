@@ -38,6 +38,9 @@ public class ExerciseDTO {
     private String imageUrl;
     private String imageUrlEnd;
 
+    /** GIF-Animation der Uebung. Extern gehostet, (c) Gym visual. */
+    private String animationUrl;
+
     private String externalId;
     private Integer defaultRestSeconds;
     private Boolean isSystem;

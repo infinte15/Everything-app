@@ -5,7 +5,7 @@ import '../../../models/gym/gym_models.dart';
 import '../../../providers/sports_provider.dart';
 import '../../../theme/lyfta_theme.dart';
 import 'exercise_picker_sheet.dart';
-import 'exercise_muscle_figure.dart';
+import 'exercise_media.dart';
 
 /// Anlegen und Bearbeiten einer Routine: Name, Tag und die Übungsliste mit Zielsätzen.
 class CreateRoutineSheet extends StatefulWidget {
@@ -30,9 +30,20 @@ class CreateRoutineSheet extends StatefulWidget {
 }
 
 class _CreateRoutineSheetState extends State<CreateRoutineSheet> {
+  /// Reihenfolge = ISO-Wochentag: Index 0 ist Montag (1), Index 6 Sonntag (7).
   static const List<String> _days = [
     'Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa', 'So',
   ];
+
+  /// Der gewählte Tag als ISO-Wochentag, oder null für "egal".
+  ///
+  /// Aus derselben Auswahl abgeleitet, die es hier schon gab: die Chips waren immer schon
+  /// Wochentage, sie hatten nur keine Wirkung. Zwei getrennte Einstellungen für denselben
+  /// Sachverhalt wären eine Quelle für Widersprüche.
+  int? get _preferredWeekday {
+    final index = _days.indexOf(_dayLabel ?? '');
+    return index < 0 ? null : index + 1;
+  }
 
   late final TextEditingController _nameController =
       TextEditingController(text: widget.existing?.name ?? '');
@@ -113,7 +124,14 @@ class _CreateRoutineSheetState extends State<CreateRoutineSheet> {
                       ),
                     ),
                     const SizedBox(height: 18),
-                    Text('TAG (OPTIONAL)', style: LyftaTheme.label),
+                    Text('TRAININGSTAG (OPTIONAL)', style: LyftaTheme.label),
+                    const SizedBox(height: 4),
+                    Text(
+                      'Mit einem festen Tag plant der Kalender diese Routine dorthin und '
+                      'sucht nur noch die Uhrzeit. Ohne Tag verteilt er sie selbst und '
+                      'lässt Ruhetage dazwischen.',
+                      style: LyftaTheme.caption.copyWith(color: LyftaTheme.textTertiary),
+                    ),
                     const SizedBox(height: 8),
                     Wrap(
                       spacing: 8,
@@ -238,6 +256,7 @@ class _CreateRoutineSheetState extends State<CreateRoutineSheet> {
       id: widget.existing?.id,
       name: name,
       dayLabel: _dayLabel,
+      preferredWeekday: _preferredWeekday,
       estimatedDurationMinutes: int.tryParse(_durationController.text.trim()),
       exercises: _exercises,
     );
@@ -281,7 +300,8 @@ class _EditableExerciseRow extends StatelessWidget {
         children: [
           Row(
             children: [
-              ExerciseMuscleFigure(
+              ExerciseThumb(
+                imageUrl: item.imageUrl,
                 primaryMuscles: item.primaryMuscles,
                 secondaryMuscles: item.secondaryMuscles,
                 size: 44,
@@ -335,7 +355,260 @@ class _EditableExerciseRow extends StatelessWidget {
               ),
             ],
           ),
+          const SizedBox(height: 8),
+          Row(
+            children: [
+              Expanded(
+                child: _Pill(
+                  label: 'PROGRESSION',
+                  value: item.isBodyweight &&
+                          item.progressionPolicy != GymProgressionPolicy.off
+                      ? '${item.progressionPolicy.label} · Körpergewicht'
+                      : item.progressionPolicy.label,
+                  active: item.progressionPolicy != GymProgressionPolicy.off,
+                  onTap: () => _editProgression(context),
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: _Pill(
+                  label: 'SUPERSATZ',
+                  value: _supersetLabel(item.supersetGroup),
+                  active: item.supersetGroup != null,
+                  onTap: () => _editSuperset(context),
+                ),
+              ),
+            ],
+          ),
         ],
+      ),
+    );
+  }
+
+  static String _supersetLabel(int? group) =>
+      group == null ? 'Keiner' : String.fromCharCode(64 + group);
+
+  Future<void> _editProgression(BuildContext context) async {
+    final result = await showModalBottomSheet<GymRoutineExercise>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: LyftaTheme.surface,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+      ),
+      builder: (_) => _ProgressionSheet(item: item),
+    );
+    if (result != null) onChanged(result);
+  }
+
+  Future<void> _editSuperset(BuildContext context) async {
+    // Drei Gruppen reichen: mehr parallele Supersätze sind in einer Einheit nicht
+    // trainierbar, ohne das halbe Studio zu belegen.
+    final picked = await showModalBottomSheet<Object>(
+      context: context,
+      backgroundColor: LyftaTheme.surface,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+      ),
+      builder: (sheetContext) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              title: Text('Keiner',
+                  style: LyftaTheme.subtitle.copyWith(color: LyftaTheme.textPrimary)),
+              subtitle: Text('Die Übung wird für sich trainiert.',
+                  style: LyftaTheme.caption),
+              onTap: () => Navigator.pop(sheetContext, #none),
+            ),
+            for (var group = 1; group <= 3; group++)
+              ListTile(
+                leading: Text(_supersetLabel(group),
+                    style: LyftaTheme.title.copyWith(color: LyftaTheme.primary)),
+                title: Text('Gruppe ${_supersetLabel(group)}',
+                    style: LyftaTheme.subtitle.copyWith(color: LyftaTheme.textPrimary)),
+                subtitle: Text(
+                    'Übungen derselben Gruppe im Wechsel, Pause erst nach der Runde.',
+                    style: LyftaTheme.caption),
+                onTap: () => Navigator.pop(sheetContext, group),
+              ),
+          ],
+        ),
+      ),
+    );
+
+    if (picked == #none) {
+      onChanged(item.copyWith(supersetGroup: null, clearSupersetGroup: true));
+    } else if (picked is int) {
+      onChanged(item.copyWith(supersetGroup: picked));
+    }
+  }
+}
+
+/// Kompakte Auswahl-Kachel im Zuschnitt von [_Stepper], damit die Zeile eine Zeile bleibt.
+class _Pill extends StatelessWidget {
+  final String label;
+  final String value;
+  final bool active;
+  final VoidCallback onTap;
+
+  const _Pill({
+    required this.label,
+    required this.value,
+    required this.active,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(label, style: LyftaTheme.label),
+        const SizedBox(height: 4),
+        InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(8),
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+            decoration: BoxDecoration(
+              color: LyftaTheme.surface,
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    value,
+                    style: LyftaTheme.title.copyWith(
+                      fontSize: 13,
+                      color: active ? LyftaTheme.primary : LyftaTheme.textSecondary,
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+                const Icon(Icons.expand_more_rounded,
+                    size: 16, color: LyftaTheme.textTertiary),
+              ],
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+/// Regel, Sprunghöhe und Körpergewichts-Kennzeichen einer Übung.
+class _ProgressionSheet extends StatefulWidget {
+  final GymRoutineExercise item;
+
+  const _ProgressionSheet({required this.item});
+
+  @override
+  State<_ProgressionSheet> createState() => _ProgressionSheetState();
+}
+
+class _ProgressionSheetState extends State<_ProgressionSheet> {
+  late GymProgressionPolicy _policy = widget.item.progressionPolicy;
+  late bool _bodyweight = widget.item.isBodyweight;
+  late double? _increment = widget.item.incrementKg;
+
+  /// Ladbare Stufen, wie sie an einer Stange tatsächlich vorkommen.
+  static const _steps = [1.25, 2.5, 5.0];
+
+  @override
+  Widget build(BuildContext context) {
+    // Ohne Automatik ist alles Weitere gegenstandslos - dann bleibt das Blatt kurz.
+    final active = _policy != GymProgressionPolicy.off;
+
+    return SafeArea(
+      child: SingleChildScrollView(
+        padding: const EdgeInsets.fromLTRB(16, 16, 16, 16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(widget.item.exerciseName,
+                style: LyftaTheme.title.copyWith(fontSize: 16)),
+            const SizedBox(height: 14),
+            RadioGroup<GymProgressionPolicy>(
+              groupValue: _policy,
+              onChanged: (v) => setState(() => _policy = v ?? _policy),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  for (final policy in GymProgressionPolicy.values)
+                    RadioListTile<GymProgressionPolicy>(
+                      value: policy,
+                      activeColor: LyftaTheme.primary,
+                      contentPadding: EdgeInsets.zero,
+                      title: Text(policy.label,
+                          style: LyftaTheme.subtitle
+                              .copyWith(color: LyftaTheme.textPrimary)),
+                      subtitle: Text(policy.hint, style: LyftaTheme.caption),
+                    ),
+                ],
+              ),
+            ),
+            if (active) ...[
+              const Divider(color: LyftaTheme.divider),
+              SwitchListTile(
+                value: _bodyweight,
+                onChanged: (v) => setState(() => _bodyweight = v),
+                activeThumbColor: LyftaTheme.primary,
+                contentPadding: EdgeInsets.zero,
+                title: Text('Körpergewichtsübung',
+                    style: LyftaTheme.subtitle.copyWith(color: LyftaTheme.textPrimary)),
+                subtitle: Text(
+                    'Gesteigert werden Wiederholungen und Sätze, nicht die Last.',
+                    style: LyftaTheme.caption),
+              ),
+              if (!_bodyweight && _policy != GymProgressionPolicy.time) ...[
+                const SizedBox(height: 8),
+                Text('SPRUNG', style: LyftaTheme.label),
+                const SizedBox(height: 8),
+                Wrap(
+                  spacing: 8,
+                  children: [
+                    ChoiceChip(
+                      label: const Text('Automatisch'),
+                      selected: _increment == null,
+                      onSelected: (_) => setState(() => _increment = null),
+                    ),
+                    for (final step in _steps)
+                      ChoiceChip(
+                        label: Text('${gymFormatNumber(step)} kg'),
+                        selected: _increment == step,
+                        onSelected: (_) => setState(() => _increment = step),
+                      ),
+                  ],
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  'Automatisch heißt: 5 kg bei Bein- und Rückenübungen, sonst 2,5 kg.',
+                  style: LyftaTheme.caption,
+                ),
+              ],
+            ],
+            const SizedBox(height: 18),
+            SizedBox(
+              width: double.infinity,
+              child: FilledButton(
+                onPressed: () => Navigator.pop(
+                  context,
+                  widget.item.copyWith(
+                    progressionPolicy: _policy,
+                    isBodyweight: _bodyweight,
+                    incrementKg: _increment,
+                    clearIncrementKg: _increment == null,
+                  ),
+                ),
+                child: const Text('Übernehmen'),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

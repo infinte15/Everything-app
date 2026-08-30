@@ -39,6 +39,7 @@ public class WorkoutLogMapper {
         dto.setRpe(set.getRpe());
         dto.setExerciseOrder(set.getExerciseOrder());
         dto.setRoutineExerciseId(set.getRoutineExerciseId());
+        dto.setParentSetId(set.getParentSetId());
         dto.setCompletedAt(set.getCompletedAt());
 
         if (set.getExercise() != null) {
@@ -62,7 +63,12 @@ public class WorkoutLogMapper {
                 : List.of();
 
         sessionMapper.fill(dto, session, null);
-        dto.setTotalSets((int) sets.stream().filter(s -> Boolean.TRUE.equals(s.getIsCompleted())).count());
+        // Arbeitssaetze, nicht alle Zeilen: dieselbe Regel wie beim Volumen, sonst zaehlt die
+        // automatische Aufwaermrampe drei Saetze mit, die niemand als Training empfindet.
+        dto.setTotalSets((int) sets.stream()
+                .filter(s -> Boolean.TRUE.equals(s.getIsCompleted()))
+                .filter(s -> SetType.countsTowardVolume(s.getSetType()))
+                .count());
         dto.setTotalVolumeKg(sets.stream()
                 .filter(s -> Boolean.TRUE.equals(s.getIsCompleted()))
                 .mapToDouble(this::volumeOf)
@@ -89,6 +95,7 @@ public class WorkoutLogMapper {
                 created.setName(exercise.getName());
                 created.setImageUrl(exercise.getImageUrl());
                 created.setImageUrlEnd(exercise.getImageUrlEnd());
+                created.setAnimationUrl(exercise.getAnimationUrl());
                 created.setEquipment(exercise.getEquipment());
                 created.setPrimaryMuscles(exercise.getPrimaryMuscles().stream()
                         .map(MuscleGroup::getSlug).toList());
@@ -113,7 +120,12 @@ public class WorkoutLogMapper {
         return new ArrayList<>(blocks.values());
     }
 
+    /**
+     * Volumen eines Satzes. Aufwaermsaetze und Rest-Pause-Cluster zaehlen nicht mit - warum,
+     * steht bei {@link SetType#countsTowardVolume(SetType)}.
+     */
     public double volumeOf(ExerciseSet set) {
+        if (!SetType.countsTowardVolume(set.getSetType())) return 0d;
         if (set.getWeight() == null || set.getReps() == null) return 0d;
         return set.getWeight() * set.getReps();
     }

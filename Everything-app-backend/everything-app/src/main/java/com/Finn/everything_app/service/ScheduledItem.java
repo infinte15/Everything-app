@@ -51,6 +51,16 @@ public class ScheduledItem {
      * Pause davor, und ohne eine Notiz daran sähe das im Kalender nach einem Fehler aus.
      */
     private int reliefLevel;
+
+    /**
+     * Nur für TASK: der Block endet innerhalb des Sicherheitspuffers vor der Deadline.
+     *
+     * Getrennt von {@link #reliefLevel}, weil beides verschiedene Fragen beantwortet — der eine
+     * sagt, WELCHER Pass den Block untergebracht hat, dieses Feld, wie knapp es geworden ist. Ein
+     * Block aus dem Hauptlauf kann im Puffer liegen (die Deadline ist nah, der Puffer schrumpft
+     * mit), und ein nachgerückter Block kann weit davor liegen.
+     */
+    private boolean insideDeadlineBuffer;
 }
 
 enum ScheduledItemType {

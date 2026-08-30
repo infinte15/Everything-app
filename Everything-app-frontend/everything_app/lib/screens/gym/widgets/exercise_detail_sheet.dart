@@ -5,6 +5,7 @@ import 'package:provider/provider.dart';
 import '../../../models/gym/gym_models.dart';
 import '../../../providers/sports_provider.dart';
 import '../../../theme/lyfta_theme.dart';
+import 'exercise_media.dart';
 import 'exercise_muscle_figure.dart';
 import 'exercise_progress_chart.dart';
 import 'routine_card.dart' show muscleLabel;
@@ -34,6 +35,7 @@ class ExerciseDetailSheet extends StatefulWidget {
 class _ExerciseDetailSheetState extends State<ExerciseDetailSheet> {
   GymPersonalRecord? _records;
   List<GymHistoryEntry> _history = const [];
+  String? _note;
   bool _loading = true;
 
   @override
@@ -53,10 +55,12 @@ class _ExerciseDetailSheetState extends State<ExerciseDetailSheet> {
     } catch (_) {
       // Verlauf ist optional - die Übung selbst bleibt trotzdem sichtbar.
     }
+    final note = await sports.loadExerciseNote(widget.exercise.id);
     if (!mounted) return;
     setState(() {
       _records = records;
       _history = history;
+      _note = note;
       _loading = false;
     });
   }
@@ -87,10 +91,12 @@ class _ExerciseDetailSheetState extends State<ExerciseDetailSheet> {
               ),
             ),
             const SizedBox(height: 18),
-            ExerciseMuscleFigureBanner(
+            ExerciseAnimation(
+              animationUrl: exercise.animationUrl,
+              imageUrl: exercise.imageUrl,
               primaryMuscles: exercise.primaryMuscles,
               secondaryMuscles: exercise.secondaryMuscles,
-              height: 200,
+              height: 220,
             ),
             const SizedBox(height: 18),
             Text(exercise.name, style: LyftaTheme.headline.copyWith(fontSize: 24)),
@@ -118,6 +124,12 @@ class _ExerciseDetailSheetState extends State<ExerciseDetailSheet> {
                 ],
               ),
             const SizedBox(height: 22),
+            // Die eigene Notiz steht vor der Anleitung aus dem Katalog: was man sich selbst
+            // aufgeschrieben hat, ist beim Nachschlagen fast immer das Gesuchte.
+            _noteSection(),
+            // Die gezeichnete Figur behält ihren Platz: die Animation zeigt die Bewegung,
+            // sie zeigt, welche Muskeln dabei arbeiten. Zwei verschiedene Fragen.
+            ..._executionSection(exercise),
             if (_loading)
               const Center(
                 child: Padding(
@@ -148,10 +160,148 @@ class _ExerciseDetailSheetState extends State<ExerciseDetailSheet> {
               else
                 ..._history.take(8).map(_historyRow),
             ],
+            const GymVisualAttribution(),
           ],
         );
       },
     );
+  }
+
+  /// Stehende Notiz zur Übung - gilt bei jedem Training, unabhängig von der Routine.
+  Widget _noteSection() {
+    final note = _note;
+
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 22),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Text('Meine Notiz', style: LyftaTheme.title),
+              const Spacer(),
+              TextButton(
+                onPressed: _editNote,
+                child: Text(note == null ? 'Hinzufügen' : 'Ändern'),
+              ),
+            ],
+          ),
+          const SizedBox(height: 4),
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: LyftaTheme.surfaceElevated,
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: Text(
+              note ??
+                  'Was du dir hier notierst, steht bei jedem Training dieser Übung dabei - '
+                      'Sitzhöhe, Griffbreite, worauf du achten willst.',
+              style: note == null
+                  ? LyftaTheme.caption
+                  : LyftaTheme.subtitle.copyWith(color: LyftaTheme.textPrimary),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _editNote() async {
+    final controller = TextEditingController(text: _note ?? '');
+    final sports = context.read<SportsProvider>();
+
+    final text = await showDialog<String>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        backgroundColor: LyftaTheme.surface,
+        title: Text('Notiz', style: LyftaTheme.title),
+        content: TextField(
+          controller: controller,
+          autofocus: true,
+          maxLines: 4,
+          maxLength: 1000,
+          style: LyftaTheme.subtitle.copyWith(color: LyftaTheme.textPrimary),
+          decoration: const InputDecoration(hintText: 'Bank auf Stufe 3, Griff eng …'),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext),
+            child: const Text('Abbrechen'),
+          ),
+          // Leeren speichern heißt löschen - dafür braucht es keinen eigenen Knopf.
+          FilledButton(
+            onPressed: () => Navigator.pop(dialogContext, controller.text),
+            child: const Text('Speichern'),
+          ),
+        ],
+      ),
+    );
+    if (text == null) return;
+
+    final ok = await sports.saveExerciseNote(widget.exercise.id, text);
+    if (!mounted) return;
+    if (ok) {
+      setState(() => _note = text.trim().isEmpty ? null : text.trim());
+    }
+  }
+
+  /// Ausführung: die Schritte aus dem Katalog, daneben die beanspruchte Muskulatur.
+  ///
+  /// Die Anleitungstexte sind englisch - so kommen sie aus dem Übungsdatensatz, und eine
+  /// maschinelle Übersetzung von Fachbegriffen wie "scapular retraction" wäre schlechter
+  /// als das Original.
+  List<Widget> _executionSection(GymExercise exercise) {
+    final steps = (exercise.instructions ?? '')
+        .split(RegExp(r'\n\s*\n'))
+        .map((s) => s.trim())
+        .where((s) => s.isNotEmpty)
+        .toList();
+    if (steps.isEmpty) return const [];
+
+    return [
+      Text('Ausführung', style: LyftaTheme.title),
+      const SizedBox(height: 10),
+      Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                for (var i = 0; i < steps.length; i++)
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 8),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        SizedBox(
+                          width: 20,
+                          child: Text(
+                            '${i + 1}.',
+                            style: LyftaTheme.caption
+                                .copyWith(color: LyftaTheme.textTertiary),
+                          ),
+                        ),
+                        Expanded(child: Text(steps[i], style: LyftaTheme.subtitle)),
+                      ],
+                    ),
+                  ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 14),
+          ExerciseMuscleFigure(
+            primaryMuscles: exercise.primaryMuscles,
+            secondaryMuscles: exercise.secondaryMuscles,
+            size: 96,
+            side: BodySide.auto,
+          ),
+        ],
+      ),
+      const SizedBox(height: 22),
+    ];
   }
 
   Widget _historyRow(GymHistoryEntry entry) {

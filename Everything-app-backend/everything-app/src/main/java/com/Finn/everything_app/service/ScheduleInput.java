@@ -3,6 +3,8 @@ package com.Finn.everything_app.service;
 import com.Finn.everything_app.model.*;
 import lombok.Data;
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
 
 @Data
 public class ScheduleInput {
@@ -54,4 +56,14 @@ public class ScheduleInput {
      * stünde die Woche unter Pensum und der Solver legte prompt Ersatz an.
      */
     private List<CalendarEvent> skippedEvents;
+
+    /**
+     * Je Routine die primaer beanspruchten Muskeln.
+     *
+     * <p>Damit bemisst der Planer den Abstand zwischen zwei Einheiten nach dem, was sie
+     * gemeinsam beanspruchen, statt fuer alle Trainings denselben Ruhetag anzusetzen: Push nach
+     * Push braucht mehr Erholung als Push nach Beinen. Siehe
+     * {@code SmartSchedulerService.restDaysBetween}.
+     */
+    private Map<Long, Set<MuscleGroup>> routineMuscles = Map.of();
 }

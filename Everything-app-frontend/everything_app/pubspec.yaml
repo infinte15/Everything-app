@@ -35,6 +35,17 @@ dependencies:
   google_fonts: ^6.1.0
   flutter_svg: ^2.0.9
 
+  # Wandelt die SVG-Pfade der Körpergeometrie (assets/body/muscle_map.json) in
+  # Flutter-Paths um. Bewusst nicht flutter_svg: die Muskelflächen müssen einzeln
+  # eingefärbt und angetippt werden können, ein fertig gerastertes SVG kann das nicht.
+  # Kam ohnehin schon als transitive Abhängigkeit von flutter_svg mit.
+  path_parsing: ^1.1.0
+
+  # Übungsbilder und -animationen. Sie liegen nicht in der App, sondern werden
+  # zur Laufzeit von einem CDN geladen (~1300 GIFs, zusammen weit über 100 MB) -
+  # ohne Cache würde jedes Öffnen einer Übung sie neu herunterladen.
+  cached_network_image: ^3.4.1
+
   http: ^1.1.2
   dio: ^5.4.0
   
@@ -91,6 +102,11 @@ flutter:
   # included with your application, so that you can use the icons in
   # the material Icons class.
   uses-material-design: true
+
+  assets:
+    # Muskel-Geometrie der Körpergrafik. Siehe body_map_paths.dart für die Herkunft
+    # (MuscleMap via openGym, MIT).
+    - assets/body/muscle_map.json
 
 
 

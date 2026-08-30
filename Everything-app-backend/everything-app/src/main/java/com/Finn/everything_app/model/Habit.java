@@ -89,6 +89,23 @@ public class Habit {
     @OneToMany(mappedBy = "habit", cascade = CascadeType.ALL, orphanRemoval = true)
     private List<HabitCompletion> completions;
 
+    /**
+     * Die Gym-Routine, aus der diese Gewohnheit entstanden ist - sonst {@code null}.
+     *
+     * <p>Weist man im Gym-Space einer Routine einen Wochentag zu, ist das fachlich eine
+     * Gewohnheit ("montags Push"), und sie gehoert in den Habit-Space samt Streak. Angelegt und
+     * gepflegt wird sie von {@link com.Finn.everything_app.service.RoutineHabitService}, nicht
+     * von Hand.
+     *
+     * <p><b>Wichtig fuer den Planer:</b> eine Gewohnheit mit Routine wird <em>nicht</em>
+     * eingeplant. Die Zeit im Kalender belegt der Workout-Platzhalter derselben Routine; beides
+     * zu planen hiesse, denselben Termin zweimal in die Woche zu legen. Siehe
+     * {@code SmartSchedulerService.loadInput}.
+     */
+    @OneToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "routine_id", unique = true)
+    private Routine routine;
+
     @PrePersist
     protected void onCreate() {
         createdAt = LocalDateTime.now();

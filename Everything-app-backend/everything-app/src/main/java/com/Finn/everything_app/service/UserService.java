@@ -52,7 +52,6 @@ public class UserService {
         prefs.setWorkdayEnd(LocalTime.of(22,0));
         prefs.setPeakProductivityTime(ProductivityPeakTime.MORNING);
         prefs.setBreakDurationMinutes(15);
-        prefs.setHoursBeforeBreak(2);
         prefs.setMaxTasksPerDay(8);
         prefs.setNotificationsEnabled(true);
         prefs.setReminderMinutesBefore(15);
@@ -107,8 +106,6 @@ public class UserService {
         if (newPrefs.getWorkdayEnd() != null)           existing.setWorkdayEnd(newPrefs.getWorkdayEnd());
         if (newPrefs.getPeakProductivityTime() != null) existing.setPeakProductivityTime(newPrefs.getPeakProductivityTime());
         if (newPrefs.getBreakDurationMinutes() != null) existing.setBreakDurationMinutes(newPrefs.getBreakDurationMinutes());
-        if (newPrefs.getHoursBeforeBreak() != null)     existing.setHoursBeforeBreak(newPrefs.getHoursBeforeBreak());
-        if (newPrefs.getGroupSimilarTasks() != null)    existing.setGroupSimilarTasks(newPrefs.getGroupSimilarTasks());
         if (newPrefs.getMaxTasksPerDay() != null)       existing.setMaxTasksPerDay(newPrefs.getMaxTasksPerDay());
         if (newPrefs.getNotificationsEnabled() != null) existing.setNotificationsEnabled(newPrefs.getNotificationsEnabled());
         if (newPrefs.getReminderMinutesBefore() != null) existing.setReminderMinutesBefore(newPrefs.getReminderMinutesBefore());
@@ -122,6 +119,7 @@ public class UserService {
         if (newPrefs.getPersonalHoursEnd() != null)     existing.setPersonalHoursEnd(newPrefs.getPersonalHoursEnd());
         if (newPrefs.getDefaultMinChunkMinutes() != null) existing.setDefaultMinChunkMinutes(newPrefs.getDefaultMinChunkMinutes());
         if (newPrefs.getDefaultMaxChunkMinutes() != null) existing.setDefaultMaxChunkMinutes(newPrefs.getDefaultMaxChunkMinutes());
+        if (newPrefs.getDeadlineBufferHours() != null)  existing.setDeadlineBufferHours(newPrefs.getDeadlineBufferHours());
         if (newPrefs.getAutoScheduleEnabled() != null)  existing.setAutoScheduleEnabled(newPrefs.getAutoScheduleEnabled());
 
         UserPreferences saved = userPreferencesRepository.save(existing);

@@ -4,11 +4,13 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
 import '../../providers/calendar_provider.dart';
+import '../../providers/task_provider.dart';
 import '../../config/app_theme.dart';
 import '../../models/at_risk_item.dart';
 import '../../models/calendar_event.dart';
 import '../../utils/deadline_urgency.dart';
 import '../../widgets/create_event_sheet.dart';
+import '../../widgets/create_task_sheet.dart';
 import '../../widgets/pointer_aware_draggable.dart';
 
 // ─── Constants ───────────────────────────────────────────────────────────────
@@ -157,6 +159,11 @@ void _navigate(int delta) {
               selectedDay: selected,
               onViewChanged: (v) => setState(() => _view = v),
               onNavigate: _navigate,
+              // Läuft schon eine Planung, ist der Knopf aus: ein zweiter Lauf würde nur warten,
+              // weil der Server pro Nutzer ohnehin serialisiert.
+              onReplan: cal.isReplanning
+                  ? null
+                  : () => cal.generateSchedule(DateTime.now()),
               onToday: () {
                 final now = DateTime.now();
                 cal.setSelectedDay(now);
@@ -494,12 +501,16 @@ class _CalendarHeader extends StatelessWidget {
   final ValueChanged<int> onNavigate;
   final VoidCallback onToday;
 
+  /// Null schaltet den Knopf ab — solange schon geplant wird.
+  final VoidCallback? onReplan;
+
   const _CalendarHeader({
     required this.view,
     required this.selectedDay,
     required this.onViewChanged,
     required this.onNavigate,
     required this.onToday,
+    required this.onReplan,
   });
 
   int _getWeekNumber(DateTime date) {
@@ -610,6 +621,32 @@ Expanded(
                         child: Container(
                           padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                           child: Text('TODAY', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w900, color: theme.colorScheme.primary, fontFamily: 'Manrope')),
+                        ),
+                      ),
+                      const SizedBox(width: 4),
+                      // "Jetzt neu planen". Normalerweise plant der Server nach jeder Änderung von
+                      // selbst; dieser Knopf ist für die Fälle, in denen man das trotzdem
+                      // anstoßen will — nach dem Ändern von Einstellungen, oder wenn ein Lauf
+                      // ausgefallen ist.
+                      //
+                      // Bewusst GestureDetector statt IconButton, wie beim TODAY daneben: ein
+                      // IconButton bringt eine Mindesthöhe mit und ließ diese Zeile bei 320 px und
+                      // Textskalierung 2.0 um 8 px überlaufen.
+                      Tooltip(
+                        message: 'Jetzt neu planen',
+                        child: GestureDetector(
+                          onTap: onReplan,
+                          behavior: HitTestBehavior.opaque,
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+                            child: Icon(
+                              Icons.auto_awesome_rounded,
+                              size: 18,
+                              color: onReplan == null
+                                  ? theme.colorScheme.onSurfaceVariant
+                                  : theme.colorScheme.primary,
+                            ),
+                          ),
                         ),
                       ),
                       const SizedBox(width: 4),
@@ -2083,7 +2120,38 @@ class _EventDetailSheet extends StatelessWidget {
                       child: OutlinedButton.icon(
                         icon: const Icon(Icons.edit_rounded, size: 16),
                         label: const Text('Edit'),
-                        onPressed: () {
+                        onPressed: () async {
+                          // Bei einem Aufgabenblock gehoert der Block dem Scheduler — geaendert
+                          // werden will die AUFGABE dahinter. Vorher oeffnete "Edit" auch hier
+                          // den Termin-Dialog, in dem sich Deadline, Dauer und Prioritaet gar
+                          // nicht setzen lassen; verschob man dort die Zeit, pinnte man den Block
+                          // nur fest, statt die Planung zu aendern.
+                          final taskId = event.relatedTaskId;
+                          if (event.isTask && taskId != null) {
+                            final messenger = ScaffoldMessenger.of(context);
+                            final tasks = context.read<TaskProvider>();
+                            Navigator.pop(context);
+                            // Auf dem Kalender-Screen ist die Aufgabenliste womoeglich noch leer;
+                            // fetchTaskById laedt dann einzeln nach.
+                            final task = await tasks.fetchTaskById(taskId);
+                            if (!context.mounted) return;
+                            if (task == null) {
+                              messenger.showSnackBar(const SnackBar(
+                                content: Text('Aufgabe konnte nicht geladen werden'),
+                              ));
+                              return;
+                            }
+                            showModalBottomSheet(
+                              context: context,
+                              isScrollControlled: true,
+                              builder: (_) => CreateTaskSheet(
+                                existingTask: task,
+                                spaceType: task.spaceType,
+                              ),
+                            );
+                            return;
+                          }
+
                           Navigator.pop(context);
                           if (!context.mounted) return;
                           showModalBottomSheet(

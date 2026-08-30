@@ -17,7 +17,9 @@ import java.time.LocalTime;
 import java.time.temporal.ChronoUnit;
 import java.time.temporal.TemporalAdjusters;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
 
@@ -3353,6 +3355,382 @@ class SmartSchedulerServiceTest {
         assertEquals(heute, nachhol.toLocalDate(), "und zwar sofort, nicht morgen");
     }
 
+    /**
+     * Überfälliges verdrängt Gewohnheiten — das konnte vor dem Vorlauf niemand.
+     *
+     * Der Tag ist voll: eine Stunde Arbeitszeit, und die will auch die Gewohnheit. Bis der Vorlauf
+     * eingeführt wurde, war das nicht zu retten — im Hauptlauf konkurrierte die überfällige Aufgabe
+     * gleichberechtigt mit, und fiel sie heraus, konnten die Nachläufe nur noch AUFFÜLLEN, nie
+     * verdrängen. Jetzt greift der Vorlauf vor allem anderen zu und das Hauptmodell findet die Zeit
+     * belegt vor.
+     */
+    @Test
+    void ueberfaelligesVerdraengtEineGewohnheit() {
+        LocalDate heute = TODAY;
+        prefs.setWorkdayStart(LocalTime.of(8, 0));
+        prefs.setWorkdayEnd(LocalTime.of(23, 30));
+        // Auch die Privatzeit einschnüren, sonst hat die Gewohnheit reichlich eigenen Platz und
+        // der Test sagt nichts über das Verdrängen aus.
+        prefs.setPersonalHoursStart(LocalTime.of(8, 0));
+        prefs.setPersonalHoursEnd(LocalTime.of(23, 30));
+        prefs.setMaxScheduledMinutesPerDay(60);
+
+        Task ueberfaellig = makeTask(3420L, "Abgabe von gestern", 60, 3,
+                heute.minusDays(1).atTime(12, 0));
+        when(taskService.getSchedulableTasks(1L)).thenReturn(List.of(ueberfaellig));
+        when(calendarEventService.getFixedEvents(eq(1L), any(), any())).thenReturn(new ArrayList<>());
+
+        Habit taeglich = new Habit();
+        taeglich.setId(3421L);
+        taeglich.setName("Lesen");
+        taeglich.setTimesPerWeek(7);
+        taeglich.setDurationMinutes(60);
+        taeglich.setStartDate(heute.minusDays(30));
+        when(habitRepository.findHabitsActiveInRange(eq(1L), any(), any()))
+                .thenReturn(List.of(taeglich));
+
+        ScheduleResult result = service.generateOptimalSchedule(1L, heute, heute.plusDays(6));
+
+        LocalDateTime nachhol = blockVon(result, 3420L);
+        assertEquals(heute, nachhol.toLocalDate(), "der Nachholtermin gehört auf heute");
+
+        boolean gewohnheitHeute = result.getScheduledHabits().stream()
+                .filter(i -> i.getHabit() != null)
+                .anyMatch(i -> i.getStartTime().toLocalDate().equals(heute));
+        assertFalse(gewohnheitHeute,
+                "die Gewohnheit muss dem Nachholtermin weichen — heute ist der Tagesdeckel weg");
+    }
+
+    /**
+     * Sind die drei Nachhol-Tage komplett dicht, eskaliert das Fenster, statt aufzugeben.
+     *
+     * Vorher war {@link #CATCHUP_TAGE} eine harte Decke in taskBounds UND im Nachlauf: kein Platz
+     * in drei Tagen hieß gar kein Block, nur eine Meldung.
+     */
+    @Test
+    void ueberfaelligesEskaliertDasFensterStattLeerAuszugehen() {
+        LocalDate heute = TODAY;
+        prefs.setWorkdayStart(LocalTime.of(8, 0));
+        prefs.setWorkdayEnd(LocalTime.of(20, 0));
+
+        // Tag 0 bis CATCHUP_TAGE ganztägig zugepinnt — auch das gelockerte Fenster 07–22 ist dicht.
+        List<CalendarEvent> gepinnt = new ArrayList<>();
+        for (int d = 0; d <= CATCHUP_TAGE; d++) {
+            gepinnt.add(makeFixedEvent(3430L + d,
+                    heute.plusDays(d).atTime(0, 0), heute.plusDays(d + 1).atTime(0, 0)));
+        }
+
+        Task ueberfaellig = makeTask(3440L, "Abgabe von gestern", 60, 3,
+                heute.minusDays(1).atTime(12, 0));
+        when(taskService.getSchedulableTasks(1L)).thenReturn(List.of(ueberfaellig));
+        when(calendarEventService.getFixedEvents(eq(1L), any(), any())).thenReturn(gepinnt);
+
+        ScheduleResult result = service.generateOptimalSchedule(1L, heute, heute.plusDays(20));
+
+        LocalDateTime nachhol = blockVon(result, 3440L);
+        assertTrue(nachhol.toLocalDate().isAfter(heute.plusDays(CATCHUP_TAGE)),
+                "das Fenster muss über die " + CATCHUP_TAGE + " Nachhol-Tage hinaus wachsen, "
+                        + "der Block lag aber am " + nachhol.toLocalDate());
+    }
+
+    /** Konkurrieren zwei überfällige Aufgaben um den letzten Platz, gewinnt die wichtigere. */
+    @Test
+    void unterUeberfaelligenGewinntDieHoehereProritaet() {
+        // Bewusst ab morgen: startet der Lauf heute, schneidet der Umplanzeitpunkt die Freistelle
+        // je nach Tageszeit weg und der Test misst die Uhrzeit statt die Rangfolge.
+        LocalDate start = TODAY.plusDays(1);
+        prefs.setWorkdayStart(LocalTime.of(8, 0));
+        prefs.setWorkdayEnd(LocalTime.of(23, 30));
+
+        // Alles außer einer einzigen Stunde am ersten Nachhol-Tag ist dicht — auch außerhalb der
+        // Arbeitszeit, denn der Vorlauf darf das gelockerte Fenster 07–22 nutzen.
+        List<CalendarEvent> gepinnt = new ArrayList<>();
+        gepinnt.add(makeFixedEvent(3450L, start.atTime(0, 0), start.atTime(8, 0)));
+        gepinnt.add(makeFixedEvent(3451L, start.atTime(9, 0), start.plusDays(1).atTime(0, 0)));
+        for (int d = 1; d <= 20; d++) {
+            gepinnt.add(makeFixedEvent(3452L + d,
+                    start.plusDays(d).atTime(0, 0), start.plusDays(d + 1).atTime(0, 0)));
+        }
+
+        Task wichtig    = makeTask(3460L, "Wichtig",    60, 5, TODAY.minusDays(1).atTime(12, 0));
+        Task nebensache = makeTask(3461L, "Nebensache", 60, 1, TODAY.minusDays(9).atTime(12, 0));
+        when(taskService.getSchedulableTasks(1L)).thenReturn(List.of(nebensache, wichtig));
+        when(calendarEventService.getFixedEvents(eq(1L), any(), any())).thenReturn(gepinnt);
+
+        ScheduleResult result = service.generateOptimalSchedule(1L, start, start.plusDays(20));
+
+        assertEquals(start.atTime(8, 0), blockVon(result, 3460L),
+                "die wichtigere Aufgabe muss den einzigen freien Platz bekommen — auch gegen eine, "
+                        + "die deutlich länger überfällig ist");
+    }
+
+    /**
+     * Eine hohe Priorität ohne Termin schlägt eine niedrige mit Termin heute.
+     *
+     * Genau die Inversion aus der Beschwerde "Prioritäten werden ignoriert": vorher war die
+     * Deadline-Nähe ein Faktor AUF die Priorität und konnte sie überholen.
+     */
+    @Test
+    void hohePrioritaetOhneTerminSchlaegtNiedrigeMitTermin() {
+        // Ab morgen, damit der Umplanzeitpunkt die eine freie Stunde nicht je nach Tageszeit
+        // wegschneidet.
+        LocalDate tag = TODAY.plusDays(1);
+        prefs.setWorkdayStart(LocalTime.of(8, 0));
+        prefs.setWorkdayEnd(LocalTime.of(9, 0));      // genau ein Block von 60 Minuten passt
+        prefs.setPersonalHoursStart(LocalTime.of(8, 0));
+        prefs.setPersonalHoursEnd(LocalTime.of(9, 0));
+        prefs.setMaxScheduledMinutesPerDay(60);
+
+        Task wichtigOhneTermin = makeTask(3470L, "Wichtig, ohne Termin", 60, 5, null);
+        Task kleinMitTermin    = makeTask(3471L, "Nebensache, heute fällig", 60, 1,
+                tag.atTime(23, 59));
+        // Unteilbar, sonst nimmt sich jede der beiden einen halbierten Block und der Test misst
+        // die Zerlegung statt die Rangfolge.
+        wichtigOhneTermin.setSplittable(false);
+        kleinMitTermin.setSplittable(false);
+        when(taskService.getSchedulableTasks(1L))
+                .thenReturn(List.of(kleinMitTermin, wichtigOhneTermin));
+
+        // Der ganze Tag außer 08–09 ist zugepinnt. Ohne das rettet der Quetsch-Nachlauf die
+        // Aufgabe mit Deadline in die gelockerten Zeiten (07–22) und die Knappheit, um die es hier
+        // geht, gibt es gar nicht mehr.
+        when(calendarEventService.getFixedEvents(eq(1L), any(), any())).thenReturn(List.of(
+                makeFixedEvent(3472L, tag.atTime(0, 0), tag.atTime(8, 0)),
+                makeFixedEvent(3473L, tag.atTime(9, 0), tag.plusDays(1).atTime(0, 0))));
+
+        // Nur der eine Tag existiert, danach ist der Horizont zu Ende: es muss eine der beiden
+        // Aufgaben herausfallen, und die Wahl ist der eigentliche Prüfgegenstand.
+        ScheduleResult result = service.generateOptimalSchedule(1L, tag, tag);
+
+        assertEquals(1, result.getScheduledTasks().size(), "es passt nur eine der beiden");
+        assertEquals(3470L, result.getScheduledTasks().get(0).getTask().getId(),
+                "die höhere Priorität muss gewinnen, auch ohne Deadline");
+    }
+
+    /** Zwei Aufgaben am selben Tag: die wichtigere liegt vorn. */
+    @Test
+    void amSelbenTagLiegtDieWichtigereAufgabeVorn() {
+        LocalDate morgen = TODAY.plusDays(1);
+        prefs.setWorkdayStart(LocalTime.of(8, 0));
+        prefs.setWorkdayEnd(LocalTime.of(12, 0));
+        prefs.setBreakDurationMinutes(0);
+
+        // Gleiche Deadline-Stufe (beide ohne Termin), damit ausschließlich die Priorität ordnet.
+        Task wichtig   = makeTask(3480L, "Wichtig",   60, 5, null);
+        Task unwichtig = makeTask(3481L, "Unwichtig", 60, 1, null);
+        when(taskService.getSchedulableTasks(1L)).thenReturn(List.of(unwichtig, wichtig));
+        when(calendarEventService.getFixedEvents(eq(1L), any(), any())).thenReturn(new ArrayList<>());
+
+        ScheduleResult result = service.generateOptimalSchedule(1L, morgen, morgen);
+
+        LocalDateTime a = blockVon(result, 3480L);
+        LocalDateTime b = blockVon(result, 3481L);
+        assertTrue(a.isBefore(b),
+                "die wichtigere Aufgabe gehört an den früheren Platz des Tages, lag aber "
+                        + a + " gegen " + b);
+    }
+
+    /** Bei genug Platz endet die Arbeit einen Puffer vor der Deadline, nicht auf ihr. */
+    @Test
+    void aufgabeIstEinenPufferVorDerDeadlineFertig() {
+        LocalDate morgen = TODAY.plusDays(1);
+        prefs.setWorkdayStart(LocalTime.of(8, 0));
+        prefs.setWorkdayEnd(LocalTime.of(18, 0));
+
+        LocalDateTime deadline = morgen.plusDays(5).atTime(17, 0);
+        Task t = makeTask(3490L, "Bericht", 60, 3, deadline);
+        when(taskService.getSchedulableTasks(1L)).thenReturn(List.of(t));
+        when(calendarEventService.getFixedEvents(eq(1L), any(), any())).thenReturn(new ArrayList<>());
+
+        ScheduleResult result = service.generateOptimalSchedule(1L, morgen, morgen.plusDays(10));
+
+        LocalDateTime ende = result.getScheduledTasks().stream()
+                .filter(i -> i.getTask().getId() == 3490L)
+                .map(ScheduledItem::getEndTime)
+                .max(LocalDateTime::compareTo)
+                .orElseThrow();
+        assertFalse(ende.isAfter(deadline.minusHours(24)),
+                "der letzte Block soll 24 Stunden vor der Deadline fertig sein, endete aber " + ende);
+        assertTrue(result.getAtRisk().isEmpty(), "der Puffer allein ist kein Grund zu warnen");
+    }
+
+    /**
+     * Reicht die Zeit für den Puffer nicht, wird hineingeplant — statt zu warnen.
+     *
+     * Der Puffer ist ein Ziel des Hauptlaufs, keine zweite harte Grenze.
+     */
+    @Test
+    void ohnePlatzFuerDenPufferWirdHineingeplantStattGewarnt() {
+        LocalDate morgen = TODAY.plusDays(1);
+        prefs.setWorkdayStart(LocalTime.of(8, 0));
+        prefs.setWorkdayEnd(LocalTime.of(18, 0));
+
+        // Deadline in 30 Stunden: der volle 24-Stunden-Puffer ist nicht zu haben.
+        LocalDateTime deadline = morgen.plusDays(1).atTime(14, 0);
+        Task t = makeTask(3495L, "Eilig", 120, 4, deadline);
+        when(taskService.getSchedulableTasks(1L)).thenReturn(List.of(t));
+        when(calendarEventService.getFixedEvents(eq(1L), any(), any())).thenReturn(new ArrayList<>());
+
+        ScheduleResult result = service.generateOptimalSchedule(1L, morgen, morgen.plusDays(10));
+
+        assertFalse(result.getScheduledTasks().isEmpty(), "die Aufgabe muss trotzdem geplant werden");
+        LocalDateTime ende = result.getScheduledTasks().stream()
+                .filter(i -> i.getTask().getId() == 3495L)
+                .map(ScheduledItem::getEndTime)
+                .max(LocalDateTime::compareTo)
+                .orElseThrow();
+        assertFalse(ende.isAfter(deadline), "die echte Deadline bleibt hart");
+        assertTrue(result.getAtRisk().isEmpty(),
+                "ein geschrumpfter Puffer ist kein Deadline-Risiko");
+    }
+
+    /**
+     * Eine Aufgabe mit Deadline verdrängt eine Gewohnheit, statt die Deadline zu reißen.
+     *
+     * Bis zum Verdrängungs-Nachlauf ging das nicht: fiel die Aufgabe aus dem Hauptlauf, konnten die
+     * Nachläufe sie nur noch in LÜCKEN legen — sie sehen alles Bestehende als fest. Stand vor der
+     * Deadline lauter Verzichtbares, meldete die App eine gerissene Deadline und daneben stand die
+     * Meditation im Kalender.
+     */
+    @Test
+    void deadlineVerdraengtEineGewohnheitStattZuReissen() {
+        LocalDate start = TODAY.plusDays(1);
+        prefs.setWorkdayStart(LocalTime.of(8, 0));
+        prefs.setWorkdayEnd(LocalTime.of(9, 0));
+        prefs.setPersonalHoursStart(LocalTime.of(8, 0));
+        prefs.setPersonalHoursEnd(LocalTime.of(9, 0));
+        prefs.setBreakDurationMinutes(0);
+
+        // Deadline am Tag darauf, aber der zweite Tag ist komplett zugepinnt: es gibt genau eine
+        // freie Stunde, und die will auch die Gewohnheit.
+        Task eilig = makeTask(3500L, "Muss morgen fertig", 60, 3, start.plusDays(1).atTime(9, 0));
+        eilig.setSplittable(false);
+        when(taskService.getSchedulableTasks(1L)).thenReturn(List.of(eilig));
+        when(calendarEventService.getFixedEvents(eq(1L), any(), any())).thenReturn(List.of(
+                makeFixedEvent(3501L, start.plusDays(1).atTime(0, 0), start.plusDays(2).atTime(0, 0))));
+
+        Habit taeglich = new Habit();
+        taeglich.setId(3502L);
+        taeglich.setName("Meditation");
+        taeglich.setTimesPerWeek(7);
+        taeglich.setDurationMinutes(60);
+        taeglich.setPriority(1);
+        taeglich.setStartDate(start.minusDays(30));
+        when(habitRepository.findHabitsActiveInRange(eq(1L), any(), any()))
+                .thenReturn(List.of(taeglich));
+
+        ScheduleResult result = service.generateOptimalSchedule(1L, start, start.plusDays(6));
+
+        assertEquals(start.atTime(8, 0), blockVon(result, 3500L),
+                "die Aufgabe muss die einzige freie Stunde bekommen");
+        boolean gewohnheitAmErstenTag = result.getScheduledHabits().stream()
+                .filter(i -> i.getHabit() != null)
+                .anyMatch(i -> i.getStartTime().toLocalDate().equals(start));
+        assertFalse(gewohnheitAmErstenTag, "die Gewohnheit muss weichen");
+        assertTrue(result.getAtRisk().stream().noneMatch(i -> i.getTaskId() != null),
+                "und die Aufgabe darf danach nicht mehr als gefährdet gemeldet werden");
+    }
+
+    /** Was dabei weggefallen ist, wird gemeldet — nicht stillschweigend gelöscht. */
+    @Test
+    void eineVerdraengteGewohnheitWirdGemeldet() {
+        LocalDate start = TODAY.plusDays(1);
+        prefs.setWorkdayStart(LocalTime.of(8, 0));
+        prefs.setWorkdayEnd(LocalTime.of(9, 0));
+        prefs.setPersonalHoursStart(LocalTime.of(8, 0));
+        prefs.setPersonalHoursEnd(LocalTime.of(9, 0));
+        prefs.setBreakDurationMinutes(0);
+
+        Task eilig = makeTask(3510L, "Muss morgen fertig", 60, 3, start.plusDays(1).atTime(9, 0));
+        eilig.setSplittable(false);
+        when(taskService.getSchedulableTasks(1L)).thenReturn(List.of(eilig));
+        when(calendarEventService.getFixedEvents(eq(1L), any(), any())).thenReturn(List.of(
+                makeFixedEvent(3511L, start.plusDays(1).atTime(0, 0), start.plusDays(2).atTime(0, 0))));
+
+        Habit taeglich = new Habit();
+        taeglich.setId(3512L);
+        taeglich.setName("Vor dem Schlafen lesen");
+        taeglich.setTimesPerWeek(7);
+        taeglich.setDurationMinutes(60);
+        taeglich.setPriority(1);
+        taeglich.setStartDate(start.minusDays(30));
+        when(habitRepository.findHabitsActiveInRange(eq(1L), any(), any()))
+                .thenReturn(List.of(taeglich));
+
+        ScheduleResult result = service.generateOptimalSchedule(1L, start, start.plusDays(6));
+
+        assertTrue(result.getAtRisk().stream()
+                        .anyMatch(i -> i.getHabitId() != null && i.getHabitId() == 3512L),
+                "die weggefallene Gewohnheit gehört in die At-Risk-Liste: " + result.getAtRisk());
+    }
+
+    /**
+     * Verdrängt wird nur nach unten. Eine wichtigere Aufgabe zu reißen, um eine unwichtigere zu
+     * retten, wäre kein Fortschritt.
+     */
+    @Test
+    void einWichtigererBlockWirdNichtVerdraengt() {
+        LocalDate start = TODAY.plusDays(1);
+        prefs.setWorkdayStart(LocalTime.of(8, 0));
+        prefs.setWorkdayEnd(LocalTime.of(9, 0));
+        prefs.setBreakDurationMinutes(0);
+
+        Task wichtig = makeTask(3520L, "Wichtig", 60, 5, start.plusDays(1).atTime(9, 0));
+        Task egal    = makeTask(3521L, "Weniger wichtig", 60, 2, start.plusDays(1).atTime(9, 0));
+        wichtig.setSplittable(false);
+        egal.setSplittable(false);
+        when(taskService.getSchedulableTasks(1L)).thenReturn(List.of(wichtig, egal));
+        // Der ganze Zeitraum bis zur Deadline ist zu, bis auf 08–09 am ersten Tag. Auch das
+        // gelockerte Fenster des Quetsch-Nachlaufs (07–22) muss dicht sein, sonst bekommt die
+        // unwichtigere Aufgabe dort einen Platz und der Test sagt nichts über das Verdrängen aus.
+        when(calendarEventService.getFixedEvents(eq(1L), any(), any())).thenReturn(List.of(
+                makeFixedEvent(3522L, start.atTime(0, 0), start.atTime(8, 0)),
+                makeFixedEvent(3523L, start.atTime(9, 0), start.plusDays(1).atTime(0, 0)),
+                makeFixedEvent(3524L, start.plusDays(1).atTime(0, 0), start.plusDays(2).atTime(0, 0))));
+
+        ScheduleResult result = service.generateOptimalSchedule(1L, start, start.plusDays(6));
+
+        assertEquals(start.atTime(8, 0), blockVon(result, 3520L),
+                "die wichtigere Aufgabe behält den Platz");
+        assertTrue(result.getAtRisk().stream()
+                        .anyMatch(i -> i.getTaskId() != null && i.getTaskId() == 3521L),
+                "und die unwichtigere wird gemeldet, statt die wichtigere zu verdrängen");
+    }
+
+    /**
+     * Ein gerade laufender Block ist nicht verpasst.
+     *
+     * Über die STARTzeit gemessen war das ein Selbstläufer, seit der Vorlauf Überfälliges auf
+     * "jetzt" legt: der nächste Lauf hielt den laufenden Block für vertan und buchte einen
+     * zweiten Nachholtermin, der übernächste einen dritten.
+     */
+    @Test
+    void einLaufenderBlockZaehltNichtAlsVerpasst() {
+        LocalDate heute = TODAY;
+        prefs.setWorkdayStart(LocalTime.of(0, 0));
+        prefs.setWorkdayEnd(LocalTime.of(23, 59));
+
+        Task ueberfaellig = makeTask(3530L, "Überfällig", 60, 3, heute.minusDays(2).atTime(12, 0));
+        when(taskService.getSchedulableTasks(1L)).thenReturn(List.of(ueberfaellig));
+
+        // Ein Block, der vor einer Minute begonnen hat und noch fast eine Stunde läuft.
+        LocalDateTime jetzt = LocalDateTime.now();
+        CalendarEvent laufend = makeFixedEvent(3531L, jetzt.minusMinutes(1), jetzt.plusMinutes(59));
+        laufend.setEventType(EventType.TASK);
+        laufend.setIsFixed(false);
+        laufend.setRelatedTask(ueberfaellig);
+        when(calendarEventService.getFixedEvents(eq(1L), any(), any())).thenReturn(new ArrayList<>());
+        when(calendarEventService.getPinnedScheduledEventsFrom(eq(1L), any()))
+                .thenReturn(List.of(laufend));
+
+        ScheduleResult result = service.generateOptimalSchedule(1L, heute, heute.plusDays(6));
+
+        assertTrue(result.getScheduledTasks().stream()
+                        .noneMatch(i -> i.getTask().getId() == 3530L),
+                "der laufende Block deckt die Aufgabe ab — es darf kein zweiter dazukommen: "
+                        + result.getScheduledTasks());
+    }
+
     private LocalDateTime blockVon(ScheduleResult result, long taskId) {
         return result.getScheduledTasks().stream()
                 .filter(i -> i.getTask().getId() == taskId)
@@ -3431,26 +3809,158 @@ class SmartSchedulerServiceTest {
         }
     }
 
-    /** Innerhalb der Aufgaben muss die alte, inversionsfreie Ordnung erhalten bleiben. */
+    /**
+     * Priorität ist ein RANG: jede Stufe hat ihr eigenes Band, und die Bänder überlappen nicht.
+     *
+     * Vorher war die Deadline-Nähe ein Faktor auf die Priorität und konnte sie damit überholen —
+     * ein P2-Task von heute (2000) schlug einen P5-Task ohne Deadline (900). Geprüft wird deshalb
+     * nicht mehr ein Beispielpaar, sondern das VOLLSTÄNDIGE Kreuzprodukt: das schwerste Gewicht
+     * einer Stufe muss unter dem leichtesten der nächsthöheren liegen.
+     */
     @Test
-    void dropGewichteBleibenInnerhalbDerAufgabenGeordnet() throws Exception {
+    void dropGewichteSindStriktNachPrioritaetGebaendert() throws Exception {
         java.lang.reflect.Method taskWeight = SmartSchedulerService.class
                 .getDeclaredMethod("calculateTaskWeight", Task.class, LocalDate.class);
         taskWeight.setAccessible(true);
 
-        long hochPrioSpaeteDeadline = (long) taskWeight.invoke(service,
-                makeTask(1L, "wichtig", 60, 5, TODAY.plusDays(5).atTime(12, 0)), TODAY);
-        long niedrigPrioFrueheDeadline = (long) taskWeight.invoke(service,
-                makeTask(2L, "nebensächlich", 60, 1, TODAY.plusDays(1).atTime(12, 0)), TODAY);
-        assertTrue(hochPrioSpaeteDeadline > niedrigPrioFrueheDeadline,
-                "Priorität darf nicht von einer näheren Deadline überstimmt werden");
+        // Alle Deadline-Stufen, von "keine" bis "überfällig".
+        List<LocalDateTime> deadlines = new ArrayList<>();
+        deadlines.add(null);
+        deadlines.add(TODAY.plusDays(30).atTime(12, 0));
+        deadlines.add(TODAY.plusDays(5).atTime(12, 0));
+        deadlines.add(TODAY.plusDays(2).atTime(12, 0));
+        deadlines.add(TODAY.plusDays(1).atTime(12, 0));
+        deadlines.add(TODAY.minusDays(1).atTime(12, 0));
 
+        Map<Integer, List<Long>> band = new LinkedHashMap<>();
+        for (int prio = 1; prio <= 5; prio++) {
+            List<Long> gewichte = new ArrayList<>();
+            for (LocalDateTime deadline : deadlines) {
+                gewichte.add((long) taskWeight.invoke(service,
+                        makeTask(1L, "T", 60, prio, deadline), TODAY));
+            }
+            band.put(prio, gewichte);
+        }
+
+        for (int prio = 1; prio < 5; prio++) {
+            long schwerstesUnten = band.get(prio).stream().mapToLong(Long::longValue).max().orElseThrow();
+            long leichtestesOben = band.get(prio + 1).stream().mapToLong(Long::longValue).min().orElseThrow();
+            assertTrue(schwerstesUnten < leichtestesOben,
+                    "Prio " + prio + " (max " + schwerstesUnten + ") muss unter Prio " + (prio + 1)
+                            + " (min " + leichtestesOben + ") liegen — sonst kann eine nähere "
+                            + "Deadline die Priorität überstimmen");
+        }
+
+        // Und innerhalb einer Stufe ordnet weiterhin die Deadline-Nähe, monoton.
         long gleichePrioFrueher = (long) taskWeight.invoke(service,
                 makeTask(3L, "früher", 60, 3, TODAY.plusDays(1).atTime(12, 0)), TODAY);
         long gleichePrioSpaeter = (long) taskWeight.invoke(service,
                 makeTask(4L, "später", 60, 3, TODAY.plusDays(10).atTime(12, 0)), TODAY);
         assertTrue(gleichePrioFrueher > gleichePrioSpaeter,
                 "bei gleicher Priorität gewinnt die nähere Deadline");
+    }
+
+    /**
+     * Dieselbe Rangordnung für die beiden Reihenfolge-Terme — und ihre Obergrenzen.
+     *
+     * Die Obergrenzen sind kein Detail: an ihnen hängt die Totzone des Stabilitätsankers. Wächst
+     * einer der Ränge, ohne dass {@code W_MOVE_FIXED} mitwächst, fängt der Kalender wieder an zu
+     * springen, und das fällt in keinem funktionalen Test auf.
+     */
+    @Test
+    void reihenfolgeRaengeSindStriktNachPrioritaetUndBleibenUnterDerTotzone() throws Exception {
+        java.lang.reflect.Method urgency = SmartSchedulerService.class
+                .getDeclaredMethod("urgencyRank", Task.class, LocalDate.class);
+        java.lang.reflect.Method dayOrder = SmartSchedulerService.class
+                .getDeclaredMethod("dayOrderRank", Task.class, LocalDate.class);
+        urgency.setAccessible(true);
+        dayOrder.setAccessible(true);
+
+        List<LocalDateTime> deadlines = new ArrayList<>();
+        deadlines.add(null);
+        deadlines.add(TODAY.plusDays(30).atTime(12, 0));
+        deadlines.add(TODAY.plusDays(2).atTime(12, 0));
+        deadlines.add(TODAY.minusDays(1).atTime(12, 0));
+
+        int maxUrgency = 0;
+        int maxDayOrder = 0;
+        Map<Integer, int[]> urgBand = new LinkedHashMap<>();
+        Map<Integer, int[]> tagBand = new LinkedHashMap<>();
+        for (int prio = 1; prio <= 5; prio++) {
+            int urgMin = Integer.MAX_VALUE, urgMax = 0, tagMin = Integer.MAX_VALUE, tagMax = 0;
+            for (LocalDateTime deadline : deadlines) {
+                Task t = makeTask(1L, "T", 60, prio, deadline);
+                int u = (int) urgency.invoke(service, t, TODAY);
+                int d = (int) dayOrder.invoke(service, t, TODAY);
+                urgMin = Math.min(urgMin, u); urgMax = Math.max(urgMax, u);
+                tagMin = Math.min(tagMin, d); tagMax = Math.max(tagMax, d);
+            }
+            urgBand.put(prio, new int[]{ urgMin, urgMax });
+            tagBand.put(prio, new int[]{ tagMin, tagMax });
+            maxUrgency = Math.max(maxUrgency, urgMax);
+            maxDayOrder = Math.max(maxDayOrder, tagMax);
+        }
+
+        for (int prio = 1; prio < 5; prio++) {
+            assertTrue(urgBand.get(prio)[1] < urgBand.get(prio + 1)[0],
+                    "urgencyRank: Prio " + prio + " überlappt Prio " + (prio + 1));
+            assertTrue(tagBand.get(prio)[1] < tagBand.get(prio + 1)[0],
+                    "dayOrderRank: Prio " + prio + " überlappt Prio " + (prio + 1));
+        }
+
+        long totzone = feldWert("W_MOVE_FIXED");
+        int slotsProTag = (int) feldWert("SLOTS_PER_DAY");
+
+        // Die Reihenfolge innerhalb eines Tages wirkt PRO SLOT und muss über einen vollen Tag
+        // unter der Totzone bleiben.
+        assertTrue((long) maxDayOrder * slotsProTag < totzone,
+                "dayOrderRank kostet über einen vollen Tag " + ((long) maxDayOrder * slotsProTag)
+                        + " und würde damit einen liegenden Block bewegen (Totzone " + totzone + ")");
+
+        // Die Reihenfolge über Tage trägt den Faktor SLOTS_PER_DAY/4 und wirkt pro TAG.
+        assertTrue((long) maxUrgency * (slotsProTag / 4) < totzone,
+                "urgencyRank kostet pro Tagessprung " + ((long) maxUrgency * (slotsProTag / 4))
+                        + " und würde damit einen fertigen Plan umwerfen (Totzone " + totzone + ")");
+
+        // Eine Deadline muss weiterhin JEDE Bewegung erzwingen können.
+        assertTrue(feldWert("W_LATE") * 1 * slotsProTag > totzone,
+                "die Deadline-Strafe muss die Totzone überbieten, sonst bleibt ein Block liegen, "
+                        + "obwohl er seinen Termin reißt");
+
+        // Der Regelfall bleibt exakt auf dem historischen Wert, gegen den alle übrigen
+        // Abwägungen im Modell formuliert sind.
+        int regelfall = (int) urgency.invoke(service, makeTask(1L, "T", 60, 3, null), TODAY);
+        assertEquals(288, regelfall * (slotsProTag / 4),
+                "P3 ohne Deadline muss weiterhin 288 pro Tagessprung kosten");
+
+        // Und die Reihenfolge-Präferenz darf ebenfalls keinen liegenden Block bewegen.
+        assertTrue(feldWert("W_ORDER") < totzone,
+                "W_ORDER muss unter der Totzone bleiben, sonst reißt die Reihenfolge einen "
+                        + "fertigen Plan wieder auf");
+    }
+
+    /**
+     * Das Leistungshoch muss den Tagessog STRIKT überbieten, nicht nur unentschieden spielen.
+     *
+     * Solange {@code dayOrderRank} bei {@code prio*2} lag, war es exakt so groß wie
+     * {@code W_PEAK * prio} — die Wunschzeit-Einstellung konnte nie gewinnen, und der zugehörige
+     * Solver-Test ging nur durch, weil CP-SAT den Gleichstand zufällig zugunsten des Hints auflöste.
+     * Ein grüner Test über eine Eigenschaft, die es nicht gab.
+     */
+    @Test
+    void dasLeistungshochUeberbietetDenTagessogStrikt() throws Exception {
+        java.lang.reflect.Method dayOrder = SmartSchedulerService.class
+                .getDeclaredMethod("dayOrderRank", Task.class, LocalDate.class);
+        dayOrder.setAccessible(true);
+        long peak = feldWert("W_PEAK");
+
+        for (int prio = 1; prio <= 5; prio++) {
+            int sog = (int) dayOrder.invoke(service, makeTask(1L, "T", 60, prio, null), TODAY);
+            assertTrue(peak * prio > sog,
+                    "bei Priorität " + prio + " wiegt das Leistungshoch " + (peak * prio)
+                            + " gegen einen Tagessog von " + sog
+                            + " — die Einstellung bliebe wirkungslos");
+        }
     }
 
     /**

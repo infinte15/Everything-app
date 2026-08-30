@@ -3,6 +3,7 @@ package com.Finn.everything_app.model;
 import com.Finn.everything_app.exception.BadRequestException;
 
 import java.util.Arrays;
+import java.util.List;
 import java.util.Map;
 import java.util.function.Function;
 import java.util.stream.Collectors;
@@ -10,10 +11,26 @@ import java.util.stream.Collectors;
 /**
  * Geschlossenes Muskel-Vokabular.
  *
- * <p>Die 17 Konstanten entsprechen exakt den Werten, die in der free-exercise-db (CC0) in
- * {@code primaryMuscles} / {@code secondaryMuscles} vorkommen. Der {@code slug} ist der
- * gemeinsame Schluessel zwischen Seeder, DTOs und der Koerper-Grafik im Flutter-Client -
- * dort werden damit die Muskelflaechen der Silhouette eingefaerbt.
+ * <p>Der {@code slug} ist der gemeinsame Schluessel zwischen Seeder, DTOs und der
+ * Koerper-Grafik im Flutter-Client - dort werden damit die Muskelflaechen der Silhouette
+ * eingefaerbt.
+ *
+ * <p>Die urspruenglichen 17 Konstanten stammen aus der free-exercise-db (CC0) und bleiben
+ * unveraendert, damit bestehende Zeilen und die Grafik weiterlaufen. {@link #CARDIO} kam mit dem
+ * Wechsel auf den ExerciseDB-Katalog dazu: dessen 29 Ausdauer-Uebungen haben kein
+ * Zielmuskel-Aequivalent, und {@code exercises.muscle_group} ist NOT NULL. Die Silhouette kennt
+ * fuer diesen Slug keine Flaeche und faerbt schlicht nichts ein - das ist die richtige
+ * Darstellung, nicht ein Mangel.
+ *
+ * <p>{@link #HIP_FLEXORS}, {@link #OBLIQUES}, {@link #SERRATUS} und {@link #TIBIALIS} kamen mit
+ * der neuen Koerpergeometrie dazu (MuscleMap, siehe {@code body_map_paths.dart}). Der Datensatz
+ * nannte diese Muskeln immer schon - 77 Uebungen den Hueftbeuger, 72 die seitlichen
+ * Bauchmuskeln -, aber die von Hand gezeichnete Silhouette hatte keine Flaeche dafuer, also
+ * fielen sie bisher auf den naechstgelegenen Nachbarn. Jetzt gibt es die Flaechen, und die
+ * Zuordnung darf so fein sein wie die Quelle.
+ *
+ * <p>Die Zuordnung des ExerciseDB-Vokabulars auf diese Konstanten macht
+ * {@link com.Finn.everything_app.seed.ExerciseDbMuscleMapping}.
  */
 public enum MuscleGroup {
 
@@ -24,16 +41,21 @@ public enum MuscleGroup {
     CALVES("calves", "Waden"),
     CHEST("chest", "Brust"),
     FOREARMS("forearms", "Unterarme"),
-    GLUTES("glutes", "Gesaess"),
+    GLUTES("glutes", "Gesäß"),
     HAMSTRINGS("hamstrings", "Beinbeuger"),
+    HIP_FLEXORS("hip flexors", "Hüftbeuger"),
     LATS("lats", "Latissimus"),
-    LOWER_BACK("lower back", "Unterer Ruecken"),
-    MIDDLE_BACK("middle back", "Mittlerer Ruecken"),
+    LOWER_BACK("lower back", "Unterer Rücken"),
+    MIDDLE_BACK("middle back", "Mittlerer Rücken"),
     NECK("neck", "Nacken"),
+    OBLIQUES("obliques", "Seitliche Bauchmuskeln"),
     QUADRICEPS("quadriceps", "Quadrizeps"),
+    SERRATUS("serratus", "Sägemuskel"),
     SHOULDERS("shoulders", "Schultern"),
+    TIBIALIS("tibialis", "Schienbein"),
     TRAPS("traps", "Trapez"),
-    TRICEPS("triceps", "Trizeps");
+    TRICEPS("triceps", "Trizeps"),
+    CARDIO("cardio", "Ausdauer");
 
     private final String slug;
     private final String label;
@@ -50,6 +72,22 @@ public enum MuscleGroup {
     /** Deutsche Anzeige-Bezeichnung fuer Filter-Chips und die Koerper-Grafik. */
     public String getLabel() {
         return label;
+    }
+
+    /**
+     * Die Gruppen, die die Koerper-Grafik im Client zeichnen kann - alles ausser
+     * {@link #CARDIO}.
+     *
+     * <p>Bewusst nicht dasselbe wie {@link #values()}: der Filter in der Bibliothek soll
+     * "Ausdauer" anbieten (29 Uebungen haengen daran), die Muskelbilanz dagegen nicht. Eine
+     * Zeile "Ausdauer: 0 kg" in einer Auswertung, die Flaechen einfaerbt, waere nur Rauschen.
+     */
+    private static final List<MuscleGroup> BODY_MAP =
+            Arrays.stream(values()).filter(m -> m != CARDIO).toList();
+
+    /** @see #BODY_MAP */
+    public static List<MuscleGroup> bodyMapValues() {
+        return BODY_MAP;
     }
 
     private static final Map<String, MuscleGroup> BY_SLUG = Arrays.stream(values())

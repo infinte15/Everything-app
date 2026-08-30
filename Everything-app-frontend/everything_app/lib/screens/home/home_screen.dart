@@ -8,6 +8,7 @@ import '../../providers/task_provider.dart';
 import '../../providers/calendar_provider.dart';
 import '../../models/task.dart';
 import '../../models/calendar_event.dart';
+import '../../models/at_risk_item.dart';
 
 // Stitch Design System: "Kinetic Mono"
 const _backgroundColor = Color(0xFF121212);
@@ -17,6 +18,32 @@ const _onSurfaceVariant = Color(0xFFA0A0A0);
 const _primary = Color(0xFF5856D6);
 const _primaryLight = Color(0xFF9896FF); // Lighter accent for icons
 const _outlineVariant = Color(0xFF333333);
+/// Dasselbe Rot wie das Überfällig-Band im Kalender und die Kachel im Tasks-Screen.
+const _overdueColor = Color(0xFFE5484D);
+
+/// Die Aufgaben in der Reihenfolge, in der sie auf dem Homescreen oben stehen gehoeren.
+///
+/// Vorher stand dort `todoTasks.take(4)` — ungefiltert und in der Reihenfolge, in der das Backend
+/// sie geliefert hat. Damit konnte eine ueberfaellige Aufgabe unter vier beliebigen anderen
+/// verschwinden, obwohl der Kalender-Screen sie mit rotem Band meldete.
+///
+/// Die Ordnung ist dieselbe, nach der auch der Scheduler entscheidet: ueberfaellig zuerst, dann
+/// die naehere Deadline, dann die hoehere Prioritaet.
+List<Task> dringendZuerst(List<Task> tasks) {
+  final sortiert = [...tasks];
+  sortiert.sort((a, b) {
+    if (a.isOverdue != b.isOverdue) return a.isOverdue ? -1 : 1;
+    if (a.deadline != null && b.deadline != null) {
+      final nachTermin = a.deadline!.compareTo(b.deadline!);
+      if (nachTermin != 0) return nachTermin;
+    } else if ((a.deadline == null) != (b.deadline == null)) {
+      // Eine Aufgabe mit Termin geht einer ohne vor.
+      return a.deadline != null ? -1 : 1;
+    }
+    return b.priority.compareTo(a.priority);
+  });
+  return sortiert;
+}
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -37,6 +64,7 @@ class _HomeScreenState extends State<HomeScreen> {
     final now = DateTime.now();
     return d.year == now.year && d.month == now.month && d.day == now.day;
   }
+
 
   Future<void> _loadData() async {
     final taskProvider = context.read<TaskProvider>();
@@ -154,7 +182,9 @@ class _HomeScreenState extends State<HomeScreen> {
                   else if (tasks.todoTasks.isEmpty)
                     const _EmptyState(message: 'Alles erledigt!')
                   else
-                    ...tasks.todoTasks.take(4).map((t) => _TaskItem(task: t)),
+                    ...dringendZuerst(tasks.todoTasks)
+                        .take(4)
+                        .map((t) => _TaskItem(task: t)),
 
                   const SizedBox(height: 48),
 
@@ -389,6 +419,19 @@ class _TaskItem extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // Dieselbe Quelle wie im Tasks-Screen: das Ergebnis des letzten Scheduler-Laufs liegt im
+    // CalendarProvider. select statt watch, sonst baut jede Kachel neu, sobald sich irgendetwas
+    // im Kalender regt.
+    final atRiskItem = context.select<CalendarProvider, AtRiskItem?>((cal) {
+      for (final item in cal.atRisk) {
+        if (item.taskId != null && item.taskId == task.id) return item;
+      }
+      return null;
+    });
+    // Der Scheduler ist die genauere Quelle — er kennt den Nachholtermin. task.isOverdue ist der
+    // Rueckfall fuer den Moment, in dem noch kein Lauf durch ist.
+    final istUeberfaellig = (atRiskItem?.isOverdue ?? false) || task.isOverdue;
+
     return Container(
       padding: const EdgeInsets.symmetric(vertical: 16),
       decoration: const BoxDecoration(
@@ -429,6 +472,21 @@ class _TaskItem extends StatelessWidget {
                     decoration: task.isCompleted ? TextDecoration.lineThrough : null,
                   ),
                 ),
+                if (istUeberfaellig && !task.isCompleted) ...[
+                  const SizedBox(height: 4),
+                  Text(
+                    // Wenn der Scheduler einen Nachholtermin gefunden hat, ist DAS die Antwort
+                    // auf "und was jetzt?" — nicht die Tatsache, dass der Termin vorbei ist.
+                    atRiskItem?.plannedStartText != null
+                        ? 'Überfällig — Nachholtermin ${atRiskItem!.plannedStartText}'
+                        : 'Überfällig',
+                    style: GoogleFonts.inter(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w600,
+                      color: _overdueColor,
+                    ),
+                  ),
+                ],
               ],
             ),
           ),

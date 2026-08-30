@@ -15,6 +15,9 @@ public class RoutineSummaryDTO {
     private String imageUrl;
     private String colorHex;
     private String dayLabel;
+
+    /** ISO-Wochentag (1 = Montag ... 7 = Sonntag), oder null fuer "egal". */
+    private Integer preferredWeekday;
     private Integer estimatedDurationMinutes;
     private Integer orderIndex;
     private Boolean isArchived;

@@ -12,7 +12,7 @@ import 'package:everything_app/config/routes.dart';
 import 'package:everything_app/screens/gym/widgets/exercise_progress_chart.dart';
 
 const _shotDir =
-    '/tmp/claude-1000/-home-finn-Dokumente-Projekte-Everything-app/04d0f0d3-166f-4287-9f63-6e1e9aafa8f6/scratchpad/gym_shots';
+    '/tmp/claude-1000/-home-finn-Dokumente-Projekte-Everything-app/c8fb48ec-962d-4389-af00-baf3af559dde/scratchpad/gym_shots';
 
 final _boundaryKey = GlobalKey();
 
@@ -23,6 +23,15 @@ Future<void> _settle(WidgetTester tester, {int steps = 20}) async {
   for (var i = 0; i < steps; i++) {
     await tester.pump(const Duration(milliseconds: 100));
   }
+}
+
+// Die Uebungsbilder kommen ueber das Netz. pump() laesst nur simulierte Zeit
+// vergehen - ein echter Download braucht runAsync, sonst steht auf jedem
+// Screenshot der Platzhalter statt der Zeichnung.
+Future<void> _loadImages(WidgetTester tester,
+    {Duration wait = const Duration(seconds: 3)}) async {
+  await tester.runAsync(() => Future<void>.delayed(wait));
+  await _settle(tester, steps: 10);
 }
 
 Future<void> _shoot(WidgetTester tester, String name) async {
@@ -62,12 +71,15 @@ void main() {
     // tabs mounted, so text like "Training" can match a card *inside* a tab
     // as well as the nav label. hitTestable() filters to what a user could
     // actually tap; icons are unique to the nav bar (unlike the labels).
-    await tester.tap(find.byIcon(Icons.fitness_center_rounded).hitTestable().last);
+    // Der Tab heisst jetzt "Plan" und traegt ein Kalender-Icon; fitness_center kommt
+    // inzwischen auch in der Heute-Zeile des Startbildschirms vor.
+    await tester.tap(find.byIcon(Icons.calendar_month_rounded).hitTestable().last);
     await _settle(tester, steps: 10);
-    await _shoot(tester, '03_gym_workout_tab');
+    await _shoot(tester, '03_gym_plan_tab');
 
     await tester.tap(find.byIcon(Icons.search_rounded).hitTestable().last);
     await _settle(tester, steps: 10);
+    await _loadImages(tester);
     await _shoot(tester, '04_gym_explore_tab');
 
     await tester.tap(find.byIcon(Icons.person_rounded).hitTestable().last);
@@ -87,11 +99,13 @@ void main() {
 
     await tester.tap(find.text('Übung hinzufügen'));
     await _settle(tester, steps: 20);
+    await _loadImages(tester);
     await _shoot(tester, '08_exercise_picker');
 
     // Exercise tiles are InkWell, not GestureDetector; seed order is
-    // alphabetical so "3/4 Sit-Up" is the first result (see 08_exercise_picker.png).
-    await tester.tap(find.widgetWithText(InkWell, '3/4 Sit-Up'));
+    // alphabetical so "3/4 sit-up" is the first result (see 08_exercise_picker.png).
+    // Kleinschreibung: der ExerciseDB-Katalog fuehrt alle Namen klein.
+    await tester.tap(find.widgetWithText(InkWell, '3/4 sit-up'));
     await _settle(tester, steps: 10);
 
     final confirmBtn = find.textContaining('übernehmen');
@@ -99,6 +113,7 @@ void main() {
       await tester.tap(confirmBtn);
       await _settle(tester, steps: 20);
     }
+    await _loadImages(tester);
     await _shoot(tester, '09_active_workout_with_exercise');
 
     // Satz-Art umstellen: die neuen Einseitig-links/rechts-Optionen muessen
@@ -156,18 +171,19 @@ void main() {
     }
 
     // Übungsdetail einer Übung MIT Verlauf - sonst zeigt das Diagramm nur den
-    // Leerzustand. "Barbell Bench Press" ist im Testlauf vorprotokolliert.
+    // Leerzustand. "barbell bench press" ist im Testlauf vorprotokolliert.
     await tester.tap(find.byIcon(Icons.search_rounded).hitTestable().last);
     await _settle(tester, steps: 15);
-    await tester.enterText(find.byType(TextField).hitTestable().first, 'Bench Press');
+    await tester.enterText(find.byType(TextField).hitTestable().first, 'bench press');
     await _settle(tester, steps: 20);
+    await _loadImages(tester);
     await _shoot(tester, '11_explore_search');
 
-    final benchTile =
-        find.widgetWithText(InkWell, 'Barbell Bench Press - Medium Grip');
+    final benchTile = find.widgetWithText(InkWell, 'barbell bench press');
     if (tester.any(benchTile)) {
       await tester.tap(benchTile.first);
       await _settle(tester, steps: 25);
+      await _loadImages(tester);
       await _shoot(tester, '12_exercise_detail_figure');
 
       // Zum Diagramm scrollen. Ein blosses drag() reicht hier nicht: das Ziel
@@ -218,6 +234,85 @@ void main() {
         await tester.tap(range.last);
         await _settle(tester, steps: 25);
         await _shoot(tester, '16_body_map_activated');
+      }
+
+      // Erholung: dieselbe Grafik, andere Frage - was wirkt noch nach.
+      final recoveryTab = find.text('Erholung');
+      if (tester.any(recoveryTab)) {
+        await tester.tap(recoveryTab.last);
+        await _settle(tester, steps: 30);
+        await _shoot(tester, '17_recovery_map');
+      }
+    }
+
+    // Trainingstage-Raster und die Trainings-Schalter im Fortschritts-Tab.
+    final progressTab = find.text('Fortschritt');
+    if (tester.any(progressTab)) {
+      await tester.tap(progressTab.last);
+      await _settle(tester, steps: 20);
+      final list = find
+          .descendant(of: find.byType(TabBarView), matching: find.byType(Scrollable))
+          .first;
+      await tester.scrollUntilVisible(find.text('TRAININGSTAGE'), 200,
+          scrollable: list, maxScrolls: 15);
+      await _settle(tester, steps: 10);
+      await _shoot(tester, '18_training_heatmap');
+
+      await tester.scrollUntilVisible(find.text('TRAINING'), 200,
+          scrollable: list, maxScrolls: 15);
+      await _settle(tester, steps: 10);
+      await _shoot(tester, '19_training_settings');
+    }
+
+    // Ausrüstungsprofile in der Bibliothek.
+    await tester.tap(find.byIcon(Icons.search_rounded).hitTestable().last);
+    await _settle(tester, steps: 15);
+    final equipmentButton = find.byIcon(Icons.handyman_outlined);
+    if (tester.any(equipmentButton)) {
+      await tester.tap(equipmentButton.last);
+      await _settle(tester, steps: 20);
+      await _shoot(tester, '20_equipment_profiles');
+      await tester.tapAt(const Offset(20, 20));
+      await _settle(tester, steps: 15);
+    }
+
+    // Training aus einer Routine starten: erst hier gibt es Vorgabe, Aufwärmrampe,
+    // stehende Notiz und Supersatz zu sehen.
+    await tester.tap(find.byIcon(Icons.home_rounded).hitTestable().last);
+    await _settle(tester, steps: 15);
+    await tester.tap(find.byIcon(Icons.add).hitTestable().last);
+    await _settle(tester, steps: 15);
+
+    final pushRoutine = find.textContaining('Push A').hitTestable();
+    if (tester.any(pushRoutine)) {
+      await tester.tap(pushRoutine.last);
+      await _settle(tester, steps: 30);
+      await _loadImages(tester);
+      await _shoot(tester, '21_routine_workout_progression');
+
+      // Aufwärmrampe einfügen - der Knopf steht nur, solange keine Aufwärmsätze da sind.
+      final insert = find.text('Einfügen');
+      if (tester.any(insert)) {
+        await tester.tap(insert.first);
+        await _settle(tester, steps: 20);
+        await _shoot(tester, '22_warmup_ramp_applied');
+      }
+
+      // Ersten Satz abhaken: im Supersatz kommt statt der Pause die Partnerübung.
+      final checkButtons = find.byIcon(Icons.check_rounded).hitTestable();
+      if (tester.any(checkButtons)) {
+        await tester.tap(checkButtons.first);
+        await _settle(tester, steps: 20);
+        await _shoot(tester, '23_after_first_set');
+      }
+
+      // Aufräumen, damit kein laufendes Training zurückbleibt.
+      await tester.tap(find.byIcon(Icons.delete_outline_rounded).hitTestable().last);
+      await _settle(tester, steps: 15);
+      final discardAgain = find.text('Verwerfen');
+      if (tester.any(discardAgain)) {
+        await tester.tap(discardAgain.last);
+        await _settle(tester, steps: 25);
       }
     }
   });

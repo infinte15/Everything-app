@@ -21,6 +21,25 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
     private final JwtUtil jwtUtil;
     private final UserDetailsService userDetailsService;
 
+    /**
+     * Auch beim ASYNC-Dispatch filtern — sonst antwortet jeder Long-Poll mit 403.
+     *
+     * {@link OncePerRequestFilter} lässt asynchrone Dispatches per Vorgabe aus. Bei einer normalen
+     * Anfrage ist das richtig (der Filter lief bereits), bei einer über {@code DeferredResult}
+     * geparkten aber nicht: Spring Security filtert ASYNC mit, und mit
+     * {@code SessionCreationPolicy.STATELESS} gibt es keinen Speicher, aus dem der SecurityContext
+     * beim zweiten Dispatch zurückkäme. Der Nutzer wäre beim Aufwachen unauthentifiziert — und
+     * zwar erst NACH der vollen Wartezeit, was den Fehler beim Suchen besonders unangenehm macht.
+     *
+     * Der Authorization-Header hängt weiterhin am selben Request, der Filter authentifiziert also
+     * schlicht erneut. Abgesichert durch
+     * {@code CalendarControllerTest#awaitScheduleStatusBleibtNachAsyncDispatchAuthentifiziert}.
+     */
+    @Override
+    protected boolean shouldNotFilterAsyncDispatch() {
+        return false;
+    }
+
     @Override
     protected void doFilterInternal(
             HttpServletRequest request,

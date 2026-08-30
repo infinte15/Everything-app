@@ -28,6 +28,7 @@ class RoutineServiceTest {
     @Mock ExerciseRepository exerciseRepository;
     @Mock WorkoutPlanRepository workoutPlanRepository;
     @Mock UserRepository userRepository;
+    @Mock RoutineHabitService routineHabitService;
     @Mock org.springframework.context.ApplicationEventPublisher eventPublisher;
 
     @InjectMocks

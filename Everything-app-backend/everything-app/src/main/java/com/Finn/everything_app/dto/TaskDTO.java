@@ -5,6 +5,7 @@ import com.Finn.everything_app.model.TaskStatus;
 import lombok.Data;
 import jakarta.validation.constraints.*;
 import java.time.LocalDateTime;
+import java.util.Set;
 import com.fasterxml.jackson.annotation.JsonProperty;
 
 @Data
@@ -58,4 +59,12 @@ public class TaskDTO {
     private Integer completedMinutes;
 
     private LocalDateTime notBefore;
+
+    /**
+     * Felder, die dieser Aufruf ausdrücklich LEEREN soll — siehe {@link TaskClearableField}.
+     *
+     * Nur eingehend: {@code TaskMapper.toDTO} setzt das nie, es geht also nie an den Client
+     * zurück. Beim Anlegen ohne Bedeutung.
+     */
+    private Set<TaskClearableField> clearFields;
 }

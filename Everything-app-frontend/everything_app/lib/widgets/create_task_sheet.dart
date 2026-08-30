@@ -7,7 +7,15 @@ import '../config/app_theme.dart';
 
 class CreateTaskSheet extends StatefulWidget {
   final String? spaceType;
-  const CreateTaskSheet({super.key, this.spaceType});
+
+  /// Gesetzt heisst BEARBEITEN statt anlegen.
+  ///
+  /// Bewusst dasselbe Widget und kein eigenes `edit_task_sheet.dart` — dasselbe Muster wie bei
+  /// `CreateEventSheet.existingEvent`. Ein zweites Sheet waere eine Kopie desselben Formulars,
+  /// und die beiden liefen bei der ersten Aenderung auseinander.
+  final Task? existingTask;
+
+  const CreateTaskSheet({super.key, this.spaceType, this.existingTask});
 
   @override
   State<CreateTaskSheet> createState() => _CreateTaskSheetState();
@@ -17,25 +25,65 @@ class _CreateTaskSheetState extends State<CreateTaskSheet> {
   final _titleController = TextEditingController();
   final _durationController = TextEditingController(text: '60');
   final _notesController = TextEditingController();
-  final _minDurationController = TextEditingController(text: '1 hr');
-  final _maxDurationController = TextEditingController(text: '2 hrs');
-  
+
   int _durationMinutes = 60;
   int _priority = 3;
   bool _splitUp = true;
   String _category = 'Personal';
   DateTime _scheduleAfter = DateTime.now();
+  /// Hat der Nutzer "Schedule after" ueberhaupt angefasst? Die Vorbelegung ist "jetzt", und das
+  /// heisst "egal" — nicht "fruehestens ab dieser Sekunde".
+  bool _scheduleAfterGesetzt = false;
   DateTime _dueDate = DateTime.now().add(const Duration(days: 3, hours: 3));
-  
+
+  /// Gegenstueck zu [_scheduleAfterGesetzt] fuer die Deadline.
+  ///
+  /// Beim Anlegen ist sie vorbelegt und gilt als gesetzt; im Bearbeiten-Sheet laesst sie sich ueber
+  /// das "x" wieder entfernen, und dann muss der Unterschied zwischen "kein Termin" und "der
+  /// vorbelegte Termin" ausdrueckbar sein.
+  bool _dueDateGesetzt = true;
+
+  /// Feineinstellung pro Aufgabe; null heisst durchgaengig "Vorgabe aus den Einstellungen",
+  /// niemals 0.
+  int? _minChunk;
+  int? _maxChunk;
+  int? _maxChunksPerDay;
+
+  bool _erweitertOffen = false;
   bool _showTitleError = false;
+  String? _feldFehler;
+
+  bool get _isEditing => widget.existingTask != null;
+
+  @override
+  void initState() {
+    super.initState();
+    final vorhanden = widget.existingTask;
+    if (vorhanden == null) return;
+
+    _titleController.text = vorhanden.title;
+    _notesController.text = vorhanden.description ?? '';
+    _durationMinutes = vorhanden.estimatedDurationMinutes;
+    _durationController.text = _durationMinutes.toString();
+    _priority = vorhanden.priority;
+    _splitUp = vorhanden.splittable ?? true;
+    _category = vorhanden.category;
+    _minChunk = vorhanden.minChunkMinutes;
+    _maxChunk = vorhanden.maxChunkMinutes;
+    _maxChunksPerDay = vorhanden.maxChunksPerDay;
+
+    _dueDateGesetzt = vorhanden.deadline != null;
+    if (vorhanden.deadline != null) _dueDate = vorhanden.deadline!;
+
+    _scheduleAfterGesetzt = vorhanden.notBefore != null;
+    if (vorhanden.notBefore != null) _scheduleAfter = vorhanden.notBefore!;
+  }
 
   @override
   void dispose() {
     _titleController.dispose();
     _durationController.dispose();
     _notesController.dispose();
-    _minDurationController.dispose();
-    _maxDurationController.dispose();
     super.dispose();
   }
 
@@ -67,32 +115,112 @@ class _CreateTaskSheetState extends State<CreateTaskSheet> {
       final newDateTime = DateTime(date.year, date.month, date.day, time.hour, time.minute);
       if (isDueDate) {
         _dueDate = newDateTime;
+        _dueDateGesetzt = true;
       } else {
         _scheduleAfter = newDateTime;
+        _scheduleAfterGesetzt = true;
       }
     });
   }
 
-  Future<void> _createTask() async {
+  /// Prueft, was das Backend nicht prueft (dort stehen nur `@Min`-Grenzen).
+  ///
+  /// Gibt den Fehlertext zurueck oder null, wenn alles stimmt.
+  String? _pruefe() {
+    if (_minChunk != null && _maxChunk != null && _minChunk! > _maxChunk!) {
+      return 'Der kürzeste Block darf nicht länger sein als der längste.';
+    }
+    if (_scheduleAfterGesetzt && _dueDateGesetzt && !_scheduleAfter.isBefore(_dueDate)) {
+      return '"Frühestens ab" liegt nach der Deadline — so ist die Aufgabe nicht planbar.';
+    }
+    return null;
+  }
+
+  Future<void> _speichern() async {
     if (_titleController.text.trim().isEmpty) {
       setState(() => _showTitleError = true);
       return;
     }
+    final fehler = _pruefe();
+    if (fehler != null) {
+      setState(() => _feldFehler = fehler);
+      return;
+    }
+    setState(() => _feldFehler = null);
 
+    if (_isEditing) {
+      await _updateTask();
+    } else {
+      await _createTask();
+    }
+  }
+
+  Future<void> _createTask() async {
     final String rawNotesText = _notesController.text.trim();
 
     final task = Task(
       title: _titleController.text.trim(),
       description: rawNotesText.isNotEmpty ? rawNotesText : null,
       priority: _priority,
-      deadline: _dueDate,
+      deadline: _dueDateGesetzt ? _dueDate : null,
       estimatedDurationMinutes: _durationMinutes,
       status: 'TODO',
       spaceType: widget.spaceType ?? 'TASKS',
       category: _category,
+      splittable: _splitUp,
+      minChunkMinutes: _minChunk,
+      maxChunkMinutes: _maxChunk,
+      maxChunksPerDay: _maxChunksPerDay,
+      // "Schedule after" ist auf jetzt vorbelegt; dieser Wert bedeutet "keine Einschraenkung"
+      // und wird nicht mitgeschickt, sonst haette jede Aufgabe ein notBefore, das beim naechsten
+      // Lauf schon in der Vergangenheit liegt.
+      notBefore: _scheduleAfterGesetzt ? _scheduleAfter : null,
     );
 
     await context.read<TaskProvider>().addTask(task);
+    if (mounted) Navigator.pop(context);
+  }
+
+  Future<void> _updateTask() async {
+    final alt = widget.existingTask!;
+    final String rawNotesText = _notesController.text.trim();
+
+    // Bewusst NEU gebaut statt ueber copyWith: Task.copyWith benutzt durchgaengig `?? this.x` und
+    // kann ein Feld deshalb nicht auf null zuruecksetzen. Wer hier copyWith nimmt, bekommt ein
+    // Sheet, in dem sich Werte nur noch setzen, aber nie mehr entfernen lassen — und zwar
+    // lautlos.
+    final task = Task(
+      id: alt.id,
+      title: _titleController.text.trim(),
+      description: rawNotesText.isNotEmpty ? rawNotesText : null,
+      priority: _priority,
+      deadline: _dueDateGesetzt ? _dueDate : null,
+      estimatedDurationMinutes: _durationMinutes,
+      status: alt.status,
+      spaceType: alt.spaceType,
+      projectId: alt.projectId,
+      category: _category,
+      splittable: _splitUp,
+      minChunkMinutes: _minChunk,
+      maxChunkMinutes: _maxChunk,
+      maxChunksPerDay: _maxChunksPerDay,
+      completedMinutes: alt.completedMinutes,
+      notBefore: _scheduleAfterGesetzt ? _scheduleAfter : null,
+    );
+
+    // Was WEG soll, muss ausdruecklich benannt werden: im Rumpf heisst null "unveraendert"
+    // (siehe TaskService.updateTask im Backend). Geleert wird nur, was vorher wirklich einen Wert
+    // hatte — sonst schickte jedes Speichern eine Liste voller Felder, die ohnehin leer sind.
+    final clear = <String>{
+      if (!_dueDateGesetzt && alt.deadline != null) 'DEADLINE',
+      if (!_scheduleAfterGesetzt && alt.notBefore != null) 'NOT_BEFORE',
+      if (_minChunk == null && alt.minChunkMinutes != null) 'MIN_CHUNK_MINUTES',
+      if (_maxChunk == null && alt.maxChunkMinutes != null) 'MAX_CHUNK_MINUTES',
+      if (_maxChunksPerDay == null && alt.maxChunksPerDay != null) 'MAX_CHUNKS_PER_DAY',
+      if (rawNotesText.isEmpty && alt.description != null) 'DESCRIPTION',
+    };
+
+    await context.read<TaskProvider>().updateTask(task, clear: clear);
     if (mounted) Navigator.pop(context);
   }
 
@@ -122,8 +250,12 @@ class _CreateTaskSheetState extends State<CreateTaskSheet> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Row(
-              mainAxisAlignment: MainAxisAlignment.end,
               children: [
+                Text(
+                  _isEditing ? 'Aufgabe bearbeiten' : 'Neue Aufgabe',
+                  style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                ),
+                const Spacer(),
                 IconButton(
                   onPressed: () => Navigator.pop(context),
                   icon: const Icon(Icons.close, size: 20),
@@ -318,11 +450,8 @@ class _CreateTaskSheetState extends State<CreateTaskSheet> {
               ),
             ),
             
-            const SizedBox(height: 4),
-            const Text('Tasks will schedule on finn.deuschle1@gmail.com.', style: TextStyle(fontSize: 11, color: Colors.grey)),
-            
             const SizedBox(height: 16),
-            
+
             Row(
               children: [
                 Expanded(
@@ -330,7 +459,15 @@ class _CreateTaskSheetState extends State<CreateTaskSheet> {
                     label: 'Schedule after',
                     child: GestureDetector(
                       onTap: () => _pickDateTime(false),
-                      child: _BuildReadonlyBox(text: DateFormat('MMM d, yyyy h:mm a').format(_scheduleAfter)),
+                      child: _BuildReadonlyBox(
+                        text: _scheduleAfterGesetzt
+                            ? DateFormat('MMM d, yyyy h:mm a').format(_scheduleAfter)
+                            : 'Egal',
+                        // Das "x" ist der einzige Weg, ein gesetztes notBefore wieder loszuwerden.
+                        onClear: _scheduleAfterGesetzt
+                            ? () => setState(() => _scheduleAfterGesetzt = false)
+                            : null,
+                      ),
                     ),
                   ),
                 ),
@@ -340,13 +477,41 @@ class _CreateTaskSheetState extends State<CreateTaskSheet> {
                     label: 'Due date',
                     child: GestureDetector(
                       onTap: () => _pickDateTime(true),
-                      child: _BuildReadonlyBox(text: DateFormat('MMM d, yyyy h:mm a').format(_dueDate)),
+                      child: _BuildReadonlyBox(
+                        text: _dueDateGesetzt
+                            ? DateFormat('MMM d, yyyy h:mm a').format(_dueDate)
+                            : 'Keine',
+                        onClear: _dueDateGesetzt
+                            ? () => setState(() => _dueDateGesetzt = false)
+                            : null,
+                      ),
                     ),
                   ),
                 ),
               ],
             ),
-            
+
+            const SizedBox(height: 16),
+
+            // Feineinstellung, standardmaessig zugeklappt: die drei Werte haben fuer die meisten
+            // Aufgaben eine gute Vorgabe aus den Einstellungen und wuerden das Formular sonst nur
+            // laenger machen.
+            _ErweiterterBereich(
+              offen: _erweitertOffen,
+              onToggle: () => setState(() => _erweitertOffen = !_erweitertOffen),
+              // Ohne Aufteilen sind alle drei Werte bedeutungslos — ausgegraut statt versteckt,
+              // damit der Zusammenhang zum Haken sichtbar bleibt.
+              aktiv: _splitUp,
+              minChunk: _minChunk,
+              maxChunk: _maxChunk,
+              maxChunksPerDay: _maxChunksPerDay,
+              onMinChunk: (v) => setState(() => _minChunk = v),
+              onMaxChunk: (v) => setState(() => _maxChunk = v),
+              onMaxChunksPerDay: (v) => setState(() => _maxChunksPerDay = v),
+              borderColor: borderColor,
+              accentColor: accentColor,
+            ),
+
             const SizedBox(height: 16),
 
             _BuildLabeledField(
@@ -372,21 +537,30 @@ class _CreateTaskSheetState extends State<CreateTaskSheet> {
               ),
             ),
             
+            if (_feldFehler != null) ...[
+              const SizedBox(height: 12),
+              Text(
+                _feldFehler!,
+                style: const TextStyle(fontSize: 12, color: Color(0xFFD9534F)),
+              ),
+            ],
+
             const SizedBox(height: 24),
-            
+
             Row(
               children: [
                 const Spacer(),
                 SizedBox(
                   height: 40,
                   child: FilledButton(
-                    onPressed: _createTask,
+                    onPressed: _speichern,
                     style: FilledButton.styleFrom(
                       backgroundColor: accentColor,
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
                       padding: const EdgeInsets.symmetric(horizontal: 24),
                     ),
-                    child: const Text('Create', style: TextStyle(fontWeight: FontWeight.bold)),
+                    child: Text(_isEditing ? 'Speichern' : 'Create',
+                        style: const TextStyle(fontWeight: FontWeight.bold)),
                   ),
                 ),
               ],
@@ -418,7 +592,11 @@ class _BuildLabeledField extends StatelessWidget {
 
 class _BuildReadonlyBox extends StatelessWidget {
   final String text;
-  const _BuildReadonlyBox({required this.text});
+
+  /// Gesetzt zeigt ein "x" zum Leeren des Feldes. Null heisst: es gibt nichts zu leeren.
+  final VoidCallback? onClear;
+
+  const _BuildReadonlyBox({required this.text, this.onClear});
 
   @override
   Widget build(BuildContext context) {
@@ -427,12 +605,221 @@ class _BuildReadonlyBox extends StatelessWidget {
 
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+      padding: EdgeInsets.only(left: 12, right: onClear != null ? 4 : 12, top: 12, bottom: 12),
       decoration: BoxDecoration(
         border: Border.all(color: borderColor),
         borderRadius: BorderRadius.circular(8),
       ),
-      child: Text(text, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500)),
+      child: Row(
+        children: [
+          Expanded(
+            child: Text(
+              text,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500),
+            ),
+          ),
+          if (onClear != null)
+            GestureDetector(
+              onTap: onClear,
+              behavior: HitTestBehavior.opaque,
+              child: const Padding(
+                padding: EdgeInsets.symmetric(horizontal: 6),
+                child: Icon(Icons.close, size: 15, color: Colors.grey),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Zugeklappte Feineinstellung: wie lang ein einzelner Block sein darf und wie viele pro Tag.
+///
+/// Die Wertebereiche sind absichtlich dieselben wie bei "Shortest/Longest task block" in den
+/// Einstellungen — die Werte hier ueberschreiben genau jene. Null heisst "Vorgabe von dort".
+class _ErweiterterBereich extends StatelessWidget {
+  final bool offen;
+  final VoidCallback onToggle;
+  final bool aktiv;
+  final int? minChunk;
+  final int? maxChunk;
+  final int? maxChunksPerDay;
+  final ValueChanged<int?> onMinChunk;
+  final ValueChanged<int?> onMaxChunk;
+  final ValueChanged<int?> onMaxChunksPerDay;
+  final Color borderColor;
+  final Color accentColor;
+
+  const _ErweiterterBereich({
+    required this.offen,
+    required this.onToggle,
+    required this.aktiv,
+    required this.minChunk,
+    required this.maxChunk,
+    required this.maxChunksPerDay,
+    required this.onMinChunk,
+    required this.onMaxChunk,
+    required this.onMaxChunksPerDay,
+    required this.borderColor,
+    required this.accentColor,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        GestureDetector(
+          onTap: onToggle,
+          behavior: HitTestBehavior.opaque,
+          child: Row(
+            children: [
+              Icon(offen ? Icons.expand_less : Icons.expand_more, size: 18, color: Colors.grey),
+              const SizedBox(width: 4),
+              const Text('Erweitert',
+                  style: TextStyle(fontSize: 12, color: Colors.grey, fontWeight: FontWeight.w600)),
+            ],
+          ),
+        ),
+        if (offen) ...[
+          const SizedBox(height: 8),
+          if (!aktiv)
+            const Padding(
+              padding: EdgeInsets.only(bottom: 8),
+              child: Text(
+                'Ohne "Split up" wird die Aufgabe am Stück geplant — diese Werte gelten dann nicht.',
+                style: TextStyle(fontSize: 11, color: Colors.grey),
+              ),
+            ),
+          Opacity(
+            opacity: aktiv ? 1 : 0.4,
+            child: IgnorePointer(
+              ignoring: !aktiv,
+              child: Column(
+                children: [
+                  _NullableStepper(
+                    label: 'Kürzester Block',
+                    suffix: 'min',
+                    value: minChunk,
+                    min: 5,
+                    max: 480,
+                    step: 5,
+                    fallback: 30,
+                    onChanged: onMinChunk,
+                    borderColor: borderColor,
+                    accentColor: accentColor,
+                  ),
+                  _NullableStepper(
+                    label: 'Längster Block',
+                    suffix: 'min',
+                    value: maxChunk,
+                    min: 5,
+                    max: 480,
+                    step: 15,
+                    fallback: 120,
+                    onChanged: onMaxChunk,
+                    borderColor: borderColor,
+                    accentColor: accentColor,
+                  ),
+                  _NullableStepper(
+                    label: 'Blöcke pro Tag',
+                    suffix: '',
+                    value: maxChunksPerDay,
+                    min: 1,
+                    max: 8,
+                    step: 1,
+                    fallback: 2,
+                    onChanged: onMaxChunksPerDay,
+                    borderColor: borderColor,
+                    accentColor: accentColor,
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ],
+    );
+  }
+}
+
+/// Wie `_Stepper` in den Einstellungen, aber mit einem dritten Zustand: "nicht gesetzt".
+///
+/// Der Unterschied ist nicht kosmetisch. Ein Stepper ohne Null-Zustand zwingt jede Aufgabe zu
+/// einem eigenen Wert, und damit haetten die Vorgaben aus den Einstellungen fuer bearbeitete
+/// Aufgaben keine Wirkung mehr.
+class _NullableStepper extends StatelessWidget {
+  final String label;
+  final String suffix;
+  final int? value;
+  final int min;
+  final int max;
+  final int step;
+
+  /// Startwert, wenn aus "Vorgabe" heraus zum ersten Mal getippt wird.
+  final int fallback;
+
+  final ValueChanged<int?> onChanged;
+  final Color borderColor;
+  final Color accentColor;
+
+  const _NullableStepper({
+    required this.label,
+    required this.suffix,
+    required this.value,
+    required this.min,
+    required this.max,
+    required this.step,
+    required this.fallback,
+    required this.onChanged,
+    required this.borderColor,
+    required this.accentColor,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final gesetzt = value != null;
+    final anzeige = gesetzt ? '${value!}${suffix.isEmpty ? '' : ' $suffix'}' : 'Vorgabe';
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4),
+      child: Row(
+        children: [
+          Expanded(child: Text(label, style: const TextStyle(fontSize: 13))),
+          IconButton(
+            onPressed: () => onChanged(
+                gesetzt ? (value! - step).clamp(min, max) : fallback),
+            icon: const Icon(Icons.remove_circle_outline, size: 20),
+            visualDensity: VisualDensity.compact,
+          ),
+          SizedBox(
+            width: 68,
+            child: Text(
+              anzeige,
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w600,
+                color: gesetzt ? null : Colors.grey,
+              ),
+            ),
+          ),
+          IconButton(
+            onPressed: () => onChanged(
+                gesetzt ? (value! + step).clamp(min, max) : fallback),
+            icon: const Icon(Icons.add_circle_outline, size: 20),
+            visualDensity: VisualDensity.compact,
+          ),
+          // Zurueck auf "Vorgabe" — ohne diesen Weg waere ein einmal gesetzter Wert endgueltig.
+          IconButton(
+            onPressed: gesetzt ? () => onChanged(null) : null,
+            icon: const Icon(Icons.close, size: 15),
+            visualDensity: VisualDensity.compact,
+            tooltip: 'Vorgabe aus den Einstellungen benutzen',
+          ),
+        ],
+      ),
     );
   }
 }

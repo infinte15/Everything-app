@@ -4,6 +4,7 @@ import com.Finn.everything_app.event.ScheduleChangedEvent;
 import jakarta.annotation.PreDestroy;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.event.TransactionPhase;
 import org.springframework.transaction.event.TransactionalEventListener;
@@ -50,6 +51,7 @@ public class ScheduleRegenerationCoordinator {
 
     private final SmartSchedulerService scheduler;
     private final UserService userService;
+    private final ApplicationEventPublisher eventPublisher;
     private final long quietPeriodMs;
     private final long maxDelayMs;
 
@@ -85,12 +87,14 @@ public class ScheduleRegenerationCoordinator {
     public ScheduleRegenerationCoordinator(
             SmartSchedulerService scheduler,
             UserService userService,
+            ApplicationEventPublisher eventPublisher,
             @Value("${scheduler.debounce-ms:400}")    long quietPeriodMs,
             @Value("${scheduler.max-delay-ms:15000}") long maxDelayMs) {
-        this.scheduler     = scheduler;
-        this.userService   = userService;
-        this.quietPeriodMs = quietPeriodMs;
-        this.maxDelayMs    = maxDelayMs;
+        this.scheduler      = scheduler;
+        this.userService    = userService;
+        this.eventPublisher = eventPublisher;
+        this.quietPeriodMs  = quietPeriodMs;
+        this.maxDelayMs     = maxDelayMs;
     }
 
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
@@ -136,6 +140,12 @@ public class ScheduleRegenerationCoordinator {
                 // diesen Aufruf verschwände eine gelöschte Vorlesung nie aus dem Kalender.
                 log.debug("Automatische Neuplanung für User {} ist deaktiviert, nur Vorlesungen", userId);
                 scheduler.syncClassEvents(userId, today, scheduler.classHorizonEnd(today));
+                // Trotzdem Bescheid geben: hier entsteht kein Lauf, also auch kein
+                // ScheduleRunFinishedEvent — ein wartender Long-Poll liefe sonst in seinen vollen
+                // Zeitablauf, und die App zeigte für 25 Sekunden "wird neu geplant" an, obwohl gar
+                // nichts geplant wird. Der Store bleibt bewusst unberührt: der Client sieht
+                // unverändertes lastRunAt und beendet den Nachlauf ohne nachzuladen.
+                eventPublisher.publishEvent(new ScheduleRunNotifier.ScheduleSkippedEvent(userId));
                 return;
             }
             // Zwei Zeiträume: geplant wird das kurze, rollierende Fenster, der Stundenplan wird

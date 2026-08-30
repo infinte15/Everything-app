@@ -5,6 +5,7 @@ import '../../../providers/sports_provider.dart';
 import '../../../theme/lyfta_theme.dart';
 import '../widgets/create_routine_sheet.dart';
 import '../widgets/routine_card.dart';
+import '../widgets/week_schedule_card.dart';
 import '../workout/active_workout_page.dart';
 import 'routine_detail_page.dart';
 
@@ -27,12 +28,25 @@ class GymWorkoutTab extends StatelessWidget {
           SliverAppBar(
             floating: true,
             backgroundColor: LyftaTheme.background,
-            title: Text('Training', style: LyftaTheme.title),
+            title: Text('Plan', style: LyftaTheme.title),
           ),
           SliverPadding(
             padding: const EdgeInsets.fromLTRB(16, 0, 16, 100),
             sliver: SliverList(
               delegate: SliverChildListDelegate([
+                Text(
+                  'Wochenplan',
+                  style: LyftaTheme.headline.copyWith(fontSize: 22),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  'Ein fester Tag legt die Routine dorthin. Tage ohne Routine bleiben frei '
+                  'für Einheiten, die der Kalender selbst verteilt.',
+                  style: LyftaTheme.subtitle.copyWith(fontSize: 13),
+                ),
+                const SizedBox(height: 12),
+                const WeekScheduleCard(),
+                const SizedBox(height: 26),
                 Text(
                   'Meine Routinen',
                   style: LyftaTheme.headline.copyWith(fontSize: 22),

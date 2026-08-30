@@ -1,12 +1,15 @@
 package com.Finn.everything_app.service;
 
+import com.Finn.everything_app.dto.MuscleRecoveryDTO;
 import com.Finn.everything_app.dto.MuscleVolumeDTO;
 import com.Finn.everything_app.dto.VolumePointDTO;
 import com.Finn.everything_app.dto.WeeklyStatsDTO;
 import com.Finn.everything_app.model.MuscleGroup;
 import com.Finn.everything_app.model.WorkoutPlan;
 import com.Finn.everything_app.repository.WorkoutStatsRepository;
+import com.Finn.everything_app.repository.projection.ExerciseOneRmRow;
 import com.Finn.everything_app.repository.projection.MuscleVolumeRow;
+import com.Finn.everything_app.repository.projection.RecoverySetRow;
 import com.Finn.everything_app.repository.projection.WeekBucketRow;
 import com.Finn.everything_app.repository.projection.WeekVolumeRow;
 import lombok.RequiredArgsConstructor;
@@ -14,7 +17,9 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.DayOfWeek;
+import java.time.Duration;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.time.temporal.TemporalAdjusters;
 import java.util.*;
 
@@ -24,6 +29,28 @@ public class WorkoutStatsService {
 
     /** Historie fuer die Serien-Berechnung. */
     private static final int STREAK_LOOKBACK_WEEKS = 52;
+
+    // ── Erholungsmodell ─────────────────────────────────────────────────────────
+    //
+    // Die Ermuedung eines Satzes ist  Last x Wdh x min(1, Last/1RM)^1,5  und klingt mit der
+    // Zeit exponentiell ab. Der Exponent 1,5 sorgt dafuer, dass drei schwere Saetze mehr
+    // nachwirken als sechs leichte mit demselben Volumen - genau der Unterschied, den eine
+    // reine Volumenrechnung nicht sieht.
+    //
+    // Die Zahl fuer sich sagt nichts: 12 000 kann fuer den einen ein Aufwaermen und fuer den
+    // anderen die Woche sein. Deshalb wird gegen die *eigene* haerteste Einheit der letzten
+    // Wochen normiert - ein Massstab, der mitwaechst.
+
+    /** Halbwertszeit der Ermuedung. Nach zwei Tagen die Haelfte, nach vier ein Viertel. */
+    private static final double FATIGUE_HALF_LIFE_DAYS = 2.0;
+    /** Fenster fuer den Vergleichsmassstab "eine harte Einheit fuer diesen Muskel". */
+    private static final int RECOVERY_LOOKBACK_DAYS = 56;
+    /** Unterhalb dieses Anteils gilt der Muskel als erholt. */
+    private static final double RECOVERED_BELOW = 0.25;
+    /** Ueberproportionale Gewichtung schwerer Saetze. */
+    private static final double INTENSITY_EXPONENT = 1.5;
+    /** Ohne bekanntes 1RM: Koerpergewichts- und Maschinenarbeit als mittlere Intensitaet. */
+    private static final double DEFAULT_INTENSITY = 0.6;
     /** Punkte der Volumen-Kurve. */
     private static final int VOLUME_SERIES_WEEKS = 8;
 
@@ -116,8 +143,10 @@ public class WorkoutStatsService {
         boolean useVolume = maxVolume > 0;
         double max = useVolume ? maxVolume : maxSets;
 
-        List<MuscleVolumeDTO> result = new ArrayList<>(MuscleGroup.values().length);
-        for (MuscleGroup muscle : MuscleGroup.values()) {
+        // bodyMapValues() statt values(): CARDIO hat keine Flaeche in der Koerper-Grafik und
+        // gehoert deshalb nicht in die Muskelbilanz.
+        List<MuscleVolumeDTO> result = new ArrayList<>(MuscleGroup.bodyMapValues().size());
+        for (MuscleGroup muscle : MuscleGroup.bodyMapValues()) {
             MuscleVolumeRow row = byMuscle.get(muscle);
             double volume = row != null ? doubleOf(row.getVolume()) : 0d;
             double sets = row != null ? doubleOf(row.getWeightedSets()) : 0d;
@@ -178,5 +207,103 @@ public class WorkoutStatsService {
 
     private static double doubleOf(Double value) {
         return value != null ? value : 0d;
+    }
+
+    // ── Erholung ────────────────────────────────────────────────────────────────
+
+    /**
+     * Erholungsstand je Muskelgruppe - liefert wie {@link #getMuscleVolume} immer jede
+     * zeichenbare Flaeche, auch die unbelasteten.
+     */
+    @Transactional(readOnly = true)
+    public List<MuscleRecoveryDTO> getRecovery(Long userId) {
+        LocalDateTime now = LocalDateTime.now();
+        List<RecoverySetRow> rows =
+                statsRepository.recoverySets(userId, now.minusDays(RECOVERY_LOOKBACK_DAYS));
+
+        Map<Long, Double> oneRepMax = new HashMap<>();
+        for (ExerciseOneRmRow row : statsRepository.bestOneRepMaxPerExercise(userId)) {
+            if (row.getExerciseId() != null && row.getBestOneRm() != null) {
+                oneRepMax.put(row.getExerciseId(), row.getBestOneRm());
+            }
+        }
+
+        // Ueber die Enum-Konstante schluesseln, nicht ueber die Zeichenkette: die Spalte
+        // enthaelt den Enum-Namen ("LOWER_BACK"), die Antwort den Slug ("lower back").
+        Map<MuscleGroup, Double> current = new EnumMap<>(MuscleGroup.class);
+        Map<MuscleGroup, LocalDateTime> lastTrained = new EnumMap<>(MuscleGroup.class);
+        // Massstab: die staerkste einzelne Einheit je Muskel im Rueckblick-Fenster.
+        Map<MuscleGroup, Map<Long, Double>> perSession = new EnumMap<>(MuscleGroup.class);
+
+        for (RecoverySetRow row : rows) {
+            MuscleGroup muscle = MuscleGroup.fromSlugOrNull(row.getMuscle());
+            LocalDateTime at = row.getPerformedAt();
+            if (muscle == null || at == null) continue;
+
+            double load = load(row, oneRepMax);
+            if (load <= 0) continue;
+
+            double ageDays = Math.max(0, Duration.between(at, now).toMinutes() / 1440.0);
+            current.merge(muscle, load * Math.pow(0.5, ageDays / FATIGUE_HALF_LIFE_DAYS),
+                    Double::sum);
+            perSession.computeIfAbsent(muscle, m -> new HashMap<>())
+                    .merge(row.getSessionId(), load, Double::sum);
+            lastTrained.merge(muscle, at, (a, b) -> a.isAfter(b) ? a : b);
+        }
+
+        List<MuscleRecoveryDTO> result = new ArrayList<>();
+        for (MuscleGroup muscle : MuscleGroup.bodyMapValues()) {
+            double reference = perSession.getOrDefault(muscle, Map.of()).values().stream()
+                    .mapToDouble(Double::doubleValue).max().orElse(0d);
+            double raw = current.getOrDefault(muscle, 0d);
+
+            // Ohne Massstab gibt es keine Aussage - dann steht der Muskel als erholt da,
+            // was auch stimmt: es wurde nie etwas dafuer getan.
+            double fatigue = reference <= 0 ? 0d : Math.min(1d, raw / reference);
+            result.add(new MuscleRecoveryDTO(
+                    muscle.getSlug(),
+                    muscle.getLabel(),
+                    round(fatigue),
+                    round(1d - fatigue),
+                    lastTrained.get(muscle),
+                    hoursToReady(raw, reference)));
+        }
+        return result;
+    }
+
+    /** Ermuedung eines Satzes: Last x Wdh, ueberproportional gewichtet nach Intensitaet. */
+    private double load(RecoverySetRow row, Map<Long, Double> oneRepMax) {
+        int reps = row.getReps() != null ? row.getReps() : 0;
+        if (reps <= 0) return 0d;
+        double weight = row.getWeight() != null ? row.getWeight() : 0d;
+        double factor = row.getFactor() != null ? row.getFactor() : 1d;
+
+        Double max = oneRepMax.get(row.getExerciseId());
+        double intensity = (max != null && max > 0 && weight > 0)
+                ? Math.min(1d, weight / max)
+                : DEFAULT_INTENSITY;
+
+        // Koerpergewichtsarbeit wird mit 0 kg geloggt und waere sonst gar keine Belastung.
+        double work = weight > 0 ? weight * reps : reps;
+        return work * Math.pow(intensity, INTENSITY_EXPONENT) * factor;
+    }
+
+    /**
+     * Stunden, bis die Ermuedung unter {@link #RECOVERED_BELOW} des Massstabs faellt.
+     *
+     * <p>Umkehrung des Abklingens: aus {@code raw * 0,5^(t/HL) = Schwelle} folgt
+     * {@code t = HL * log2(raw / Schwelle)}.
+     */
+    private int hoursToReady(double raw, double reference) {
+        double threshold = reference * RECOVERED_BELOW;
+        if (threshold <= 0 || raw <= threshold) return 0;
+        double days = FATIGUE_HALF_LIFE_DAYS * (Math.log(raw / threshold) / Math.log(2));
+        // Aufrunden, aber nicht auf Rechenrauschen: exakt 24,000000000000004 Stunden sind
+        // 24 und nicht 25.
+        return (int) Math.ceil(days * 24 - 1e-6);
+    }
+
+    private static double round(double value) {
+        return Math.round(value * 1000d) / 1000d;
     }
 }

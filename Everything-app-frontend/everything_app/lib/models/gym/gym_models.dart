@@ -8,7 +8,7 @@ library;
 // Satz-Arten
 // ─────────────────────────────────────────────────────────────────────────────
 
-enum GymSetType { normal, warmup, drop, failure, amrap, singleLeft, singleRight }
+enum GymSetType { normal, warmup, drop, failure, amrap, singleLeft, singleRight, restpause }
 
 extension GymSetTypeLabel on GymSetType {
   /// Kürzel in der Satz-Zeile. Normale Sätze zeigen ihre Nummer, kein Kürzel.
@@ -26,6 +26,8 @@ extension GymSetTypeLabel on GymSetType {
         return 'L';
       case GymSetType.singleRight:
         return 'R';
+      case GymSetType.restpause:
+        return 'RP';
       case GymSetType.normal:
         return '';
     }
@@ -45,6 +47,8 @@ extension GymSetTypeLabel on GymSetType {
         return 'Einseitig (links)';
       case GymSetType.singleRight:
         return 'Einseitig (rechts)';
+      case GymSetType.restpause:
+        return 'Rest-Pause';
       case GymSetType.normal:
         return 'Normaler Satz';
     }
@@ -52,6 +56,15 @@ extension GymSetTypeLabel on GymSetType {
 
   /// Name, den das Backend erwartet (`SetType`).
   String get apiValue => name.toUpperCase();
+
+  /// Zählt ein Satz dieser Art ins Volumen? Muss zu `SetType.countsTowardVolume` im
+  /// Backend passen, sonst zeigt der laufende Bildschirm eine andere Summe als der
+  /// Verlauf danach.
+  ///
+  /// Aufwärmsätze sind Vorbereitung; ein Rest-Pause-Cluster steckt schon im Arbeitssatz,
+  /// an dem er hängt. Ein Dropsatz ist eigene Arbeit mit eigener Last und zählt.
+  bool get countsTowardVolume =>
+      this != GymSetType.warmup && this != GymSetType.restpause;
 }
 
 GymSetType gymSetTypeFrom(dynamic value) {
@@ -61,6 +74,165 @@ GymSetType gymSetTypeFrom(dynamic value) {
     (t) => t.name == normalized,
     orElse: () => GymSetType.normal,
   );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Progression
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// Wie sich die Vorgabe einer Übung fortschreibt. Spiegelt `ProgressionPolicy` im Backend.
+enum GymProgressionPolicy { off, linear, greyskull, double_, time }
+
+extension GymProgressionPolicyLabel on GymProgressionPolicy {
+  String get label {
+    switch (this) {
+      case GymProgressionPolicy.off:
+        return 'Keine Automatik';
+      case GymProgressionPolicy.linear:
+        return 'Linear';
+      case GymProgressionPolicy.greyskull:
+        return 'Greyskull';
+      case GymProgressionPolicy.double_:
+        return 'Doppelte Progression';
+      case GymProgressionPolicy.time:
+        return 'Auf Zeit';
+    }
+  }
+
+  /// Ein Satz, der erklärt, was die Regel tut - die Auswahl ist sonst nicht bedienbar.
+  String get hint {
+    switch (this) {
+      case GymProgressionPolicy.off:
+        return 'Die Vorgabe bleibt, was in der Routine steht.';
+      case GymProgressionPolicy.linear:
+        return 'Alle Sätze geschafft? Nächstes Mal mehr Gewicht. Nach drei Fehlschlägen zurück.';
+      case GymProgressionPolicy.greyskull:
+        return 'Letzter Satz bis zum Anschlag. Doppelte Wiederholungen geben einen doppelten '
+            'Sprung, ein Fehlschlag sofort einen Deload.';
+      case GymProgressionPolicy.double_:
+        return 'Erst innerhalb der Wiederholungsspanne nach oben, dann mehr Gewicht.';
+      case GymProgressionPolicy.time:
+        return 'Gesteigert wird die Dauer, nicht die Last.';
+    }
+  }
+
+  /// `DOUBLE` ist in Dart ein reserviertes Wort - deshalb heißt die Konstante `double_`.
+  String get apiValue =>
+      this == GymProgressionPolicy.double_ ? 'DOUBLE' : name.toUpperCase();
+}
+
+GymProgressionPolicy gymProgressionPolicyFrom(dynamic value) {
+  if (value == null) return GymProgressionPolicy.off;
+  final normalized = value.toString().toLowerCase();
+  if (normalized == 'double') return GymProgressionPolicy.double_;
+  return GymProgressionPolicy.values.firstWhere(
+    (p) => p.name == normalized,
+    orElse: () => GymProgressionPolicy.off,
+  );
+}
+
+/// Wie die Vorgabe zustande kommt - bestimmt die Farbe und das Symbol der Zeile.
+enum GymProgressionKind { first, up, hold, deload, off }
+
+GymProgressionKind gymProgressionKindFrom(dynamic value) {
+  final normalized = value?.toString().toLowerCase() ?? 'off';
+  return GymProgressionKind.values.firstWhere(
+    (k) => k.name == normalized,
+    orElse: () => GymProgressionKind.off,
+  );
+}
+
+/// Ein Aufwärmsatz der automatischen Rampe.
+class GymWarmupSet {
+  final double weight;
+  final int reps;
+  final int percent;
+
+  const GymWarmupSet({required this.weight, required this.reps, required this.percent});
+
+  factory GymWarmupSet.fromMap(Map<String, dynamic> m) => GymWarmupSet(
+        weight: (m['weight'] as num?)?.toDouble() ?? 0,
+        reps: m['reps'] as int? ?? 0,
+        percent: m['percent'] as int? ?? 0,
+      );
+}
+
+/// Was das Backend für die nächste Einheit vorschlägt, samt Begründung.
+class GymProgressionSuggestion {
+  final int? routineExerciseId;
+  final int? exerciseId;
+  final String exerciseName;
+  final GymProgressionPolicy policy;
+  final GymProgressionKind kind;
+  final double? weight;
+  final int? reps;
+  final int? sets;
+  final int? seconds;
+  final int stallCount;
+  final String why;
+  final List<GymWarmupSet> warmup;
+
+  const GymProgressionSuggestion({
+    this.routineExerciseId,
+    this.exerciseId,
+    this.exerciseName = '',
+    this.policy = GymProgressionPolicy.off,
+    this.kind = GymProgressionKind.off,
+    this.weight,
+    this.reps,
+    this.sets,
+    this.seconds,
+    this.stallCount = 0,
+    this.why = '',
+    this.warmup = const [],
+  });
+
+  factory GymProgressionSuggestion.fromMap(Map<String, dynamic> m) =>
+      GymProgressionSuggestion(
+        routineExerciseId: m['routineExerciseId'] as int?,
+        exerciseId: m['exerciseId'] as int?,
+        exerciseName: m['exerciseName'] as String? ?? '',
+        policy: gymProgressionPolicyFrom(m['policy']),
+        kind: gymProgressionKindFrom(m['kind']),
+        weight: (m['weight'] as num?)?.toDouble(),
+        reps: m['reps'] as int?,
+        sets: m['sets'] as int?,
+        seconds: m['seconds'] as int?,
+        stallCount: m['stallCount'] as int? ?? 0,
+        why: m['why'] as String? ?? '',
+        warmup: _mapList(m['warmup'], GymWarmupSet.fromMap),
+      );
+
+  Map<String, dynamic> toCache() => {
+        'routineExerciseId': routineExerciseId,
+        'exerciseId': exerciseId,
+        'exerciseName': exerciseName,
+        'policy': policy.apiValue,
+        'kind': kind.name,
+        'weight': weight,
+        'reps': reps,
+        'sets': sets,
+        'seconds': seconds,
+        'stallCount': stallCount,
+        'why': why,
+        'warmup': warmup
+            .map((w) => {'weight': w.weight, 'reps': w.reps, 'percent': w.percent})
+            .toList(),
+      };
+
+  /// Ohne Automatik und ohne Verlauf gibt es nichts zu erzählen.
+  bool get hasAdvice =>
+      kind != GymProgressionKind.off && kind != GymProgressionKind.first && why.isNotEmpty;
+
+  /// "62,5 kg × 5" bzw. "45 s" - die Kurzform für den Kopf des Übungsblocks.
+  String get headline {
+    if (seconds != null) return '$seconds s';
+    final parts = <String>[];
+    if (weight != null) parts.add('${_trimNumber(weight!)} kg');
+    if (reps != null) parts.add('${reps!} Wdh');
+    if (sets != null) parts.add('${sets!} Sätze');
+    return parts.join(' × ');
+  }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -81,6 +253,9 @@ class GymExercise {
   final String? mechanic;
   final String? imageUrl;
   final String? imageUrlEnd;
+
+  /// Animiertes GIF der Übungsausführung. Extern gehostet, © Gym visual.
+  final String? animationUrl;
   final int? defaultRestSeconds;
   final bool isSystem;
 
@@ -98,6 +273,7 @@ class GymExercise {
     this.mechanic,
     this.imageUrl,
     this.imageUrlEnd,
+    this.animationUrl,
     this.defaultRestSeconds,
     this.isSystem = false,
   });
@@ -116,6 +292,7 @@ class GymExercise {
         mechanic: m['mechanic'] as String?,
         imageUrl: m['imageUrl'] as String?,
         imageUrlEnd: m['imageUrlEnd'] as String?,
+        animationUrl: m['animationUrl'] as String?,
         defaultRestSeconds: m['defaultRestSeconds'] as int?,
         isSystem: m['isSystem'] as bool? ?? false,
       );
@@ -123,6 +300,82 @@ class GymExercise {
   /// Führender Muskel für Einfärbung und Platzhalter-Grafik.
   String get leadMuscle =>
       primaryMuscles.isNotEmpty ? primaryMuscles.first : muscleGroup;
+}
+
+/// Ein gewogener Wert an einem Tag.
+class GymBodyWeightEntry {
+  final int? id;
+  final DateTime date;
+  final double weightKg;
+  final String? note;
+
+  const GymBodyWeightEntry({
+    this.id,
+    required this.date,
+    required this.weightKg,
+    this.note,
+  });
+
+  factory GymBodyWeightEntry.fromMap(Map<String, dynamic> m) => GymBodyWeightEntry(
+        id: m['id'] as int?,
+        date: DateTime.tryParse(m['date']?.toString() ?? '') ?? DateTime.now(),
+        weightKg: (m['weightKg'] as num?)?.toDouble() ?? 0,
+        note: m['note'] as String?,
+      );
+}
+
+/// Gewichtsverlauf plus die Zahlen, die daneben stehen.
+///
+/// [latest] und [previous] kommen vom Server und sind bewusst nicht aus [entries] abgeleitet:
+/// die Liste ist auf einen Zeitraum beschnitten, die große Zahl soll aber immer das zuletzt
+/// Gewogene zeigen - auch wenn das länger her ist als der dargestellte Zeitraum.
+class GymBodyWeightSeries {
+  final List<GymBodyWeightEntry> entries;
+  final GymBodyWeightEntry? latest;
+  final GymBodyWeightEntry? previous;
+  final double? targetWeightKg;
+
+  const GymBodyWeightSeries({
+    this.entries = const [],
+    this.latest,
+    this.previous,
+    this.targetWeightKg,
+  });
+
+  factory GymBodyWeightSeries.fromMap(Map<String, dynamic> m) {
+    GymBodyWeightEntry? one(Object? value) => value is Map
+        ? GymBodyWeightEntry.fromMap(Map<String, dynamic>.from(value))
+        : null;
+
+    return GymBodyWeightSeries(
+      entries: (m['entries'] as List? ?? [])
+          .whereType<Map>()
+          .map((e) => GymBodyWeightEntry.fromMap(Map<String, dynamic>.from(e)))
+          .toList(),
+      latest: one(m['latest']),
+      previous: one(m['previous']),
+      targetWeightKg: (m['targetWeightKg'] as num?)?.toDouble(),
+    );
+  }
+
+  bool get isEmpty => latest == null;
+
+  /// Veränderung zum vorherigen Wert, oder null wenn es keinen gibt.
+  double? get delta {
+    final l = latest, p = previous;
+    if (l == null || p == null) return null;
+    final d = l.weightKg - p.weightKg;
+    // Unverändert ist keine Veränderung: ohne diese Grenze stünde neben der Zahl ein "0,0",
+    // das nach Bewegung aussieht, wo keine war.
+    return d.abs() < 0.05 ? null : d;
+  }
+
+  /// Wie weit ist es noch bis zum Ziel? Negativ heißt abnehmen.
+  double? get toTarget {
+    final l = latest, t = targetWeightKg;
+    if (l == null || t == null) return null;
+    return t - l.weightKg;
+  }
 }
 
 class GymMuscleOption {
@@ -146,6 +399,7 @@ class GymRoutineExercise {
   final int exerciseId;
   final String exerciseName;
   final String? imageUrl;
+  final String? animationUrl;
   final String equipment;
   final List<String> primaryMuscles;
   final List<String> secondaryMuscles;
@@ -156,12 +410,23 @@ class GymRoutineExercise {
   final double? targetWeight;
   final int? restSeconds;
   final String? notes;
+  final int? supersetGroup;
+
+  /// Wie sich die Vorgabe fortschreibt - Werte wie im Backend-Enum `ProgressionPolicy`.
+  final GymProgressionPolicy progressionPolicy;
+
+  /// Eigener Sprung in kg, oder null für "aus der Übung ableiten".
+  final double? incrementKg;
+
+  /// Körpergewichtsübung: gesteigert werden Wiederholungen, nicht die Last.
+  final bool isBodyweight;
 
   const GymRoutineExercise({
     this.id,
     required this.exerciseId,
     required this.exerciseName,
     this.imageUrl,
+    this.animationUrl,
     this.equipment = '',
     this.primaryMuscles = const [],
     this.secondaryMuscles = const [],
@@ -172,6 +437,10 @@ class GymRoutineExercise {
     this.targetWeight,
     this.restSeconds,
     this.notes,
+    this.supersetGroup,
+    this.progressionPolicy = GymProgressionPolicy.off,
+    this.incrementKg,
+    this.isBodyweight = false,
   });
 
   factory GymRoutineExercise.fromMap(Map<String, dynamic> m) => GymRoutineExercise(
@@ -179,6 +448,7 @@ class GymRoutineExercise {
         exerciseId: m['exerciseId'] as int? ?? 0,
         exerciseName: m['exerciseName'] as String? ?? '',
         imageUrl: m['imageUrl'] as String?,
+        animationUrl: m['animationUrl'] as String?,
         equipment: m['equipment'] as String? ?? '',
         primaryMuscles: _stringList(m['primaryMuscles']),
         secondaryMuscles: _stringList(m['secondaryMuscles']),
@@ -189,6 +459,10 @@ class GymRoutineExercise {
         targetWeight: (m['targetWeight'] as num?)?.toDouble(),
         restSeconds: m['restSeconds'] as int?,
         notes: m['notes'] as String?,
+        supersetGroup: m['supersetGroup'] as int?,
+        progressionPolicy: gymProgressionPolicyFrom(m['progressionPolicy']),
+        incrementKg: (m['incrementKg'] as num?)?.toDouble(),
+        isBodyweight: m['isBodyweight'] as bool? ?? false,
       );
 
   Map<String, dynamic> toRequest() => {
@@ -199,6 +473,10 @@ class GymRoutineExercise {
         if (targetWeight != null) 'targetWeight': targetWeight,
         if (restSeconds != null) 'restSeconds': restSeconds,
         if (notes != null) 'notes': notes,
+        if (supersetGroup != null) 'supersetGroup': supersetGroup,
+        'progressionPolicy': progressionPolicy.apiValue,
+        if (incrementKg != null) 'incrementKg': incrementKg,
+        'isBodyweight': isBodyweight,
       };
 
   GymRoutineExercise copyWith({
@@ -207,12 +485,21 @@ class GymRoutineExercise {
     int? targetRepsMax,
     double? targetWeight,
     int? restSeconds,
+    int? supersetGroup,
+    GymProgressionPolicy? progressionPolicy,
+    double? incrementKg,
+    bool? isBodyweight,
+    // `?? this.x` kann einen Wert nur setzen, nie entfernen - "kein Supersatz" und
+    // "Sprung automatisch" brauchen deshalb einen eigenen Schalter.
+    bool clearSupersetGroup = false,
+    bool clearIncrementKg = false,
   }) =>
       GymRoutineExercise(
         id: id,
         exerciseId: exerciseId,
         exerciseName: exerciseName,
         imageUrl: imageUrl,
+        animationUrl: animationUrl,
         equipment: equipment,
         primaryMuscles: primaryMuscles,
         secondaryMuscles: secondaryMuscles,
@@ -223,6 +510,11 @@ class GymRoutineExercise {
         targetWeight: targetWeight ?? this.targetWeight,
         restSeconds: restSeconds ?? this.restSeconds,
         notes: notes,
+        supersetGroup:
+            clearSupersetGroup ? null : (supersetGroup ?? this.supersetGroup),
+        progressionPolicy: progressionPolicy ?? this.progressionPolicy,
+        incrementKg: clearIncrementKg ? null : (incrementKg ?? this.incrementKg),
+        isBodyweight: isBodyweight ?? this.isBodyweight,
       );
 
   /// "8-12", "10" oder null, je nachdem was hinterlegt ist.
@@ -243,6 +535,12 @@ class GymRoutine {
   final String? description;
   final String? imageUrl;
   final String? dayLabel;
+
+  /// Wunsch-Wochentag nach ISO (1 = Montag ... 7 = Sonntag), oder null für "egal".
+  ///
+  /// Ein Wunsch, keine Festlegung: der Smart Scheduler sucht die Uhrzeit weiter selbst, legt
+  /// die Einheit aber auf diesen Tag.
+  final int? preferredWeekday;
   final int? estimatedDurationMinutes;
   final int orderIndex;
   final int exerciseCount;
@@ -260,6 +558,7 @@ class GymRoutine {
     this.description,
     this.imageUrl,
     this.dayLabel,
+    this.preferredWeekday,
     this.estimatedDurationMinutes,
     this.orderIndex = 0,
     this.exerciseCount = 0,
@@ -278,6 +577,7 @@ class GymRoutine {
         description: m['description'] as String?,
         imageUrl: m['imageUrl'] as String?,
         dayLabel: m['dayLabel'] as String?,
+        preferredWeekday: m['preferredWeekday'] as int?,
         estimatedDurationMinutes: m['estimatedDurationMinutes'] as int?,
         orderIndex: m['orderIndex'] as int? ?? 0,
         exerciseCount: m['exerciseCount'] as int? ?? 0,
@@ -309,6 +609,12 @@ class GymLoggedSet {
   int? rpe;
   DateTime? performedAt;
 
+  /// Nummer des Arbeitssatzes, an dem dieser Satz hängt (Dropsatz, Rest-Pause-Cluster).
+  ///
+  /// Bewusst die Nummer und nicht die ID: die Elternzeile hat beim Loggen noch keine, der
+  /// Server löst die Nummer beim Speichern auf.
+  int? parentSetNumber;
+
   GymLoggedSet({
     required this.setNumber,
     this.weight,
@@ -318,6 +624,7 @@ class GymLoggedSet {
     this.restSeconds,
     this.rpe,
     this.performedAt,
+    this.parentSetNumber,
   });
 
   factory GymLoggedSet.fromMap(Map<String, dynamic> m) => GymLoggedSet(
@@ -329,6 +636,7 @@ class GymLoggedSet {
         restSeconds: m['restSeconds'] as int?,
         rpe: m['rpe'] as int?,
         performedAt: _parseDate(m['performedAt']),
+        parentSetNumber: m['parentSetNumber'] as int?,
       );
 
   Map<String, dynamic> toRequest() => {
@@ -339,6 +647,7 @@ class GymLoggedSet {
         'setType': setType.apiValue,
         if (restSeconds != null) 'restSeconds': restSeconds,
         if (rpe != null) 'rpe': rpe,
+        if (parentSetNumber != null) 'parentSetNumber': parentSetNumber,
       };
 
   Map<String, dynamic> toCache() => {
@@ -349,10 +658,14 @@ class GymLoggedSet {
         'setType': setType.name,
         'restSeconds': restSeconds,
         'rpe': rpe,
+        'parentSetNumber': parentSetNumber,
       };
 
-  double get volume =>
-      isCompleted ? (weight ?? 0) * (reps ?? 0) : 0;
+  /// Volumen dieses Satzes - Aufwärm- und Rest-Pause-Zeilen zählen nicht mit, siehe
+  /// [GymSetTypeLabel.countsTowardVolume].
+  double get volume => isCompleted && setType.countsTowardVolume
+      ? (weight ?? 0) * (reps ?? 0)
+      : 0;
 
   /// "80 kg × 8" für die "vorher"-Spalte.
   String get summary {
@@ -370,6 +683,7 @@ class GymWorkoutExercise {
   final int exerciseId;
   final String name;
   final String? imageUrl;
+  final String? animationUrl;
   final String equipment;
   final List<String> primaryMuscles;
   final List<String> secondaryMuscles;
@@ -382,12 +696,27 @@ class GymWorkoutExercise {
   final int? targetRepsMax;
   final List<GymLoggedSet> previous;
   final double? personalRecordWeight;
+
+  /// Übungen mit derselben Nummer werden im Wechsel trainiert (Supersatz).
+  final int? supersetGroup;
+
+  /// Vorgabe für heute, abgeleitet aus dem Verlauf. Null bei frei hinzugefügten Übungen.
+  final GymProgressionSuggestion? progression;
+
+  /// Stehende Notiz zur Übung - gilt bei jedem Training, nicht nur in dieser Routine.
+  ///
+  /// Nicht final, aus demselben Grund wie [restSeconds]: sie lässt sich im laufenden Training
+  /// bearbeiten (siehe [SportsProvider.setExerciseNoteInWorkout]), und der Block soll das
+  /// zeigen, ohne dass das ganze Training neu geladen wird.
+  String? exerciseNote;
+
   List<GymLoggedSet> sets;
 
   GymWorkoutExercise({
     required this.exerciseId,
     required this.name,
     this.imageUrl,
+    this.animationUrl,
     this.equipment = '',
     this.primaryMuscles = const [],
     this.secondaryMuscles = const [],
@@ -397,20 +726,36 @@ class GymWorkoutExercise {
     this.targetRepsMax,
     this.previous = const [],
     this.personalRecordWeight,
+    this.supersetGroup,
+    this.progression,
+    this.exerciseNote,
     required this.sets,
   });
 
   /// Baut den Block aus einer geplanten Übung inklusive leerer Zielsätze.
   factory GymWorkoutExercise.fromPlanned(Map<String, dynamic> m) {
     final previous = _mapList(m['previous'], GymLoggedSet.fromMap);
-    final targetSets = m['targetSets'] as int? ?? 3;
-    final targetWeight = (m['targetWeight'] as num?)?.toDouble();
-    final targetReps = m['targetRepsMin'] as int?;
+    final progression = m['progression'] == null
+        ? null
+        : GymProgressionSuggestion.fromMap(
+            Map<String, dynamic>.from(m['progression'] as Map));
+
+    // Die Vorgabe schlägt die letzte Einheit: sie *ist* aus ihr abgeleitet, kennt aber
+    // zusätzlich die Regel. Ohne Automatik bleibt es vollständig beim alten Verhalten -
+    // eine OFF-Vorgabe trägt keine eigenen Zahlen bei, auch keine einzelne.
+    final planned = progression != null && progression.kind != GymProgressionKind.off;
+    final advice = planned ? progression : null;
+
+    final targetSets = advice?.sets ?? m['targetSets'] as int? ?? 3;
+    final targetWeight =
+        advice?.weight ?? (m['targetWeight'] as num?)?.toDouble();
+    final targetReps = advice?.reps ?? m['targetRepsMin'] as int?;
 
     return GymWorkoutExercise(
       exerciseId: m['exerciseId'] as int? ?? 0,
       name: m['name'] as String? ?? '',
       imageUrl: m['imageUrl'] as String?,
+      animationUrl: m['animationUrl'] as String?,
       equipment: m['equipment'] as String? ?? '',
       primaryMuscles: _stringList(m['primaryMuscles']),
       secondaryMuscles: _stringList(m['secondaryMuscles']),
@@ -420,13 +765,21 @@ class GymWorkoutExercise {
       targetRepsMax: m['targetRepsMax'] as int?,
       previous: previous,
       personalRecordWeight: (m['personalRecordWeight'] as num?)?.toDouble(),
+      supersetGroup: m['supersetGroup'] as int?,
+      progression: progression,
+      exerciseNote: m['exerciseNote'] as String?,
       sets: List.generate(
         targetSets < 1 ? 1 : targetSets,
         (i) => GymLoggedSet(
           setNumber: i + 1,
-          // Vorschlag aus der letzten Einheit, sonst aus der Routine.
-          weight: i < previous.length ? previous[i].weight : targetWeight,
-          reps: i < previous.length ? previous[i].reps : targetReps,
+          // Mit Automatik gilt die Vorgabe für jeden Satz; ohne sie bleibt der alte
+          // Vorschlag aus der letzten Einheit stehen.
+          weight: planned
+              ? targetWeight
+              : (i < previous.length ? previous[i].weight : targetWeight),
+          reps: planned
+              ? targetReps
+              : (i < previous.length ? previous[i].reps : targetReps),
         ),
       ),
     );
@@ -437,6 +790,7 @@ class GymWorkoutExercise {
         exerciseId: exercise.id,
         name: exercise.name,
         imageUrl: exercise.imageUrl,
+        animationUrl: exercise.animationUrl,
         equipment: exercise.equipment,
         primaryMuscles: exercise.primaryMuscles,
         secondaryMuscles: exercise.secondaryMuscles,
@@ -448,6 +802,7 @@ class GymWorkoutExercise {
         exerciseId: m['exerciseId'] as int? ?? 0,
         name: m['name'] as String? ?? '',
         imageUrl: m['imageUrl'] as String?,
+        animationUrl: m['animationUrl'] as String?,
         equipment: m['equipment'] as String? ?? '',
         primaryMuscles: _stringList(m['primaryMuscles']),
         secondaryMuscles: _stringList(m['secondaryMuscles']),
@@ -455,6 +810,12 @@ class GymWorkoutExercise {
         restSeconds: m['restSeconds'] as int?,
         previous: _mapList(m['previous'], GymLoggedSet.fromMap),
         personalRecordWeight: (m['personalRecordWeight'] as num?)?.toDouble(),
+        supersetGroup: m['supersetGroup'] as int?,
+        exerciseNote: m['exerciseNote'] as String?,
+        progression: m['progression'] == null
+            ? null
+            : GymProgressionSuggestion.fromMap(
+                Map<String, dynamic>.from(m['progression'] as Map)),
         sets: _mapList(m['sets'], GymLoggedSet.fromMap),
       );
 
@@ -462,12 +823,16 @@ class GymWorkoutExercise {
         'exerciseId': exerciseId,
         'name': name,
         'imageUrl': imageUrl,
+        'animationUrl': animationUrl,
         'equipment': equipment,
         'primaryMuscles': primaryMuscles,
         'secondaryMuscles': secondaryMuscles,
         'routineExerciseId': routineExerciseId,
         'restSeconds': restSeconds,
         'personalRecordWeight': personalRecordWeight,
+        'supersetGroup': supersetGroup,
+        'exerciseNote': exerciseNote,
+        'progression': progression?.toCache(),
         'previous': previous.map((s) => s.toCache()).toList(),
         'sets': sets.map((s) => s.toCache()).toList(),
       };
@@ -481,7 +846,14 @@ class GymWorkoutExercise {
         'sets': sets.where((s) => s.isCompleted).map((s) => s.toRequest()).toList(),
       };
 
-  int get completedSets => sets.where((s) => s.isCompleted).length;
+  /// Arbeitssätze - Aufwärm- und Rest-Pause-Zeilen zählen nicht mit.
+  ///
+  /// Dieselbe Regel wie beim Volumen und wie im Backend: sonst zeigt der laufende
+  /// Bildschirm "1/22" und die fertige Einheit danach 19 Sätze.
+  List<GymLoggedSet> get workSets =>
+      sets.where((s) => s.setType.countsTowardVolume).toList();
+
+  int get completedSets => workSets.where((s) => s.isCompleted).length;
 
   double get volume => sets.fold(0.0, (sum, s) => sum + s.volume);
 }
@@ -543,6 +915,76 @@ class GymSession {
 // ─────────────────────────────────────────────────────────────────────────────
 // Auswertungen
 // ─────────────────────────────────────────────────────────────────────────────
+
+/// Erholungsstand einer Muskelgruppe.
+///
+/// [fatigue] ist relativ zur eigenen härtesten Einheit der letzten Wochen - eine absolute
+/// Zahl wäre für den einen ein Aufwärmen und für den anderen die Woche.
+class GymMuscleRecovery {
+  final String muscle;
+  final String label;
+  final double fatigue;
+  final double readiness;
+  final DateTime? lastTrainedAt;
+  final int hoursToReady;
+
+  const GymMuscleRecovery({
+    required this.muscle,
+    this.label = '',
+    this.fatigue = 0,
+    this.readiness = 1,
+    this.lastTrainedAt,
+    this.hoursToReady = 0,
+  });
+
+  factory GymMuscleRecovery.fromMap(Map<String, dynamic> m) => GymMuscleRecovery(
+        muscle: m['muscle'] as String? ?? '',
+        label: m['label'] as String? ?? '',
+        fatigue: (m['fatigue'] as num?)?.toDouble() ?? 0,
+        readiness: (m['readiness'] as num?)?.toDouble() ?? 1,
+        lastTrainedAt: _parseDate(m['lastTrainedAt']),
+        hoursToReady: m['hoursToReady'] as int? ?? 0,
+      );
+
+  bool get isReady => hoursToReady == 0;
+
+  /// "bereit", "in 6 Std" bzw. "in 2 Tagen" - Stunden werden ab einem Tag unhandlich.
+  String get readyLabel {
+    if (isReady) return 'bereit';
+    if (hoursToReady < 24) return 'in $hoursToReady Std';
+    final days = (hoursToReady / 24).ceil();
+    return days == 1 ? 'in 1 Tag' : 'in $days Tagen';
+  }
+}
+
+/// Ein benanntes Set verfügbarer Geräte.
+class GymEquipmentProfile {
+  final int id;
+  final String name;
+  final bool isActive;
+  final List<String> equipment;
+
+  const GymEquipmentProfile({
+    required this.id,
+    required this.name,
+    this.isActive = false,
+    this.equipment = const [],
+  });
+
+  factory GymEquipmentProfile.fromMap(Map<String, dynamic> m) => GymEquipmentProfile(
+        id: m['id'] as int? ?? 0,
+        name: m['name'] as String? ?? '',
+        // Jackson serialisiert `isActive` als `active`.
+        isActive: (m['active'] ?? m['isActive']) as bool? ?? false,
+        equipment: _stringList(m['equipment']),
+      );
+
+  Map<String, dynamic> toRequest() => {
+        'name': name,
+        'equipment': equipment,
+      };
+}
+
 
 class GymMuscleVolume {
   final String muscle;

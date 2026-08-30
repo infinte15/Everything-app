@@ -17,6 +17,7 @@ public class PlannedExerciseDTO {
     private String name;
     private String imageUrl;
     private String imageUrlEnd;
+    private String animationUrl;
     private String equipment;
     private List<String> primaryMuscles = new ArrayList<>();
     private List<String> secondaryMuscles = new ArrayList<>();
@@ -32,7 +33,17 @@ public class PlannedExerciseDTO {
     private String notes;
     private Integer supersetGroup;
 
+    /** Stehende Notiz zur Uebung (nicht die der Routine) - siehe {@code ExerciseNote}. */
+    private String exerciseNote;
+
     private List<ExerciseSetDTO> previous = new ArrayList<>();
+
+    /**
+     * Was heute ansteht, abgeleitet aus dem Verlauf. Steckt hier mit drin, damit der
+     * Trainingsstart eine Anfrage bleibt - die Historie wird fuer {@link #previous} ohnehin
+     * geladen.
+     */
+    private ProgressionSuggestionDTO progression;
 
     /** Bestes je bewegtes Gewicht dieser Uebung - fuer die Bestleistungs-Markierung. */
     private Double personalRecordWeight;

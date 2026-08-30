@@ -21,12 +21,6 @@ public class UserPreferencesDTO {
     @Max(value = 120, message = "Pausenlänge darf höchstens 120 Minuten sein")
     private Integer breakDurationMinutes;
 
-    @Min(value = 1, message = "Stunden bis zur Pause muss mindestens 1 sein")
-    @Max(value = 12, message = "Stunden bis zur Pause darf höchstens 12 sein")
-    private Integer hoursBeforeBreak;
-
-    private Boolean groupSimilarTasks;
-
     @Min(value = 1, message = "Maximale Tasks pro Tag muss mindestens 1 sein")
     @Max(value = 50, message = "Maximale Tasks pro Tag darf höchstens 50 sein")
     private Integer maxTasksPerDay;
@@ -73,5 +67,13 @@ public class UserPreferencesDTO {
     @Max(value = 480, message = "Maximalblock darf höchstens 8 Stunden sein")
     private Integer defaultMaxChunkMinutes;
 
+    /** Wie viele Stunden vor der Deadline eine Aufgabe fertig sein soll. */
+    @Min(value = 0,   message = "Puffer darf nicht negativ sein")
+    @Max(value = 168, message = "Puffer darf höchstens eine Woche sein")
+    private Integer deadlineBufferHours;
+
     private Boolean autoScheduleEnabled;
+
+    /** Angestrebtes Koerpergewicht in kg, oder null. */
+    private Double targetWeightKg;
 }

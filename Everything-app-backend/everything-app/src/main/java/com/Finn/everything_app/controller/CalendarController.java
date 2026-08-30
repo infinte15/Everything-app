@@ -5,13 +5,15 @@ import com.Finn.everything_app.mapper.CalendarEventMapper;
 import com.Finn.everything_app.model.CalendarEvent;
 import com.Finn.everything_app.security.CurrentUser;
 import com.Finn.everything_app.service.CalendarEventService;
-import com.Finn.everything_app.service.LastScheduleRunStore;
+import com.Finn.everything_app.service.ScheduleRunNotifier;
 import com.Finn.everything_app.service.SmartSchedulerService;
 import com.Finn.everything_app.service.ScheduleResult;
 import lombok.RequiredArgsConstructor;
+import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.context.request.async.DeferredResult;
 import jakarta.validation.Valid;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -27,7 +29,7 @@ public class CalendarController {
     private final CalendarEventService calendarEventService;
     private final SmartSchedulerService smartSchedulerService;
     private final CalendarEventMapper calendarEventMapper;
-    private final LastScheduleRunStore lastScheduleRunStore;
+    private final ScheduleRunNotifier scheduleRunNotifier;
 
     //GET /api/calendar/events --> Events in Zeitraum
     @GetMapping("/events")
@@ -165,22 +167,31 @@ public class CalendarController {
      */
     @GetMapping("/schedule-status")
     public ResponseEntity<ScheduleStatusDTO> getScheduleStatus(@CurrentUser Long userId) {
-        LastScheduleRunStore.Entry letzter = lastScheduleRunStore.get(userId);
-        if (letzter == null) {
-            // Noch kein Lauf in dieser Laufzeit — kein Fehler, nur nichts zu berichten.
-            return ResponseEntity.ok(new ScheduleStatusDTO());
-        }
+        // Die Abbildung liegt im Notifier, damit beide Endpunkte dieselbe Antwort bauen.
+        return ResponseEntity.ok(scheduleRunNotifier.statusVon(userId));
+    }
 
-        ScheduleStatusDTO dto = new ScheduleStatusDTO();
-        dto.setLastRunAt(letzter.getFinishedAt());
-        dto.setSolverStatus(letzter.getSolverStatus());
-        dto.setScheduledBlocks(letzter.getScheduledBlocks());
-        dto.setAtRisk(letzter.getAtRisk().stream()
-                .map(a -> new AtRiskItemDTO(a.getTaskId(), a.getHabitId(), a.getTitle(),
-                        a.getMinutes(), a.getReason() != null ? a.getReason().name() : null,
-                        a.getPlannedStart()))
-                .collect(Collectors.toList()));
-        return ResponseEntity.ok(dto);
+    /**
+     * GET /api/calendar/schedule-status/await --> dasselbe, aber es wartet.
+     *
+     * Die Anfrage wird geparkt, bis für den Nutzer ein Lauf fertig ist, der neuer ist als
+     * {@code since} — und erst dann beantwortet. Vorher fragte das Frontend in einer Retry-Leiter
+     * nach und traf den Fertig-Zeitpunkt nur auf einige hundert Millisekunden genau; diese
+     * Rundung war der größte verbliebene Posten der spürbaren Wartezeit.
+     *
+     * <p>{@code since} weglassen heißt "ich habe noch nichts gesehen" (App-Start): dann wird auf
+     * das nächste Ereignis gewartet, statt sofort den letzten bekannten Lauf zu melden.
+     *
+     * <p>Antwortet nach {@code scheduler.await-timeout-ms} mit <b>204</b>, wenn nichts passiert
+     * ist. Der Client-Timeout muss größer sein als dieser Wert, damit immer der Server zuerst
+     * antwortet und die App ein sauberes 204 sieht statt eines Socket-Fehlers.
+     */
+    @GetMapping("/schedule-status/await")
+    public DeferredResult<ResponseEntity<ScheduleStatusDTO>> awaitScheduleStatus(
+            @CurrentUser Long userId,
+            @RequestParam(required = false)
+            @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime since) {
+        return scheduleRunNotifier.awaitRun(userId, since);
     }
 
     // DELETE /api/calendar/events/{id}  --> Lösche Event

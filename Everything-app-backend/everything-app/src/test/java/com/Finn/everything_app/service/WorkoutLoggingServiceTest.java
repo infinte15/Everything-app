@@ -30,15 +30,18 @@ class WorkoutLoggingServiceTest {
     @Mock ExerciseSetRepository setRepository;
     @Mock ExerciseRepository exerciseRepository;
     @Mock RoutineRepository routineRepository;
+    @Mock RoutineHabitService routineHabitService;
     @Mock UserRepository userRepository;
     @Mock WorkoutPlanService workoutPlanService;
+    @Mock ExerciseNoteService exerciseNoteService;
     @Mock org.springframework.context.ApplicationEventPublisher eventPublisher;
 
     private WorkoutLoggingService service() {
         return new WorkoutLoggingService(
                 sessionRepository, setRepository, exerciseRepository, routineRepository,
-                userRepository, workoutPlanService, new WorkoutLogMapper(new WorkoutSessionMapper()),
-                eventPublisher);
+                routineHabitService, userRepository, workoutPlanService,
+                new WorkoutLogMapper(new WorkoutSessionMapper()),
+                new ProgressionService(setRepository), exerciseNoteService, eventPublisher);
     }
 
     private User user(long id) {

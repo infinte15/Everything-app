@@ -4,6 +4,7 @@ import com.Finn.everything_app.model.*;
 import com.Finn.everything_app.repository.CalendarEventRepository;
 import com.Finn.everything_app.repository.UserRepository;
 import com.Finn.everything_app.security.JwtUtil;
+import com.Finn.everything_app.service.LastScheduleRunStore;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -13,9 +14,11 @@ import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMock
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.test.web.servlet.MvcResult;
 
 import java.time.LocalDateTime;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 import static org.hamcrest.Matchers.equalTo;
@@ -41,6 +44,7 @@ class CalendarControllerTest {
     @Autowired CalendarEventRepository calendarEventRepository;
     @Autowired PasswordEncoder passwordEncoder;
     @Autowired JwtUtil jwtUtil;
+    @Autowired LastScheduleRunStore lastScheduleRunStore;
 
     private User testUser;
     private String token;
@@ -60,6 +64,9 @@ class CalendarControllerTest {
 
     @AfterEach
     void tearDown() {
+        // Der Store ist ein Singleton und lebt über die ganze Testklasse: ein hier eingetragener
+        // Lauf ließe sonst den nächsten Test seine Anfrage sofort beantworten, statt sie zu parken.
+        lastScheduleRunStore.clear(testUser.getId());
         calendarEventRepository.findByUserIdAndStartTimeBetweenOrderByStartTimeAsc(
                 testUser.getId(), LocalDateTime.now().minusDays(1), LocalDateTime.now().plusDays(365)
         ).forEach(calendarEventRepository::delete);
@@ -118,6 +125,73 @@ class CalendarControllerTest {
                         .header("Authorization", "Bearer " + token)
                         .contentType(APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(body)))
+                .andExpect(status().is4xxClientError());
+    }
+
+    /**
+     * Der Long-Poll muss den ASYNC-Dispatch überleben — sonst antwortet er 403 statt 200.
+     *
+     * {@code OncePerRequestFilter} lässt asynchrone Dispatches per Vorgabe aus; Spring Security
+     * filtert sie aber mit, und mit {@code SessionCreationPolicy.STATELESS} gibt es keinen
+     * Speicher, aus dem der SecurityContext beim zweiten Dispatch zurückkäme. Ohne den Override
+     * {@code shouldNotFilterAsyncDispatch() -> false} in {@code JwtAuthenticationFilter} ist dieser
+     * Test rot — und zwar erst NACH der vollen Wartezeit, was den Fehler im Betrieb besonders
+     * unangenehm zu finden macht. Wer den Override anfasst, muss diesen Test einmal rot gesehen
+     * haben, sonst prüft er nichts.
+     */
+    @Test
+    void awaitScheduleStatusBleibtNachAsyncDispatchAuthentifiziert() throws Exception {
+        // "since" in der Vergangenheit: der Store ist in dieser Laufzeit leer, die Anfrage wird
+        // also geparkt statt sofort beantwortet.
+        MvcResult geparkt = mockMvc.perform(get("/api/calendar/schedule-status/await")
+                        .header("Authorization", "Bearer " + token)
+                        .param("since", LocalDateTime.now().minusHours(1).toString()))
+                .andExpect(request().asyncStarted())
+                .andReturn();
+
+        // Einen fertigen Lauf melden — genau das, was SmartSchedulerService am Ende tut.
+        lastScheduleRunStore.record(testUser.getId(), "OPTIMAL", List.of(), 5, 2);
+
+        mockMvc.perform(asyncDispatch(geparkt))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.solverStatus", equalTo("OPTIMAL")))
+                .andExpect(jsonPath("$.changedBlocks", equalTo(2)));
+    }
+
+    /**
+     * War der Lauf schon durch, bevor die Anfrage ankam, wird sie gar nicht erst geparkt.
+     *
+     * Ohne diesen Vorabblick in den Store wartete der Client die vollen 25 Sekunden auf ein
+     * Ereignis, das längst vorbei ist — der häufigste Fall bei einer schnellen Maschine, und
+     * ausgerechnet dort wäre der Umbau langsamer als die alte Retry-Leiter.
+     */
+    @Test
+    void awaitScheduleStatusAntwortetSofortWennDerLaufSchonDurchIst() throws Exception {
+        LocalDateTime vorher = LocalDateTime.now().minusMinutes(5);
+        lastScheduleRunStore.record(testUser.getId(), "FEASIBLE", List.of(), 3, 1);
+
+        // Auch die sofort beantwortete Anfrage geht formal durch den Async-Weg — MockMvc rendert
+        // den Body erst beim Dispatch, selbst wenn das Ergebnis schon feststeht. Im Betrieb ist
+        // das unsichtbar: Spring dispatcht dann unmittelbar, der Client sieht eine schnelle
+        // normale Antwort. Der Unterschied zum Test darüber ist deshalb NICHT die Antwortzeit,
+        // sondern dass hier nichts geparkt wird.
+        MvcResult sofort = mockMvc.perform(get("/api/calendar/schedule-status/await")
+                        .header("Authorization", "Bearer " + token)
+                        .param("since", vorher.toString()))
+                .andExpect(request().asyncStarted())
+                .andReturn();
+
+        assertTrue(sofort.getAsyncResult(0) != null,
+                "Das Ergebnis muss ohne jedes Warten schon dastehen");
+
+        mockMvc.perform(asyncDispatch(sofort))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.solverStatus", equalTo("FEASIBLE")));
+    }
+
+    @Test
+    void awaitScheduleStatusVerlangtEinenToken() throws Exception {
+        mockMvc.perform(get("/api/calendar/schedule-status/await"))
                 .andExpect(status().is4xxClientError());
     }
 }

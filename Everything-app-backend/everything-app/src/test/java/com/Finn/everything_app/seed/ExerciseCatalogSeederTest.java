@@ -42,8 +42,9 @@ class ExerciseCatalogSeederTest {
         seeder.run(null);
         long afterFirstRun = exerciseRepository.count();
 
-        assertTrue(afterFirstRun > 800,
-                "der Katalog sollte mehrere hundert Übungen enthalten, waren: " + afterFirstRun);
+        assertEquals(1324, afterFirstRun,
+                "der ExerciseDB-Katalog hat 1324 Übungen - eine andere Zahl heißt, dass "
+                        + "data/exercisedb.json nicht zur erwarteten Quelle passt");
 
         seeder.run(null);
 
@@ -62,6 +63,14 @@ class ExerciseCatalogSeederTest {
             assertNotNull(exercise.getImageUrl(), "ohne Bild bleibt die Übungsliste leer");
             assertTrue(exercise.getImageUrl().startsWith("https://"),
                     "Bild-URL muss absolut sein: " + exercise.getImageUrl());
+            assertTrue(exercise.getImageUrl().endsWith(".jpg"),
+                    "Vorschaubild ist ein JPG: " + exercise.getImageUrl());
+            // Der Grund fuer den Katalogwechsel: jede Uebung hat eine Animation, nicht nur
+            // ein Teil von ihnen. Faellt das hier durch, ist der Wechsel sinnlos geworden.
+            assertNotNull(exercise.getAnimationUrl(),
+                    "jede Katalog-Übung braucht eine Animation: " + exercise.getName());
+            assertTrue(exercise.getAnimationUrl().endsWith(".gif"),
+                    "Animation ist ein GIF: " + exercise.getAnimationUrl());
             assertNotNull(exercise.getMuscleGroup(), "muscle_group ist NOT NULL");
             assertFalse(exercise.getPrimaryMuscles().isEmpty(),
                     "ohne primäre Muskelgruppe kann die Körper-Grafik nichts einfärben");
@@ -72,7 +81,30 @@ class ExerciseCatalogSeederTest {
             // Die Spiegel-Spalte muss zur primären Muskelgruppe passen.
             MuscleGroup primary = exercise.getPrimaryMuscles().iterator().next();
             assertEquals(primary.getSlug(), exercise.getMuscleGroup());
+
+            // Ein Muskel darf nicht zugleich primär und unterstützend sein, sonst zählt die
+            // Körper-Grafik dieselbe Fläche doppelt.
+            assertFalse(exercise.getSecondaryMuscles().contains(primary),
+                    "primäre Muskelgruppe darf nicht auch sekundär sein: " + exercise.getName());
         }
+    }
+
+    /**
+     * Der Seeder faellt bei unbekanntem Vokabular auf {@link MuscleGroup#CARDIO} zurueck statt
+     * zu raten. Genau 29 Uebungen sind echte Ausdauer-Uebungen ("cardiovascular system"); mehr
+     * heisst, dass {@link ExerciseDbMuscleMapping} eine Luecke hat.
+     */
+    @Test
+    void everyTargetMapsToARealMuscleExceptCardio() throws Exception {
+        seeder.run(null);
+
+        long cardio = exerciseRepository.findAll().stream()
+                .filter(e -> MuscleGroup.CARDIO.getSlug().equals(e.getMuscleGroup()))
+                .count();
+
+        assertEquals(29, cardio,
+                "nur die Ausdauer-Übungen dürfen auf CARDIO fallen - jede weitere ist eine "
+                        + "Lücke im Mapping");
     }
 
     @Test
@@ -80,7 +112,7 @@ class ExerciseCatalogSeederTest {
         seeder.run(null);
 
         var page = exerciseRepository.search(
-                "bench", null, null, null, null, 1L,
+                "bench", null, null, null, null, false, java.util.Set.of(""), 1L,
                 org.springframework.data.domain.PageRequest.of(0, 5));
 
         assertTrue(page.getTotalElements() > 0, "\"bench\" sollte Treffer liefern");
@@ -94,7 +126,7 @@ class ExerciseCatalogSeederTest {
         seeder.run(null);
 
         var page = exerciseRepository.search(
-                null, MuscleGroup.CHEST, null, null, null, 1L,
+                null, MuscleGroup.CHEST, null, null, null, false, java.util.Set.of(""), 1L,
                 org.springframework.data.domain.PageRequest.of(0, 10));
 
         assertTrue(page.getTotalElements() > 0);

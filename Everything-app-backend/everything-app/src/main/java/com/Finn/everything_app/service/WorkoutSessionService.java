@@ -1,6 +1,5 @@
 package com.Finn.everything_app.service;
 
-import com.Finn.everything_app.dto.WorkoutProgressDTO;
 import com.Finn.everything_app.event.ScheduleChangedEvent;
 import com.Finn.everything_app.model.*;
 import com.Finn.everything_app.repository.*;
@@ -55,13 +54,6 @@ public class WorkoutSessionService {
 
     public List<WorkoutSession> getSessionsByPlan(Long planId) {
         return workoutSessionRepository.findByWorkoutPlanId(planId);
-    }
-
-    public List<WorkoutSession> getSessionsInDateRange(Long userId, LocalDate start, LocalDate end) {
-        LocalDateTime startDateTime = start.atStartOfDay();
-        LocalDateTime endDateTime = end.atTime(23, 59, 59);
-
-        return workoutSessionRepository.findByUserIdAndStartTimeBetween(userId, startDateTime, endDateTime);
     }
 
     @Transactional
@@ -132,65 +124,5 @@ public class WorkoutSessionService {
         calendarEventRepository.deleteAll(calendarEventRepository.findByRelatedWorkoutId(id));
         workoutSessionRepository.delete(session);
         eventPublisher.publishEvent(new ScheduleChangedEvent(this, userId));
-    }
-
-    // STATISTICS
-
-    public WorkoutProgressDTO calculateProgress(Long userId, LocalDate start, LocalDate end) {
-        List<WorkoutSession> sessions;
-
-        if (start != null && end != null) {
-            sessions = getSessionsInDateRange(userId, start, end);
-        } else {
-            sessions = getUserSessions(userId);
-        }
-
-        int totalWorkouts = sessions.size();
-        int completedWorkouts = (int) sessions.stream()
-                .filter(WorkoutSession::getIsCompleted)
-                .count();
-
-        double completionRate = totalWorkouts > 0 ?
-                ((double) completedWorkouts / totalWorkouts) * 100 : 0.0;
-
-        int totalMinutes = sessions.stream()
-                .filter(s -> s.getDurationMinutes() != null)
-                .mapToInt(WorkoutSession::getDurationMinutes)
-                .sum();
-
-        double avgIntensity = sessions.stream()
-                .filter(s -> s.getIntensity() != null)
-                .mapToInt(WorkoutSession::getIntensity)
-                .average()
-                .orElse(0.0);
-
-        int totalCalories = sessions.stream()
-                .filter(s -> s.getCaloriesBurned() != null)
-                .mapToInt(WorkoutSession::getCaloriesBurned)
-                .sum();
-
-        Map<String, Integer> workoutsByType = sessions.stream()
-                .filter(s -> s.getWorkoutType() != null)
-                .collect(Collectors.groupingBy(
-                        WorkoutSession::getWorkoutType,
-                        Collectors.summingInt(s -> 1)
-                ));
-
-        String mostFrequentType = workoutsByType.entrySet().stream()
-                .max(Map.Entry.comparingByValue())
-                .map(Map.Entry::getKey)
-                .orElse(null);
-
-        WorkoutProgressDTO progress = new WorkoutProgressDTO();
-        progress.setTotalWorkouts(totalWorkouts);
-        progress.setCompletedWorkouts(completedWorkouts);
-        progress.setCompletionRate(completionRate);
-        progress.setTotalMinutesTrained(totalMinutes);
-        progress.setAverageIntensity(avgIntensity);
-        progress.setTotalCaloriesBurned(totalCalories);
-        progress.setWorkoutsByType(workoutsByType);
-        progress.setMostFrequentWorkoutType(mostFrequentType);
-
-        return progress;
     }
 }

@@ -27,6 +27,7 @@ public class SportsController {
     private final ExerciseService exerciseService;
     private final ExerciseSetService setService;
     private final WorkoutLoggingService loggingService;
+    private final ExerciseNoteService exerciseNoteService;
 
     private final WorkoutPlanMapper planMapper;
     private final WorkoutSessionMapper sessionMapper;
@@ -126,20 +127,6 @@ public class SportsController {
         return ResponseEntity.ok(
                 sessions.stream().map(sessionMapper::toDTO).collect(Collectors.toList())
         );
-    }
-
-
-    @GetMapping("/sessions/date-range")
-    public ResponseEntity<List<WorkoutSessionDTO>> getSessionsByDateRange(
-            @CurrentUser Long userId,
-            @RequestParam String startDate,
-            @RequestParam String endDate) {
-
-        LocalDate start = LocalDate.parse(startDate);
-        LocalDate end = LocalDate.parse(endDate);
-
-        List<WorkoutSession> sessions = sessionService.getSessionsInDateRange(userId, start, end);
-        return ResponseEntity.ok(withAggregates(sessions));
     }
 
 
@@ -259,15 +246,25 @@ public class SportsController {
     }
 
 
-    @GetMapping("/exercises/{id}/last")
-    public ResponseEntity<ExerciseHistoryEntryDTO> getLastPerformance(
-            @CurrentUser Long userId,
-            @PathVariable Long id) {
+    /**
+     * Stehende Notiz zur Uebung - erscheint bei jedem Training, unabhaengig von der Routine.
+     */
+    @GetMapping("/exercises/{id}/note")
+    public ResponseEntity<ExerciseNoteDTO> getExerciseNote(
+            @CurrentUser Long userId, @PathVariable Long id) {
 
-        ExerciseHistoryEntryDTO last = loggingService.getLastPerformance(userId, id);
-        return last != null ? ResponseEntity.ok(last) : ResponseEntity.noContent().build();
+        return ResponseEntity.ok(exerciseNoteService.get(userId, id));
     }
 
+    /** Leerer Text loescht die Notiz. */
+    @PutMapping("/exercises/{id}/note")
+    public ResponseEntity<ExerciseNoteDTO> saveExerciseNote(
+            @CurrentUser Long userId,
+            @PathVariable Long id,
+            @Valid @RequestBody ExerciseNoteDTO request) {
+
+        return ResponseEntity.ok(exerciseNoteService.save(userId, id, request.text()));
+    }
 
     @GetMapping("/exercises/{id}/records")
     public ResponseEntity<PersonalRecordDTO> getPersonalRecords(
@@ -275,15 +272,6 @@ public class SportsController {
             @PathVariable Long id) {
 
         return ResponseEntity.ok(loggingService.getPersonalRecords(userId, id));
-    }
-
-
-    @GetMapping("/exercises/muscle/{muscleGroup}")
-    public ResponseEntity<List<ExerciseDTO>> getExercisesByMuscleGroup(@PathVariable String muscleGroup) {
-        List<Exercise> exercises = exerciseService.getExercisesByMuscleGroup(muscleGroup);
-        return ResponseEntity.ok(
-                exercises.stream().map(exerciseMapper::toDTO).collect(Collectors.toList())
-        );
     }
 
 
@@ -369,22 +357,4 @@ public class SportsController {
         return ResponseEntity.noContent().build();
     }
 
-    // ==================== STATISTICS ====================
-
-
-    @GetMapping("/stats/progress")
-    public ResponseEntity<WorkoutProgressDTO> getProgress(
-            @CurrentUser Long userId,
-            @RequestParam(required = false) String startDate,
-            @RequestParam(required = false) String endDate) {
-
-
-        WorkoutProgressDTO progress = sessionService.calculateProgress(
-                userId,
-                startDate != null ? LocalDate.parse(startDate) : null,
-                endDate != null ? LocalDate.parse(endDate) : null
-        );
-
-        return ResponseEntity.ok(progress);
-    }
 }

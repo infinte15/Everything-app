@@ -40,9 +40,25 @@ class FinanceForecastServiceTest {
         heute = LocalDate.now();
     }
 
+    /**
+     * Ein Faelligkeitsdatum {@code tage} in der Zukunft, aber garantiert noch in diesem Monat.
+     *
+     * <p>Die Prognose rechnet bis Monatsende. Ein schlichtes {@code heute.plusDays(3)} faellt am
+     * 30. eines Monats in den naechsten und damit aus dem Fenster - die Tests scheiterten dann an
+     * den letzten Tagen jedes Monats, ohne dass sich an der Rechnung etwas geaendert haette.
+     *
+     * <p>Am Monatsletzten bleibt nur der heutige Tag; das ist kein Sonderfall, sondern genau die
+     * dokumentierte Regel "was heute faellig ist, zaehlt zur Prognose".
+     */
+    private LocalDate faelligInTagen(int tage) {
+        LocalDate monatsende = heute.withDayOfMonth(heute.lengthOfMonth());
+        LocalDate ziel = heute.plusDays(tage);
+        return ziel.isAfter(monatsende) ? monatsende : ziel;
+    }
+
     @Test
     void ohneKontoGibtEsKeineZahl() {
-        vertrag("Miete", 845.00, TransactionType.EXPENSE, heute.plusDays(3), 30);
+        vertrag("Miete", 845.00, TransactionType.EXPENSE, faelligInTagen(3), 30);
 
         FinanceForecastDTO prognose = forecastService.forecast(nutzer.getId(), heute);
 
@@ -66,7 +82,7 @@ class FinanceForecastServiceTest {
             // Am letzten Tag des Monats gibt es keine Resttage - dann prüft dieser Test nichts.
             return;
         }
-        vertrag("Netflix", 13.99, TransactionType.EXPENSE, heute.plusDays(1), 30);
+        vertrag("Netflix", 13.99, TransactionType.EXPENSE, faelligInTagen(1), 30);
 
         FinanceForecastDTO prognose = forecastService.forecast(nutzer.getId(), heute);
 
@@ -85,7 +101,7 @@ class FinanceForecastServiceTest {
         if (heute.isEqual(monatsende)) {
             return;
         }
-        vertrag("Gehalt", 2480.00, TransactionType.INCOME, heute.plusDays(1), 30);
+        vertrag("Gehalt", 2480.00, TransactionType.INCOME, faelligInTagen(1), 30);
 
         FinanceForecastDTO prognose = forecastService.forecast(nutzer.getId(), heute);
 
@@ -101,7 +117,7 @@ class FinanceForecastServiceTest {
         if (heute.isEqual(monatsende)) {
             return;
         }
-        vertrag("Miete", 845.00, TransactionType.EXPENSE, heute.plusDays(1), 30);
+        vertrag("Miete", 845.00, TransactionType.EXPENSE, faelligInTagen(1), 30);
 
         FinanceForecastDTO prognose = forecastService.forecast(nutzer.getId(), heute);
 
@@ -158,8 +174,8 @@ class FinanceForecastServiceTest {
         // upcomingContractExpenses, fehlte aber im projizierten Saldo.
         konto(1000.00);
         vertrag("Heute fällig", 13.99, TransactionType.EXPENSE, heute, 30);
-        vertrag("Morgen fällig", 25.00, TransactionType.EXPENSE, heute.plusDays(1), 30);
-        vertrag("Gehalt", 2000.00, TransactionType.INCOME, heute.plusDays(2), 30);
+        vertrag("Morgen fällig", 25.00, TransactionType.EXPENSE, faelligInTagen(1), 30);
+        vertrag("Gehalt", 2000.00, TransactionType.INCOME, faelligInTagen(2), 30);
 
         FinanceForecastDTO prognose = forecastService.forecast(nutzer.getId(), heute);
 
@@ -191,7 +207,7 @@ class FinanceForecastServiceTest {
     @Test
     void gekuendigteVertraegeWerdenNichtEingerechnet() {
         konto(1000.00);
-        Contract gekuendigt = vertrag("Altes Abo", 50.00, TransactionType.EXPENSE, heute.plusDays(1), 30);
+        Contract gekuendigt = vertrag("Altes Abo", 50.00, TransactionType.EXPENSE, faelligInTagen(1), 30);
         gekuendigt.setActive(false);
         gekuendigt.setCancelledAt(LocalDateTime.now());
         contractRepository.saveAndFlush(gekuendigt);

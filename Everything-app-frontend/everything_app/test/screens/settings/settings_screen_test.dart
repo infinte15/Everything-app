@@ -19,10 +19,7 @@ Future<CalendarProvider> _pumpSettings(
   addTearDown(tester.view.resetDevicePixelRatio);
 
   // Der CalendarProvider wird nach dem Speichern für scheduleReconcile() gebraucht.
-  final calendar = CalendarProvider(
-    calendarService: FakeCalendarService(),
-    reconcileDelay: Duration.zero,
-  );
+  final calendar = CalendarProvider(calendarService: FakeCalendarService());
 
   await tester.pumpWidget(
     MultiProvider(

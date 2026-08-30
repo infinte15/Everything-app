@@ -62,4 +62,28 @@ public class RoutineExercise {
     /** Uebungen mit derselben Nummer werden im Wechsel trainiert (Supersatz). */
     @Column(name = "superset_group")
     private Integer supersetGroup;
+
+    /**
+     * Wie die naechste Vorgabe aus dem Verlauf abgeleitet wird. Nullable, weil
+     * {@code ddl-auto=update} kein NOT NULL auf eine gefuellte Tabelle setzen kann -
+     * {@code null} ist als {@link ProgressionPolicy#OFF} zu lesen.
+     */
+    @Enumerated(EnumType.STRING)
+    @Column(name = "progression_policy", length = 20)
+    private ProgressionPolicy progressionPolicy;
+
+    /**
+     * Ladbare Stufe in kg. {@code null} heisst "aus der Uebung ableiten" - Bein- und
+     * Rueckenuebungen springen groesser als Isolationsarbeit.
+     */
+    @Column(name = "increment_kg")
+    private Double incrementKg;
+
+    /**
+     * Koerpergewichtsuebung: gesteigert werden Wiederholungen und Saetze, nicht die Last.
+     * Ohne das Kennzeichen liesse sich "0 kg geloggt" nicht von "Gewicht vergessen"
+     * unterscheiden.
+     */
+    @Column(name = "is_bodyweight")
+    private Boolean isBodyweight;
 }

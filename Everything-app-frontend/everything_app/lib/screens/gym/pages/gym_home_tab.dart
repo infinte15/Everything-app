@@ -7,8 +7,10 @@ import '../../../models/gym/gym_models.dart';
 import '../../../providers/sports_provider.dart';
 import '../../../theme/lyfta_theme.dart';
 import '../widgets/body_activation_map.dart';
+import '../widgets/body_weight_card.dart';
 import '../widgets/gym_session_card.dart';
 import '../widgets/routine_card.dart' show muscleLabel;
+import '../widgets/week_strip_card.dart';
 import '../widgets/week_stats_grid.dart';
 
 class GymHomeTab extends StatelessWidget {
@@ -85,15 +87,20 @@ class GymHomeTab extends StatelessWidget {
                   ),
                   const SizedBox(height: 16),
                 ],
-                FilledButton.icon(
-                  onPressed: onStartWorkout,
-                  icon: const Icon(Icons.play_arrow_rounded),
-                  label: Text(
-                    sports.hasActiveWorkout
-                        ? 'Training fortsetzen'
-                        : 'Training starten',
-                  ),
+                // Die Wochenübersicht ersetzt den früheren "Training starten"-Knopf: sie
+                // beantwortet dieselbe Frage, sagt aber zusätzlich *was* ansteht und ob der
+                // Tag schon erledigt ist. Gestartet wird über ihre Heute-Zeile.
+                WeekStripCard(
+                  routines: sports.routines,
+                  sessions: sports.sessions,
+                  activeWorkoutName: sports.activeWorkout?.name,
+                  onStart: onStartWorkout,
+                  onResume: onOpenActiveWorkout,
                 ),
+                const SizedBox(height: 26),
+                const _SectionTitle('Körpergewicht'),
+                const SizedBox(height: 12),
+                BodyWeightCard(series: sports.bodyWeight),
                 const SizedBox(height: 26),
                 const _SectionTitle('Diese Woche'),
                 const SizedBox(height: 12),

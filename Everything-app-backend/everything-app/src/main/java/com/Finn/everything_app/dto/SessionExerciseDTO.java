@@ -12,6 +12,7 @@ public class SessionExerciseDTO {
     private String name;
     private String imageUrl;
     private String imageUrlEnd;
+    private String animationUrl;
     private String equipment;
     private List<String> primaryMuscles = new ArrayList<>();
     private List<String> secondaryMuscles = new ArrayList<>();

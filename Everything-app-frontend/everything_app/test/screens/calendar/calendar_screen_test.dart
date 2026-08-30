@@ -43,9 +43,9 @@ Future<CalendarProvider> _pumpCalendar(
   // Disposed explicitly by each test (not via addTearDown) so the 30s polling Timer
   // is guaranteed cancelled before flutter_test's end-of-test "no pending timers"
   // invariant check runs, rather than depending on addTearDown/invariant-check ordering.
-  // reconcileDelay: zero, damit der Nachlade-Timer nach jeder Mutation nicht als
-  // "pending timer" am Testende hängen bleibt.
-  final provider = CalendarProvider(calendarService: fake, reconcileDelay: Duration.zero);
+  // Seit der Nachlauf ein Long-Poll ist, gibt es keinen Nachlade-Timer mehr, der am Testende
+  // als "pending timer" hängen bleiben könnte — die Warte-Anfrage ist ein Future, kein Timer.
+  final provider = CalendarProvider(calendarService: fake);
   // Pre-load synchronously so the first pump already has real data, instead of
   // racing CalendarScreen's own async initState load.
   await provider.loadEventsForMonth(DateTime.now());

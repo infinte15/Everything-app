@@ -77,7 +77,9 @@ public class TaskController {
     @PutMapping("/{id}")
     public ResponseEntity<TaskDTO> updateTask(@PathVariable Long id, @Valid @RequestBody TaskDTO taskDTO){
         Task task = taskMapper.toEntity(taskDTO);
-        Task updated = taskService.updateTask(id, task);
+        // clearFields sagt, was ausdruecklich WEG soll — im Rumpf laesst sich das nicht
+        // ausdruecken, weil dort null "unveraendert" heisst (siehe TaskClearableField).
+        Task updated = taskService.updateTask(id, task, taskDTO.getClearFields());
 
         return ResponseEntity.ok(taskMapper.toDTO(updated));
     }
@@ -87,6 +89,10 @@ public class TaskController {
      *
      * Eigener Endpunkt, weil die Patch-Semantik von PUT /api/tasks/{id} "null = unveraendert"
      * bedeutet und damit kein Entkoppeln ausdruecken kann.
+     *
+     * Fuer die uebrigen leerbaren Felder loest {@code TaskDTO.clearFields} dasselbe Problem
+     * anders — mit Begruendung dort. Kurz: eine Projektzuordnung ist eine eigene Nutzeraktion mit
+     * eigenem Dialog, das Bearbeiten-Sheet speichert dagegen sechs leerbare Felder auf einmal.
      */
     @PutMapping("/{id}/project")
     public ResponseEntity<TaskDTO> assignProject(

@@ -32,6 +32,7 @@ public class ExerciseMapper {
         dto.setVideoUrl(exercise.getVideoUrl());
         dto.setImageUrl(exercise.getImageUrl());
         dto.setImageUrlEnd(exercise.getImageUrlEnd());
+        dto.setAnimationUrl(exercise.getAnimationUrl());
         dto.setExternalId(exercise.getExternalId());
         dto.setDefaultRestSeconds(exercise.getDefaultRestSeconds());
         dto.setIsSystem(exercise.getIsSystem());
@@ -62,6 +63,7 @@ public class ExerciseMapper {
         exercise.setVideoUrl(dto.getVideoUrl());
         exercise.setImageUrl(dto.getImageUrl());
         exercise.setImageUrlEnd(dto.getImageUrlEnd());
+        exercise.setAnimationUrl(dto.getAnimationUrl());
         exercise.setDefaultRestSeconds(dto.getDefaultRestSeconds());
 
         // externalId/source/isSystem sind bewusst nicht uebernehmbar - die vergibt nur der Seeder.

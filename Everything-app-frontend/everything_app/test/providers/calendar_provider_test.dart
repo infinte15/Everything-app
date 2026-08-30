@@ -28,8 +28,9 @@ CalendarEvent _event({
 }
 
 Future<CalendarProvider> _loadedProvider(FakeCalendarService fake) async {
-  // reconcileDelay: zero, damit der Nachlade-Timer nicht als pending timer hängen bleibt.
-  final provider = CalendarProvider(calendarService: fake, reconcileDelay: Duration.zero);
+  // Kein reconcileDelay mehr: der Nachlauf ist seit dem Long-Poll ein Future statt einer
+  // Timer-Leiter, es kann also gar kein pending timer mehr hängen bleiben.
+  final provider = CalendarProvider(calendarService: fake);
   addTearDown(provider.dispose);
   await provider.loadEventsForMonth(DateTime.now());
   return provider;
@@ -172,17 +173,136 @@ void main() {
 
       final before = fake.getEventsInRangeCallCount;
       await provider.updateEvent(original.copyWith(startTime: original.startTime));
-      // reconcileDelay ist zero — der Timer feuert im nächsten Event-Loop-Durchlauf. Der Nachlauf
-      // fragt seither erst den Scheduler-Status ab und lädt den Monat nur nach, wenn tatsächlich
-      // neu geplant wurde; das sind ein paar Mikrotask-Runden mehr als früher.
       for (var i = 0; i < 6; i++) {
         await Future<void>.delayed(Duration.zero);
       }
 
       expect(fake.getEventsInRangeCallCount, greaterThan(before),
           reason: 'the provider must refetch after a mutation, not wait for the 30s poll');
-      expect(fake.getScheduleStatusCallCount, greaterThan(0),
-          reason: 'der Nachlauf soll den billigen Status abfragen, nicht blind den ganzen Monat');
+      expect(fake.awaitScheduleRunCallCount, 1,
+          reason: 'der Nachlauf wartet auf den Server, statt ihn in einer Leiter abzufragen');
+    });
+
+    test('fünf schnelle Änderungen öffnen genau eine Warte-Anfrage', () async {
+      final original = _event();
+      final fake = FakeCalendarService([original]);
+      final provider = await _loadedProvider(fake);
+
+      // Ohne die _wartet-Sperre lägen jetzt fünf HTTP-Anfragen gleichzeitig beim Server, die alle
+      // auf dasselbe Ereignis warten — genau das, was der Koordinator serverseitig auch vermeidet.
+      for (var i = 0; i < 5; i++) {
+        provider.scheduleReconcile();
+      }
+      expect(fake.awaitScheduleRunCallCount, lessThanOrEqualTo(1));
+
+      for (var i = 0; i < 10; i++) {
+        await Future<void>.delayed(Duration.zero);
+      }
+
+      // Die zwischenzeitlichen Meldungen sind nicht verloren: nach der ersten Antwort wird genau
+      // einmal nachgefasst, nicht viermal.
+      expect(fake.awaitScheduleRunCallCount, 2);
+    });
+
+    test('meldet der Server 0 geänderte Blöcke, entfällt der Monatsabruf', () async {
+      final fake = FakeCalendarService([_event()]);
+      final provider = await _loadedProvider(fake);
+
+      final zeit = DateTime.now().add(const Duration(minutes: 1));
+      fake.awaitFallback = ScheduleStatus(
+        lastRunAt: zeit,
+        lastRunAtRaw: zeit.toIso8601String(),
+        solverStatus: 'OPTIMAL',
+        changedBlocks: 0,
+      );
+
+      final before = fake.getEventsInRangeCallCount;
+      provider.scheduleReconcile();
+      for (var i = 0; i < 6; i++) {
+        await Future<void>.delayed(Duration.zero);
+      }
+
+      expect(fake.getEventsInRangeCallCount, before,
+          reason: 'der Lauf hat nichts bewegt — den ganzen Monat zu laden wäre reine Verschwendung');
+      expect(provider.isReplanning, isFalse);
+    });
+
+    test('null geänderte Blöcke heißt unbekannt und wird geladen', () async {
+      final fake = FakeCalendarService([_event()]);
+      final provider = await _loadedProvider(fake);
+
+      final zeit = DateTime.now().add(const Duration(minutes: 1));
+      // changedBlocks fehlt: ein Server, der nicht mitzählt, darf keinen falschen Kalender
+      // erzeugen — im Zweifel wird geladen.
+      fake.awaitFallback = ScheduleStatus(
+        lastRunAt: zeit,
+        lastRunAtRaw: zeit.toIso8601String(),
+        solverStatus: 'OPTIMAL',
+      );
+
+      final before = fake.getEventsInRangeCallCount;
+      provider.scheduleReconcile();
+      for (var i = 0; i < 6; i++) {
+        await Future<void>.delayed(Duration.zero);
+      }
+
+      expect(fake.getEventsInRangeCallCount, greaterThan(before));
+    });
+
+    test('eine leere Antwort (204) lässt die Anzeige nicht hängen', () async {
+      final fake = FakeCalendarService([_event()]);
+      final provider = await _loadedProvider(fake);
+
+      fake.awaitResponses.add(null);
+
+      final before = fake.getEventsInRangeCallCount;
+      provider.scheduleReconcile();
+      expect(provider.isReplanning, isTrue);
+
+      for (var i = 0; i < 6; i++) {
+        await Future<void>.delayed(Duration.zero);
+      }
+
+      expect(provider.isReplanning, isFalse,
+          reason: 'ohne Lauf im Zeitfenster darf der Balken nicht stehen bleiben');
+      expect(fake.getEventsInRangeCallCount, before,
+          reason: 'es ist nichts passiert, also gibt es auch nichts nachzuladen');
+    });
+
+    test('der zuletzt gesehene Lauf geht als since zurück', () async {
+      final fake = FakeCalendarService([_event()]);
+      final provider = await _loadedProvider(fake);
+
+      provider.scheduleReconcile();
+      for (var i = 0; i < 6; i++) {
+        await Future<void>.delayed(Duration.zero);
+      }
+      final ersterWert = fake.lastAwaitSince;
+
+      provider.scheduleReconcile();
+      for (var i = 0; i < 6; i++) {
+        await Future<void>.delayed(Duration.zero);
+      }
+
+      expect(fake.lastAwaitSince, isNotNull);
+      expect(fake.lastAwaitSince, isNot(ersterWert),
+          reason: 'die zweite Anfrage muss den Lauf kennen, den die erste gemeldet hat — sonst '
+              'antwortet der Server sofort mit demselben Ergebnis und die App fragt endlos nach');
+    });
+
+    test('nach dispose während einer offenen Anfrage fliegt nichts', () async {
+      final fake = FakeCalendarService([_event()]);
+      final provider = CalendarProvider(calendarService: fake);
+      await provider.loadEventsForMonth(DateTime.now());
+
+      provider.scheduleReconcile();
+      // Eine Warte-Anfrage kann 35 Sekunden offen sein und überlebt damit jeden Screenwechsel.
+      provider.dispose();
+
+      for (var i = 0; i < 10; i++) {
+        await Future<void>.delayed(Duration.zero);
+      }
+      // Kein expect nötig: ein notifyListeners nach dispose würde den Test von selbst umwerfen.
     });
 
     test('der Indikator geht wieder aus, wenn die Neuplanung durch ist', () async {

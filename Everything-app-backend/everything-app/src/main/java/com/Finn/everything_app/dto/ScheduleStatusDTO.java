@@ -24,5 +24,16 @@ public class ScheduleStatusDTO {
     private LocalDateTime lastRunAt;
     private String solverStatus;
     private Integer scheduledBlocks;
+
+    /**
+     * Angelegte + geänderte + gelöschte Blöcke in diesem Lauf.
+     *
+     * Bei {@code 0} darf sich das Frontend den Monatsabruf sparen — der häufige Fall "Block gezogen
+     * und gepinnt, der Löser hat sonst nichts bewegt". {@code null} heißt ausdrücklich
+     * <b>unbekannt</b> und nicht "null Blöcke": der Client lädt dann wie bisher nach. Damit ist ein
+     * Schreibweg, der versehentlich nicht mitzählt, ein Leistungsverlust und kein falscher Kalender.
+     */
+    private Integer changedBlocks;
+
     private List<AtRiskItemDTO> atRisk = new ArrayList<>();
 }

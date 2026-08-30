@@ -66,13 +66,19 @@ class ApiService {
   }
 
   /// GET Request
-  Future<http.Response> get(String url) async {
+  /// [timeout] überschreibt [ApiConfig.timeout] für diese eine Anfrage.
+  ///
+  /// Gebraucht für den Long-Poll auf `/calendar/schedule-status/await`, der absichtlich lange
+  /// offen bleibt. Benannt und optional, damit keiner der bestehenden Aufrufe angefasst werden
+  /// muss — genau deshalb reicht hier ein Parameter, wo ein Streaming-Ansatz (SSE) eine ganze
+  /// zweite Netz-Primitive in dieser Klasse gebraucht hätte.
+  Future<http.Response> get(String url, {Duration? timeout}) async {
     final uri = _buildUri(url);
     try {
       final headers = await getHeaders();
       final response = await _client
           .get(uri, headers: headers)
-          .timeout(ApiConfig.timeout);
+          .timeout(timeout ?? ApiConfig.timeout);
       
       _logRequest('GET', uri.toString(), response.statusCode);
       return response;

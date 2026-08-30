@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../../models/gym/gym_models.dart';
 import '../../../theme/lyfta_theme.dart';
+import 'exercise_media.dart';
 import 'exercise_muscle_figure.dart';
 
 /// Routinen-Karte mit Titelbild, Umfang und beteiligten Muskelgruppen.
@@ -94,21 +95,50 @@ class RoutineCard extends StatelessWidget {
   }
 }
 
-/// Titelbild: die Muskeln, die die Routine insgesamt trifft.
+/// Titelbild: eine Kachel aus den ersten Übungen der Routine.
 ///
-/// Früher eine Collage der ersten Übungsfotos - die gibt es nicht mehr, und aus
-/// einer abgeleiteten Figur lässt sich nichts kacheln. Die Aggregat-Muskeln der
-/// Routine sagen ohnehin mehr über sie aus als drei zufällige Übungsbilder.
+/// Lange stand hier die aggregierte Muskelgrafik, weil es keine Übungsbilder gab. Seit der
+/// Katalog für jede Übung eine Zeichnung liefert, ist die Kachel die bessere Antwort auf die
+/// Frage, die man vor einer Routine hat - nämlich welche Übungen darin stecken. Ohne Bilder
+/// (leere Routine, nur eigene Übungen) bleibt die Muskelgrafik als Rückfall.
 class _Cover extends StatelessWidget {
+  static const double _height = 116;
+
   final GymRoutine routine;
 
   const _Cover({required this.routine});
 
   @override
   Widget build(BuildContext context) {
-    return ExerciseMuscleFigureBanner(
-      primaryMuscles: routine.primaryMuscles,
-      height: 116,
+    final images = routine.previewImageUrls.take(4).toList();
+    if (images.isEmpty) {
+      return ExerciseMuscleFigureBanner(
+        primaryMuscles: routine.primaryMuscles,
+        height: _height,
+      );
+    }
+
+    return SizedBox(
+      height: _height,
+      child: Row(
+        children: [
+          for (var i = 0; i < images.length; i++) ...[
+            if (i > 0) const SizedBox(width: 2),
+            Expanded(
+              child: ExerciseThumb(
+                imageUrl: images[i],
+                size: _height,
+                // Nur die äußeren Kacheln runden, damit die Reihe als ein Bild liest.
+                radius: images.length == 1
+                    ? 12
+                    : i == 0 || i == images.length - 1
+                        ? 12
+                        : 0,
+              ),
+            ),
+          ],
+        ],
+      ),
     );
   }
 }

@@ -9,8 +9,6 @@ class UserPreferences {
   final String? peakProductivityTime; // MORNING | AFTERNOON | EVENING
 
   final int? breakDurationMinutes;
-  final int? hoursBeforeBreak;
-  final bool? groupSimilarTasks;
   final int? maxTasksPerDay;
 
   final bool? notificationsEnabled;
@@ -42,6 +40,13 @@ class UserPreferences {
 
   final int? defaultMinChunkMinutes;
   final int? defaultMaxChunkMinutes;
+
+  /// Wie viele Stunden vor der Deadline eine Aufgabe fertig sein soll.
+  ///
+  /// Ein Ziel des Hauptlaufs, keine zweite harte Grenze: passt es sonst nicht, plant der
+  /// Scheduler in den Puffer hinein, statt zu warnen.
+  final int? deadlineBufferHours;
+
   final bool? autoScheduleEnabled;
 
   const UserPreferences({
@@ -50,8 +55,6 @@ class UserPreferences {
     this.workdayEnd,
     this.peakProductivityTime,
     this.breakDurationMinutes,
-    this.hoursBeforeBreak,
-    this.groupSimilarTasks,
     this.maxTasksPerDay,
     this.notificationsEnabled,
     this.reminderMinutesBefore,
@@ -65,6 +68,7 @@ class UserPreferences {
     this.personalHoursEnd,
     this.defaultMinChunkMinutes,
     this.defaultMaxChunkMinutes,
+    this.deadlineBufferHours,
     this.autoScheduleEnabled,
   });
 
@@ -93,8 +97,6 @@ class UserPreferences {
       workdayEnd: _parseTime(json['workdayEnd']),
       peakProductivityTime: json['peakProductivityTime'],
       breakDurationMinutes: json['breakDurationMinutes'],
-      hoursBeforeBreak: json['hoursBeforeBreak'],
-      groupSimilarTasks: json['groupSimilarTasks'],
       maxTasksPerDay: json['maxTasksPerDay'],
       notificationsEnabled: json['notificationsEnabled'],
       reminderMinutesBefore: json['reminderMinutesBefore'],
@@ -108,6 +110,7 @@ class UserPreferences {
       personalHoursEnd: _parseTime(json['personalHoursEnd']),
       defaultMinChunkMinutes: json['defaultMinChunkMinutes'],
       defaultMaxChunkMinutes: json['defaultMaxChunkMinutes'],
+      deadlineBufferHours: json['deadlineBufferHours'],
       autoScheduleEnabled: json['autoScheduleEnabled'],
     );
   }
@@ -118,8 +121,6 @@ class UserPreferences {
       'workdayEnd': _formatTime(workdayEnd),
       'peakProductivityTime': peakProductivityTime,
       'breakDurationMinutes': breakDurationMinutes,
-      'hoursBeforeBreak': hoursBeforeBreak,
-      'groupSimilarTasks': groupSimilarTasks,
       'maxTasksPerDay': maxTasksPerDay,
       'notificationsEnabled': notificationsEnabled,
       'reminderMinutesBefore': reminderMinutesBefore,
@@ -133,6 +134,7 @@ class UserPreferences {
       'personalHoursEnd': _formatTime(personalHoursEnd),
       'defaultMinChunkMinutes': defaultMinChunkMinutes,
       'defaultMaxChunkMinutes': defaultMaxChunkMinutes,
+      'deadlineBufferHours': deadlineBufferHours,
       'autoScheduleEnabled': autoScheduleEnabled,
     };
   }
@@ -142,8 +144,6 @@ class UserPreferences {
     TimeOfDay? workdayEnd,
     String? peakProductivityTime,
     int? breakDurationMinutes,
-    int? hoursBeforeBreak,
-    bool? groupSimilarTasks,
     int? maxTasksPerDay,
     bool? notificationsEnabled,
     int? reminderMinutesBefore,
@@ -157,6 +157,7 @@ class UserPreferences {
     TimeOfDay? personalHoursEnd,
     int? defaultMinChunkMinutes,
     int? defaultMaxChunkMinutes,
+    int? deadlineBufferHours,
     bool? autoScheduleEnabled,
   }) {
     return UserPreferences(
@@ -165,8 +166,6 @@ class UserPreferences {
       workdayEnd: workdayEnd ?? this.workdayEnd,
       peakProductivityTime: peakProductivityTime ?? this.peakProductivityTime,
       breakDurationMinutes: breakDurationMinutes ?? this.breakDurationMinutes,
-      hoursBeforeBreak: hoursBeforeBreak ?? this.hoursBeforeBreak,
-      groupSimilarTasks: groupSimilarTasks ?? this.groupSimilarTasks,
       maxTasksPerDay: maxTasksPerDay ?? this.maxTasksPerDay,
       notificationsEnabled: notificationsEnabled ?? this.notificationsEnabled,
       reminderMinutesBefore: reminderMinutesBefore ?? this.reminderMinutesBefore,
@@ -180,6 +179,7 @@ class UserPreferences {
       personalHoursEnd: personalHoursEnd ?? this.personalHoursEnd,
       defaultMinChunkMinutes: defaultMinChunkMinutes ?? this.defaultMinChunkMinutes,
       defaultMaxChunkMinutes: defaultMaxChunkMinutes ?? this.defaultMaxChunkMinutes,
+      deadlineBufferHours: deadlineBufferHours ?? this.deadlineBufferHours,
       autoScheduleEnabled: autoScheduleEnabled ?? this.autoScheduleEnabled,
     );
   }

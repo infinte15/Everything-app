@@ -3,8 +3,12 @@ import '../models/task.dart';
 import '../services/task_service.dart';
 
 class TaskProvider with ChangeNotifier {
-  final TaskService _taskService = TaskService();
-  
+  /// Injizierbar, damit Tests eine Attrappe statt des Netzwerks setzen koennen — dasselbe Muster
+  /// wie bei [CalendarProvider].
+  final TaskService _taskService;
+
+  TaskProvider({TaskService? taskService}) : _taskService = taskService ?? TaskService();
+
   List<Task> _tasks = [];
   bool _isLoading = false;
   String? _error;
@@ -87,10 +91,24 @@ class TaskProvider with ChangeNotifier {
   }
 
 
-  Future<bool> updateTask(Task task) async {
+  /// Eine einzelne Aufgabe, notfalls per Nachladen.
+  ///
+  /// Gebraucht vom Kalender: dort ist [_tasks] unter Umstaenden noch leer, weil der Screen die
+  /// Aufgabenliste selbst gar nicht laedt — er kennt nur die Bloecke und deren `relatedTaskId`.
+  /// Liefert null, wenn es die Aufgabe nicht (mehr) gibt.
+  Future<Task?> fetchTaskById(int id) async {
+    for (final t in _tasks) {
+      if (t.id == id) return t;
+    }
+    return _taskService.getTaskById(id);
+  }
+
+  /// [clear] reicht die ausdruecklich zu leerenden Felder durch — siehe
+  /// [TaskService.updateTask].
+  Future<bool> updateTask(Task task, {Set<String> clear = const {}}) async {
     try {
-      final updated = await _taskService.updateTask(task);
-      
+      final updated = await _taskService.updateTask(task, clear: clear);
+
       if (updated != null) {
         final index = _tasks.indexWhere((t) => t.id == task.id);
         if (index != -1) {

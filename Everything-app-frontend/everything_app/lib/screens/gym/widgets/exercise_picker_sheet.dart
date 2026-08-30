@@ -6,7 +6,8 @@ import 'package:provider/provider.dart';
 import '../../../models/gym/gym_models.dart';
 import '../../../providers/sports_provider.dart';
 import '../../../theme/lyfta_theme.dart';
-import 'exercise_muscle_figure.dart';
+import 'exercise_media.dart';
+import 'muscle_filter_strip.dart';
 import 'routine_card.dart' show muscleLabel;
 
 /// Auswahl aus dem Übungskatalog.
@@ -159,25 +160,14 @@ class _ExercisePickerSheetState extends State<ExercisePickerSheet> {
                   ),
                 ),
               ),
-              const SizedBox(height: 12),
-              SizedBox(
-                height: 36,
-                child: ListView(
-                  scrollDirection: Axis.horizontal,
-                  padding: const EdgeInsets.symmetric(horizontal: 20),
-                  children: [
-                    _filterChip('Alle', _muscle == null, () {
-                      setState(() => _muscle = null);
-                      _search(reset: true);
-                    }),
-                    ...options.map(
-                      (option) => _filterChip(option.label, _muscle == option.slug, () {
-                        setState(() => _muscle = option.slug);
-                        _search(reset: true);
-                      }),
-                    ),
-                  ],
-                ),
+              const SizedBox(height: 14),
+              MuscleFilterStrip(
+                options: options,
+                selected: _muscle,
+                onChanged: (slug) {
+                  setState(() => _muscle = slug);
+                  _search(reset: true);
+                },
               ),
               const SizedBox(height: 8),
               Expanded(child: _list(options, sheetController)),
@@ -252,32 +242,6 @@ class _ExercisePickerSheetState extends State<ExercisePickerSheet> {
     );
   }
 
-  Widget _filterChip(String label, bool selected, VoidCallback onTap) {
-    return Padding(
-      padding: const EdgeInsets.only(right: 8),
-      child: GestureDetector(
-        onTap: onTap,
-        child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-          decoration: BoxDecoration(
-            color: selected
-                ? LyftaTheme.surfaceHighlight
-                : LyftaTheme.surfaceElevated,
-            borderRadius: BorderRadius.circular(20),
-            border: Border.all(
-              color: selected ? LyftaTheme.primary : LyftaTheme.divider,
-            ),
-          ),
-          child: Text(
-            label,
-            style: LyftaTheme.caption.copyWith(
-              color: selected ? LyftaTheme.primary : LyftaTheme.textSecondary,
-            ),
-          ),
-        ),
-      ),
-    );
-  }
 }
 
 /// Einheitliche Zeile für Übungslisten.
@@ -317,7 +281,8 @@ class ExerciseListTile extends StatelessWidget {
             padding: const EdgeInsets.all(10),
             child: Row(
               children: [
-                ExerciseMuscleFigure(
+                ExerciseThumb(
+                  imageUrl: exercise.imageUrl,
                   primaryMuscles: exercise.primaryMuscles,
                   secondaryMuscles: exercise.secondaryMuscles,
                   size: 48,

@@ -6,7 +6,9 @@ import 'package:provider/provider.dart';
 import '../../../models/gym/gym_models.dart';
 import '../../../providers/sports_provider.dart';
 import '../../../theme/lyfta_theme.dart';
+import '../widgets/equipment_profile_sheet.dart';
 import '../widgets/exercise_detail_sheet.dart';
+import '../widgets/exercise_media.dart';
 import '../widgets/exercise_picker_sheet.dart' show ExerciseListTile;
 
 /// Durchsuchbarer Übungskatalog.
@@ -93,7 +95,9 @@ class _GymExploreTabState extends State<GymExploreTab> {
 
   @override
   Widget build(BuildContext context) {
-    final options = context.watch<SportsProvider>().muscleOptions;
+    final sports = context.watch<SportsProvider>();
+    final options = sports.muscleOptions;
+    final profile = sports.activeEquipmentProfile;
 
     return SafeArea(
       child: Column(
@@ -101,7 +105,29 @@ class _GymExploreTabState extends State<GymExploreTab> {
         children: [
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
-            child: Text('Übungen', style: LyftaTheme.headline.copyWith(fontSize: 24)),
+            child: Row(
+              children: [
+                Expanded(
+                  child: Text('Übungen',
+                      style: LyftaTheme.headline.copyWith(fontSize: 24)),
+                ),
+                // Das aktive Profil steht im Kopf und nicht in der Filterleiste: es gilt
+                // dauerhaft und erklärt, warum die Liste kürzer ist als erwartet.
+                TextButton.icon(
+                  onPressed: () async {
+                    await EquipmentProfileSheet.show(context);
+                    if (mounted) _search(reset: true);
+                  },
+                  icon: const Icon(Icons.handyman_outlined, size: 16),
+                  label: Text(profile?.name ?? 'Ausrüstung'),
+                  style: TextButton.styleFrom(
+                    foregroundColor: profile == null
+                        ? LyftaTheme.textSecondary
+                        : LyftaTheme.primary,
+                  ),
+                ),
+              ],
+            ),
           ),
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 14, 16, 0),
@@ -173,9 +199,12 @@ class _GymExploreTabState extends State<GymExploreTab> {
     return ListView.builder(
       controller: _scrollController,
       padding: const EdgeInsets.fromLTRB(16, 0, 16, 100),
-      itemCount: _results.length + (_last ? 0 : 1),
+      // Eine Zeile mehr als Treffer: solange nachgeladen wird der Spinner, am Ende der
+      // Liste der Rechtehinweis zu den Übungsbildern.
+      itemCount: _results.length + 1,
       itemBuilder: (context, index) {
         if (index >= _results.length) {
+          if (_last) return const GymVisualAttribution();
           return const Padding(
             padding: EdgeInsets.symmetric(vertical: 20),
             child: Center(child: CircularProgressIndicator(color: LyftaTheme.primary)),

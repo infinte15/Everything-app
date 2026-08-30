@@ -1,5 +1,6 @@
 package com.Finn.everything_app.repository;
 
+import com.Finn.everything_app.model.Exercise;
 import com.Finn.everything_app.model.ExerciseSet;
 import com.Finn.everything_app.repository.projection.SessionAggregateRow;
 import org.springframework.data.domain.Pageable;
@@ -10,6 +11,7 @@ import org.springframework.data.repository.query.Param;
 
 import java.util.Collection;
 import java.util.List;
+import java.util.Set;
 
 public interface ExerciseSetRepository extends JpaRepository<ExerciseSet, Long> {
 
@@ -39,6 +41,15 @@ public interface ExerciseSetRepository extends JpaRepository<ExerciseSet, Long> 
     @Query("delete from ExerciseSet s where s.workoutSession.id = :sessionId")
     void deleteByWorkoutSessionId(@Param("sessionId") Long sessionId);
 
+    /** Biegt geloggte Saetze auf eine andere Katalog-Zeile um (Katalog-Wechsel). */
+    @Modifying(clearAutomatically = true, flushAutomatically = true)
+    @Query("update ExerciseSet s set s.exercise = :target where s.exercise = :source")
+    int repointExercise(@Param("source") Exercise source, @Param("target") Exercise target);
+
+    /** Jede Uebung, an der noch ein geloggter Satz haengt. */
+    @Query("select distinct s.exercise.id from ExerciseSet s where s.exercise is not null")
+    Set<Long> findReferencedExerciseIds();
+
     /**
      * Satzanzahl und Volumen je Einheit in einer Abfrage - damit die Listen-Endpunkte mit
      * insgesamt zwei Queries auskommen statt mit einer pro Einheit.
@@ -48,7 +59,11 @@ public interface ExerciseSetRepository extends JpaRepository<ExerciseSet, Long> 
                    count(s) as setCount,
                    coalesce(sum(s.weight * s.reps), 0) as volume
             from ExerciseSet s
-            where s.workoutSession.id in :ids and s.isCompleted = true
+            where s.workoutSession.id in :ids
+              and s.isCompleted = true
+              and (s.setType is null or s.setType not in (
+                    com.Finn.everything_app.model.SetType.WARMUP,
+                    com.Finn.everything_app.model.SetType.RESTPAUSE))
             group by s.workoutSession.id
             """)
     List<SessionAggregateRow> aggregateBySessionIds(@Param("ids") Collection<Long> ids);

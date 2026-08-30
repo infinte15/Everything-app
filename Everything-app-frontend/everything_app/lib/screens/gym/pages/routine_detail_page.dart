@@ -5,7 +5,7 @@ import '../../../models/gym/gym_models.dart';
 import '../../../providers/sports_provider.dart';
 import '../../../theme/lyfta_theme.dart';
 import '../widgets/create_routine_sheet.dart';
-import '../widgets/exercise_muscle_figure.dart';
+import '../widgets/exercise_media.dart';
 import '../widgets/routine_card.dart' show muscleLabel;
 import '../workout/active_workout_page.dart';
 
@@ -219,9 +219,11 @@ class _ExerciseRow extends StatelessWidget {
       ),
       child: Row(
         children: [
-          ExerciseMuscleFigure(
+          ExerciseThumb(
+            imageUrl: item.imageUrl,
             primaryMuscles: item.primaryMuscles,
             secondaryMuscles: item.secondaryMuscles,
+            size: 52,
           ),
           const SizedBox(width: 12),
           Expanded(

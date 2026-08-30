@@ -1,6 +1,7 @@
 package com.Finn.everything_app.seed.demo;
 
 import com.Finn.everything_app.model.Exercise;
+import com.Finn.everything_app.model.ProgressionPolicy;
 import com.Finn.everything_app.model.ExerciseSet;
 import com.Finn.everything_app.model.Routine;
 import com.Finn.everything_app.model.RoutineExercise;
@@ -9,6 +10,7 @@ import com.Finn.everything_app.model.User;
 import com.Finn.everything_app.model.WorkoutPlan;
 import com.Finn.everything_app.model.WorkoutSession;
 import com.Finn.everything_app.repository.ExerciseRepository;
+import com.Finn.everything_app.service.RoutineHabitService;
 import com.Finn.everything_app.repository.ExerciseSetRepository;
 import com.Finn.everything_app.repository.RoutineExerciseRepository;
 import com.Finn.everything_app.repository.RoutineRepository;
@@ -50,13 +52,37 @@ public class DemoSportsData {
     private final WorkoutSessionRepository sessionRepository;
     private final ExerciseSetRepository setRepository;
     private final ExerciseRepository exerciseRepository;
+    private final RoutineHabitService routineHabitService;
 
     /** Wochen Trainingshistorie vor heute. Jede Woche kostet drei Sessions mit je ~20 Saetzen. */
     private static final int HISTORY_WEEKS = 3;
 
     /** Eine Zeile einer Routine: Übungsname aus dem Katalog + Zielvorgaben. */
     private record Slot(String exerciseName, int sets, int repsMin, int repsMax,
-                        double startWeight, int restSeconds) {
+                        double startWeight, int restSeconds,
+                        ProgressionPolicy policy, boolean bodyweight, Integer supersetGroup) {
+
+        /** Beiwerk: feste Vorgabe, keine Automatik. */
+        Slot(String name, int sets, int repsMin, int repsMax, double weight, int rest) {
+            this(name, sets, repsMin, repsMax, weight, rest, ProgressionPolicy.OFF, false, null);
+        }
+
+        /** Hauptübung - doppelte Progression, wie es die Plan-Beschreibung ankündigt. */
+        static Slot main(String name, int sets, int repsMin, int repsMax, double weight, int rest) {
+            return new Slot(name, sets, repsMin, repsMax, weight, rest,
+                    ProgressionPolicy.DOUBLE, false, null);
+        }
+
+        /** Körpergewichtsübung - gesteigert werden Wiederholungen, nicht die Last. */
+        static Slot bodyweight(String name, int sets, int repsMin, int repsMax, int rest) {
+            return new Slot(name, sets, repsMin, repsMax, 0, rest,
+                    ProgressionPolicy.LINEAR, true, null);
+        }
+
+        Slot inSuperset(int group) {
+            return new Slot(exerciseName, sets, repsMin, repsMax, startWeight, restSeconds,
+                    policy, bodyweight, group);
+        }
     }
 
     @Transactional
@@ -71,37 +97,40 @@ public class DemoSportsData {
 
         Routine push = routine(user, plan, catalog, 0, "Push A — Brust, Schultern, Trizeps", "#FF6B6B", "Tag 1", 70,
                 "Schwerer Druck zuerst, danach Volumen für Schultern und Trizeps.", List.of(
-                        new Slot("Barbell Bench Press - Medium Grip", 4, 5, 8, 72.5, 180),
-                        new Slot("Barbell Incline Bench Press - Medium Grip", 3, 8, 10, 50.0, 120),
-                        new Slot("Dumbbell Shoulder Press", 3, 8, 12, 20.0, 120),
-                        new Slot("Side Lateral Raise", 3, 12, 15, 10.0, 60),
-                        new Slot("Cable Crossover", 3, 12, 15, 15.0, 60),
-                        new Slot("Triceps Pushdown", 3, 10, 15, 30.0, 60)));
+                        Slot.main("barbell bench press", 4, 5, 8, 72.5, 180),
+                        new Slot("barbell incline bench press", 3, 8, 10, 50.0, 120),
+                        new Slot("dumbbell seated shoulder press", 3, 8, 12, 20.0, 120),
+                        new Slot("dumbbell lateral raise", 3, 12, 15, 10.0, 60).inSuperset(1),
+                        new Slot("cable cross-over variation", 3, 12, 15, 15.0, 60),
+                        new Slot("cable pushdown", 3, 10, 15, 30.0, 60).inSuperset(1)),
+                1);
 
         Routine pull = routine(user, plan, catalog, 1, "Pull A — Rücken & Bizeps", "#4D96FF", "Tag 2", 75,
                 "Kreuzheben schwer, danach horizontales und vertikales Ziehen.", List.of(
-                        new Slot("Barbell Deadlift", 3, 3, 5, 110.0, 240),
-                        new Slot("Pullups", 4, 6, 10, 0.0, 150),
-                        new Slot("Bent Over Barbell Row", 3, 8, 10, 60.0, 120),
-                        new Slot("Seated Cable Rows", 3, 10, 12, 55.0, 90),
-                        new Slot("Face Pull", 3, 15, 20, 20.0, 60),
-                        new Slot("Barbell Curl", 3, 8, 12, 30.0, 90)));
+                        Slot.main("barbell deadlift", 3, 3, 5, 110.0, 240),
+                        Slot.bodyweight("pull-up", 4, 6, 10, 150),
+                        new Slot("barbell bent over row", 3, 8, 10, 60.0, 120),
+                        new Slot("cable seated row", 3, 10, 12, 55.0, 90),
+                        new Slot("cable seated rear lateral raise", 3, 15, 20, 20.0, 60),
+                        new Slot("barbell curl", 3, 8, 12, 30.0, 90)),
+                3);
 
         Routine legs = routine(user, plan, catalog, 2, "Legs — Beine & Rumpf", "#6BCB77", "Tag 3", 80,
                 "Kniebeuge als Hauptübung, hinterer Oberschenkel bewusst danach.", List.of(
-                        new Slot("Barbell Full Squat", 4, 5, 8, 95.0, 210),
-                        new Slot("Romanian Deadlift", 3, 8, 10, 70.0, 150),
-                        new Slot("Leg Press", 3, 10, 12, 160.0, 120),
-                        new Slot("Seated Leg Curl", 3, 10, 15, 45.0, 90),
-                        new Slot("Standing Calf Raises", 4, 12, 20, 60.0, 60),
-                        new Slot("Hanging Leg Raise", 3, 10, 15, 0.0, 60)));
+                        Slot.main("barbell full squat", 4, 5, 8, 95.0, 210),
+                        new Slot("barbell romanian deadlift", 3, 8, 10, 70.0, 150),
+                        new Slot("sled 45° leg press", 3, 10, 12, 160.0, 120),
+                        new Slot("lever seated leg curl", 3, 10, 15, 45.0, 90),
+                        new Slot("lever standing calf raise", 4, 12, 20, 60.0, 60),
+                        Slot.bodyweight("hanging leg raise", 3, 10, 15, 60)),
+                5);
 
         Routine full = routine(user, plan, catalog, 3, "Ganzkörper kurz (45 min)", "#FFD93D", "Ersatztag", 45,
                 "Für Wochen, in denen drei Einheiten nicht in den Stundenplan passen.", List.of(
-                        new Slot("Barbell Full Squat", 3, 6, 8, 90.0, 180),
-                        new Slot("Barbell Bench Press - Medium Grip", 3, 6, 8, 70.0, 180),
-                        new Slot("Pullups", 3, 6, 10, 0.0, 150),
-                        new Slot("Plank", 3, 1, 1, 0.0, 60)));
+                        new Slot("barbell full squat", 3, 6, 8, 90.0, 180),
+                        new Slot("barbell bench press", 3, 6, 8, 70.0, 180),
+                        Slot.bodyweight("pull-up", 3, 6, 10, 150),
+                        new Slot("front plank with twist", 3, 1, 1, 0.0, 60)));
 
         List<Routine> rotation = List.of(push, pull, legs, full);
         seedHistory(user, plan, rotation, today);
@@ -130,6 +159,13 @@ public class DemoSportsData {
     private Routine routine(User user, WorkoutPlan plan, Map<String, Exercise> catalog, int order,
                             String name, String color, String dayLabel, int minutes,
                             String description, List<Slot> slots) {
+        return routine(user, plan, catalog, order, name, color, dayLabel, minutes,
+                description, slots, null);
+    }
+
+    private Routine routine(User user, WorkoutPlan plan, Map<String, Exercise> catalog, int order,
+                            String name, String color, String dayLabel, int minutes,
+                            String description, List<Slot> slots, Integer preferredWeekday) {
         Routine routine = new Routine();
         routine.setUser(user);
         routine.setWorkoutPlan(plan);
@@ -139,7 +175,13 @@ public class DemoSportsData {
         routine.setDayLabel(dayLabel);
         routine.setEstimatedDurationMinutes(minutes);
         routine.setOrderIndex(order);
+        routine.setPreferredWeekday(preferredWeekday);
         routine = routineRepository.save(routine);
+        // Über den Dienst statt nur über das Repository: eine Routine mit Wunsch-Wochentag ist
+        // fachlich auch eine Gewohnheit, und im Demo-Bestand soll die Streak im Habit-Space
+        // genauso zu sehen sein wie im Gym-Space. Ohne diesen Aufruf legt der Seeder Routinen an,
+        // zu denen es die zugehörige Gewohnheit nie gibt.
+        routineHabitService.sync(routine);
 
         int position = 0;
         for (Slot slot : slots) {
@@ -160,6 +202,9 @@ public class DemoSportsData {
             entry.setTargetRepsMax(slot.repsMax());
             entry.setTargetWeight(slot.startWeight() > 0 ? slot.startWeight() : null);
             entry.setRestSeconds(slot.restSeconds());
+            entry.setProgressionPolicy(slot.policy());
+            entry.setIsBodyweight(slot.bodyweight());
+            entry.setSupersetGroup(slot.supersetGroup());
             routineExerciseRepository.save(entry);
         }
         return routine;

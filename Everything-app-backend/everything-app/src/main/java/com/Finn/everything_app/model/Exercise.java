@@ -38,8 +38,8 @@ public class Exercise {
     /**
      * Denormalisiertes Spiegelbild von {@code primaryMuscles[0].getSlug()}.
      *
-     * <p>Die Spalte bleibt bewusst unveraendert (NOT NULL, varchar(50)): daran haengen
-     * {@code findByMuscleGroup}, {@code GET /exercises/muscle/{g}} und der bestehende Client.
+     * <p>Die Spalte bleibt NOT NULL: {@code ddl-auto=update} kann die Bedingung auf einer
+     * gefuellten Tabelle nicht mehr loesen, und der bestehende Client liest das Feld.
      * Gepflegt wird sie von {@code ExerciseService.syncMuscleGroupMirror} und vom Seeder.
      * Fuer Auswertungen ist immer {@link #primaryMuscles} die Quelle der Wahrheit.
      */
@@ -91,9 +91,24 @@ public class Exercise {
     @Column(name = "image_url", length = 500)
     private String imageUrl;
 
-    /** Endposition der Uebung (zweites Bild des Datensatzes). */
+    /**
+     * Endposition der Uebung (zweites Bild des Datensatzes).
+     *
+     * <p>Nur die free-exercise-db lieferte zwei Standbilder. Beim ExerciseDB-Katalog bleibt das
+     * Feld leer - dort uebernimmt {@link #animationUrl} die Bewegung.
+     */
     @Column(name = "image_url_end", length = 500)
     private String imageUrlEnd;
+
+    /**
+     * Animation der Uebung (180x180 GIF), extern gehostet und zur Laufzeit geladen.
+     *
+     * <p>Die Medien sind (c) Gym visual (https://gymvisual.com/) und liegen bewusst NICHT im
+     * Repository: hier steht nur die URL auf den oeffentlichen Spiegel des Datensatzes. Der
+     * Client zeigt die Attribution neben dem Bild an.
+     */
+    @Column(name = "animation_url", length = 500)
+    private String animationUrl;
 
     /** Stabiler natuerlicher Schluessel des Katalog-Datensatzes, macht den Seeder idempotent. */
     @Column(name = "external_id", length = 120, unique = true)

@@ -10,6 +10,7 @@ import 'package:everything_app/screens/finance/pages/finance_contracts_tab.dart'
 import 'package:everything_app/screens/finance/pages/finance_overview_tab.dart';
 import 'package:everything_app/screens/finance/pages/finance_transactions_tab.dart';
 import 'package:everything_app/screens/finance/widgets/category_donut.dart';
+import 'package:everything_app/screens/finance/widgets/finance_format.dart';
 import 'package:everything_app/screens/finance/widgets/recategorize_sheet.dart';
 import 'package:everything_app/theme/kinetic_theme.dart';
 import 'package:fl_chart/fl_chart.dart';
@@ -441,11 +442,12 @@ void main() {
   });
 }
 
-String _shortDate(int inDays) {
-  final date = DateTime.now().add(Duration(days: inDays));
-  const months = [
-    'Jan.', 'Feb.', 'März', 'Apr.', 'Mai', 'Juni',
-    'Juli', 'Aug.', 'Sep.', 'Okt.', 'Nov.', 'Dez.',
-  ];
-  return '${date.day}. ${months[date.month - 1]}';
-}
+/// Dasselbe Format, das auch die Karte benutzt.
+///
+/// Vorher stand hier eine eigene Monatsliste. Die stimmte elf Monate im Jahr mit intl überein
+/// und im zwölften nicht: intl kürzt den September im Deutschen auf "Sept.", die Liste auf
+/// "Sep.". Aufgefallen ist das erst, als ein Test Ende August drei Tage voraus rechnete und
+/// damit zum ersten Mal in den September fiel. Eine zweite Quelle für dieselbe Formatierung
+/// gibt es deshalb nicht mehr.
+String _shortDate(int inDays) =>
+    FinanceFormat.shortDate(DateTime.now().add(Duration(days: inDays)));

@@ -47,6 +47,22 @@ class _SettingsScreenState extends State<SettingsScreen> {
     _patch((p) => isStart ? p.copyWith(workdayStart: picked) : p.copyWith(workdayEnd: picked));
   }
 
+  /// Ende der Kernzeit — die Grenze, hinter der Aufgaben zwar noch erlaubt sind, aber im Ziel
+  /// des Schedulers etwas kosten ("Abendstrafe").
+  ///
+  /// Eigene Methode statt eines dritten bool-Parameters an [_pickTime], aus demselben Grund wie
+  /// bei [_pickPersonalTime]: an der Aufrufstelle waere `_pickTime(context, true, false)` nicht
+  /// mehr zu lesen.
+  Future<void> _pickCoreHoursEnd(BuildContext context) async {
+    final current = _draft;
+    if (current == null) return;
+    final initial = current.coreHoursEnd ?? const TimeOfDay(hour: 18, minute: 0);
+
+    final picked = await showTimePicker(context: context, initialTime: initial);
+    if (picked == null) return;
+    _patch((p) => p.copyWith(coreHoursEnd: picked));
+  }
+
   /// Gegenstueck zu [_pickTime] fuer die Privatzeiten.
   ///
   /// Bewusst eine eigene Methode statt eines dritten Parameters an [_pickTime]: die beiden
@@ -127,6 +143,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       value: _formatTime(draft.workdayEnd) ?? '22:00',
                       onTap: () => _pickTime(context, false),
                     ),
+                    // Abgrenzung zu "Day ends": das ist die harte Grenze, hinter der gar nichts
+                    // mehr geplant wird. Wer bis 22 Uhr arbeiten KANN, will trotzdem nicht, dass
+                    // um 21 Uhr geplant wird, solange vormittags Platz ist.
+                    _SettingRow(
+                      label: 'Evenings start at',
+                      value: _formatTime(draft.coreHoursEnd) ?? '18:00',
+                      onTap: () => _pickCoreHoursEnd(context),
+                    ),
 
                     const SizedBox(height: 24),
                     // Getrennt von den Arbeitszeiten: hier liegen Gewohnheiten und Trainings.
@@ -203,6 +227,17 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       max: 480,
                       step: 15,
                       onChanged: (v) => _patch((p) => p.copyWith(defaultMaxChunkMinutes: v)),
+                    ),
+                    // Ziel, keine zweite harte Grenze: reicht die Zeit nicht, plant der Scheduler
+                    // in den Puffer hinein, statt zu warnen. 0 heißt "bis zur letzten Minute".
+                    _Stepper(
+                      label: 'Finish before deadline',
+                      suffix: 'h',
+                      value: draft.deadlineBufferHours ?? 24,
+                      min: 0,
+                      max: 168,
+                      step: 6,
+                      onChanged: (v) => _patch((p) => p.copyWith(deadlineBufferHours: v)),
                     ),
                     _SwitchRow(
                       label: 'Auto-schedule',

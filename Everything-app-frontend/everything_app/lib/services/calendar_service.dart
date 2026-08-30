@@ -213,19 +213,69 @@ class CalendarService {
       return null;
     }
   }
+
+  /// Wartet, bis der Server neu geplant hat — statt danach zu fragen.
+  ///
+  /// Die Anfrage bleibt beim Server liegen und wird in dem Moment beantwortet, in dem ein Lauf
+  /// fertig ist, der neuer ist als [since]. Damit entfaellt die alte Retry-Leiter samt ihrer
+  /// Blindwartezeit; getroffen wird der Fertig-Zeitpunkt jetzt auf Millisekunden statt auf
+  /// mehrere hundert.
+  ///
+  /// [since] ist der ROHE Zeitstempel aus der letzten Antwort (siehe
+  /// [ScheduleStatus.lastRunAtRaw]) — nicht neu formatiert, sonst antwortet der Server sofort.
+  ///
+  /// Liefert `null` bei 204 (im Zeitfenster ist nichts passiert), bei einem Fehler und bei einem
+  /// Zeitablauf. Wirft nicht, aus demselben Grund wie [getScheduleStatus]: der 30-Sekunden-Poll
+  /// faengt alles auf, was hier durchrutscht.
+  Future<ScheduleStatus?> awaitScheduleRun({String? since}) async {
+    try {
+      final response = await _apiService.get(
+        ApiConfig.scheduleStatusAwait(since),
+        timeout: ApiConfig.longPollTimeout,
+      );
+      if (!_apiService.isSuccess(response)) return null;
+      // 204 kommt ohne Rumpf — das ist der Normalfall "es ist nichts passiert", kein Fehler.
+      if (response.body.isEmpty) return null;
+      final data = _apiService.parseResponse(response);
+      if (data is! Map<String, dynamic>) return null;
+      return ScheduleStatus.fromJson(data);
+    } catch (e) {
+      debugPrint('Error awaiting schedule run: $e');
+      return null;
+    }
+  }
 }
 
 /// Momentaufnahme des letzten Scheduler-Laufs.
 class ScheduleStatus {
   final DateTime? lastRunAt;
+
+  /// Derselbe Zeitpunkt als unveraenderter Rohstring aus der Antwort.
+  ///
+  /// Nur zum Zurueckschicken als `since` gedacht. [lastRunAt] hat den Umweg ueber
+  /// `DateTime.tryParse` genommen und dabei Stellen verloren (Dart kann nur Mikrosekunden, der
+  /// Server schreibt Millisekunden bis Nanosekunden) — als `since` waere er minimal zu klein, der
+  /// Server haette jeden alten Lauf fuer neu gehalten und die App liefe in eine Anfrageschleife.
+  final String? lastRunAtRaw;
+
   final String? solverStatus;
   final int scheduledBlocks;
+
+  /// Wie viele Bloecke der Lauf angefasst hat; `null` heisst UNBEKANNT, nicht "keine".
+  ///
+  /// Bei 0 darf sich der Kalender den Monatsabruf sparen. Bei `null` laedt er nach wie bisher —
+  /// so ist ein Schreibweg, der versehentlich nicht mitzaehlt, ein Leistungsverlust und kein
+  /// falsch angezeigter Kalender.
+  final int? changedBlocks;
+
   final List<AtRiskItem> atRisk;
 
   const ScheduleStatus({
     this.lastRunAt,
+    this.lastRunAtRaw,
     this.solverStatus,
     this.scheduledBlocks = 0,
+    this.changedBlocks,
     this.atRisk = const [],
   });
 
@@ -233,8 +283,10 @@ class ScheduleStatus {
         lastRunAt: json['lastRunAt'] != null
             ? DateTime.tryParse(json['lastRunAt'] as String)
             : null,
+        lastRunAtRaw: json['lastRunAt'] as String?,
         solverStatus: json['solverStatus'] as String?,
         scheduledBlocks: (json['scheduledBlocks'] as int?) ?? 0,
+        changedBlocks: json['changedBlocks'] as int?,
         atRisk: ((json['atRisk'] as List<dynamic>?) ?? const [])
             .map((e) => AtRiskItem.fromJson(e as Map<String, dynamic>))
             .toList(growable: false),

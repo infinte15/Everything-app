@@ -102,7 +102,7 @@ class _LyftaBottomNav extends StatelessWidget {
             mainAxisAlignment: MainAxisAlignment.spaceAround,
             children: [
               _item(Icons.home_rounded, 'Start', 0),
-              _item(Icons.fitness_center_rounded, 'Training', 1),
+              _item(Icons.calendar_month_rounded, 'Plan', 1),
               _fab(context),
               _item(Icons.search_rounded, 'Übungen', 3),
               _item(Icons.person_rounded, 'Du', 4),

@@ -39,6 +39,23 @@ public class SolveOutcome {
      */
     private int reliefCatchUp;
     private int reliefSqueeze;
+    /**
+     * Wie viele Blöcke der Vorlauf für überfällige Aufgaben platziert hat.
+     *
+     * Ohne diese Zahl ist der Pass unsichtbar: er läuft nur, wenn überhaupt etwas überfällig ist,
+     * und man kann an der SCHED-Zeile sonst nicht unterscheiden, ob nichts überfällig war oder ob
+     * der Vorlauf nichts untergebracht hat.
+     */
+    private int overduePlaced;
+
+    /**
+     * Wie viele bestehende Blöcke der Verdrängungs-Nachlauf verschoben oder verworfen hat.
+     *
+     * Steht hier dauerhaft etwas > 0, ist nicht der Pass das Problem, sondern die Lage: dann ist
+     * der Kalender chronisch so voll, dass Deadlines nur noch auf Kosten anderer Blöcke zu halten
+     * sind.
+     */
+    private int displaced;
 
     public SolveOutcome(CpSolverStatus status, List<ScheduledItem> items, List<AtRiskItem> atRisk) {
         this.status = status;

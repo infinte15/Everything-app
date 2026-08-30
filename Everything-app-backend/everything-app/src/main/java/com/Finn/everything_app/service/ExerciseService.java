@@ -12,6 +12,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
+import java.util.Set;
 
 @Service
 @RequiredArgsConstructor
@@ -21,6 +22,7 @@ public class ExerciseService {
 
     private final ExerciseRepository exerciseRepository;
     private final UserRepository userRepository;
+    private final EquipmentProfileService equipmentProfileService;
 
     public List<Exercise> getAllExercises() {
         return exerciseRepository.findAll();
@@ -45,12 +47,21 @@ public class ExerciseService {
         int safeSize = Math.min(Math.max(size, 1), MAX_PAGE_SIZE);
         int safePage = Math.max(page, 0);
 
+        // Ein aktives Ausruestungsprofil schraenkt die Bibliothek auf das ein, was damit
+        // ueberhaupt machbar ist. Ein ausdruecklich gewaehltes Geraet schlaegt es nicht -
+        // beide Bedingungen gelten, sonst koennte der Filter etwas anzeigen, das im Profil
+        // gar nicht vorkommt.
+        Set<String> profile = equipmentProfileService.activeEquipment(userId);
+        boolean byProfile = !profile.isEmpty();
+
         return exerciseRepository.search(
                 blankToNull(search),
                 muscle,
                 blankToNull(equipment),
                 blankToNull(category),
                 blankToNull(difficulty),
+                byProfile,
+                byProfile ? profile : Set.of(""),
                 userId,
                 PageRequest.of(safePage, safeSize, Sort.by(Sort.Direction.ASC, "name"))
         );
@@ -59,10 +70,6 @@ public class ExerciseService {
     public Exercise getExerciseById(Long id) {
         return exerciseRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Übung nicht gefunden"));
-    }
-
-    public List<Exercise> getExercisesByMuscleGroup(String muscleGroup) {
-        return exerciseRepository.findByMuscleGroup(muscleGroup);
     }
 
     public List<String> getEquipmentValues() {
@@ -132,6 +139,9 @@ public class ExerciseService {
         }
         if (updatedExercise.getImageUrl() != null) {
             exercise.setImageUrl(updatedExercise.getImageUrl());
+        }
+        if (updatedExercise.getAnimationUrl() != null) {
+            exercise.setAnimationUrl(updatedExercise.getAnimationUrl());
         }
         if (updatedExercise.getImageUrlEnd() != null) {
             exercise.setImageUrlEnd(updatedExercise.getImageUrlEnd());

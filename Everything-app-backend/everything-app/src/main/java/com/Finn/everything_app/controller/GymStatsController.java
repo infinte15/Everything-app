@@ -1,5 +1,6 @@
 package com.Finn.everything_app.controller;
 
+import com.Finn.everything_app.dto.MuscleRecoveryDTO;
 import com.Finn.everything_app.dto.MuscleVolumeDTO;
 import com.Finn.everything_app.dto.WeeklyStatsDTO;
 import com.Finn.everything_app.security.CurrentUser;
@@ -40,5 +41,14 @@ public class GymStatsController {
             @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate endDate) {
 
         return ResponseEntity.ok(statsService.getMuscleVolume(userId, startDate, endDate));
+    }
+
+    /**
+     * Erholungsstand je Muskelgruppe. Kein Zeitraum-Parameter: "wie erholt bin ich" ist
+     * immer eine Frage von jetzt.
+     */
+    @GetMapping("/recovery")
+    public ResponseEntity<List<MuscleRecoveryDTO>> getRecovery(@CurrentUser Long userId) {
+        return ResponseEntity.ok(statsService.getRecovery(userId));
     }
 }

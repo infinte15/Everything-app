@@ -27,62 +27,11 @@ const double _kOutlineMinSize = 72;
 const double _kZoomBelowSize = 72;
 const double _kZoomFactor = 2.1;
 
-/// Mittlere Höhe eines Muskels in der Figur (0 = Kopf, 1 = Füße).
-double _muscleCenterY(String muscle, bool back) {
-  final regions = back ? kBodyBackRegions : kBodyFrontRegions;
-  for (final region in regions) {
-    if (region.muscle != muscle) continue;
-    var sum = 0.0;
-    for (final p in region.points) {
-      sum += p.dy;
-    }
-    return sum / region.points.length;
-  }
-  return 0.5;
-}
-
-/// Worauf der Ausschnitt zentriert wird: Schwerpunkt der primären Muskeln,
-/// ersatzweise der sekundären, sonst die Bildmitte.
-double _focusY(List<String> primary, List<String> secondary, bool back) {
-  final muscles = primary.isNotEmpty ? primary : secondary;
-  if (muscles.isEmpty) return 0.5;
-  var sum = 0.0;
-  for (final m in muscles) {
-    sum += _muscleCenterY(m, back);
-  }
-  return sum / muscles.length;
-}
-
-/// Auf welcher Seite liegt der Schwerpunkt der Übung?
-///
-/// Punkte je Muskel: 2 für primär, 1 für sekundär, gezählt gegen die Muskeln,
-/// die es in der jeweiligen Ansicht überhaupt gibt. Muskeln, die vorne *und*
-/// hinten vorkommen (Schultern, Unterarme, Waden …), zählen für beide Seiten
-/// gleich und entscheiden damit nichts - das ist gewollt.
-///
-/// Gleichstand fällt auf die Vorderansicht zurück: die Flächen sind dort größer
-/// und die Silhouette vertrauter.
-bool preferBackView(List<String> primary, List<String> secondary) {
-  var front = 0;
-  var back = 0;
-
-  for (final muscle in primary) {
-    if (kFrontMuscles.contains(muscle)) front += 2;
-    if (kBackMuscles.contains(muscle)) back += 2;
-  }
-  for (final muscle in secondary) {
-    if (kFrontMuscles.contains(muscle)) front += 1;
-    if (kBackMuscles.contains(muscle)) back += 1;
-  }
-
-  return back > front;
-}
-
 /// Kleine Körper-Figur, die zeigt, was eine Übung beansprucht.
 ///
-/// Ersetzt die früheren Fotos aus der free-exercise-db: die Grafik entsteht aus
-/// den Muskel-Slugs, die ohnehin an jeder Übung hängen, braucht damit weder
-/// Assets noch Netz und ist für alle Übungen einheitlich.
+/// Sie tritt dort an, wo es kein Übungsbild gibt - bei selbst angelegten Übungen und wenn das
+/// CDN nicht erreichbar ist. Die Grafik entsteht aus den Muskel-Slugs, die ohnehin an jeder
+/// Übung hängen, und braucht deshalb kein Netz.
 class ExerciseMuscleFigure extends StatelessWidget {
   final List<String> primaryMuscles;
   final List<String> secondaryMuscles;
@@ -154,7 +103,7 @@ class ExerciseMuscleFigureBanner extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 8),
-          const _MuscleLegend(),
+          const MuscleLegend(),
         ],
       ),
     );
@@ -180,8 +129,8 @@ class ExerciseMuscleFigureBanner extends StatelessWidget {
 
 /// "Beansprucht / Unterstützend" - ohne die Legende ist die Rot/Blau-Codierung
 /// beim ersten Mal nicht selbsterklärend.
-class _MuscleLegend extends StatelessWidget {
-  const _MuscleLegend();
+class MuscleLegend extends StatelessWidget {
+  const MuscleLegend({super.key});
 
   @override
   Widget build(BuildContext context) {
@@ -230,10 +179,7 @@ class _FigureBody extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final highlight = BodyHighlight(
-      primary: primaryMuscles.toSet(),
-      secondary: secondaryMuscles.toSet(),
-    );
+    final highlight = BodyHighlight.fromBackend(primaryMuscles, secondaryMuscles);
 
     if (side == BodySide.both) {
       return Row(
@@ -252,56 +198,10 @@ class _FigureBody extends StatelessWidget {
     return _view(highlight, back: back);
   }
 
-  Widget _view(BodyHighlight highlight, {required bool back}) {
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final box = fitBodySize(constraints);
-        final painter = BodyMapPainter(
-          highlight: highlight,
-          back: back,
-          outlined: outlined,
-        );
-
-        // Listen zeichnen dutzende dieser Figuren; ohne Grenze malt jeder
-        // Scroll-Frame alle neu.
-        if (zoom <= 1.0) {
-          return Center(
-            child: RepaintBoundary(
-              child: CustomPaint(size: box, painter: painter),
-            ),
-          );
-        }
-
-        // Figur größer zeichnen als das Fenster und so verschieben, dass der
-        // beanspruchte Bereich in der Mitte liegt. Der Rest wird abgeschnitten.
-        final viewW = constraints.maxWidth;
-        final viewH = constraints.maxHeight;
-        final canvasH = viewH * zoom;
-        final canvasW = canvasH * kBodyAspectRatio;
-
-        final focus = _focusY(primaryMuscles, secondaryMuscles, back);
-        final top = (focus * canvasH - viewH / 2).clamp(0.0, canvasH - viewH);
-        final left = (canvasW - viewW) / 2;
-
-        return ClipRect(
-          child: RepaintBoundary(
-            child: Stack(
-              children: [
-                Positioned(
-                  left: -left,
-                  top: -top,
-                  width: canvasW,
-                  height: canvasH,
-                  child: CustomPaint(
-                    size: Size(canvasW, canvasH),
-                    painter: painter,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        );
-      },
-    );
-  }
+  Widget _view(BodyHighlight highlight, {required bool back}) => BodyFigure(
+        back: back,
+        highlight: highlight,
+        outlined: outlined,
+        zoom: zoom,
+      );
 }

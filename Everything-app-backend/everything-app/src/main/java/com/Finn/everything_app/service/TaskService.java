@@ -1,5 +1,6 @@
 package com.Finn.everything_app.service;
 
+import com.Finn.everything_app.dto.TaskClearableField;
 import com.Finn.everything_app.exception.ResourceNotFoundException;
 import com.Finn.everything_app.model.CalendarEvent;
 import com.Finn.everything_app.model.Project;
@@ -17,6 +18,7 @@ import org.springframework.context.ApplicationEventPublisher;
 import com.Finn.everything_app.event.ScheduleChangedEvent;
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Set;
 
 @Service
 @RequiredArgsConstructor
@@ -102,6 +104,22 @@ public class TaskService {
 
     @Transactional
     public Task updateTask(Long taskId, Task updatedTask) {
+        return updateTask(taskId, updatedTask, Set.of());
+    }
+
+    /**
+     * Wie {@link #updateTask(Long, Task)}, kann zusätzlich Felder ausdrücklich LEEREN.
+     *
+     * Die Patch-Konvention "{@code null} heißt unverändert" kann "leeren" nicht ausdrücken; welche
+     * Felder wirklich weg sollen, sagt deshalb {@code clear} — die Begründung für diese Bauform
+     * steht bei {@link TaskClearableField}.
+     *
+     * Die zweistellige Fassung bleibt bestehen und delegiert hierher: {@code CalendarEventService}
+     * patcht beim Abhaken mit einem nackten {@code new Task()}, das nur Minuten und Status trägt,
+     * und darf davon nichts mitbekommen.
+     */
+    @Transactional
+    public Task updateTask(Long taskId, Task updatedTask, Set<TaskClearableField> clear) {
         Task existing = getTaskById(taskId);
         Long ownerId = existing.getUser().getId();
         // Vor dem Patchen merken: wandert die Aufgabe in ein anderes Projekt, muessen BEIDE
@@ -152,6 +170,22 @@ public class TaskService {
         // nicht verloren gehen. Zum Entkoppeln gibt es assignToProject(..., null).
         if (updatedTask.getProject() != null && updatedTask.getProject().getId() != null) {
             existing.setProject(resolveProject(ownerId, updatedTask.getProject()));
+        }
+
+        // Bewusst NACH dem Patchen: erst setzen, dann leeren. Andersherum wäre das Ergebnis davon
+        // abhängig, ob der Client dasselbe Feld gleichzeitig im Rumpf mitschickt — und genau das
+        // tut er, weil Task.toJson im Frontend alle Felder sendet.
+        if (clear != null) {
+            for (TaskClearableField feld : clear) {
+                switch (feld) {
+                    case DEADLINE           -> existing.setDeadline(null);
+                    case NOT_BEFORE         -> existing.setNotBefore(null);
+                    case MIN_CHUNK_MINUTES  -> existing.setMinChunkMinutes(null);
+                    case MAX_CHUNK_MINUTES  -> existing.setMaxChunkMinutes(null);
+                    case MAX_CHUNKS_PER_DAY -> existing.setMaxChunksPerDay(null);
+                    case DESCRIPTION        -> existing.setDescription(null);
+                }
+            }
         }
 
         existing.setUpdatedAt(LocalDateTime.now());

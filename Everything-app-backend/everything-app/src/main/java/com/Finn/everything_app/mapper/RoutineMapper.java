@@ -5,6 +5,7 @@ import com.Finn.everything_app.dto.RoutineExerciseDTO;
 import com.Finn.everything_app.dto.RoutineSummaryDTO;
 import com.Finn.everything_app.model.Exercise;
 import com.Finn.everything_app.model.MuscleGroup;
+import com.Finn.everything_app.model.ProgressionPolicy;
 import com.Finn.everything_app.model.Routine;
 import com.Finn.everything_app.model.RoutineExercise;
 import org.springframework.stereotype.Component;
@@ -47,12 +48,16 @@ public class RoutineMapper {
         dto.setRestSeconds(entity.getRestSeconds());
         dto.setNotes(entity.getNotes());
         dto.setSupersetGroup(entity.getSupersetGroup());
+        dto.setProgressionPolicy(ProgressionPolicy.orDefault(entity.getProgressionPolicy()));
+        dto.setIncrementKg(entity.getIncrementKg());
+        dto.setIsBodyweight(Boolean.TRUE.equals(entity.getIsBodyweight()));
 
         Exercise exercise = entity.getExercise();
         if (exercise != null) {
             dto.setExerciseId(exercise.getId());
             dto.setExerciseName(exercise.getName());
             dto.setImageUrl(exercise.getImageUrl());
+            dto.setAnimationUrl(exercise.getAnimationUrl());
             dto.setEquipment(exercise.getEquipment());
             dto.setPrimaryMuscles(exercise.getPrimaryMuscles().stream()
                     .map(MuscleGroup::getSlug).toList());
@@ -69,6 +74,7 @@ public class RoutineMapper {
         dto.setImageUrl(routine.getImageUrl());
         dto.setColorHex(routine.getColorHex());
         dto.setDayLabel(routine.getDayLabel());
+        dto.setPreferredWeekday(routine.getPreferredWeekday());
         dto.setEstimatedDurationMinutes(routine.getEstimatedDurationMinutes());
         dto.setOrderIndex(routine.getOrderIndex());
         dto.setIsArchived(routine.getIsArchived());

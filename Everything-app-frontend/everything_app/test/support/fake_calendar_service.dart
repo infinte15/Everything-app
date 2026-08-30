@@ -147,11 +147,57 @@ class FakeCalendarService extends CalendarService {
   Future<ScheduleStatus?> getScheduleStatus() async {
     getScheduleStatusCallCount++;
     if (!scheduleStatusAdvances) return scheduleStatus;
-    return scheduleStatus ??
-        ScheduleStatus(
-          lastRunAt: DateTime.now().add(Duration(seconds: getScheduleStatusCallCount)),
-          solverStatus: 'OPTIMAL',
-          scheduledBlocks: events.length,
-        );
+    if (scheduleStatus != null) return scheduleStatus;
+    final zeit = DateTime.now().add(Duration(seconds: getScheduleStatusCallCount));
+    return ScheduleStatus(
+      lastRunAt: zeit,
+      // lastRunAtRaw gehoert dazu, auch wenn kein Test danach fragt: die echte
+      // ScheduleStatus.fromJson setzt IMMER beide Felder. Fehlte es hier, loeschte der
+      // Statusabruf im Nachlauf den Rohwert wieder, den der Long-Poll gerade gesetzt hat — und
+      // die naechste Warte-Anfrage ginge ohne `since` raus. Ein Fehler, den nur die Untreue der
+      // Attrappe erzeugt haette.
+      lastRunAtRaw: zeit.toIso8601String(),
+      solverStatus: 'OPTIMAL',
+      scheduledBlocks: events.length,
+    );
+  }
+
+  /// Pflicht-Override, aus demselben Grund wie [getScheduleStatus] — und hier waere ein Vergessen
+  /// besonders unangenehm: die echte Fassung wartet bis zu 35 Sekunden, der Test bliebe ohne jede
+  /// Ausgabe haengen.
+  int awaitScheduleRunCallCount = 0;
+  String? lastAwaitSince;
+
+  /// Antwortschlange. Ist sie leer, gilt [awaitFallback]; ist AUCH die null, heisst das "204,
+  /// es ist nichts passiert".
+  final List<ScheduleStatus?> awaitResponses = [];
+
+  /// Vorgabe: bei jedem Abruf ein neuerer Lauf. Der Provider laedt dann nach, was in den meisten
+  /// Tests der interessante Fall ist. [changedBlocks] bleibt null = "unbekannt", damit sich
+  /// Bestandstests wie vorher verhalten.
+  ScheduleStatus? awaitFallback;
+
+  @override
+  Future<ScheduleStatus?> awaitScheduleRun({String? since}) async {
+    awaitScheduleRunCallCount++;
+    lastAwaitSince = since;
+    if (awaitResponses.isNotEmpty) return awaitResponses.removeAt(0);
+    if (awaitFallback != null) return awaitFallback;
+
+    // Immer ein Zeitstempel, der neuer ist als alles Vorherige — sonst gilt die Antwort im
+    // Provider als "kein neuer Lauf" und er laedt nicht nach.
+    final zeit = DateTime.now().add(Duration(seconds: awaitScheduleRunCallCount));
+
+    // [scheduleStatus] bleibt die eine Stellschraube fuer den Inhalt, damit ein Test nicht zwei
+    // Felder setzen muss, um dasselbe zu sagen. Uebernommen wird alles ausser der Zeit.
+    final vorlage = scheduleStatus;
+    return ScheduleStatus(
+      lastRunAt: zeit,
+      lastRunAtRaw: zeit.toIso8601String(),
+      solverStatus: vorlage?.solverStatus ?? 'OPTIMAL',
+      scheduledBlocks: vorlage?.scheduledBlocks ?? events.length,
+      changedBlocks: vorlage?.changedBlocks,
+      atRisk: vorlage?.atRisk ?? const [],
+    );
   }
 }

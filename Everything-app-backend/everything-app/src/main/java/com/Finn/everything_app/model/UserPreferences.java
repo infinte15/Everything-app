@@ -47,10 +47,15 @@ public class UserPreferences {
 
 
     private Integer breakDurationMinutes;
-    private Integer hoursBeforeBreak;
 
-
-    private Boolean groupSimilarTasks;
+    /**
+     * Obergrenze für die ANZAHL automatisch verplanter Aufgabenblöcke pro Tag.
+     *
+     * Sieht auf den ersten Blick aus wie die entfernten {@code hoursBeforeBreak} und
+     * {@code groupSimilarTasks} — ist es aber nicht: {@code addDailyLoadLimits} im
+     * {@code SmartSchedulerService} wertet dieses Feld aus. Vor dem Aufräumen also nachsehen,
+     * nicht nach Gefühl entscheiden.
+     */
     private Integer maxTasksPerDay;
 
 
@@ -103,6 +108,18 @@ public class UserPreferences {
     @Column(name = "default_max_chunk_minutes")
     private Integer defaultMaxChunkMinutes;
 
+    /**
+     * Wie viele Stunden VOR der Deadline eine Aufgabe fertig sein soll.
+     *
+     * Der Hauptlauf plant gegen {@code deadline - dieser Puffer}, nicht gegen die Deadline selbst:
+     * "geplant" und "auf Kante genäht" waren vorher dasselbe, ein Block durfte bis zur letzten
+     * Minute laufen. Passt es mit Puffer nicht mehr, greift der Nachlauf (CATCH_UP) und rechnet mit
+     * der echten Deadline — der Puffer ist also ein Ziel, keine zusätzliche harte Grenze, und er
+     * erzeugt für sich genommen nie eine Warnung.
+     */
+    @Column(name = "deadline_buffer_hours")
+    private Integer deadlineBufferHours;
+
     /** Schaltet die automatische Neuplanung komplett ab. */
     @Column(name = "auto_schedule_enabled")
     private Boolean autoScheduleEnabled;
@@ -118,5 +135,18 @@ public class UserPreferences {
      */
     @Column(name = "last_schedule_run_date")
     private LocalDate lastScheduleRunDate;
+
+    /**
+     * Angestrebtes Koerpergewicht in Kilogramm, oder null wenn keins gesetzt ist.
+     *
+     * <p>Liegt hier und nicht am Gewichtsverlauf: es ist eine Einstellung, kein Messwert. Der
+     * Gym-Space zeichnet daraus die Ziellinie im Diagramm und den Abstand darunter.
+     *
+     * <p>Gesetzt wird es ueber {@code PUT /api/sports/bodyweight/target}, bewusst nicht ueber
+     * {@code UserService.updatePreferences}: das uebernimmt nur Felder, die nicht null sind, und
+     * koennte "Ziel entfernen" damit nie von "Feld nicht mitgeschickt" unterscheiden.
+     */
+    @Column(name = "target_weight_kg")
+    private Double targetWeightKg;
 }
 

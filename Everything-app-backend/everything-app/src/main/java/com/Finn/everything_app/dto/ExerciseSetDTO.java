@@ -49,6 +49,17 @@ public class ExerciseSetDTO {
 
     private Integer exerciseOrder;
     private Long routineExerciseId;
+
+    /** Nur lesend: Arbeitssatz, an dem ein Abfallsatz oder Rest-Pause-Cluster haengt. */
+    private Long parentSetId;
+
+    /**
+     * Beim Schreiben der Weg zum Elternsatz: dessen {@code setNumber} im selben
+     * Uebungsblock. Eine ID kann der Client nicht schicken - die Elternzeile bekommt sie
+     * erst beim Speichern. Der Server loest die Nummer danach zu {@link #parentSetId} auf.
+     */
+    @Min(value = 1, message = "Satz-Nummer muss mindestens 1 sein")
+    private Integer parentSetNumber;
     private LocalDateTime completedAt;
 
     /** Nur lesend: wann der Satz trainiert wurde (Startzeit der Einheit). */

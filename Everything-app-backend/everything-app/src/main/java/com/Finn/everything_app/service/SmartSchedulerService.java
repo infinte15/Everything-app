@@ -61,6 +61,7 @@ public class SmartSchedulerService {
     private final HabitRepository            habitRepository;
     private final HabitCompletionRepository  habitCompletionRepository;
     private final WorkoutSessionRepository   workoutSessionRepository;
+    private final RoutineExerciseRepository  routineExerciseRepository;
     private final CourseScheduleRepository   courseScheduleRepository;
     // Bewusst das Repository und nicht ProjectService: es gibt keine Platzhalter zu erzeugen
     // (Projekt-Sessions haben keine eigene Entität), und ProjectService publiziert selbst
@@ -121,9 +122,17 @@ public class SmartSchedulerService {
             EnumSet.of(ProjectStatus.PLANNING, ProjectStatus.IN_PROGRESS, ProjectStatus.ACTIVE);
 
     // Phase-2-Gewichte. Alle Terme sind in Slots, damit sie vergleichbar sind.
-    // Eine Deadline um einen Tag zu reißen kostet 40*prio*96; einen Tag später zu liegen 1*prio*96.
-    // Der Solver sortiert also ~40 Items um, um eine Deadline zu retten.
+    // Eine Deadline um einen Tag zu reißen kostet 40*prio*96; einen Tag später zu liegen im
+    // Regelfall 288 (siehe urgencyRank). Der Solver sortiert also viele Items um, um eine
+    // Deadline zu retten.
     private static final long W_LATE      = 40;
+    /**
+     * Grundgewicht des "früher ist besser" für Trainings und Projektzeit.
+     *
+     * Für AUFGABEN steht hier nichts mehr: deren Dringlichkeit kommt seit dem Umbau auf strikte
+     * Priorität aus {@link #urgencyRank} bzw. {@link #dayOrderRank}, weil ein einzelner Faktor die
+     * geforderte Rangordnung zwischen Priorität und Deadline nicht ausdrücken kann.
+     */
     private static final long W_URGENCY   = 1;
     private static final long W_HABIT_DEV = 2;
 
@@ -142,9 +151,29 @@ public class SmartSchedulerService {
      * Fester Preis dafür, einen bereits liegenden Block ÜBERHAUPT anzufassen — die Totzone.
      * Herleitung der Höhe siehe {@link #addStabilityTerm}.
      */
-    private static final long W_MOVE_FIXED = 400;
+    private static final long W_MOVE_FIXED = 1200;
 
     private static final long W_PEAK      = 2;
+
+    /**
+     * Fester Preis dafür, zwei gleich dringende Aufgaben am selben Tag in der falschen Reihenfolge
+     * zu haben (siehe {@link #addTaskOrderPreference}).
+     *
+     * Bewusst ein PAUSCHALPREIS und kein Gewicht pro Slot: nur so konkurriert der Term nicht mit
+     * dem Leistungshoch und der Abendstrafe, die beide über die Uhrzeit entscheiden. Er sagt nichts
+     * darüber, WANN die Blöcke liegen, nur in welcher Reihenfolge.
+     *
+     * Die Höhe ist gegen zwei Nachbarn gerechnet:
+     * <ul>
+     *   <li>Beide Aufgaben einer Gruppe haben dieselbe Priorität, also auch dasselbe
+     *       {@code W_PEAK * prio}. Zwei gleich große Blöcke zu tauschen ändert am Leistungshoch
+     *       exakt nichts — 200 reicht deshalb bequem, um jede Rest-Asymmetrie zu überbieten.</li>
+     *   <li>{@code 200 < W_MOVE_FIXED = 1200}: die Reihenfolge darf einen bereits liegenden Block
+     *       nicht mehr anfassen. Ein fertiger Plan bleibt stehen, auch wenn seine Reihenfolge
+     *       nicht mehr ideal ist — dieselbe Abwägung wie überall sonst.</li>
+     * </ul>
+     */
+    private static final long W_ORDER     = 200;
 
     /**
      * Strafe dafür, einen Task-Block in die Abendstunden zu legen (nach {@code coreHoursEnd}).
@@ -174,8 +203,22 @@ public class SmartSchedulerService {
      */
     private static final long W_REST      = 4;
 
-    /** Angestrebter Abstand zwischen zwei Trainings: ein voller Ruhetag dazwischen. */
-    private static final int  REST_DAYS_BETWEEN_WORKOUTS = 2;
+    /**
+     * Angestrebter Abstand zwischen zwei Trainings, in Tagen.
+     *
+     * <p>Frueher eine feste 2 fuer jedes Paar. Das ging an der Sache vorbei: der Ruhetag gilt
+     * dem Muskel, nicht dem Kalender. Push nach Push beansprucht dieselbe Brust zweimal und
+     * braucht laenger als Push nach Beinen, wo sich die beiden Einheiten kaum begegnen.
+     *
+     * <p>Der tatsaechliche Wunschabstand liegt zwischen diesen beiden Grenzen und haengt an der
+     * Ueberschneidung der beanspruchten Muskeln - siehe {@link #restDaysBetween}. Bei halber
+     * Ueberschneidung kommt wieder 2 heraus, das bisherige Verhalten ist also der Mittelfall.
+     */
+    private static final int REST_DAYS_MIN = 1;
+    private static final int REST_DAYS_MAX = 3;
+
+    /** Abstand, solange ueber die Muskeln nichts bekannt ist (freie Einheit ohne Routine). */
+    private static final int REST_DAYS_DEFAULT = 2;
 
     /**
      * Obergrenze für Phase 1 — ein DECKEL, kein Anteil.
@@ -196,16 +239,6 @@ public class SmartSchedulerService {
     /** Untergrenze für Phase 2, falls Phase 1 wider Erwarten ihren Deckel ausschöpft. */
     private static final double PHASE2_MIN_SECONDS = 1.0;
 
-    /**
-     * Zeitbudget für den Wiederholungslauf, wenn Phase 2 ohne Lösung endet.
-     *
-     * Deutlich kleiner als Phase 1 selbst: Der Lauf muss keine Lösung mehr SUCHEN, sondern nur die
-     * bereits bekannte aus Phase 1 wiederherstellen — und die wird seit dem vollständigen Hint
-     * (Startzeiten UND Präsenz-Literale) direkt gefunden. Vorher stand hier derselbe Anteil wie
-     * für Phase 1, womit ein einzelner Lauf im schlechtesten Fall 6+4+6 = 16 Sekunden dauern
-     * konnte.
-     */
-    private static final double PHASE1_RETRY_SECONDS = 1.0;
 
     /**
      * Nachhol-Fenster für einen bereits überfälligen Task, in Tagen ab jetzt.
@@ -220,6 +253,20 @@ public class SmartSchedulerService {
     /** Steht an jedem Block, den erst der Quetsch-Nachlauf untergebracht hat. */
     private static final String NOTE_SQUEEZED = "Eng geplant, um die Deadline zu halten.";
 
+    /** Steht an jedem Block, der in den Sicherheitspuffer vor der Deadline gerutscht ist. */
+    private static final String NOTE_NO_BUFFER = "Ohne Puffer vor der Deadline geplant.";
+
+    /**
+     * Sicherheitspuffer vor der Deadline, wenn der Nutzer nichts eingestellt hat.
+     *
+     * Ein Tag: knapp genug, dass er im Alltag fast nie stört, und weit genug, dass "fertig" nicht
+     * heißt "fertig in der Minute, in der es fällig ist". Der Puffer ist ein ZIEL des Hauptlaufs,
+     * keine zweite harte Grenze — der Nachlauf CATCH_UP rechnet weiterhin mit der echten Deadline
+     * und darf hineinplanen, wenn es sonst nicht passt. Deshalb erzeugt er für sich genommen auch
+     * nie eine Warnung.
+     */
+    private static final int DEFAULT_DEADLINE_BUFFER_HOURS = 24;
+
     /**
      * Drop-Gewichte der wiederkehrenden Items — und die Invariante, die sie zusammenhält.
      *
@@ -232,13 +279,13 @@ public class SmartSchedulerService {
      *
      * Die Bänder sind deshalb getrennt statt überlappend:
      * <pre>
-     *   Gewohnheit    prio*60                       =  60 .. 300
-     *   Training      W_DROP_WORKOUT                =        240
-     *   Projektzeit   W_DROP_PROJECT                =        200
-     *   Aufgabe       W_DROP_TASK_BASE + prio*100*U = 500 .. 4400
+     *   Gewohnheit    prio*60                        =   60 ..  300
+     *   Training      W_DROP_WORKOUT                 =         240
+     *   Projektzeit   W_DROP_PROJECT                 =         200
+     *   Aufgabe       siehe calculateTaskWeight      = 1500 .. 6200
      * </pre>
-     * {@code min(Aufgabe) = 500} liegt strikt über {@code max(Wiederkehrendes) = 300}. Innerhalb
-     * jedes Bandes bleibt die alte Ordnung monoton erhalten; es kippt ausschließlich das
+     * {@code min(Aufgabe) = 1500} liegt strikt über {@code max(Wiederkehrendes) = 300}. Innerhalb
+     * jedes Bandes bleibt die Ordnung monoton erhalten; es kippt ausschließlich das
      * Verhältnis Aufgabe-zu-Wiederkehrendem, und genau das ist der Zweck.
      *
      * Projektzeit bleibt das Verzichtbarste: deadlinefrei, quotenbasiert und nächste Woche wieder da.
@@ -247,6 +294,14 @@ public class SmartSchedulerService {
     private static final long W_DROP_WORKOUT   = 240;
     private static final long W_DROP_HABIT_PRIO = 60;
     private static final long W_DROP_TASK_BASE = 400;
+
+    /**
+     * Abstand zwischen zwei Prioritätsstufen beim Verdrängen — der Grund, warum Priorität STRIKT
+     * ist. Muss größer sein als die größte Spanne, die die Deadline innerhalb einer Stufe erzeugen
+     * kann ({@code (max(DROP_URGENCY) - min(DROP_URGENCY)) * 100 = 700}), sonst könnte eine nähere
+     * Deadline die niedrigere Priorität wieder nach oben ziehen. Siehe {@link #calculateTaskWeight}.
+     */
+    private static final long W_DROP_PRIO_STEP = 1000;
 
     // Feld-Initialisierung, damit Mockito-Tests ohne Spring-Kontext einen sinnvollen Wert haben.
     @Value("${scheduler.solver-time-limit-seconds:2.0}")
@@ -564,7 +619,7 @@ public class SmartSchedulerService {
         // Nach hinten reicht das Fenster bewusst weiter als geplant wird (cleanupHorizonEnd):
         // sonst überlebten die Blöcke früherer, längerer Läufe jenseits des Planungsfensters für
         // immer. Gepinntes ist nicht betroffen, gefiltert wird auf isFixed=false.
-        reconcileScheduledEvents(userId, cutoff,
+        int geaenderteBloecke = reconcileScheduledEvents(userId, cutoff,
                 cleanupHorizonEnd(startDate).atTime(23, 59, 59), outcome.getItems());
         log.info("Gespeichert: {} geplante Blöcke", outcome.getItems().size());
         writeBackTaskSpans(outcome, input.getTasks(), credited);
@@ -573,7 +628,18 @@ public class SmartSchedulerService {
         // zählt alles, was kein TASK ist, als "Habits/Workouts" und summiert es in
         // totalHoursScheduled. Eingemischt bliese das die Kennzahl mit Stunden auf, die der
         // Solver nie geplant hat.
-        syncClassEvents(userId, startDate, classEndDate);
+        // Zählt mit in changedBlocks: der Stundenplan schreibt an reconcileScheduledEvents vorbei,
+        // und ein Lauf, der NUR eine Vorlesung geändert hat, müsste sonst 0 melden — das Frontend
+        // spart sich dann den Abruf und zeigt den alten Kalender.
+        //
+        // ACHTUNG, bekannte Grobheit: syncClassEvents löscht und schreibt jedes Mal ALLES neu
+        // (clearClassEvents + saveScheduleToDatabase), statt wie reconcileScheduledEvents
+        // abzugleichen. Die Zahl ist damit "wie viele Vorlesungen es gibt", nicht "wie viele sich
+        // geändert haben" — und weil jeder Lauf neue IDs vergibt, ist das für das Frontend sogar
+        // korrekt: es MUSS nachladen. Folge: die Abkürzung "changedBlocks == 0, also kein
+        // Monatsabruf" greift nur für Nutzer ohne Vorlesungen im Horizont. Wer sie auch für
+        // Stundenplan-Nutzer will, muss zuerst syncClassEvents auf denselben Abgleich umstellen.
+        geaenderteBloecke += syncClassEvents(userId, startDate, classEndDate);
         long persistMs = (System.nanoTime() - persistStart) / 1_000_000;
 
         List<ScheduledItem> scheduledTasks = outcome.getItems().stream()
@@ -602,7 +668,7 @@ public class SmartSchedulerService {
         // Damit die At-Risk-Liste auch den entprellten Hintergrundlauf überlebt — sonst erführe der
         // Nutzer nur bei dem einen manuell angestoßenen Lauf, dass eine Aufgabe liegen bleibt.
         lastRunStore.record(userId, outcome.getStatus().name(), outcome.getAtRisk(),
-                scheduledTasks.size() + scheduledRest.size());
+                scheduledTasks.size() + scheduledRest.size(), geaenderteBloecke);
 
         logRunMetrics(userId, startDate, endDate, outcome, collectMs, solveMs, persistMs,
                 (System.nanoTime() - runStart) / 1_000_000, statementsStart,
@@ -624,14 +690,15 @@ public class SmartSchedulerService {
         long statements = statementsStart < 0 ? -1 : statementCount() - statementsStart;
         log.info("SCHED user={} tage={} totalMs={} collectMs={} solveMs={} p1Ms={} p2Ms={} "
                         + "persistMs={} intervalle={} placeables={} bloecke={}+{} drop={} obj={} "
-                        + "status={} p2Retry={} relief={}+{} statements={} atRisk={}",
+                        + "status={} p2Retry={} overdue={} relief={}+{} verdraengt={} "
+                        + "statements={} atRisk={}",
                 userId, ChronoUnit.DAYS.between(startDate, endDate) + 1, totalMs, collectMs,
                 solveMs, outcome.getPhase1Ms(), outcome.getPhase2Ms(), persistMs,
                 outcome.getIntervals(), outcome.getPlaceables(), taskBlocks, restBlocks,
                 outcome.getDrop(), Math.round(outcome.getPlacementObjective()),
-                outcome.getStatus(), outcome.isPhase2Retried(),
-                outcome.getReliefCatchUp(), outcome.getReliefSqueeze(), statements,
-                outcome.getAtRisk().size());
+                outcome.getStatus(), outcome.isPhase2Retried(), outcome.getOverduePlaced(),
+                outcome.getReliefCatchUp(), outcome.getReliefSqueeze(), outcome.getDisplaced(),
+                statements, outcome.getAtRisk().size());
     }
 
     /**
@@ -726,6 +793,13 @@ public class SmartSchedulerService {
         int     sizeSlots;
         int     realMinutes;
         IntervalVar interval;
+        /**
+         * Bei Trainings die primaer beanspruchten Muskeln der Routine, sonst leer.
+         *
+         * <p>Bestimmt zusammen mit dem Nachbarn den gewuenschten Abstand - siehe
+         * {@link SmartSchedulerService#restDaysBetween}.
+         */
+        Set<MuscleGroup> muscles = Set.of();
         final Map<Integer, BoolVar> inDay = new LinkedHashMap<>();
         /** Je erlaubtem Tag die Schranken [lo, hi] für start — für brauchbare Startwerte (Hints). */
         final Map<Integer, int[]> dayBounds = new LinkedHashMap<>();
@@ -797,6 +871,12 @@ public class SmartSchedulerService {
      * alle Items: die allermeisten Paare sind ohnehin unmöglich (ein Item hat Tages-Booleans nur
      * für seine eigenen erlaubten Tage), und über den vollen Horizont war das eine spürbare
      * Menge Leerlauf beim Modellaufbau.
+     *
+     * <p><b>Was der Vorlauf schon belegt hat, zählt mit.</b> Ein überfälliger Block darf den Deckel
+     * für SICH überschreiten — er ist der eine Fall, für den der Deckel nie gedacht war. Er hat
+     * aber im Hauptmodell kein Placeable mehr, und ohne diese Verrechnung hielte der Löser den Tag
+     * für unberührt und legte die volle Tagesration NOCH EINMAL obendrauf. Aus "der Deckel gilt
+     * für Überfälliges nicht" würde so "an einem Nachholtag gilt der Deckel überhaupt nicht mehr".
      */
     private void addDailyLoadLimits(CpModel model, UserPreferences prefs, Axis axis,
                                     List<TaskChunk> chunks, List<Placeable> allPlaceables) {
@@ -804,6 +884,16 @@ public class SmartSchedulerService {
                 .map(c -> c.placeable)
                 .filter(Objects::nonNull)
                 .collect(Collectors.toCollection(java.util.LinkedHashSet::new));
+
+        // Was der Vorlauf an einem Tag bereits verplant hat, in Slots und Blöcken.
+        Map<Integer, Integer> vergebenSlots  = new HashMap<>();
+        Map<Integer, Integer> vergebenBloecke = new HashMap<>();
+        for (TaskChunk c : chunks) {
+            if (c.placedStartSlot == null) continue;
+            int tag = c.placedStartSlot / SLOTS_PER_DAY;
+            vergebenSlots.merge(tag, Axis.slotsFor(c.durationMinutes), Integer::sum);
+            vergebenBloecke.merge(tag, 1, Integer::sum);
+        }
 
         // Tag -> Items, die an diesem Tag liegen könnten.
         Map<Integer, List<Placeable>> perDay = new LinkedHashMap<>();
@@ -835,13 +925,16 @@ public class SmartSchedulerService {
                 }
             }
 
+            int belegt  = vergebenSlots.getOrDefault(e.getKey(), 0);
+            int bloecke = vergebenBloecke.getOrDefault(e.getKey(), 0);
+
             if (anyTask) {
-                model.addLessOrEqual(taskLoad.build(), taskCapSlots);
+                model.addLessOrEqual(taskLoad.build(), Math.max(0, taskCapSlots - belegt));
                 if (maxTasksPerDay != null && maxTasksPerDay > 0) {
-                    model.addLessOrEqual(taskCount.build(), maxTasksPerDay);
+                    model.addLessOrEqual(taskCount.build(), Math.max(0, maxTasksPerDay - bloecke));
                 }
             }
-            model.addLessOrEqual(totalLoad.build(), totalCapSlots);
+            model.addLessOrEqual(totalLoad.build(), Math.max(0, totalCapSlots - belegt));
         }
     }
 
@@ -1069,10 +1162,17 @@ public class SmartSchedulerService {
      * Bewusst NUR bei abgelaufener Deadline: solange sie in der Zukunft liegt, bleibt es bei der
      * bisherigen Annahme "vergangener Block = gelaufene Zeit". Der Task-Status muss nicht geprüft
      * werden, findSchedulableTasks liefert ohnehin nur TODO.
+     *
+     * <p><b>Maßgeblich ist das ENDE, nicht der Start.</b> Ein Block, der gerade läuft, ist nicht
+     * verpasst — er läuft. Über den Start gemessen war das ein Selbstläufer, seit der Vorlauf
+     * überfällige Aufgaben auf "jetzt" legt: der Block beginnt um 15:15, der nächste Lauf ein paar
+     * Minuten später hält ihn für vertan, schreibt seine Minuten nicht gut und bucht einen ZWEITEN
+     * Nachholtermin — und der übernächste Lauf einen dritten. Am Ende stand für eine
+     * Sechzig-Minuten-Aufgabe der halbe Nachmittag im Kalender.
      */
     private boolean isMissedBlock(CalendarEvent e, LocalDateTime cutoff) {
         if (e.getRelatedTask() == null || e.getCompletedAt() != null) return false;
-        if (e.getStartTime() == null || !e.getStartTime().isBefore(cutoff)) return false;
+        if (e.getEndTime() == null || !e.getEndTime().isBefore(cutoff)) return false;
         LocalDateTime deadline = e.getRelatedTask().getDeadline();
         return deadline != null && deadline.isBefore(LocalDateTime.now());
     }
@@ -1693,19 +1793,33 @@ public class SmartSchedulerService {
         // acht Stunden Arbeit lückenlos aufeinander — technisch optimal, menschlich unbrauchbar.
         int gapSlots = slotsAufgerundet(nz(prefs.getBreakDurationMinutes(), 0));
 
+        // Wie weit vor der Deadline der Hauptlauf fertig sein will. Bewusst NICHT über
+        // Axis.slotsFor: das rundet auf mindestens einen Slot auf, und ein eingestellter Puffer
+        // von 0 soll auch 0 sein.
+        int deadlineBufferSlots = Math.max(0,
+                nz(prefs.getDeadlineBufferHours(), DEFAULT_DEADLINE_BUFFER_HOURS) * 60 / GRID);
+
         // Platzhalter-Zuordnung für flexible Workouts, bewusst lokal: ein Feld würde
         // zwischen zwei Läufen (auch verschiedener User) Zustand verschleppen.
         Map<Long, Placeable> workoutPlaceables = new HashMap<>();
 
         List<int[]> blocked = collectBlockedSlots(axis, input, startDate, endDate, bufferSlots, gapSlots);
 
+        Map<String, Integer> previousStarts = previousStartSlots(input, axis, chunks);
+
+        // ---- Vorlauf: Überfälliges zuerst ----
+        //
+        // Läuft VOR dem Hauptmodell und hängt seine Blöcke an blocked an. Damit dreht sich das
+        // Verhältnis um: nicht "Überfälliges kämpft mit allem anderen um Reste", sondern "alles
+        // andere wird um das Überfällige herum geplant". Siehe solveOverduePass.
+        int overduePlatziert = solveOverduePass(chunks, blocked, axis, prefs, nowSlot, gapSlots,
+                previousStarts);
+
         List<IntervalVar> allIntervals = new ArrayList<>();
         for (int i = 0; i < blocked.size(); i++) {
             int[] b = blocked.get(i);
             allIntervals.add(model.newFixedInterval(b[0], b[1] - b[0], "blocked_" + i));
         }
-
-        Map<String, Integer> previousStarts = previousStartSlots(input, axis, chunks);
 
         // Phase-1-Ziel: gewichtete Summe der VERWORFENEN Items. Der konstante Anteil bleibt im
         // Ausdruck, weil er für die spätere Schranke addLessOrEqual(dropCost, bestDrop) zählt.
@@ -1728,6 +1842,14 @@ public class SmartSchedulerService {
         for (Map.Entry<Long, List<TaskChunk>> e : chunksByTask.entrySet()) {
             List<TaskChunk> group = e.getValue();
             Task task = group.get(0).task;
+
+            // Überfälliges hat der Vorlauf bereits platziert; seine Zeit steckt schon als festes
+            // Intervall in blocked. Ein zweites Placeable hier wäre nicht nur überflüssig, es
+            // würde den Block doppelt buchen. Die Prüfung gilt für die ganze Gruppe, weil
+            // istUeberfaellig nur an der Deadline des TASKS hängt — es kann keine gemischte
+            // Gruppe geben.
+            if (istUeberfaellig(group.get(0), axis, nowSlot)) continue;
+
             long weight = calculateTaskWeight(task, startDate);
 
             int earliest = nowSlot;
@@ -1737,7 +1859,11 @@ public class SmartSchedulerService {
 
             // Deadline schneidet das Fenster hart zu (siehe taskBounds). taskLastDay ist damit nur
             // noch der Nahbereich für Tasks OHNE Deadline.
-            TaskBounds bounds = taskBounds(task, axis, taskLastDay, nowSlot, earliest);
+            // Restdauer der ganzen Aufgabe, damit der Puffer sie nicht aus ihrem eigenen Fenster
+            // drängt (siehe taskBounds).
+            int restSlots = group.stream().mapToInt(c -> Axis.slotsFor(c.durationMinutes)).sum();
+            TaskBounds bounds = taskBounds(task, axis, taskLastDay, nowSlot, earliest,
+                    deadlineBufferSlots, restSlots);
 
             for (int ci = 0; ci < group.size(); ci++) {
                 TaskChunk c = group.get(ci);
@@ -1771,24 +1897,28 @@ public class SmartSchedulerService {
                 // Vergleiche im Modell sind ohnehin in "×96 pro Tag" formuliert), während der Tag
                 // nach innen flach wird. Welche Uhrzeit es dort wird, entscheiden Leistungshoch,
                 // Abendstrafe und der Stabilitätsanker — also die Terme, die dafür da sind.
+                //
+                // Der Rang ist seit dem Umbau auf strikte Priorität nicht mehr prio*Stufe, sondern
+                // prio*4 + Stufe: die Deadline ordnet nur noch INNERHALB einer Prioritätsstufe.
+                // Der Faktor SLOTS_PER_DAY/4 hält den Regelfall exakt auf dem alten Wert —
+                // P3 ohne Deadline ergibt 12*24 = 288, genau wie vorher 1*3*1*96. Alle
+                // dokumentierten Abwägungen im Modell sind gegen diese Zahl formuliert.
                 qVars.add(gatedDayIndex(model, p, "urg_" + name, axis));
-                qWeights.add(W_URGENCY * prio * PLACEMENT_URGENCY[deadlineBucket(task, startDate)]
-                        * SLOTS_PER_DAY);
+                qWeights.add((long) urgencyRank(task, startDate) * (SLOTS_PER_DAY / 4));
 
                 // Und ein schwacher Gleichstandsbrecher INNERHALB des Tages: liegen zwei Aufgaben
                 // am selben Tag, soll die früher fällige zuerst drankommen. Ohne ihn wäre der Tag
                 // nach innen völlig flach und die Reihenfolge beliebig — das war eine echte
                 // Verschlechterung, kein Testartefakt.
                 //
-                // Bewusst NUR die Deadline-Stufe als Gewicht (1..3 pro Slot), ohne W_URGENCY und
-                // ohne Priorität. Vorher stand hier prio*Stufe, also bis zu 15 pro Slot — damit
-                // überbot der Term das Leistungshoch (2*prio) und presste alles an den
-                // Arbeitsbeginn. Jetzt kostet die Reihenfolge über einen ganzen Arbeitstag
-                // höchstens 3*56 = 168 und bleibt damit klar unter der Totzone des
-                // Stabilitätsankers (400): Ordnung ja, aber niemals um den Preis, dass ein
-                // liegender Block noch einmal verschoben wird.
+                // Der Rang ist bewusst schmal (2..11 pro Slot): über einen vollen Tag kostet die
+                // Reihenfolge damit höchstens 11*96 = 1056 und bleibt unter der Totzone des
+                // Stabilitätsankers (1200) — Ordnung ja, aber niemals um den Preis, dass ein
+                // liegender Block noch einmal verschoben wird. Bis zum Umbau auf strikte Priorität
+                // stand hier NUR die Deadline-Stufe: lagen zwei Aufgaben am selben Tag, war ihre
+                // Reihenfolge von der Priorität völlig unabhängig.
                 qVars.add(gated(model, p, "urgday_" + name, p.start, axis.horizonSlots));
-                qWeights.add((long) PLACEMENT_URGENCY[deadlineBucket(task, startDate)]);
+                qWeights.add((long) dayOrderRank(task, startDate));
 
                 // Abendstrafe: ohne sie ist 21:00 bei einem Arbeitsende von 22:00 eine völlig
                 // gleichwertige Lage, seit die Dringlichkeit innerhalb des Tages nicht mehr zieht.
@@ -1885,6 +2015,8 @@ public class SmartSchedulerService {
             }
         }
 
+        addTaskOrderPreference(model, chunksByTask, startDate, qVars, qWeights);
+
         // --- Habit-Slots ---
         for (int i = 0; i < habitSlots.size(); i++) {
             HabitSlot s = habitSlots.get(i);
@@ -1961,6 +2093,10 @@ public class SmartSchedulerService {
         // Stabilitätsanker wertlos machen würde.
         Map<LocalDate, List<Placeable>> workoutWeeks = new LinkedHashMap<>();
         Map<LocalDate, Set<Integer>>    workoutWeekDays = new LinkedHashMap<>();
+        // Einheiten OHNE Wunschtag. Nur sie sind untereinander austauschbar und nur sie
+        // unterliegen der automatischen Ruhetagsverteilung - wer einer Routine einen Wochentag
+        // gibt, hat den Rhythmus damit selbst festgelegt.
+        Map<LocalDate, List<Placeable>> floatingWeeks = new LinkedHashMap<>();
 
         List<WorkoutSession> orderedWorkouts = flexibleWorkouts.stream()
                 .sorted(Comparator.comparing(WorkoutSession::getId,
@@ -1987,10 +2123,34 @@ public class SmartSchedulerService {
             // aussichtsloses Intervall im Modell zu stehen.
             if (days.isEmpty()) continue;
 
+            // Wunschtag der Routine: die Tagesauswahl schrumpft auf diesen einen Tag, der Solver
+            // sucht dort nur noch die Uhrzeit. Bewusst hart - ein Wochentag, der regelmäßig nicht
+            // eingehalten wird, wäre als Einstellung wertlos.
+            //
+            // Der Rückfall auf die ganze Woche greift, wenn der Wunschtag im Horizont gar nicht
+            // vorkommt oder dort schon ein anderes Training liegt. Dann ist die Alternative nicht
+            // "Wunschtag", sondern "kein Training" - und ein Tag daneben ist besser als keins.
+            boolean pinned = false;
+            Integer preferredWeekday = w.getRoutine() != null
+                    ? w.getRoutine().getPreferredWeekday() : null;
+            if (preferredWeekday != null) {
+                List<Integer> onPreferred = days.stream()
+                        .filter(d -> startDate.plusDays(d).getDayOfWeek().getValue() == preferredWeekday)
+                        .toList();
+                if (!onPreferred.isEmpty()) {
+                    days = new ArrayList<>(onPreferred);
+                    pinned = true;
+                }
+            }
+
             // Wie bei den Gewohnheiten: Training ist Privatzeit, nicht Arbeitszeit.
             List<DayWindow> windows = dayWindows(axis, privateStartSlot, privateEndSlot, sizeSlots,
                     nowSlot, days, axis.totalDays - 1);
             Placeable p = makePlaceable(model, name, sizeSlots, duration, windows, gapSlots);
+            if (w.getRoutine() != null) {
+                p.muscles = input.getRoutineMuscles()
+                        .getOrDefault(w.getRoutine().getId(), Set.of());
+            }
             allPlaceables.add(p);
             allIntervals.add(p.interval);
             workoutPlaceables.put(w.getId(), p);
@@ -2009,6 +2169,9 @@ public class SmartSchedulerService {
 
             workoutWeeks.computeIfAbsent(weekStart, k -> new ArrayList<>()).add(p);
             workoutWeekDays.computeIfAbsent(weekStart, k -> new LinkedHashSet<>()).addAll(days);
+            if (!pinned) {
+                floatingWeeks.computeIfAbsent(weekStart, k -> new ArrayList<>()).add(p);
+            }
         }
 
         // --- Gruppen-Constraints für flexible Workouts (je Zielwoche) ---
@@ -2016,10 +2179,19 @@ public class SmartSchedulerService {
         // chronologische Ordnung, die zugleich die Permutationssymmetrie der austauschbaren
         // Platzhalter bricht und damit den Solve beschleunigt.
         for (Map.Entry<LocalDate, List<Placeable>> e : workoutWeeks.entrySet()) {
-            List<Placeable> group = e.getValue();
             Set<Integer> days = workoutWeekDays.get(e.getKey());
-            addWeekGroupConstraints(model, group, days);
-            addRestDayRule(model, group, days, "wow" + e.getKey(), qVars, qWeights);
+
+            // "Höchstens ein Training pro Tag" gilt über ALLE Einheiten der Woche - eine mit
+            // Wunschtag und eine frei verschiebbare dürfen nicht auf denselben Tag fallen.
+            addAtMostOnePerDay(model, e.getValue(), days);
+
+            // Ordnung und Ruhetagsverteilung nur über die frei verschiebbaren: die anderen haben
+            // ihren Tag vom Nutzer, und eine Ordnung über feste Tage wäre schnell unerfüllbar.
+            List<Placeable> floating = floatingWeeks.getOrDefault(e.getKey(), List.of());
+            if (floating.size() > 1) {
+                addChronologicalOrder(model, floating);
+                addRestDayRule(model, floating, days, "wow" + e.getKey(), qVars, qWeights);
+            }
         }
 
         // --- Projekt-Sessions ---
@@ -2099,6 +2271,11 @@ public class SmartSchedulerService {
         }
         long bestDrop = Math.round(solver.objectiveValue());
 
+        // Phase 1 hat eine gültige Lösung. Sie wird JETZT festgehalten, bevor Phase 2 das Modell
+        // anfasst: scheitert Phase 2, steht im Löser keine gültige Belegung mehr, und ohne diesen
+        // Schnappschuss wäre die bereits bewiesene Lösung verloren. Siehe unten.
+        Platzierung phase1Platzierung = schnappschuss(solver, allPlaceables);
+
         // ---- Phase 2: Qualität, ohne Phase 1 zu verschlechtern ----
         //
         // Phase 2 bekommt den gesamten Rest des Budgets. Ein früherer Versuch, ihr die ungenutzte
@@ -2119,8 +2296,8 @@ public class SmartSchedulerService {
         // Mitgegeben wird zusätzlich, WELCHE Items Phase 1 überhaupt platziert hat. Ohne die
         // Präsenz-Literale ist der Hint unvollständig: der Löser kennt Startzeiten für Items, von
         // denen er noch gar nicht weiß, ob sie vorkommen sollen. Vollständig ist er dagegen eine
-        // nachweislich zulässige Lösung — deshalb reicht für den Notfall-Wiederholungslauf unten
-        // eine Sekunde statt der vollen Phase-1-Zeit.
+        // nachweislich zulässige Lösung — Phase 2 startet also nicht bei null, sondern hat vom
+        // ersten Moment an etwas, das sie nur noch verbessern muss.
         model.clearHints();
         for (Placeable p : allPlaceables) {
             model.addHint(p.start, preferredHint(p, (int) solver.value(p.start), desiredMinuteOfDay));
@@ -2153,29 +2330,33 @@ public class SmartSchedulerService {
         double placementObjective = (s2 == CpSolverStatus.OPTIMAL || s2 == CpSolverStatus.FEASIBLE)
                 ? solver.objectiveValue() : Double.NaN;
 
-        CpSolverStatus effective = (s2 == CpSolverStatus.OPTIMAL || s2 == CpSolverStatus.FEASIBLE) ? s2 : s1;
-        boolean phase2Retried = false;
-        if (s2 != CpSolverStatus.OPTIMAL && s2 != CpSolverStatus.FEASIBLE) {
-            phase2Retried = true;
-            // Phase 2 hat das Zeitbudget gerissen; Phase 1 hatte aber eine gültige Lösung.
-            // Die ist zwar schlechter platziert, aber vollständig gültig — also erneut lösen,
-            // damit der Solver-Zustand wieder zur Phase-1-Lösung passt.
-            log.warn("CP-SAT Phase 2 ohne Lösung ({}), nutze Phase-1-Platzierung.", s2);
-            model.minimize(dropCost);
-            solver.getParameters().setNumSearchWorkers(solverWorkersPhase1);
-            solver.getParameters().setMaxTimeInSeconds(PHASE1_RETRY_SECONDS);
-            CpSolverStatus retry = solver.solve(model);
-            if (retry != CpSolverStatus.OPTIMAL && retry != CpSolverStatus.FEASIBLE) {
-                return SolveOutcome.unusable(retry);
-            }
+        boolean phase2Brauchbar = s2 == CpSolverStatus.OPTIMAL || s2 == CpSolverStatus.FEASIBLE;
+        CpSolverStatus effective = phase2Brauchbar ? s2 : s1;
+
+        // Phase 2 gescheitert? Dann gilt die Lösung aus Phase 1 - schlechter platziert, aber
+        // vollständig gültig und bereits bewiesen.
+        //
+        // Früher wurde sie dafür NEU GELÖST (eine Sekunde, Hint aus Phase 1), weil extract() aus
+        // dem Löser liest. Das hielt nur, solange der Hint sofort wieder durchging: bei rund 75
+        // offenen Aufgaben schaffte der Wiederholungslauf es nicht mehr, der ganze Lauf endete
+        // auf UNKNOWN und der Kalender blieb stehen - ohne dass etwas als gefährdet gemeldet
+        // wurde. Ein größeres Zeitbudget half nicht, weil nicht die Suche das Problem war,
+        // sondern das Wegwerfen einer Lösung, die man schon hatte.
+        //
+        // Der Schnappschuss braucht weder Zeit noch Glück: er liest dieselben zwei Werte je
+        // Placeable, die extract() ohnehin abfragt.
+        boolean phase2Retried = !phase2Brauchbar;
+        if (!phase2Brauchbar) {
+            log.warn("CP-SAT Phase 2 ohne Lösung ({}), nutze die Platzierung aus Phase 1.", s2);
         }
+        Platzierung platzierung = phase2Brauchbar ? ausLoeser(solver) : phase1Platzierung;
 
         log.info("CP-SAT {} | Intervalle: {} | Chunks: {} Habits: {} Workouts: {} Projekte: {} | drop={} obj={}",
                 effective, allIntervals.size(), chunks.size(), habitSlots.size(),
                 flexibleWorkouts.size(), projectSlots.size(), bestDrop,
                 Math.round(placementObjective));
 
-        SolveOutcome outcome = extract(solver, effective, chunks, habitSlots, flexibleWorkouts,
+        SolveOutcome outcome = extract(platzierung, effective, chunks, habitSlots, flexibleWorkouts,
                 workoutPlaceables, projectSlots, axis);
 
         // ---- Nachläufe: was der Hauptlauf liegen gelassen hat, doch noch vor die Deadline ----
@@ -2203,10 +2384,20 @@ public class SmartSchedulerService {
         int relief1 = solveReliefPass(ReliefMode.CATCH_UP, chunks, belegt, axis, prefs, nowSlot, gapSlots);
         int relief2 = solveReliefPass(ReliefMode.SQUEEZE, chunks, belegt, axis, prefs, nowSlot, gapSlots);
 
-        outcome.getItems().addAll(buildTaskItems(chunks, axis));
+        // ---- Letzte Stufe: verdrängen statt aufgeben ----
+        //
+        // Bis hierher wurde nur aufgefüllt. Was jetzt noch fehlt, fehlt nicht aus Platzmangel im
+        // Kalender, sondern weil die Zeit an etwas Unwichtigeres vergeben ist. Genau dort greift
+        // dieser Pass ein — und nur dort: er läuft ausschließlich für Aufgaben, deren Deadline
+        // sonst reißt.
+        int verdraengt = solveDeadlineRescuePass(chunks, outcome, blocked, axis, prefs, nowSlot);
+
+        outcome.getItems().addAll(buildTaskItems(chunks, axis, deadlineBufferSlots));
         outcome.getAtRisk().addAll(classifyAtRisk(chunks, axis, cutoff));
         outcome.setReliefCatchUp(relief1);
         outcome.setReliefSqueeze(relief2);
+        outcome.setOverduePlaced(overduePlatziert);
+        outcome.setDisplaced(verdraengt);
         outcome.setPhase1Ms(phase1Ms);
         outcome.setPhase2Ms(phase2Ms);
         outcome.setIntervals(allIntervals.size());
@@ -2229,6 +2420,10 @@ public class SmartSchedulerService {
      *       mehr, der Callback feuert also nie wieder und könnte nie abbrechen.</li>
      * </ul>
      *
+     * Abgebrochen wird erst, wenn es überhaupt schon eine Lösung gibt. "Stillstand" heißt
+     * <em>keine Verbesserung mehr</em>, nicht <em>noch nichts gefunden</em> — die beiden zu
+     * verwechseln kostet bei großem Bestand den ganzen Lauf.
+     *
      * {@code setMaxTimeInSeconds} bleibt daneben als harte Decke bestehen. Der Stillstandsabbruch
      * senkt den Regelfall, er ersetzt die Obergrenze nicht.
      *
@@ -2245,6 +2440,20 @@ public class SmartSchedulerService {
                     Thread.sleep(WACHHUND_TAKT_MS);
                     long jetzt = System.nanoTime();
                     if ((jetzt - start) / 1_000_000 < solverMinMs) continue;
+                    // Vor der ersten Lösung gibt es keinen Stillstand, sondern nur Suche.
+                    //
+                    // Ohne diese Zeile fiel lastImprovementNanos auf den Startzeitpunkt zurück,
+                    // der Wachhund maß also "Zeit seit Beginn" und hielt den Löser nach
+                    // solverMinMs + solverStallMs an - auch wenn der noch gar keine Lösung
+                    // gefunden HATTE. Bei rund 75 offenen Aufgaben braucht Phase 2 länger als
+                    // diese knappe Sekunde bis zur ersten Lösung; sie wurde abgewürgt, der
+                    // Wiederholungslauf konnte die Phase-1-Lösung in seiner einen Sekunde
+                    // ebenfalls nicht wiederherstellen, und der ganze Lauf endete auf UNKNOWN -
+                    // der Kalender blieb stehen, ohne dass irgendetwas als gefährdet gemeldet
+                    // wurde. Mehr Budget half nicht, weil der Abbruch nicht am Budget hing.
+                    //
+                    // Die harte Decke aus setMaxTimeInSeconds begrenzt den Fall weiterhin.
+                    if (!probe.hatLoesung()) continue;
                     if ((jetzt - probe.lastImprovementNanos(start)) / 1_000_000 > solverStallMs) {
                         solver.stopSearch();
                         return;
@@ -2289,12 +2498,20 @@ public class SmartSchedulerService {
         private volatile double referenz = Double.MAX_VALUE;
         private volatile long   lastImprovementNanos;
 
+        /** Ob überhaupt schon eine Lösung kam - erst danach kann es Stillstand geben. */
+        private volatile boolean hatLoesung;
+
         StallProbe(double epsilon) {
             this.epsilon = epsilon;
         }
 
+        boolean hatLoesung() {
+            return hatLoesung;
+        }
+
         @Override
         public void onSolutionCallback() {
+            hatLoesung = true;
             double obj = objectiveValue();
             // Die erste Lösung zählt immer als Fortschritt. Bei einem Zielwert von 0 fällt der
             // Nenner weg — dann ist ohnehin nichts mehr zu holen und alles Weitere ist Stillstand.
@@ -2327,6 +2544,18 @@ public class SmartSchedulerService {
      * der i-te Slot den i-ten Vorgänger.
      */
     private void addWeekGroupConstraints(CpModel model, List<Placeable> group, Collection<Integer> days) {
+        addAtMostOnePerDay(model, group, days);
+        addChronologicalOrder(model, group);
+    }
+
+    /**
+     * Höchstens eine dieser Einheiten pro Tag.
+     *
+     * <p>Getrennt von der Ordnung, weil beide für unterschiedliche Teilmengen gelten können: bei
+     * Trainings muss "einer pro Tag" über <em>alle</em> Einheiten der Woche greifen, die
+     * Symmetriebrechung dagegen nur über die untereinander austauschbaren.
+     */
+    private void addAtMostOnePerDay(CpModel model, List<Placeable> group, Collection<Integer> days) {
         for (int day : days) {
             List<Literal> sameDay = new ArrayList<>();
             for (Placeable p : group) {
@@ -2335,7 +2564,17 @@ public class SmartSchedulerService {
             }
             if (sameDay.size() > 1) model.addAtMostOne(sameDay);
         }
+    }
 
+    /**
+     * Chronologische Ordnung als Symmetriebrechung.
+     *
+     * <p>Nur für Slots, die untereinander <b>austauschbar</b> sind. Auf Einheiten mit festem Tag
+     * angewandt wäre sie ein Widerspruch statt einer Hilfe: liegt der Wunschtag der ersten
+     * Einheit hinter dem der zweiten, ist die Ordnung unerfüllbar und der Solver verwirft beide,
+     * statt sie einfach an ihre Tage zu legen.
+     */
+    private void addChronologicalOrder(CpModel model, List<Placeable> group) {
         for (int i = 1; i < group.size(); i++) {
             Placeable a = group.get(i - 1);
             Placeable b = group.get(i);
@@ -2365,25 +2604,35 @@ public class SmartSchedulerService {
                                 String groupName, List<IntVar> qVars, List<Long> qWeights) {
         List<Integer> sorted = days.stream().sorted().toList();
 
-        if (restDaysFit(sorted, group.size())) {
+        // gaps[i] ist der Wunschabstand zwischen Einheit i-1 und i, in Tagen.
+        int[] gaps = new int[group.size()];
+        for (int i = 1; i < group.size(); i++) {
+            gaps[i] = restDaysBetween(group.get(i - 1), group.get(i));
+        }
+
+        if (restDaysFit(sorted, gaps)) {
             for (int i = 1; i < group.size(); i++) {
                 Placeable a = group.get(i - 1);
                 Placeable b = group.get(i);
-                // "a am Tag d" schließt "b am Tag d+1" aus. Denselben Tag verbietet bereits das
-                // addAtMostOne aus addWeekGroupConstraints, die Reihenfolge die dortige Ordnung.
+                // "a am Tag d" schließt "b" auf den folgenden gaps[i]-1 Tagen aus. Denselben Tag
+                // verbietet bereits das addAtMostOne aus addWeekGroupConstraints, die Reihenfolge
+                // die dortige Ordnung.
                 for (int d : sorted) {
                     BoolVar ad = a.inDay.get(d);
-                    BoolVar bd = b.inDay.get(d + 1);
-                    if (ad != null && bd != null) model.addImplication(ad, bd.not());
+                    if (ad == null) continue;
+                    for (int offset = 1; offset < gaps[i]; offset++) {
+                        BoolVar bd = b.inDay.get(d + offset);
+                        if (bd != null) model.addImplication(ad, bd.not());
+                    }
                 }
             }
             return;
         }
 
-        int wanted = REST_DAYS_BETWEEN_WORKOUTS * SLOTS_PER_DAY;
         for (int i = 1; i < group.size(); i++) {
             Placeable a = group.get(i - 1);
             Placeable b = group.get(i);
+            int wanted = gaps[i] * SLOTS_PER_DAY;
 
             IntVar shortfall = model.newIntVar(0, wanted, "rest_" + groupName + "_" + i);
             // shortfall >= wanted - (b.start - a.start); die Minimierung drückt ihn auf genau
@@ -2435,25 +2684,63 @@ public class SmartSchedulerService {
     }
 
     /**
-     * Lassen sich {@code k} der erlaubten Tage mit je einem Ruhetag dazwischen auswählen?
+     * Lassen sich die erlaubten Tage so belegen, dass jedes Paar seinen Wunschabstand bekommt?
      *
-     * Gierig von vorn: der früheste zulässige Tag ist immer eine optimale Wahl, weil er die
+     * <p>{@code gaps[i]} ist der geforderte Abstand zwischen Einheit i-1 und i; {@code gaps[0]}
+     * bleibt ungenutzt, die erste Einheit hat keinen Vorgänger.
+     *
+     * <p>Gierig von vorn: der früheste zulässige Tag ist immer eine optimale Wahl, weil er die
      * meisten Möglichkeiten für die restlichen offen lässt. Damit ist die Antwort exakt und die
      * harte Variante oben beweisbar erfüllbar — sie kann also keine Einheit kosten.
      */
-    private boolean restDaysFit(List<Integer> sortedDays, int k) {
+    private boolean restDaysFit(List<Integer> sortedDays, int[] gaps) {
+        int k = gaps.length;
         if (k <= 1) return true;
 
         int used = 0;
         Integer last = null;
         for (int d : sortedDays) {
-            if (last == null || d - last >= REST_DAYS_BETWEEN_WORKOUTS) {
+            if (last == null || d - last >= gaps[used]) {
                 used++;
                 last = d;
                 if (used >= k) return true;
             }
         }
         return false;
+    }
+
+    /**
+     * Wie viele Tage sollen zwischen diesen beiden Einheiten liegen?
+     *
+     * <p>Nach der Ueberschneidung der primaer beanspruchten Muskeln (Jaccard): zwei Einheiten,
+     * die dieselben Muskeln treffen, bekommen {@link #REST_DAYS_MAX}, zwei ohne gemeinsamen
+     * Muskel {@link #REST_DAYS_MIN}. Bei halber Ueberschneidung kommt {@link #REST_DAYS_DEFAULT}
+     * heraus - der Wert, der frueher fuer alle Paare galt.
+     *
+     * <p>Weiss der Planer ueber eine der beiden nichts (freie Einheit ohne Routine, oder eine
+     * Routine ohne Uebungen), bleibt es beim bisherigen Abstand. Geraten wird nicht: eine
+     * Einheit ohne bekannte Muskeln als "ueberschneidungsfrei" zu behandeln haette zwei
+     * Trainings an aufeinanderfolgenden Tagen zur Folge, nur weil eine Zuordnung fehlt.
+     */
+    private int restDaysBetween(Placeable a, Placeable b) {
+        return restDaysBetween(a.muscles, b.muscles);
+    }
+
+    /** @see #restDaysBetween(Placeable, Placeable) */
+    static int restDaysBetween(Set<MuscleGroup> a, Set<MuscleGroup> b) {
+        if (a.isEmpty() || b.isEmpty()) {
+            return REST_DAYS_DEFAULT;
+        }
+        Set<MuscleGroup> shared = new HashSet<>(a);
+        shared.retainAll(b);
+        if (shared.isEmpty()) {
+            return REST_DAYS_MIN;
+        }
+        Set<MuscleGroup> union = new HashSet<>(a);
+        union.addAll(b);
+
+        double overlap = (double) shared.size() / union.size();
+        return REST_DAYS_MIN + (int) Math.round(overlap * (REST_DAYS_MAX - REST_DAYS_MIN));
     }
 
     /**
@@ -2507,7 +2794,7 @@ public class SmartSchedulerService {
      * Fenster ist genau so groß, wie es sein muss.
      */
     private TaskBounds taskBounds(Task task, Axis axis, int defaultLastDay, int nowSlot,
-                                  int earliestSlot) {
+                                  int earliestSlot, int deadlineBufferSlots, int restSlots) {
         int maxDay = axis.totalDays - 1;
         int lastDay;
         Integer latestEnd = null;
@@ -2517,9 +2804,14 @@ public class SmartSchedulerService {
         } else {
             int deadlineSlot = axis.floorSlot(task.getDeadline());
             if (deadlineSlot <= nowSlot) {
-                // Überfällig: die Deadline als Obergrenze wäre leer, jede Lage ist zu spät.
-                // Stattdessen ein kurzes Nachhol-Fenster ab jetzt — der weiche late-Term sorgt
-                // darin weiter für "so früh wie möglich".
+                // Überfälliges kommt hier normalerweise gar nicht mehr an: es wird vom Vorlauf
+                // (solveOverduePass) platziert, und seine Gruppe wird im Hauptmodell übersprungen.
+                //
+                // Der Zweig bleibt trotzdem stehen, und zwar als Sicherung, nicht als toter Code:
+                // die Deadline wäre als Obergrenze leer (sie liegt hinter uns), das Fenster damit
+                // leer, und der Task würde LAUTLOS verworfen. Rutscht durch eine spätere Änderung
+                // doch einmal etwas Überfälliges hierher, bekommt es wenigstens dasselbe kurze
+                // Nachhol-Fenster wie früher, statt still zu verschwinden.
                 lastDay = Math.min(maxDay, nowSlot / SLOTS_PER_DAY + CATCHUP_DAYS);
             } else {
                 // Der Nahbereich bleibt die Obergrenze, auch wenn die Deadline weiter weg liegt.
@@ -2529,9 +2821,26 @@ public class SmartSchedulerService {
                 // Bestand blieb sie bei Drop 28200 statt 800 stehen und ließ 16 von 17 Aufgaben
                 // ungeplant. Für die Deadline kostet der Deckel nichts — eine Aufgabe, die schon
                 // in den nächsten 14 Tagen eingeplant wird, reißt einen Termin in vier Wochen nicht.
-                lastDay = Math.min(defaultLastDay, deadlineSlot / SLOTS_PER_DAY);
-                // Die scharfe Endzeit nur, wenn die Deadline auch wirklich im Fenster liegt.
-                if (deadlineSlot / SLOTS_PER_DAY <= defaultLastDay) latestEnd = deadlineSlot;
+                //
+                // Gezielt wird dabei auf den PUFFER, nicht auf die Deadline: "geplant" und "auf
+                // Kante genäht" waren vorher dasselbe.
+                //
+                // Der Puffer schrumpft aber mit, und zwar nach ZWEI Grenzen — er darf eine Deadline
+                // niemals unerreichbar machen:
+                //   * höchstens die Hälfte der noch verfügbaren Zeit, und
+                //   * niemals so viel, dass die Restdauer der Aufgabe nicht mehr hineinpasst.
+                // Die zweite Grenze fehlte zuerst und war teuer: eine Aufgabe über 120 Minuten mit
+                // Deadline in zweieinhalb Stunden bekam ein Fenster von 75 Minuten, passte dort
+                // nicht und fiel komplett aus dem Hauptlauf — die Nachläufe konnten sie danach nur
+                // noch in Lücken legen, statt ihr im Hauptlauf Vorrang zu verschaffen.
+                int verfuegbar = deadlineSlot - Math.max(nowSlot, earliestSlot);
+                int puffer     = Math.min(deadlineBufferSlots, Math.max(0, verfuegbar / 2));
+                puffer         = Math.min(puffer, Math.max(0, verfuegbar - restSlots));
+                int zielSlot   = deadlineSlot - puffer;
+
+                lastDay = Math.min(defaultLastDay, zielSlot / SLOTS_PER_DAY);
+                // Die scharfe Endzeit nur, wenn das Ziel auch wirklich im Fenster liegt.
+                if (zielSlot / SLOTS_PER_DAY <= defaultLastDay) latestEnd = zielSlot;
             }
         }
 
@@ -2579,6 +2888,94 @@ public class SmartSchedulerService {
     }
 
     /**
+     * Die Reihenfolge gleich dringender Aufgaben innerhalb eines Tages.
+     *
+     * <p><b>Warum das nicht über ein Gewicht auf {@code p.start} geht.</b> {@link #dayOrderRank}
+     * ordnet den Tag, hat für die Deadline aber nur ein Bit — und dieses Bit lässt sich nicht
+     * verbreitern: der Rang muss unter {@code W_MOVE_FIXED / SLOTS_PER_DAY} bleiben, und
+     * {@code W_MOVE_FIXED} selbst ist nach oben durch die Deadline-Strafe gedeckelt. Ein Versuch
+     * mit vier Stufen erdrückte prompt das Leistungshoch: beide Terme wirken PRO SLOT und
+     * konkurrieren deshalb direkt um denselben Spielraum, der längst ausgeschöpft ist.
+     *
+     * <p>Gemessen sah der Fehler so aus: drei gleich wichtige Aufgaben mit Terminen an drei
+     * aufeinanderfolgenden Tagen bekamen alle denselben Rang, ihre Reihenfolge am Tag war damit
+     * beliebig — und sie landeten in genau umgekehrter Reihenfolge im Kalender.
+     *
+     * <p><b>Die Lösung ist relativ statt absolut.</b> Bestraft wird nicht mehr "spät liegen",
+     * sondern "am selben Tag in der falschen Reihenfolge liegen". Ein solcher Term hat keine
+     * Meinung über die Uhrzeit und konkurriert deshalb mit keinem Wunschzeit-Term: das
+     * Leistungshoch darf beide Blöcke verschieben, solange ihre Reihenfolge stimmt.
+     *
+     * <p>Gebaut wird nur, was die Gewichte offenlassen: Aufgaben werden nach ihrem
+     * {@code dayOrderRank} gruppiert — gleicher Rang heißt "das Modell kann sie nicht
+     * unterscheiden", seit dessen Vereinfachung also nach Priorität —, innerhalb der Gruppe nach
+     * Termin sortiert und je zwei BENACHBARTE verknüpft. Nachbarpaare genügen: stimmt jedes Paar,
+     * stimmt die ganze Kette. Damit bleibt es bei O(n) statt O(n²), und Gruppen mit einem einzigen
+     * Mitglied kosten gar nichts.
+     */
+    private void addTaskOrderPreference(CpModel model, Map<Long, List<TaskChunk>> chunksByTask,
+                                        LocalDate startDate, List<IntVar> qVars,
+                                        List<Long> qWeights) {
+        // Der erste Chunk vertritt seine Aufgabe: die Chunk-Verkettung hält ihn ohnehin vorn.
+        List<TaskChunk> vertreter = chunksByTask.values().stream()
+                .filter(g -> !g.isEmpty())
+                .map(g -> g.get(0))
+                .filter(c -> c.placeable != null)
+                .collect(Collectors.toList());
+        if (vertreter.size() < 2) return;
+
+        Map<Integer, List<TaskChunk>> gruppen = vertreter.stream()
+                .collect(Collectors.groupingBy(c -> dayOrderRank(c.task, startDate),
+                        LinkedHashMap::new, Collectors.toList()));
+
+        for (List<TaskChunk> gruppe : gruppen.values()) {
+            if (gruppe.size() < 2) continue;
+            gruppe.sort(Comparator
+                    .comparing((TaskChunk c) -> c.task.getDeadline(),
+                            Comparator.nullsLast(Comparator.naturalOrder()))
+                    .thenComparing(c -> c.task.getId()));
+            for (int i = 1; i < gruppe.size(); i++) {
+                addSameDayOrder(model, gruppe.get(i - 1).placeable, gruppe.get(i).placeable,
+                        qVars, qWeights,
+                        gruppe.get(i - 1).task.getId() + "_" + gruppe.get(i).task.getId());
+            }
+        }
+    }
+
+    /**
+     * Straft, dass {@code spaeter} am selben Tag VOR {@code frueher} beginnt.
+     *
+     * Die Vertauschung wird einmal reifiziert und dann mit jedem gemeinsamen Tag verknüpft.
+     * Bewusst nur auf gemeinsamen Tagen: liegen die beiden an verschiedenen Tagen, ist ihre
+     * Reihenfolge Sache der Dringlichkeit, und dort entscheidet sie {@link #urgencyRank}.
+     */
+    private void addSameDayOrder(CpModel model, Placeable frueher, Placeable spaeter,
+                                 List<IntVar> qVars, List<Long> qWeights, String name) {
+        BoolVar vertauscht = model.newBoolVar("vt_" + name);
+        model.addGreaterOrEqual(LinearExpr.newBuilder()
+                .addTerm(frueher.start, 1).addTerm(spaeter.start, -1).build(), 1)
+             .onlyEnforceIf(vertauscht);
+        model.addLessOrEqual(LinearExpr.newBuilder()
+                .addTerm(frueher.start, 1).addTerm(spaeter.start, -1).build(), 0)
+             .onlyEnforceIf(vertauscht.not());
+
+        for (Map.Entry<Integer, BoolVar> e : frueher.inDay.entrySet()) {
+            BoolVar bTag = spaeter.inDay.get(e.getKey());
+            if (bTag == null) continue;
+
+            // verletzt >= aTag + bTag + vertauscht - 2. Eine untere Schranke genügt: minimiert
+            // wird, also bleibt verletzt von selbst 0, wo es darf. Über inDay ist zugleich die
+            // Präsenz mit abgedeckt — ein verworfener Block hat keine Tages-Boolean auf 1.
+            BoolVar verletzt = model.newBoolVar("vl_" + name + "_" + e.getKey());
+            model.addLessOrEqual(LinearExpr.newBuilder()
+                    .addTerm(e.getValue(), 1).addTerm(bTag, 1).addTerm(vertauscht, 1)
+                    .addTerm(verletzt, -1).build(), 2);
+            qVars.add(verletzt);
+            qWeights.add(W_ORDER);
+        }
+    }
+
+    /**
      * Hält einen Block auf seiner bisherigen Lage — mit einer Totzone statt einer reinen
      * Wegstrecken-Strafe.
      *
@@ -2590,20 +2987,53 @@ public class SmartSchedulerService {
      * Schwelle verschoben; falsch war die FORM.
      *
      * Deshalb zusätzlich ein fester Preis dafür, sich überhaupt zu bewegen. Die Höhe ist gegen die
-     * übrigen Gewichte gerechnet:
+     * übrigen Gewichte gerechnet — seit dem Umbau auf strikte Priorität konservativ gegen eine
+     * VOLLE Tagesspanne (96 Slots) statt gegen die Arbeitszeit, damit die Rechnung nicht von den
+     * eingestellten Arbeitszeiten abhängt:
      * <ul>
-     *   <li>{@code 400 > W_PEAK * prio_max * maxAbweichung = 2*5*36 = 360} — das Leistungshoch
-     *       kann einen liegenden Block nie mehr allein bewegen. Damit ist das Springen weg.</li>
-     *   <li>{@code 400 > W_URGENCY * 3 * 1 * SLOTS_PER_DAY = 288} für den Regelfall (Prio 3, keine
-     *       Deadline) — "früher ist besser" wirft einen fertigen Plan nicht mehr um.</li>
-     *   <li>{@code 400 < W_LATE * prio * SLOTS_PER_DAY >= 3840} — eine Deadline erzwingt die
-     *       Bewegung weiterhin, immer. Genau das soll sie auch.</li>
+     *   <li>{@code 1200 > dayOrderRank_max * SLOTS_PER_DAY = 5*96 = 480} — "früher am Tag ist
+     *       besser" ordnet, wirft aber keinen fertigen Plan um.</li>
+     *   <li>{@code 1200 > W_ORDER = 200} — dasselbe für die Reihenfolge-Präferenz.</li>
+     *   <li>{@code 1200 > W_PEAK * prio_max * SLOTS_PER_DAY = 2*5*96 = 960} — das Leistungshoch
+     *       kann einen liegenden Block nie allein bewegen. Damit ist das Springen weg.</li>
+     *   <li>{@code 1200 > urgencyRank_max * (SLOTS_PER_DAY/4) = 22*24 = 528} — "früher ist besser"
+     *       wirft einen fertigen Plan nicht mehr um.</li>
+     *   <li>{@code 1200 < W_LATE * prio * SLOTS_PER_DAY >= 3840} — ein ganzer Tag Verspätung
+     *       erzwingt die Bewegung weiterhin, für jede Priorität.</li>
      * </ul>
+     * Der Wert stand lange auf 400 und war gegen die damals viel flacheren Ordnungsterme gerechnet
+     * (Deadline-Stufe 1..3 statt eines Prioritätsrangs). Mit den neuen Rängen wäre er zu klein: der
+     * Kalender hätte wieder angefangen zu springen. Die Totzone ist also kein freier Parameter,
+     * sondern das Maximum aller Terme, die einen Block bewegen dürfen SOLLEN, außer der Deadline.
+     *
+     * <p><b>Warum nicht höher.</b> Ein Versuch mit 2400 sollte {@link #dayOrderRank} mehr Auflösung
+     * für die Deadline geben. Arithmetisch ging das auf, praktisch nicht: der Ordnungsterm überbot
+     * damit das Leistungshoch, und die Wunschzeit-Einstellung hatte keine Wirkung mehr. Beide Terme
+     * wirken pro Slot und konkurrieren deshalb direkt um denselben Spielraum. Gelöst wurde das
+     * nicht durch mehr Spielraum, sondern indem die Reihenfolge aus dem Slot-Gewicht herauswanderte
+     * (siehe {@link #addTaskOrderPreference}) — seither ist der Spielraum reichlich.
+     *
+     * Nebenwirkung, gemessen erwünscht: eine höhere Totzone lässt Phase 2 im Wiederholungslauf
+     * früher in den Stillstandsabbruch laufen — der Warmlauf wird davon eher schneller.
+     *
      * Die Wegstrecke bleibt zusätzlich im Ziel: muss ein Block weichen, soll er möglichst nah an
      * seiner alten Lage landen und nicht irgendwo.
      */
     private void addStabilityTerm(CpModel model, Placeable p, Integer previousSlot, Axis axis,
                                   List<IntVar> qVars, List<Long> qWeights, String name) {
+        addStabilityTerm(model, p, previousSlot, axis, qVars, qWeights, name, W_MOVE_FIXED, W_MOVE);
+    }
+
+    /**
+     * Wie oben, mit eigenen Gewichten — für den Vorlauf, der eine ANDERE Abwägung braucht.
+     *
+     * Dort ist die Totzone ausdrücklich 0: ein überfälliger Block soll jeden früheren Slot
+     * gewinnen dürfen, der frei geworden ist. Übrig bleibt die Wegstrecke mit Gewicht 1, und die
+     * wirkt nur noch als Gleichstandsbrecher zwischen ansonsten gleichwertigen Lagen.
+     */
+    private void addStabilityTerm(CpModel model, Placeable p, Integer previousSlot, Axis axis,
+                                  List<IntVar> qVars, List<Long> qWeights, String name,
+                                  long fixedWeight, long perSlotWeight) {
         if (previousSlot == null) return;
         p.previousSlot = previousSlot;
 
@@ -2616,14 +3046,16 @@ public class SmartSchedulerService {
         IntVar move = model.newIntVar(0, axis.horizonSlots, "move_" + name);
         model.addAbsEquality(move, diff);
 
-        BoolVar moved = model.newBoolVar("moved_" + name);
-        model.addEquality(move, 0).onlyEnforceIf(moved.not());
-        model.addGreaterOrEqual(move, 1).onlyEnforceIf(moved);
-
-        qVars.add(moved);
-        qWeights.add(W_MOVE_FIXED);
+        // Die Totzone braucht eine eigene Boolean; bei Gewicht 0 wäre sie nur totes Modell.
+        if (fixedWeight > 0) {
+            BoolVar moved = model.newBoolVar("moved_" + name);
+            model.addEquality(move, 0).onlyEnforceIf(moved.not());
+            model.addGreaterOrEqual(move, 1).onlyEnforceIf(moved);
+            qVars.add(moved);
+            qWeights.add(fixedWeight);
+        }
         qVars.add(move);
-        qWeights.add(W_MOVE);
+        qWeights.add(perSlotWeight);
     }
 
     /**
@@ -2708,7 +3140,63 @@ public class SmartSchedulerService {
      * was wirklich fehlt. Deshalb landet die Platzierung nur im Chunk selbst; die Items baut
      * {@link #buildTaskItems}, die Meldungen {@link #classifyAtRisk} — beides nach allen Pässen.
      */
-    private SolveOutcome extract(CpSolver solver, CpSolverStatus status, List<TaskChunk> chunks,
+    /**
+     * Woher die Platzierung eines {@link Placeable} kommt.
+     *
+     * <p>Im Regelfall direkt aus dem Löser. Scheitert Phase 2, steht dort aber keine gültige
+     * Belegung mehr - dann liefert der Schnappschuss aus Phase 1. Beide liefern dieselben zwei
+     * Werte, deshalb reicht diese schmale Abstraktion statt zweier Auslesepfade.
+     */
+    private interface Platzierung {
+        boolean vorhanden(Placeable p);
+
+        int startSlot(Placeable p);
+    }
+
+    /** Liest direkt aus dem Löser - der Normalfall nach einer erfolgreichen Phase 2. */
+    private static Platzierung ausLoeser(CpSolver solver) {
+        return new Platzierung() {
+            @Override
+            public boolean vorhanden(Placeable p) {
+                return Boolean.TRUE.equals(solver.booleanValue(p.present));
+            }
+
+            @Override
+            public int startSlot(Placeable p) {
+                return (int) solver.value(p.start);
+            }
+        };
+    }
+
+    /**
+     * Friert die aktuelle Lösung ein, damit sie eine spätere Modelländerung überlebt.
+     *
+     * <p>{@link IdentityHashMap}, weil {@link Placeable} kein {@code equals} hat und auch keins
+     * haben soll: zwei Blöcke gleicher Länge am selben Tag sind verschiedene Blöcke.
+     */
+    private static Platzierung schnappschuss(CpSolver solver, List<Placeable> alle) {
+        Map<Placeable, int[]> werte = new IdentityHashMap<>();
+        for (Placeable p : alle) {
+            werte.put(p, new int[]{
+                    Boolean.TRUE.equals(solver.booleanValue(p.present)) ? 1 : 0,
+                    (int) solver.value(p.start)});
+        }
+        return new Platzierung() {
+            @Override
+            public boolean vorhanden(Placeable p) {
+                int[] v = werte.get(p);
+                return v != null && v[0] == 1;
+            }
+
+            @Override
+            public int startSlot(Placeable p) {
+                int[] v = werte.get(p);
+                return v == null ? 0 : v[1];
+            }
+        };
+    }
+
+    private SolveOutcome extract(Platzierung platzierung, CpSolverStatus status, List<TaskChunk> chunks,
                                  List<HabitSlot> habitSlots, List<WorkoutSession> flexibleWorkouts,
                                  Map<Long, Placeable> workoutPlaceables,
                                  List<ProjectSlot> projectSlots, Axis axis) {
@@ -2717,20 +3205,20 @@ public class SmartSchedulerService {
 
         // --- Tasks: nur festhalten, wo der Hauptlauf sie hingelegt hat ---
         for (TaskChunk c : chunks) {
-            if (c.placeable != null && Boolean.TRUE.equals(solver.booleanValue(c.placeable.present))) {
-                c.placedStartSlot = (int) solver.value(c.placeable.start);
+            if (c.placeable != null && platzierung.vorhanden(c.placeable)) {
+                c.placedStartSlot = platzierung.startSlot(c.placeable);
                 c.reliefLevel = 0;
             }
         }
 
         // --- Habits ---
         for (HabitSlot s : habitSlots) {
-            if (s.placeable == null || !Boolean.TRUE.equals(solver.booleanValue(s.placeable.present))) {
+            if (s.placeable == null || !platzierung.vorhanden(s.placeable)) {
                 atRisk.add(AtRiskItem.forHabit(s.habit.getId(), s.habit.getName(),
                         s.durationMinutes, AtRiskReason.NO_ROOM));
                 continue;
             }
-            LocalDateTime start = axis.timeOf((int) solver.value(s.placeable.start));
+            LocalDateTime start = axis.timeOf(platzierung.startSlot(s.placeable));
             ScheduledItem item = new ScheduledItem();
             item.setHabit(s.habit);
             // Nur flexible Slots haben eine Wochenquote; feste Wochentags-Habits (weekStart null)
@@ -2746,9 +3234,9 @@ public class SmartSchedulerService {
         // --- Flexible Workouts ---
         for (WorkoutSession w : flexibleWorkouts) {
             Placeable p = workoutPlaceables.get(w.getId());
-            if (p == null || !Boolean.TRUE.equals(solver.booleanValue(p.present))) continue;
+            if (p == null || !platzierung.vorhanden(p)) continue;
 
-            LocalDateTime start = axis.timeOf((int) solver.value(p.start));
+            LocalDateTime start = axis.timeOf(platzierung.startSlot(p));
             LocalDateTime end   = start.plusMinutes(p.realMinutes);
             w.setStartTime(start);
             w.setEndTime(end);
@@ -2766,9 +3254,9 @@ public class SmartSchedulerService {
         // Kein AtRiskItem: eine nicht platzierbare Session fällt still weg — sie ist Wochenquote,
         // keine Zusage, und steht nächste Woche wieder zur Verfügung (wie beim flexiblen Workout).
         for (ProjectSlot s : projectSlots) {
-            if (s.placeable == null || !Boolean.TRUE.equals(solver.booleanValue(s.placeable.present))) continue;
+            if (s.placeable == null || !platzierung.vorhanden(s.placeable)) continue;
 
-            LocalDateTime start = axis.timeOf((int) solver.value(s.placeable.start));
+            LocalDateTime start = axis.timeOf(platzierung.startSlot(s.placeable));
             ScheduledItem item = new ScheduledItem();
             item.setProject(s.project);
             item.setStartTime(start);
@@ -2788,7 +3276,8 @@ public class SmartSchedulerService {
      * leerem Kalender packt der Solver alle Chunks hintereinander; würde man die dann verschmelzen,
      * wäre vom Chunking genau im häufigsten Fall nichts mehr zu sehen.
      */
-    private List<ScheduledItem> buildTaskItems(List<TaskChunk> chunks, Axis axis) {
+    private List<ScheduledItem> buildTaskItems(List<TaskChunk> chunks, Axis axis,
+                                               int deadlineBufferSlots) {
         List<ScheduledItem> items = new ArrayList<>();
         Map<Long, List<TaskChunk>> byTask = chunks.stream()
                 .filter(c -> c.placedStartSlot != null)
@@ -2808,6 +3297,16 @@ public class SmartSchedulerService {
                 item.setChunkIndex(i + 1);
                 item.setChunkCount(group.size());
                 item.setReliefLevel(c.reliefLevel);
+
+                // Ehrlichkeit im Kalender: liegt das Ende hinter dem Pufferziel, ist die Aufgabe
+                // zwar rechtzeitig geplant, aber ohne Reserve. Bewusst am tatsächlichen Ende
+                // gemessen und nicht am reliefLevel — der sagt nur, WELCHER Pass den Block
+                // untergebracht hat, nicht, wie knapp es geworden ist.
+                if (deadlineBufferSlots > 0 && c.task.getDeadline() != null) {
+                    int endSlot  = c.placedStartSlot + Axis.slotsFor(c.durationMinutes);
+                    int zielSlot = axis.floorSlot(c.task.getDeadline()) - deadlineBufferSlots;
+                    item.setInsideDeadlineBuffer(endSlot > zielSlot);
+                }
                 items.add(item);
             }
         }
@@ -2874,6 +3373,652 @@ public class SmartSchedulerService {
     }
 
     // =========================================================================
+    // VORLAUF: ÜBERFÄLLIGES
+    // =========================================================================
+
+    /**
+     * Eskalationsstufen des Nachhol-Fensters, in Tagen ab jetzt.
+     *
+     * {@link #CATCHUP_DAYS} bleibt der WUNSCH — "überfällig" heißt "jetzt", nicht "irgendwann
+     * diesen Monat". Es ist nur keine Decke mehr: vorher war die 3 eine harte Grenze, und war in
+     * diesen drei Tagen nichts frei, bekam die Aufgabe GAR KEINEN Nachholtermin, sondern nur eine
+     * Meldung. Genau das war die Beschwerde. Jede weitere Stufe läuft nur, wenn die vorige nicht
+     * alles untergebracht hat — im Regelfall wird nur die erste je gerechnet.
+     */
+    private static final int[] OVERDUE_WINDOW_DAYS = { CATCHUP_DAYS, 7, 14 };
+
+    /**
+     * Platziert überfällige Aufgaben VOR allem anderen und so früh wie möglich.
+     *
+     * <p><b>Warum ein Vorlauf und nicht ein stärkeres Gewicht im Hauptlauf.</b> Bis hierher lief
+     * Überfälliges im Hauptmodell mit — in der Arbeitszeit, unter {@link #addDailyLoadLimits} und
+     * in Konkurrenz zu allem anderen. Fiel es dort heraus, blieben nur die Nachläufe, und die
+     * können ausdrücklich <em>nur auffüllen, nie verdrängen</em> (siehe {@link #solveReliefPass}).
+     * Waren die nächsten Tage mit Gewohnheiten, Trainings und nicht einmal überfälligen Aufgaben
+     * belegt, bekam der gerissene Termin nichts. Ein größeres Gewicht hätte daran nichts geändert:
+     * das Problem war die Reihenfolge, nicht die Höhe.
+     *
+     * <p>Hier ist es umgekehrt. Der Pass sieht nur, was wirklich unverrückbar ist — Vergangenes,
+     * Gepinntes, Vorlesungen, feste Trainings ({@code blocked}) —, legt seine Blöcke in die
+     * frühesten freien Slots und hängt sie an {@code blocked} an. Das Hauptmodell findet die Zeit
+     * anschließend als belegt vor und plant alles andere darum herum. Verdrängen wird damit zur
+     * Nebenwirkung der Reihenfolge und braucht keine eigene Regel.
+     *
+     * <p>Gebrochen werden dabei genau zwei Regeln, beide bewusst:
+     * <ul>
+     *   <li><b>Die Arbeitszeit</b> — es gilt das gelockerte Fenster {@code relief-day-start/-end}
+     *       (07–22). Der Termin ist gerissen; ein Block um halb neun abends ist das kleinere Übel.
+     *       Die Nacht bleibt trotzdem tabu, sonst "rettet" der Löser jede Deadline um vier Uhr früh.</li>
+     *   <li><b>Die Tagesdeckel</b> — {@code addDailyLoadLimits} läuft hier nicht. Die Begründung
+     *       steht schon an {@link #addReliefDayCaps}: die Alternative zum überzogenen Tagesdeckel
+     *       ist kein entspannter Tag, sondern ein Nachholtermin, den es gar nicht gibt.</li>
+     * </ul>
+     * {@code maxChunksPerDay} gilt dagegen weiter. Es ist kein Kapazitätsdeckel, sondern eine
+     * Aussage über DIESE Aufgabe ("höchstens zwei Blöcke am Tag"), und sie zu ignorieren würde
+     * acht Stunden desselben Tasks auf heute stapeln — das ist kein Nachholen, das ist ein
+     * unbrauchbarer Tag.
+     *
+     * @param blocked wird um die neu belegten Slots ERWEITERT
+     * @return wie viele Chunks der Vorlauf untergebracht hat
+     */
+    private int solveOverduePass(List<TaskChunk> chunks, List<int[]> blocked, Axis axis,
+                                 UserPreferences prefs, int nowSlot, int gapSlots,
+                                 Map<String, Integer> previousStarts) {
+        List<TaskChunk> ueberfaellig = chunks.stream()
+                .filter(c -> istUeberfaellig(c, axis, nowSlot))
+                .collect(Collectors.toList());
+        if (ueberfaellig.isEmpty()) return 0;
+
+        // Index innerhalb der eigenen Aufgabe — der Schlüssel des Stabilitätsankers.
+        Map<TaskChunk, Integer> chunkIndex = new HashMap<>();
+        Map<Long, Integer> laufend = new HashMap<>();
+        for (TaskChunk c : chunks) {
+            chunkIndex.put(c, laufend.merge(c.task.getId(), 0, (a, b) -> a + 1));
+        }
+
+        int[] fenster = tagesFenster(prefs);
+        int platziert = 0;
+        for (int fensterTage : OVERDUE_WINDOW_DAYS) {
+            List<TaskChunk> offen = ueberfaellig.stream()
+                    .filter(c -> c.placedStartSlot == null)
+                    .collect(Collectors.toList());
+            if (offen.isEmpty()) break;
+            platziert += solveOverdueWindow(offen, blocked, axis, nowSlot, gapSlots,
+                    fenster[0], fenster[1], fensterTage, chunkIndex, previousStarts);
+        }
+
+        if (platziert < ueberfaellig.size()) {
+            log.warn("Vorlauf: {} von {} überfälligen Blöcken konnten auch in {} Tagen nicht "
+                            + "untergebracht werden", ueberfaellig.size() - platziert,
+                    ueberfaellig.size(), OVERDUE_WINDOW_DAYS[OVERDUE_WINDOW_DAYS.length - 1]);
+        }
+        return platziert;
+    }
+
+    /** Das gelockerte Tagesfenster (07–22), gemeinsam genutzt von Vorlauf und Quetsch-Nachlauf. */
+    private int[] tagesFenster(UserPreferences prefs) {
+        int lo = minuteOfDay(parseZeit(reliefDayStart, LocalTime.of(7, 0))) / GRID;
+        int hi = minuteOfDay(parseZeit(reliefDayEnd, LocalTime.of(22, 0))) / GRID;
+        if (hi <= lo) {   // defensiv gegen Fehlkonfiguration
+            lo = 0;
+            hi = SLOTS_PER_DAY;
+        }
+        return new int[]{ lo, hi };
+    }
+
+    /** Eine Eskalationsstufe des Vorlaufs: ein eigenes, winziges Modell über {@code fensterTage}. */
+    private int solveOverdueWindow(List<TaskChunk> offen, List<int[]> blocked, Axis axis,
+                                   int nowSlot, int gapSlots, int dayStartSlot, int dayEndSlot,
+                                   int fensterTage, Map<TaskChunk, Integer> chunkIndex,
+                                   Map<String, Integer> previousStarts) {
+        int lastDay = Math.min(axis.totalDays - 1, nowSlot / SLOTS_PER_DAY + fensterTage);
+
+        CpModel model = new CpModel();
+        List<IntervalVar> intervals = new ArrayList<>();
+        for (int i = 0; i < blocked.size(); i++) {
+            int[] b = blocked.get(i);
+            intervals.add(model.newFixedInterval(b[0], Math.max(1, b[1] - b[0]), "belegt_" + i));
+        }
+
+        LinearExprBuilder dropB = LinearExpr.newBuilder();
+        long dropConst = 0;
+        List<IntVar> qVars    = new ArrayList<>();
+        List<Long>   qWeights = new ArrayList<>();
+        List<Placeable> placeables = new ArrayList<>();
+
+        for (int i = 0; i < offen.size(); i++) {
+            TaskChunk c = offen.get(i);
+            int sizeSlots = Axis.slotsFor(c.durationMinutes);
+
+            // notBefore gilt auch hier. Eine überfällige Aufgabe, die vor Montag nicht anfangen
+            // darf, kann man am Sonntag nicht nachholen — das ist keine Regel des Kalenders,
+            // sondern eine der Sache selbst.
+            int earliest = nowSlot;
+            if (c.task.getNotBefore() != null) {
+                earliest = Math.max(earliest, axis.ceilSlot(c.task.getNotBefore()));
+            }
+
+            List<DayWindow> windows = dayWindows(axis, dayStartSlot, dayEndSlot, sizeSlots,
+                    earliest, null, lastDay);
+            if (windows.isEmpty()) {
+                placeables.add(null);
+                continue;
+            }
+            Placeable p = makePlaceable(model, "overdue" + fensterTage + "_" + i, sizeSlots,
+                    c.durationMinutes, windows, gapSlots);
+            placeables.add(p);
+            intervals.add(p.interval);
+
+            // Platzieren: allein die Priorität. Strikt, wie überall seit dem Umbau — konkurrieren
+            // zwei überfällige Aufgaben um den letzten Slot, gewinnt die wichtigere, und die Frage
+            // "wer ist länger überfällig" entscheidet erst danach über die Reihenfolge.
+            int prio = Math.max(1, nz(c.task.getPriority(), 3));
+            dropB.addTerm(p.present, -(long) prio);
+            dropConst += prio;
+
+            // So früh wie möglich, priorisiert. Der Rang ist so gebaut, dass die Überfälligkeit
+            // die Priorität nicht überholen kann: prio*4 spannt 4..20, der Zuschlag 0..3.
+            qVars.add(gated(model, p, "ovfrueh" + fensterTage + "_" + i, p.start, axis.horizonSlots));
+            qWeights.add((long) prio * 4 + ueberfaelligkeitsRang(c.task, axis, nowSlot));
+
+            // Stabilität nur als Gleichstandsbrecher, mit Gewicht 1 und ausdrücklich OHNE Totzone:
+            // ein Nachholtermin soll nicht bei jedem Lauf springen, aber einen frei gewordenen
+            // früheren Slot soll er jederzeit gewinnen dürfen. Das Frühseins-Gewicht ist mit
+            // mindestens 4 pro Slot immer stärker.
+            addStabilityTerm(model, p, previousStarts.get(
+                            "task:" + c.task.getId() + ":" + chunkIndex.get(c)),
+                    axis, qVars, qWeights, "ov" + fensterTage + "_" + i, 0, 1);
+        }
+        if (placeables.stream().allMatch(Objects::isNull)) return 0;
+
+        addOverdueChunkOrder(model, offen, placeables);
+        model.addNoOverlap(intervals.toArray(new IntervalVar[0]));
+
+        // Lexikografisch über EIN Ziel, exakt wie im Nachlauf: der Faktor ist die berechnete
+        // Obergrenze des zweitrangigen Ziels plus eins, also nicht geschätzt. Platzieren schlägt
+        // Frühsein damit immer — ein Block am Freitag ist besser als gar keiner am Dienstag.
+        long qMax = 0;
+        for (long w : qWeights) qMax += w * axis.horizonSlots;
+        LinearExprBuilder ziel = LinearExpr.newBuilder();
+        ziel.addTerm(dropB.add(dropConst).build(), qMax + 1);
+        for (int i = 0; i < qVars.size(); i++) ziel.addTerm(qVars.get(i), qWeights.get(i));
+        model.minimize(ziel.build());
+
+        CpSolver solver = new CpSolver();
+        solver.getParameters().setLogSearchProgress(false);
+        solver.getParameters().setRandomSeed(42);
+        solver.getParameters().setNumSearchWorkers(solverWorkersPhase1);
+        solver.getParameters().setMaxTimeInSeconds(Math.max(0.05, reliefTimeLimitSeconds));
+        CpSolverStatus status = solver.solve(model);
+        if (status != CpSolverStatus.OPTIMAL && status != CpSolverStatus.FEASIBLE) {
+            log.warn("Vorlauf über {} Tage ohne Lösung: {}", fensterTage, status);
+            return 0;
+        }
+
+        int platziert = 0;
+        for (int i = 0; i < offen.size(); i++) {
+            Placeable p = placeables.get(i);
+            if (p == null || !Boolean.TRUE.equals(solver.booleanValue(p.present))) continue;
+
+            TaskChunk c = offen.get(i);
+            c.placedStartSlot = (int) solver.value(p.start);
+            // Kein Notbehelf: für Überfälliges IST das der Regelweg. reliefLevel bleibt 0, damit
+            // im Kalender kein "eng geplant"-Hinweis erscheint.
+            c.reliefLevel = 0;
+            blocked.add(new int[]{ c.placedStartSlot,
+                    c.placedStartSlot + Axis.slotsFor(c.durationMinutes) + gapSlots });
+            platziert++;
+        }
+        if (platziert > 0) {
+            log.info("Vorlauf über {} Tage: {} von {} überfälligen Blöcken platziert",
+                    fensterTage, platziert, offen.size());
+        }
+        return platziert;
+    }
+
+    /**
+     * Chronologische Ordnung und {@code maxChunksPerDay} für die Chunks derselben Aufgabe.
+     *
+     * Die Ordnung ist reine Symmetriebrechung — zwei gleich große Chunks derselben Aufgabe sind
+     * austauschbar, und ohne diese Constraint sucht der Löser jede Permutation davon ab.
+     */
+    private void addOverdueChunkOrder(CpModel model, List<TaskChunk> offen,
+                                      List<Placeable> placeables) {
+        Map<Long, List<Integer>> proTask = new LinkedHashMap<>();
+        for (int i = 0; i < offen.size(); i++) {
+            if (placeables.get(i) != null) {
+                proTask.computeIfAbsent(offen.get(i).task.getId(), k -> new ArrayList<>()).add(i);
+            }
+        }
+
+        for (Map.Entry<Long, List<Integer>> e : proTask.entrySet()) {
+            List<Integer> idx = e.getValue();
+            for (int k = 1; k < idx.size(); k++) {
+                Placeable prev = placeables.get(idx.get(k - 1));
+                Placeable cur  = placeables.get(idx.get(k));
+                model.addLessOrEqual(
+                        LinearExpr.newBuilder().addTerm(prev.start, 1).add(prev.sizeSlots).build(),
+                        cur.start).onlyEnforceIf(new Literal[]{ prev.present, cur.present });
+                model.addImplication(cur.present, prev.present);
+            }
+
+            Integer perDay = offen.get(idx.get(0)).task.getMaxChunksPerDay();
+            if (perDay == null || perDay <= 0 || idx.size() <= perDay) continue;
+            Map<Integer, LinearExprBuilder> proTag = new LinkedHashMap<>();
+            for (int i : idx) {
+                placeables.get(i).inDay.forEach((tag, b) ->
+                        proTag.computeIfAbsent(tag, k -> LinearExpr.newBuilder()).addTerm(b, 1));
+            }
+            for (LinearExprBuilder b : proTag.values()) model.addLessOrEqual(b.build(), perDay);
+        }
+    }
+
+    // =========================================================================
+    // LETZTE STUFE: VERDRÄNGEN
+    // =========================================================================
+
+    /**
+     * Bringt eine Aufgabe unter, deren Deadline sonst reißt — notfalls auf Kosten anderer Blöcke.
+     *
+     * <p><b>Warum es diesen Pass braucht.</b> Der Hauptlauf wägt Aufgaben und wiederkehrende Items
+     * gegeneinander ab und lässt jede Aufgabe gewinnen (Drop-Gewicht 1500+ gegen höchstens 300).
+     * Das hilft aber nur, solange die Aufgabe im Hauptlauf überhaupt ein zulässiges Fenster hat.
+     * Hatte sie keines — Deadline zu nah, Nahbereich voll, Tagesdeckel erreicht —, fiel sie heraus,
+     * und ab da konnten die Nachläufe sie nur noch in Lücken legen: sie sehen alles Bestehende als
+     * FEST. War die Zeit vor der Deadline an Meditation, Lesen und Projektzeit vergeben, gab es
+     * keine Lücke mehr, und die App meldete eine gerissene Deadline, obwohl im Kalender lauter
+     * Verzichtbares stand.
+     *
+     * <p>Hier ist diese Annahme aufgehoben. Im Fenster bis zur Deadline gilt:
+     * <ul>
+     *   <li><b>Fest</b> bleibt, was der Nutzer selbst gesetzt hat oder was nicht nachholbar ist:
+     *       {@code blocked} (gepinnt, Vergangenheit, Vorlesungen) und jede Aufgabe mit gleicher
+     *       oder höherer Priorität. Eine Deadline zu retten, indem man eine wichtigere reißt,
+     *       ist kein Fortschritt.</li>
+     *   <li><b>Verschiebbar oder verzichtbar</b> ist alles Wiederkehrende (Gewohnheit, Training,
+     *       Projektzeit) und jede Aufgabe mit STRIKT niedrigerer Priorität. Es darf innerhalb des
+     *       Fensters umziehen; erst wenn auch das nicht reicht, fällt es weg.</li>
+     * </ul>
+     *
+     * <p>Die Tagesdeckel gelten hier nicht — aus demselben Grund wie beim Überfälligen: die
+     * Alternative zum vollen Tag ist kein entspannter Tag, sondern eine gerissene Deadline.
+     *
+     * <p>Was wegfällt, verschwindet nicht stillschweigend: es wird als {@link AtRiskItem} mit
+     * {@link AtRiskReason#NO_ROOM} gemeldet und taucht damit in derselben Liste auf wie eine
+     * Gewohnheit, für die der Hauptlauf keinen Platz fand.
+     *
+     * @return wie viele bestehende Blöcke verschoben oder verworfen wurden
+     */
+    private int solveDeadlineRescuePass(List<TaskChunk> chunks, SolveOutcome outcome,
+                                        List<int[]> blocked, Axis axis, UserPreferences prefs,
+                                        int nowSlot) {
+        // Nur Aufgaben, deren Termin in der Zukunft liegt und die noch Minuten schuldig sind.
+        // Überfälliges hat der Vorlauf; ohne Deadline ist nichts in Gefahr.
+        List<TaskChunk> gefaehrdet = chunks.stream()
+                .filter(c -> c.placedStartSlot == null)
+                .filter(c -> c.task.getDeadline() != null)
+                .filter(c -> !istUeberfaellig(c, axis, nowSlot))
+                .collect(Collectors.toList());
+        if (gefaehrdet.isEmpty()) return 0;
+
+        // Höchste betroffene Priorität und spätestes Fenster bestimmen den Zuschnitt: ein Pass für
+        // alle gefährdeten Aufgaben zusammen, statt einer pro Aufgabe, der dem nächsten die Zeit
+        // wieder wegnimmt.
+        int hoechstePrio = gefaehrdet.stream().mapToInt(c -> prioClamped(c.task)).max().orElse(3);
+        int fensterEnde  = gefaehrdet.stream()
+                .mapToInt(c -> axis.floorSlot(c.task.getDeadline())).max().orElse(nowSlot);
+        if (fensterEnde <= nowSlot) return 0;
+
+        int[] fenster = tagesFenster(prefs);
+
+        CpModel model = new CpModel();
+        List<IntervalVar> intervals = new ArrayList<>();
+        for (int i = 0; i < blocked.size(); i++) {
+            int[] b = blocked.get(i);
+            intervals.add(model.newFixedInterval(b[0], Math.max(1, b[1] - b[0]), "fest_" + i));
+        }
+
+        // --- Was im Fenster liegt und weichen darf ---
+        List<Verdraengbar> verdraengbar = new ArrayList<>();
+        for (ScheduledItem item : outcome.getItems()) {
+            // extract liefert hier ausschließlich Wiederkehrendes; Task-Blöcke stecken noch in den
+            // Chunks und werden unten getrennt behandelt.
+            int start = axis.floorSlot(item.getStartTime());
+            if (start < nowSlot || start >= fensterEnde) continue;
+            int dauer = (int) ChronoUnit.MINUTES.between(item.getStartTime(), item.getEndTime());
+            verdraengbar.add(new Verdraengbar(item, null, start, Axis.slotsFor(dauer),
+                    dropGewichtVon(item)));
+        }
+        for (TaskChunk c : chunks) {
+            if (c.placedStartSlot == null) continue;
+            if (c.placedStartSlot < nowSlot || c.placedStartSlot >= fensterEnde) continue;
+            // Gleiche Priorität reicht NICHT: sonst schiebt sich ein Gleichrangiger gegenseitig aus
+            // dem Kalender, je nachdem welcher zufällig zuerst drankommt.
+            if (prioClamped(c.task) >= hoechstePrio) continue;
+            verdraengbar.add(new Verdraengbar(null, c, c.placedStartSlot,
+                    Axis.slotsFor(c.durationMinutes), calculateTaskWeight(c.task, axis.origin.toLocalDate())));
+        }
+
+        // Alles Übrige, was schon liegt, ist in diesem Modell fest.
+        Set<ScheduledItem> beweglicheItems = identitaetsMenge(verdraengbar, v -> v.item);
+        Set<TaskChunk> beweglicheChunks = identitaetsMenge(verdraengbar, v -> v.chunk);
+        int festIdx = blocked.size();
+        for (ScheduledItem item : outcome.getItems()) {
+            if (beweglicheItems.contains(item)) continue;
+            int s = axis.floorSlot(item.getStartTime());
+            int d = Axis.slotsFor((int) ChronoUnit.MINUTES.between(item.getStartTime(), item.getEndTime()));
+            intervals.add(model.newFixedInterval(s, Math.max(1, d), "fest_i" + (festIdx++)));
+        }
+        for (TaskChunk c : chunks) {
+            if (c.placedStartSlot == null || beweglicheChunks.contains(c)) continue;
+            intervals.add(model.newFixedInterval(c.placedStartSlot,
+                    Math.max(1, Axis.slotsFor(c.durationMinutes)), "fest_c" + (festIdx++)));
+        }
+
+        // --- Die gefährdeten Chunks ---
+        LinearExprBuilder rettenB = LinearExpr.newBuilder();
+        long rettenConst = 0;
+        List<Placeable> gefaehrdetP = new ArrayList<>();
+        for (int i = 0; i < gefaehrdet.size(); i++) {
+            TaskChunk c = gefaehrdet.get(i);
+            int sizeSlots    = Axis.slotsFor(c.durationMinutes);
+            int deadlineSlot = axis.floorSlot(c.task.getDeadline());
+            int earliest     = nowSlot;
+            if (c.task.getNotBefore() != null) {
+                earliest = Math.max(earliest, axis.ceilSlot(c.task.getNotBefore()));
+            }
+            List<DayWindow> windows = dayWindows(axis, fenster[0], fenster[1], sizeSlots, earliest,
+                    null, Math.min(axis.totalDays - 1, deadlineSlot / SLOTS_PER_DAY), deadlineSlot);
+            if (windows.isEmpty()) {
+                gefaehrdetP.add(null);
+                continue;
+            }
+            // Gap 0: dieser Pass läuft, wenn es sonst nicht mehr geht.
+            Placeable p = makePlaceable(model, "rettung_" + i, sizeSlots, c.durationMinutes, windows, 0);
+            gefaehrdetP.add(p);
+            intervals.add(p.interval);
+            rettenB.addTerm(p.present, -1L);
+            rettenConst += 1;
+        }
+        if (gefaehrdetP.stream().allMatch(Objects::isNull)) return 0;
+
+        // --- Die Verdrängbaren: umziehen oder wegfallen ---
+        LinearExprBuilder opferB = LinearExpr.newBuilder();
+        long opferConst = 0;
+        List<IntVar> qVars    = new ArrayList<>();
+        List<Long>   qWeights = new ArrayList<>();
+        List<Placeable> opferP = new ArrayList<>();
+        for (int i = 0; i < verdraengbar.size(); i++) {
+            Verdraengbar v = verdraengbar.get(i);
+            List<DayWindow> windows = dayWindows(axis, fenster[0], fenster[1], v.sizeSlots, nowSlot,
+                    null, Math.min(axis.totalDays - 1, (fensterEnde - 1) / SLOTS_PER_DAY));
+            if (windows.isEmpty()) {
+                opferP.add(null);
+                continue;
+            }
+            Placeable p = makePlaceable(model, "opfer_" + i, v.sizeSlots, v.sizeSlots * GRID, windows, 0);
+            opferP.add(p);
+            intervals.add(p.interval);
+            opferB.addTerm(p.present, -v.gewicht);
+            opferConst += v.gewicht;
+            // Am liebsten bleibt alles, wo es ist: erst umziehen, wenn das Platz schafft, und
+            // wegfallen nur, wenn auch das nicht reicht.
+            addStabilityTerm(model, p, v.startSlot, axis, qVars, qWeights, "opfer_" + i, 0, 1);
+        }
+
+        model.addNoOverlap(intervals.toArray(new IntervalVar[0]));
+        addRescueDayCaps(model, prefs, axis, chunks, outcome, gefaehrdet, gefaehrdetP,
+                verdraengbar, opferP);
+
+        // Lexikografisch, drei Stufen: die Deadline retten schlägt alles; danach so wenig wie
+        // möglich (und so Billiges wie möglich) opfern; ganz zuletzt möglichst wenig verschieben.
+        // Die Faktoren sind berechnete Obergrenzen, nicht geschätzte Größenordnungen.
+        long qMax = 0;
+        for (long w : qWeights) qMax += w * axis.horizonSlots;
+        long opferMax = opferConst;
+        LinearExprBuilder ziel = LinearExpr.newBuilder();
+        ziel.addTerm(rettenB.add(rettenConst).build(), (opferMax + 1) * (qMax + 1));
+        ziel.addTerm(opferB.add(opferConst).build(), qMax + 1);
+        for (int i = 0; i < qVars.size(); i++) ziel.addTerm(qVars.get(i), qWeights.get(i));
+        model.minimize(ziel.build());
+
+        CpSolver solver = new CpSolver();
+        solver.getParameters().setLogSearchProgress(false);
+        solver.getParameters().setRandomSeed(42);
+        solver.getParameters().setNumSearchWorkers(solverWorkersPhase1);
+        solver.getParameters().setMaxTimeInSeconds(Math.max(0.05, reliefTimeLimitSeconds));
+        CpSolverStatus status = solver.solve(model);
+        if (status != CpSolverStatus.OPTIMAL && status != CpSolverStatus.FEASIBLE) {
+            log.warn("Verdrängungs-Nachlauf ohne Lösung: {}", status);
+            return 0;
+        }
+
+        // Nichts anfassen, wenn er nichts gerettet hat: sonst würden Blöcke umziehen, ohne dass es
+        // irgendjemandem genützt hätte.
+        int gerettet = 0;
+        for (int i = 0; i < gefaehrdet.size(); i++) {
+            Placeable p = gefaehrdetP.get(i);
+            if (p != null && Boolean.TRUE.equals(solver.booleanValue(p.present))) gerettet++;
+        }
+        if (gerettet == 0) return 0;
+
+        for (int i = 0; i < gefaehrdet.size(); i++) {
+            Placeable p = gefaehrdetP.get(i);
+            if (p == null || !Boolean.TRUE.equals(solver.booleanValue(p.present))) continue;
+            TaskChunk c = gefaehrdet.get(i);
+            c.placedStartSlot = (int) solver.value(p.start);
+            c.reliefLevel = 2;   // eng geplant — der Hinweis am Block ist hier ehrlich
+        }
+
+        int bewegt = 0;
+        for (int i = 0; i < verdraengbar.size(); i++) {
+            Verdraengbar v = verdraengbar.get(i);
+            Placeable p = opferP.get(i);
+            boolean bleibt = p != null && Boolean.TRUE.equals(solver.booleanValue(p.present));
+
+            if (!bleibt) {
+                if (v.item != null) {
+                    // removeIf über Identität, NICHT List.remove: ScheduledItem ist eine
+                    // Lombok-@Data-Klasse und vergleicht über seine JPA-Entities weiter, die sich
+                    // gegenseitig referenzieren — equals() läuft dort in einen StackOverflowError.
+                    ScheduledItem weg = v.item;
+                    outcome.getItems().removeIf(x -> x == weg);
+                    meldeVerdraengt(outcome, weg);
+                } else {
+                    v.chunk.placedStartSlot = null;   // classifyAtRisk meldet es anschließend
+                }
+                bewegt++;
+                continue;
+            }
+            int neu = (int) solver.value(p.start);
+            if (neu == v.startSlot) continue;
+            if (v.item != null) {
+                int dauer = (int) ChronoUnit.MINUTES.between(v.item.getStartTime(), v.item.getEndTime());
+                v.item.setStartTime(axis.timeOf(neu));
+                v.item.setEndTime(axis.timeOf(neu).plusMinutes(dauer));
+            } else {
+                v.chunk.placedStartSlot = neu;
+            }
+            bewegt++;
+        }
+
+        log.info("Verdrängungs-Nachlauf: {} von {} gefährdeten Blöcken gerettet, {} bestehende "
+                + "Blöcke verschoben oder verworfen", gerettet, gefaehrdet.size(), bewegt);
+        return bewegt;
+    }
+
+    /**
+     * Die Tagesdeckel im Verdrängungs-Modell — sie bleiben, und zwar mit Absicht.
+     *
+     * Der erste Entwurf ließ sie weg, wie beim Überfälligen. Das war falsch, und zwei Bestandstests
+     * haben es sofort gezeigt: der Pass stopfte einen Tag mit vier Blöcken voll, wo zwei erlaubt
+     * waren. Der Unterschied zum Überfälligen ist grundsätzlich — dort ist der Termin schon
+     * gerissen und es gibt gar keine Alternative mehr, hier gibt es eine, und sie ist genau der
+     * Zweck dieses Passes: <b>verdrängen SCHAFFT Kapazität.</b> Fällt die Meditation weg, wird ihre
+     * Zeit im Deckel frei. Der Deckel steht der Rettung also gar nicht im Weg; er verhindert nur,
+     * dass aus "eine Deadline retten" ein zugestellter Tag wird.
+     *
+     * Gezählt wird über die inDay-Booleans der beweglichen Items plus einem festen Sockel aus
+     * allem, was in diesem Modell nicht mehr verhandelbar ist.
+     */
+    private void addRescueDayCaps(CpModel model, UserPreferences prefs, Axis axis,
+                                  List<TaskChunk> chunks, SolveOutcome outcome,
+                                  List<TaskChunk> gefaehrdet, List<Placeable> gefaehrdetP,
+                                  List<Verdraengbar> verdraengbar, List<Placeable> opferP) {
+        int taskCapSlots = Axis.slotsFor(nz(prefs.getMaxTaskMinutesPerDay(), FALLBACK_MAX_TASK_MIN_PER_DAY));
+        int totalCapSlots = Axis.slotsFor(
+                nz(prefs.getMaxScheduledMinutesPerDay(), FALLBACK_MAX_SCHEDULED_MIN_PER_DAY));
+        Integer maxTasksPerDay = prefs.getMaxTasksPerDay();
+
+        Set<ScheduledItem> beweglicheItems = identitaetsMenge(verdraengbar, v -> v.item);
+        Set<TaskChunk> beweglicheChunks = identitaetsMenge(verdraengbar, v -> v.chunk);
+
+        // Sockel: was an einem Tag liegt und in diesem Modell nicht mehr bewegt werden kann.
+        Map<Integer, int[]> sockel = new HashMap<>();   // [taskSlots, totalSlots, taskCount]
+        for (ScheduledItem item : outcome.getItems()) {
+            if (beweglicheItems.contains(item)) continue;
+            int start = axis.floorSlot(item.getStartTime());
+            int slots = Axis.slotsFor((int) ChronoUnit.MINUTES.between(
+                    item.getStartTime(), item.getEndTime()));
+            int[] s = sockel.computeIfAbsent(start / SLOTS_PER_DAY, k -> new int[3]);
+            s[1] += slots;
+        }
+        for (TaskChunk c : chunks) {
+            if (c.placedStartSlot == null || beweglicheChunks.contains(c)) continue;
+            int slots = Axis.slotsFor(c.durationMinutes);
+            int[] s = sockel.computeIfAbsent(c.placedStartSlot / SLOTS_PER_DAY, k -> new int[3]);
+            s[0] += slots;
+            s[1] += slots;
+            s[2] += 1;
+        }
+
+        // Beweglich: Tag -> Beiträge. Bei den gefährdeten Chunks und den verdrängbaren
+        // Aufgaben-Blöcken zählt zusätzlich der Aufgaben-Deckel.
+        Map<Integer, LinearExprBuilder> taskLoad  = new LinkedHashMap<>();
+        Map<Integer, LinearExprBuilder> totalLoad = new LinkedHashMap<>();
+        Map<Integer, LinearExprBuilder> taskCount = new LinkedHashMap<>();
+
+        for (int i = 0; i < gefaehrdet.size(); i++) {
+            Placeable p = gefaehrdetP.get(i);
+            if (p == null) continue;
+            zaehleProTag(p, Axis.slotsFor(gefaehrdet.get(i).durationMinutes), true,
+                    taskLoad, totalLoad, taskCount);
+        }
+        for (int i = 0; i < verdraengbar.size(); i++) {
+            Placeable p = opferP.get(i);
+            if (p == null) continue;
+            zaehleProTag(p, verdraengbar.get(i).sizeSlots, verdraengbar.get(i).chunk != null,
+                    taskLoad, totalLoad, taskCount);
+        }
+
+        for (Map.Entry<Integer, LinearExprBuilder> e : taskLoad.entrySet()) {
+            int rest = taskCapSlots - sockel.getOrDefault(e.getKey(), new int[3])[0];
+            model.addLessOrEqual(e.getValue().build(), Math.max(0, rest));
+        }
+        for (Map.Entry<Integer, LinearExprBuilder> e : totalLoad.entrySet()) {
+            int rest = totalCapSlots - sockel.getOrDefault(e.getKey(), new int[3])[1];
+            model.addLessOrEqual(e.getValue().build(), Math.max(0, rest));
+        }
+        if (maxTasksPerDay != null && maxTasksPerDay > 0) {
+            for (Map.Entry<Integer, LinearExprBuilder> e : taskCount.entrySet()) {
+                int rest = maxTasksPerDay - sockel.getOrDefault(e.getKey(), new int[3])[2];
+                model.addLessOrEqual(e.getValue().build(), Math.max(0, rest));
+            }
+        }
+    }
+
+    private void zaehleProTag(Placeable p, int slots, boolean istAufgabe,
+                              Map<Integer, LinearExprBuilder> taskLoad,
+                              Map<Integer, LinearExprBuilder> totalLoad,
+                              Map<Integer, LinearExprBuilder> taskCount) {
+        for (Map.Entry<Integer, BoolVar> e : p.inDay.entrySet()) {
+            totalLoad.computeIfAbsent(e.getKey(), k -> LinearExpr.newBuilder())
+                     .addTerm(e.getValue(), slots);
+            if (!istAufgabe) continue;
+            taskLoad.computeIfAbsent(e.getKey(), k -> LinearExpr.newBuilder())
+                    .addTerm(e.getValue(), slots);
+            taskCount.computeIfAbsent(e.getKey(), k -> LinearExpr.newBuilder())
+                     .addTerm(e.getValue(), 1);
+        }
+    }
+
+    /**
+     * Eine Menge, die über IDENTITÄT vergleicht — Pflicht bei {@link ScheduledItem}.
+     *
+     * {@code ScheduledItem} ist eine Lombok-{@code @Data}-Klasse, ihr generiertes
+     * {@code equals}/{@code hashCode} läuft über die enthaltenen JPA-Entities, und die haben
+     * bidirektionale Beziehungen: Task ↔ Project, Habit ↔ Completions. Ein {@code HashSet} oder
+     * ein {@code List.remove} darauf endet in einem {@code StackOverflowError} — und zwar nicht
+     * als Test-Fehlschlag, sondern als HTTP 500 mitten im Lauf.
+     */
+    private static <T> Set<T> identitaetsMenge(List<Verdraengbar> quelle,
+                                               java.util.function.Function<Verdraengbar, T> auswahl) {
+        Set<T> out = Collections.newSetFromMap(new IdentityHashMap<>());
+        for (Verdraengbar v : quelle) {
+            T t = auswahl.apply(v);
+            if (t != null) out.add(t);
+        }
+        return out;
+    }
+
+    /** Ein bestehender Block, der einer gerissenen Deadline weichen darf. */
+    private static final class Verdraengbar {
+        final ScheduledItem item;    // Wiederkehrendes; genau eines von beiden ist gesetzt
+        final TaskChunk chunk;       // Aufgabe mit niedrigerer Priorität
+        final int startSlot;
+        final int sizeSlots;
+        final long gewicht;
+
+        Verdraengbar(ScheduledItem item, TaskChunk chunk, int startSlot, int sizeSlots, long gewicht) {
+            this.item = item;
+            this.chunk = chunk;
+            this.startSlot = startSlot;
+            this.sizeSlots = sizeSlots;
+            this.gewicht = gewicht;
+        }
+    }
+
+    /** Dieselben Bänder wie im Hauptlauf — was dort billig zu verwerfen war, ist es auch hier. */
+    private long dropGewichtVon(ScheduledItem item) {
+        return switch (item.getType()) {
+            case HABIT   -> item.getHabit() != null ? calculateHabitWeight(item.getHabit()) : W_DROP_HABIT_PRIO;
+            case WORKOUT -> W_DROP_WORKOUT;
+            case PROJECT -> W_DROP_PROJECT;
+            default      -> W_DROP_PROJECT;
+        };
+    }
+
+    /**
+     * Ein weggefallener Block wird gemeldet, nicht verschwiegen.
+     *
+     * Nur Gewohnheiten bekommen einen Eintrag, und zwar denselben {@code NO_ROOM}, den auch der
+     * Hauptlauf vergibt — für den Nutzer ist es dieselbe Aussage. Trainings und Projektzeit sind
+     * schon im Hauptlauf stumm, wenn sie ausfallen (Wochenquote, nächste Woche wieder da); hier
+     * eine Meldung zu erzeugen, die es sonst nie gibt, wäre inkonsistent.
+     */
+    private void meldeVerdraengt(SolveOutcome outcome, ScheduledItem item) {
+        if (item.getType() != ScheduledItemType.HABIT || item.getHabit() == null) return;
+        int dauer = (int) ChronoUnit.MINUTES.between(item.getStartTime(), item.getEndTime());
+        outcome.getAtRisk().add(AtRiskItem.forHabit(item.getHabit().getId(),
+                item.getHabit().getName(), dauer, AtRiskReason.NO_ROOM));
+    }
+
+    /**
+     * Wie lange eine Aufgabe schon überfällig ist, als Rang 0..3.
+     *
+     * Bewusst grob: es geht nur darum, unter gleich wichtigen Aufgaben die länger liegengebliebene
+     * zuerst nachzuholen. Der Wertebereich ist so gewählt, dass der Zuschlag den Prioritätsschritt
+     * (4) nie überbrücken kann.
+     */
+    private int ueberfaelligkeitsRang(Task task, Axis axis, int nowSlot) {
+        long tage = (nowSlot - axis.floorSlot(task.getDeadline())) / SLOTS_PER_DAY;
+        if (tage >= 7) return 3;
+        if (tage >= 3) return 2;
+        if (tage >= 1) return 1;
+        return 0;
+    }
+
+    // =========================================================================
     // NACHLÄUFE
     // =========================================================================
 
@@ -2920,17 +4065,19 @@ public class SmartSchedulerService {
      */
     private int solveReliefPass(ReliefMode mode, List<TaskChunk> chunks, List<int[]> occupied,
                                 Axis axis, UserPreferences prefs, int nowSlot, int gapSlots) {
-        // Alles mit Deadline — die künftigen wie die bereits gerissenen. Ohne Deadline ist nichts
-        // in Gefahr; die Aufgabe kommt beim nächsten Lauf wieder dran.
+        // Nur künftige Deadlines. Ohne Deadline ist nichts in Gefahr — die Aufgabe kommt beim
+        // nächsten Lauf wieder dran.
         //
-        // Überfällige gehören ausdrücklich dazu. Sie hatten im Hauptlauf zwar ihr Nachhol-Fenster
-        // (siehe taskBounds), aber innerhalb der Arbeitszeit und unter den Tagesdeckeln — war die
-        // dicht, bekamen sie GAR KEINEN Block und standen nur als Meldung da. Genau das ist der
-        // schlimmste Fall: der Termin ist schon gerissen, und die App verplant nicht einmal einen
-        // Nachholtermin.
+        // Überfälliges gehört ausdrücklich NICHT mehr hierher: das erledigt der Vorlauf
+        // (solveOverduePass), und zwar gründlicher, als es diese Pässe je könnten. Sie können nur
+        // auffüllen; wenn der Vorlauf mit 14 Tagen, gelockerten Zeiten und ohne Tagesdeckel keinen
+        // Platz gefunden hat, findet ihn hier niemand mehr. Ein überfälliger Chunk mit leerem
+        // Fenster würde unten außerdem eine leere Obergrenze bekommen (die Deadline liegt hinter
+        // uns) und lautlos gar kein Fenster erhalten.
         List<TaskChunk> offen = chunks.stream()
                 .filter(c -> c.placedStartSlot == null)
                 .filter(c -> c.task.getDeadline() != null)
+                .filter(c -> !istUeberfaellig(c, axis, nowSlot))
                 .collect(Collectors.toList());
         if (offen.isEmpty()) return 0;
 
@@ -2942,8 +4089,9 @@ public class SmartSchedulerService {
             dayEndSlot   = minuteOfDay(workEnd(prefs)) / GRID;
             gap          = gapSlots;
         } else {
-            dayStartSlot = minuteOfDay(parseZeit(reliefDayStart, LocalTime.of(7, 0))) / GRID;
-            dayEndSlot   = minuteOfDay(parseZeit(reliefDayEnd, LocalTime.of(22, 0))) / GRID;
+            int[] fenster = tagesFenster(prefs);
+            dayStartSlot = fenster[0];
+            dayEndSlot   = fenster[1];
             gap          = 0;
         }
         if (dayEndSlot <= dayStartSlot) {   // defensiv gegen Fehlkonfiguration
@@ -2970,19 +4118,11 @@ public class SmartSchedulerService {
             int sizeSlots    = Axis.slotsFor(c.durationMinutes);
             int deadlineSlot = axis.floorSlot(c.task.getDeadline());
 
-            int lastDay;
-            Integer latestEnd;
-            if (istUeberfaellig(c, axis, nowSlot)) {
-                // Dasselbe Nachhol-Fenster wie im Hauptlauf. Eine scharfe Endzeit gäbe es hier
-                // nicht: die Deadline liegt hinter uns, jede Lage ist zu spät — als Obergrenze
-                // wäre sie leer und der Task bekäme wieder kein Fenster.
-                lastDay   = Math.min(axis.totalDays - 1, nowSlot / SLOTS_PER_DAY + CATCHUP_DAYS);
-                latestEnd = null;
-            } else {
-                // Hier fällt der Deckel: bis zur Deadline, nicht bis zum Nahbereich.
-                lastDay   = Math.min(axis.totalDays - 1, deadlineSlot / SLOTS_PER_DAY);
-                latestEnd = deadlineSlot;
-            }
+            // Hier fällt der Deckel: bis zur Deadline, nicht bis zum Nahbereich. Und hier gilt die
+            // ECHTE Deadline, nicht der Puffer aus taskBounds — passt es mit Puffer nicht, ist ein
+            // Block im Puffer allemal besser als eine Warnung.
+            int lastDay     = Math.min(axis.totalDays - 1, deadlineSlot / SLOTS_PER_DAY);
+            Integer latestEnd = deadlineSlot;
 
             int earliest = nowSlot;
             if (c.task.getNotBefore() != null) {
@@ -3000,12 +4140,10 @@ public class SmartSchedulerService {
             placeables.add(p);
             intervals.add(p.interval);
 
-            // Priorität als Gewicht, für Überfälliges das Zehnfache: konkurrieren hier zwei
-            // Aufgaben um denselben letzten Platz, gewinnt die, deren Termin schon gerissen ist.
-            // Die Abwägung gegen Gewohnheiten und Trainings hat der Hauptlauf längst getroffen —
-            // hier wird nichts mehr verdrängt, nur aufgefüllt.
-            long weight = Math.max(1, nz(c.task.getPriority(), 3))
-                    * (istUeberfaellig(c, axis, nowSlot) ? 10 : 1);
+            // Priorität als Gewicht: konkurrieren hier zwei Aufgaben um denselben letzten Platz,
+            // gewinnt die wichtigere. Die Abwägung gegen Gewohnheiten und Trainings hat der
+            // Hauptlauf längst getroffen — hier wird nichts mehr verdrängt, nur aufgefüllt.
+            long weight = Math.max(1, nz(c.task.getPriority(), 3));
             dropB.addTerm(p.present, -weight);
             dropConst += weight;
 
@@ -3017,7 +4155,7 @@ public class SmartSchedulerService {
         if (placeables.stream().allMatch(Objects::isNull)) return 0;
 
         model.addNoOverlap(intervals.toArray(new IntervalVar[0]));
-        addReliefDayCaps(model, prefs, chunks, offen, placeables, axis, nowSlot);
+        addReliefDayCaps(model, prefs, chunks, offen, placeables);
 
         // Lexikografisch über EIN Ziel: Platzieren schlägt Frühsein immer. Der Faktor ist die
         // exakte Obergrenze des Frühseins-Terms plus eins, also nicht geschätzt — ein zweiter
@@ -3069,13 +4207,14 @@ public class SmartSchedulerService {
      * Tag überhaupt schafft; die zu überschreiten würde die Deadline nicht retten, sondern nur
      * die Überlastung in den Kalender schreiben.
      *
-     * <b>Ausgenommen ist Überfälliges.</b> Dort ist der Termin schon gerissen, und die Alternative
-     * zum überzogenen Tagesdeckel ist kein entspannter Tag, sondern ein Nachholtermin, den es gar
-     * nicht gibt. Ein Tag, an dem eine überfällige Aufgabe nachgeholt wird, ist ohnehin ein voller.
+     * <b>Überfälliges taucht hier nicht mehr auf</b> — es ist längst vom Vorlauf platziert und
+     * erreicht die Nachläufe gar nicht. Seine Minuten zählen über {@code alleChunks} trotzdem
+     * gegen den Deckel: ein Tag, an dem etwas nachgeholt wird, ist voll, und dort soll nicht auch
+     * noch nachgerückt werden. Der Deckel gilt also weiterhin für alle, die ihn respektieren
+     * müssen, und wird von genau dem einen Fall überschritten, für den er nie gedacht war.
      */
     private void addReliefDayCaps(CpModel model, UserPreferences prefs, List<TaskChunk> alleChunks,
-                                  List<TaskChunk> offen, List<Placeable> placeables,
-                                  Axis axis, int nowSlot) {
+                                  List<TaskChunk> offen, List<Placeable> placeables) {
         int capSlots = Axis.slotsFor(nz(prefs.getMaxTaskMinutesPerDay(), FALLBACK_MAX_TASK_MIN_PER_DAY));
         Integer maxTasksPerDay = prefs.getMaxTasksPerDay();
 
@@ -3093,7 +4232,6 @@ public class SmartSchedulerService {
         for (int i = 0; i < offen.size(); i++) {
             Placeable p = placeables.get(i);
             if (p == null) continue;
-            if (istUeberfaellig(offen.get(i), axis, nowSlot)) continue;
             int slots = Axis.slotsFor(offen.get(i).durationMinutes);
             for (Map.Entry<Integer, BoolVar> e : p.inDay.entrySet()) {
                 lastProTag.computeIfAbsent(e.getKey(), k -> LinearExpr.newBuilder())
@@ -3162,7 +4300,15 @@ public class SmartSchedulerService {
         input.setPinnedCommitments(pinned.stream()
                 .filter(e -> e.getSkippedAt() == null)
                 .collect(Collectors.toList()));
-        input.setHabits(habitRepository.findHabitsActiveInRange(userId, startDate, endDate));
+        // Gewohnheiten, die aus einer Gym-Routine stammen, planen wir hier NICHT: ihre Zeit
+        // belegt der Workout-Platzhalter derselben Routine (siehe generateWorkoutPlaceholders).
+        // Beides einzuplanen legte zwei Termine fuer ein Training in die Woche - einen als
+        // Habit-Slot, einen als Einheit. Die Gewohnheit dient allein der Nachhaltung im
+        // Habit-Space; siehe RoutineHabitService.
+        input.setHabits(habitRepository.findHabitsActiveInRange(userId, startDate, endDate)
+                .stream()
+                .filter(h -> h.getRoutine() == null)
+                .collect(Collectors.toList()));
         input.setCourseSchedules(courseScheduleRepository.findByUserId(userId));
         input.setProjects(projectRepository.findByUserIdAndStatusIn(userId, SCHEDULABLE_PROJECT_STATUS));
 
@@ -3227,11 +4373,38 @@ public class SmartSchedulerService {
                 .filter(w -> !flexibleIds.contains(w.getId()))
                 .collect(Collectors.toList()));
         input.setFlexibleWorkouts(flexible);
+        // Erst hier: das Muskelprofil wird aus den geladenen Einheiten abgeleitet.
+        input.setRoutineMuscles(loadRoutineMuscles(flexible));
 
         log.debug("Input: {} Tasks, {} fixe Events, {} Habits, {} fixe Workouts, {} flexible Workouts",
                 input.getTasks().size(), input.getFixedEvents().size(), input.getHabits().size(),
                 input.getFixedWorkouts().size(), input.getFlexibleWorkouts().size());
         return input;
+    }
+
+    /**
+     * Die primaer beanspruchten Muskeln je Routine, ueber die der Planer gleich entscheidet.
+     *
+     * <p>Eine Abfrage fuer alle Routinen des Horizonts statt eines Lazy-Durchgriffs je Einheit.
+     * Ohne Routinen faellt sie ganz weg - die haeufige Lage, wenn niemand im Gym-Space plant.
+     */
+    private Map<Long, Set<MuscleGroup>> loadRoutineMuscles(List<WorkoutSession> workouts) {
+        Set<Long> routineIds = nz(workouts).stream()
+                .map(WorkoutSession::getRoutine)
+                .filter(Objects::nonNull)
+                .map(Routine::getId)
+                .filter(Objects::nonNull)
+                .collect(Collectors.toCollection(LinkedHashSet::new));
+        if (routineIds.isEmpty()) {
+            return Map.of();
+        }
+
+        Map<Long, Set<MuscleGroup>> byRoutine = new LinkedHashMap<>();
+        for (Object[] row : routineExerciseRepository.findPrimaryMusclesByRoutineIds(routineIds)) {
+            byRoutine.computeIfAbsent((Long) row[0], k -> new LinkedHashSet<>())
+                    .add((MuscleGroup) row[1]);
+        }
+        return byRoutine;
     }
 
     private boolean isWorkoutRelevantToRange(WorkoutSession w, LocalDate startDate, LocalDate endDate) {
@@ -3280,7 +4453,7 @@ public class SmartSchedulerService {
      * chronologische Position. Ein Schlüssel über die Startzeit wäre falsch: gerade der
      * verschobene Block soll ja wiedererkannt werden.
      */
-    private void reconcileScheduledEvents(Long userId, LocalDateTime cutoff, LocalDateTime bis,
+    private int reconcileScheduledEvents(Long userId, LocalDateTime cutoff, LocalDateTime bis,
                                           List<ScheduledItem> scheduled) {
         List<CalendarEvent> vorhanden = nz(calendarEventRepository
                 .findByUserIdAndEventTypeInAndIsFixedAndStartTimeBetween(
@@ -3309,6 +4482,8 @@ public class SmartSchedulerService {
         alleGruppen.addAll(altNachGruppe.keySet());
         alleGruppen.addAll(neuNachGruppe.keySet());
 
+        int angelegt = 0;
+
         for (String gruppe : alleGruppen) {
             List<CalendarEvent> alt = altNachGruppe.getOrDefault(gruppe, List.of());
             List<ScheduledItem> neu = neuNachGruppe.getOrDefault(gruppe, List.of());
@@ -3322,7 +4497,10 @@ public class SmartSchedulerService {
                     zuLoeschen.add(alt.get(i).getId());
                 } else if (i >= alt.size()) {
                     CalendarEvent ev = buildEvent(user, neu.get(i));
-                    if (ev != null) calendarEventRepository.save(ev);
+                    if (ev != null) {
+                        calendarEventRepository.save(ev);
+                        angelegt++;
+                    }
                 } else if (uebernimmAenderungen(alt.get(i), neu.get(i))) {
                     zuAendern.add(alt.get(i));
                 }
@@ -3331,6 +4509,14 @@ public class SmartSchedulerService {
 
         if (!zuAendern.isEmpty())  calendarEventRepository.saveAll(zuAendern);
         if (!zuLoeschen.isEmpty()) calendarEventRepository.deleteAllByIdInBatch(zuLoeschen);
+
+        // Wie viele Blöcke dieser Lauf wirklich angefasst hat. Ist die Summe 0, hat sich für das
+        // Frontend nichts geändert und der Monatsabruf kann entfallen — der häufige Fall, seit der
+        // Abgleich einen Lauf ohne Änderung gar nichts mehr schreiben lässt.
+        //
+        // buildEvent kann null liefern (Item ohne auflösbare Entität); nur wirklich Gespeichertes
+        // wird gezählt, sonst meldete ein Lauf Änderungen, die niemand nachladen kann.
+        return angelegt + zuAendern.size() + zuLoeschen.size();
     }
 
     /**
@@ -3372,6 +4558,24 @@ public class SmartSchedulerService {
      * geändert hat — nur dann muss gespeichert werden, und nur so schreibt ein Lauf ohne Änderung
      * tatsächlich nichts.
      */
+    /**
+     * Die Notiz, die der Scheduler an einen Task-Block schreibt — oder {@code null}.
+     *
+     * Eine Stelle für beide Aufrufer (Neuanlage und Abgleich): stünde die Regel zweimal da, würde
+     * ein Block, dessen Lage sich verbessert hat, seine alte Begründung behalten.
+     *
+     * <p>Das Quetschen schlägt den fehlenden Puffer, weil es die stärkere Aussage ist: ein Block
+     * um halb neun abends erklärt sich nicht damit, dass die Reserve knapp war.
+     */
+    private String taskNotiz(ScheduledItem item) {
+        if (item.getType() != ScheduledItemType.TASK) return null;
+        // Ein Block aus dem Quetsch-Nachlauf liegt außerhalb der Arbeitszeit oder ohne die übliche
+        // Pause davor. Ohne diesen Satz liest sich das wie ein Fehler.
+        if (item.getReliefLevel() >= 2) return NOTE_SQUEEZED;
+        if (item.isInsideDeadlineBuffer()) return NOTE_NO_BUFFER;
+        return null;
+    }
+
     private boolean uebernimmAenderungen(CalendarEvent alt, ScheduledItem neu) {
         String titel = titelFuer(neu);
         // Die Quetsch-Notiz gehört zum Abgleich: rutscht ein Block beim nächsten Lauf wieder in
@@ -3379,7 +4583,7 @@ public class SmartSchedulerService {
         // immer an einem völlig unauffälligen Termin. Nur bei TASK, denn nur dort schreibt der
         // Scheduler die Notiz überhaupt; an einem Habit-Block gehört sie dem Nutzer.
         boolean istTask = neu.getType() == ScheduledItemType.TASK;
-        String notiz = istTask && neu.getReliefLevel() >= 2 ? NOTE_SQUEEZED : null;
+        String notiz = taskNotiz(neu);
         boolean geaendert = !Objects.equals(alt.getStartTime(), neu.getStartTime())
                 || !Objects.equals(alt.getEndTime(), neu.getEndTime())
                 || !Objects.equals(alt.getTitle(), titel)
@@ -3419,9 +4623,7 @@ public class SmartSchedulerService {
                     ev.setEventType(EventType.TASK);
                     ev.setRelatedTask(item.getTask());
                     ev.setColor(getColorForTask(item.getTask()));
-                    // Ein Block aus dem Quetsch-Nachlauf liegt außerhalb der Arbeitszeit oder ohne
-                    // die übliche Pause davor. Ohne diesen Satz liest sich das wie ein Fehler.
-                    if (item.getReliefLevel() >= 2) ev.setNotes(NOTE_SQUEEZED);
+                    ev.setNotes(taskNotiz(item));
                 }
                 case HABIT -> {
                     ev.setTitle(item.getHabit().getName());
@@ -3564,29 +4766,96 @@ public class SmartSchedulerService {
      * ein glatter Gleichstand — zwei gleich wichtige Aufgaben, eine morgen und eine nächsten
      * Monat fällig, landeten in beliebiger Reihenfolge.
      *
-     * Die Obergrenze ist bewusst 3: das Leistungshoch darf einen Block weiterhin nicht auf einen
-     * anderen Tag ziehen (Abweichung höchstens 2*prio*36 = 72*prio gegen einen Tagessprung von
-     * mindestens 1*prio*96), und die Deadline-Strafe W_LATE = 40 bleibt um Größenordnungen
-     * stärker als jede Dringlichkeit.
+     * Die Obergrenze ist bewusst 3: sie füllt genau die drei Plätze, die {@link #urgencyRank}
+     * zwischen zwei Prioritätsstufen frei lässt ({@code prio*4}). Eine breitere Skala würde die
+     * Rangordnung zerstören — dann könnte eine nähere Deadline eine höhere Priorität wieder
+     * überholen, und genau das war die Beschwerde. Die Deadline-Strafe {@code W_LATE = 40} bleibt
+     * davon unberührt und um Größenordnungen stärker als jede Dringlichkeit.
      */
     private static final long[] PLACEMENT_URGENCY = { 1, 1, 2, 2, 3 };
 
     /**
      * Wie wichtig es ist, diesen Task überhaupt unterzubringen (Phase-1-Gewicht).
      *
-     * Die Nähe der Deadline ist ein FAKTOR, kein Summand. Addiert kippte die Rangfolge: ein
-     * P1-Task von heute kam auf 100+1000 = 1100 und schlug damit einen P5-Task von morgen mit
-     * 500+500 = 1000 — eine Nebensächlichkeit verdrängte etwas Wichtiges, nur weil sie einen Tag
-     * früher fällig war. Multiplikativ ist die Ordnung garantiert inversionsfrei: bei gleicher
-     * Deadline gewinnt immer die höhere Priorität, bei gleicher Priorität immer die nähere
-     * Deadline.
+     * <b>Priorität ist ein RANG, keine Größe.</b> Jede Prioritätsstufe bekommt ihr eigenes Band,
+     * und die Bänder überlappen nicht:
+     *
+     * <pre>
+     *   P1   1500 .. 2200        P4   4500 .. 5200
+     *   P2   2500 .. 3200        P5   5500 .. 6200
+     *   P3   3500 .. 4200
+     * </pre>
+     *
+     * Die Deadline-Nähe ordnet also nur noch INNERHALB einer Stufe (Bandbreite 700 < Abstand 1000).
+     * Vorher war sie ein Faktor auf die Priorität, und damit konnte sie die Priorität überholen:
+     * ein P2-Task, der heute fällig ist, kam auf {@code 400 + 2*100*8 = 2000} und schlug einen
+     * P5-Task ohne Deadline ({@code 400 + 5*100*1 = 900}). Wer eine wichtige Aufgabe ohne Termin
+     * eintrug, sah sie gegen eine Nebensächlichkeit mit Termin verlieren — genau die Beschwerde
+     * "Prioritäten werden ignoriert".
+     *
+     * Die dokumentierte Invariante an {@link #W_DROP_PROJECT} — jede Aufgabe schlägt jedes
+     * wiederkehrende Item — gilt weiter und jetzt mit deutlichem Abstand:
+     * {@code min(Aufgabe) = 1500} gegen {@code max(Wiederkehrendes) = 300}.
      */
     private long calculateTaskWeight(Task task, LocalDate today) {
-        int priority = Math.min(5, Math.max(1, nz(task.getPriority(), 3)));
-        // Der Sockel hebt das ganze Aufgabenband über das der wiederkehrenden Items — siehe die
-        // Invariante an W_DROP_PROJECT. Er ist ein Summand und kein Faktor, damit die
-        // inversionsfreie Ordnung INNERHALB der Aufgaben unverändert bleibt.
-        return W_DROP_TASK_BASE + priority * 100L * DROP_URGENCY[deadlineBucket(task, today)];
+        return W_DROP_TASK_BASE
+                + prioClamped(task) * W_DROP_PRIO_STEP
+                + DROP_URGENCY[deadlineBucket(task, today)] * 100L;
+    }
+
+    /**
+     * Rang für die Reihenfolge über TAGE — "welche Aufgabe kommt zuerst dran".
+     *
+     * Dieselbe Dominanzregel wie beim Verdrängungsgewicht: die Priorität spannt {@code prio*4}
+     * (4..20), die Deadline-Stufe füllt die drei Plätze dazwischen. Eine nähere Deadline kann eine
+     * höhere Priorität damit nie überholen.
+     */
+    private int urgencyRank(Task task, LocalDate today) {
+        return prioClamped(task) * 4 + (int) (PLACEMENT_URGENCY[deadlineBucket(task, today)] - 1);
+    }
+
+    /**
+     * Rang für die Reihenfolge INNERHALB eines Tages.
+     *
+     * Bewusst deutlich schmaler als {@link #urgencyRank} (2..11 statt 4..22): dieser Term wirkt
+     * pro Slot und muss über einen ganzen Tag unter der Totzone des Stabilitätsankers bleiben —
+     * {@code 11 * 96 = 1056 < W_MOVE_FIXED = 1200}. Ordnung ja, aber niemals um den Preis, dass
+     * ein liegender Block noch einmal verschoben wird.
+     *
+     * Vorher stand hier ausschließlich die Deadline-Stufe: lagen zwei Aufgaben am selben Tag,
+     * spielte die Priorität überhaupt keine Rolle.
+     *
+     * <p><b>Die Deadline steht hier bewusst nicht mehr drin.</b> Sie hatte in diesem Rang nur Platz
+     * für ein einziges Bit — der Rang muss unter {@code W_MOVE_FIXED / SLOTS_PER_DAY = 12} bleiben,
+     * und die Priorität soll strikt dominieren. Mit einem Bit fielen "morgen fällig", "in zwei
+     * Tagen" und "in drei Tagen" alle zusammen, und drei solche Aufgaben landeten gemessen in
+     * umgekehrter Reihenfolge im Kalender.
+     *
+     * <p>Die Reihenfolge macht seit dem Umbau {@link #addTaskOrderPreference} — relativ, mit einem
+     * Pauschalpreis pro vertauschtem Paar statt mit einem Gewicht auf der Uhrzeit. Das ist nicht
+     * nur genauer (volle Termin-Reihenfolge statt zweier Stufen), es macht diesen Term auch frei:
+     * er darf jetzt schwach sein.
+     *
+     * <p><b>Und das musste er werden.</b> Solange hier {@code prio*2} stand, war er immer mindestens
+     * so groß wie das Leistungshoch ({@code W_PEAK * prio = prio*2}) — die Wunschzeit-Einstellung
+     * konnte also bestenfalls unentschieden spielen und nie gewinnen. Mit {@code prio} kostet ein
+     * Slot später zu liegen halb so viel, wie das Leistungshoch dafür gutschreibt: die Einstellung
+     * wirkt endlich, und "früher ist besser" bleibt als schwacher Grundzug erhalten.
+     */
+    private int dayOrderRank(Task task, LocalDate today) {
+        return prioClamped(task);
+    }
+
+    /**
+     * Die Priorität auf 1..5 begrenzt.
+     *
+     * Die Grenzen sind keine Kosmetik: sämtliche Rang-Herleitungen (Bandbreite beim Verdrängen,
+     * Obergrenze gegen die Totzone) rechnen mit prio ≤ 5. Ein Ausreißer aus alten Daten würde sie
+     * still aushebeln. Die API validiert bereits {@code @Min(1) @Max(5)} — hier ist der Löser
+     * gegen alles abgesichert, was daran vorbeigekommen ist.
+     */
+    private int prioClamped(Task task) {
+        return Math.min(5, Math.max(1, nz(task.getPriority(), 3)));
     }
 
     private long calculateHabitWeight(Habit habit) {

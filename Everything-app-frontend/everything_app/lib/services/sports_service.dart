@@ -119,6 +119,7 @@ class SportsService {
     String? description,
     String? imageUrl,
     String? dayLabel,
+    int? preferredWeekday,
     int? estimatedDurationMinutes,
     int? workoutPlanId,
     required List<GymRoutineExercise> exercises,
@@ -128,6 +129,7 @@ class SportsService {
       description: description,
       imageUrl: imageUrl,
       dayLabel: dayLabel,
+      preferredWeekday: preferredWeekday,
       estimatedDurationMinutes: estimatedDurationMinutes,
       workoutPlanId: workoutPlanId,
       exercises: exercises,
@@ -142,6 +144,7 @@ class SportsService {
     String? description,
     String? imageUrl,
     String? dayLabel,
+    int? preferredWeekday,
     int? estimatedDurationMinutes,
     int? workoutPlanId,
     required List<GymRoutineExercise> exercises,
@@ -151,6 +154,7 @@ class SportsService {
       description: description,
       imageUrl: imageUrl,
       dayLabel: dayLabel,
+      preferredWeekday: preferredWeekday,
       estimatedDurationMinutes: estimatedDurationMinutes,
       workoutPlanId: workoutPlanId,
       exercises: exercises,
@@ -173,6 +177,7 @@ class SportsService {
     String? dayLabel,
     int? estimatedDurationMinutes,
     int? workoutPlanId,
+    int? preferredWeekday,
     required List<GymRoutineExercise> exercises,
   }) =>
       {
@@ -180,6 +185,9 @@ class SportsService {
         'description': ?description,
         'imageUrl': ?imageUrl,
         'dayLabel': ?dayLabel,
+        // Ohne "?" und damit immer im Body: null heißt hier "kein Wunschtag mehr" und muss
+        // beim Server ankommen. Ein weggelassenes Feld könnte das nicht ausdrücken.
+        'preferredWeekday': preferredWeekday,
         'estimatedDurationMinutes': ?estimatedDurationMinutes,
         'workoutPlanId': ?workoutPlanId,
         'exercises': exercises.map((e) => e.toRequest()).toList(),
@@ -259,6 +267,93 @@ class SportsService {
     return list.map(GymMuscleVolume.fromMap).toList();
   }
 
+  /// Erholungsstand je Muskelgruppe. Ohne Zeitraum - die Frage ist immer "jetzt".
+  Future<List<GymMuscleRecovery>> getRecovery() async {
+    final list = await _getList(ApiConfig.gymRecovery);
+    return list.map(GymMuscleRecovery.fromMap).toList();
+  }
+
+  // ── Stehende Übungsnotizen ───────────────────────────────────────────────────
+
+  Future<String?> getExerciseNote(int exerciseId) async {
+    final map = await _getMap(ApiConfig.exerciseNote(exerciseId));
+    final text = map['text'] as String?;
+    return text == null || text.isEmpty ? null : text;
+  }
+
+  /// Leerer Text löscht die Notiz - so hält es auch das Backend.
+  Future<String?> saveExerciseNote(int exerciseId, String text) async {
+    final response = await _api.put(ApiConfig.exerciseNote(exerciseId), {'text': text});
+    final map = _decodeMap(response.body, response.statusCode, _api.isSuccess(response));
+    final saved = map['text'] as String?;
+    return saved == null || saved.isEmpty ? null : saved;
+  }
+
+  // ── Ausrüstungsprofile ───────────────────────────────────────────────────────
+
+  Future<List<GymEquipmentProfile>> getEquipmentProfiles() async {
+    final list = await _getList(ApiConfig.equipmentProfiles);
+    return list.map(GymEquipmentProfile.fromMap).toList();
+  }
+
+  Future<GymEquipmentProfile> saveEquipmentProfile({
+    int? id,
+    required String name,
+    required List<String> equipment,
+  }) async {
+    final body = {'name': name, 'equipment': equipment};
+    final response = id == null
+        ? await _api.post(ApiConfig.equipmentProfiles, body)
+        : await _api.put(ApiConfig.equipmentProfileById(id), body);
+    return GymEquipmentProfile.fromMap(
+        _decodeMap(response.body, response.statusCode, _api.isSuccess(response)));
+  }
+
+  Future<void> deleteEquipmentProfile(int id) async {
+    final response = await _api.delete(ApiConfig.equipmentProfileById(id));
+    _ensureSuccess(response.body, response.statusCode, _api.isSuccess(response));
+  }
+
+  /// [id] null schaltet die Filterung ab.
+  Future<void> activateEquipmentProfile(int? id) async {
+    final response = await _api.put(ApiConfig.equipmentProfileActivate(id ?? 0), const {});
+    _ensureSuccess(response.body, response.statusCode, _api.isSuccess(response));
+  }
+
+  // ── Körpergewicht ────────────────────────────────────────────────────────────
+
+  Future<GymBodyWeightSeries> getBodyWeight({DateTime? from}) async {
+    final url = from == null
+        ? ApiConfig.bodyWeight
+        : ApiConfig.bodyWeightSince(_isoDate(from));
+    return GymBodyWeightSeries.fromMap(await _getMap(url));
+  }
+
+  /// Legt den Eintrag des Tages an - oder überschreibt ihn, wenn es schon einen gibt.
+  Future<GymBodyWeightEntry> logBodyWeight(double weightKg, {DateTime? date, String? note}) async {
+    final response = await _api.post(ApiConfig.bodyWeight, {
+      'weightKg': weightKg,
+      if (date != null) 'date': _isoDate(date),
+      if (note != null && note.isNotEmpty) 'note': note,
+    });
+    return GymBodyWeightEntry.fromMap(
+        _decodeMap(response.body, response.statusCode, _api.isSuccess(response)));
+  }
+
+  Future<void> deleteBodyWeight(int id) async {
+    final response = await _api.delete(ApiConfig.bodyWeightById(id));
+    if (!_api.isSuccess(response)) {
+      throw SportsApiException(_api.getErrorMessage(response));
+    }
+  }
+
+  /// Setzt das Zielgewicht. `null` entfernt es wieder.
+  Future<double?> setBodyWeightTarget(double? targetKg) async {
+    final response = await _api.put(ApiConfig.bodyWeightTarget, {'targetWeightKg': targetKg});
+    final map = _decodeMap(response.body, response.statusCode, _api.isSuccess(response));
+    return (map['targetWeightKg'] as num?)?.toDouble();
+  }
+
   // ── Trainingspläne (für die Ziel-Vorgabe) ────────────────────────────────────
 
   Future<Map<String, dynamic>?> getActivePlan() async {
@@ -284,6 +379,11 @@ class SportsService {
     final decoded = json.decode(response.body);
     if (decoded is! List) return [];
     return decoded.whereType<Map>().map((e) => Map<String, dynamic>.from(e)).toList();
+  }
+
+  /// Für Antworten ohne Inhalt (204): nur prüfen, nicht dekodieren.
+  void _ensureSuccess(String body, int statusCode, bool success) {
+    if (!success) _decodeMap(body, statusCode, false);
   }
 
   Map<String, dynamic> _decodeMap(String body, int statusCode, bool success) {

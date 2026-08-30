@@ -1,5 +1,6 @@
 package com.Finn.everything_app.controller;
 
+import com.Finn.everything_app.dto.ProgressionSuggestionDTO;
 import com.Finn.everything_app.dto.ReorderRequest;
 import com.Finn.everything_app.dto.RoutineDetailDTO;
 import com.Finn.everything_app.dto.RoutineSummaryDTO;
@@ -7,6 +8,7 @@ import com.Finn.everything_app.dto.RoutineUpsertRequest;
 import com.Finn.everything_app.mapper.RoutineMapper;
 import com.Finn.everything_app.model.Routine;
 import com.Finn.everything_app.security.CurrentUser;
+import com.Finn.everything_app.service.ProgressionService;
 import com.Finn.everything_app.service.RoutineService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -28,6 +30,7 @@ public class RoutineController {
 
     private final RoutineService routineService;
     private final RoutineMapper routineMapper;
+    private final ProgressionService progressionService;
 
     @GetMapping
     public ResponseEntity<List<RoutineSummaryDTO>> getRoutines(
@@ -45,6 +48,21 @@ public class RoutineController {
             @PathVariable Long id) {
 
         return ResponseEntity.ok(routineMapper.toDetail(routineService.getRoutine(userId, id)));
+    }
+
+    /**
+     * Was beim naechsten Mal ansteht - je Zeile der Routine.
+     *
+     * <p>Eigener Endpunkt und nicht Teil von {@code getRoutine}: die Ableitung liest die
+     * Trainingshistorie, und die braucht nicht jeder, der nur die Routine anzeigen will.
+     */
+    @GetMapping("/{id}/progression")
+    public ResponseEntity<List<ProgressionSuggestionDTO>> getProgression(
+            @CurrentUser Long userId,
+            @PathVariable Long id) {
+
+        Routine routine = routineService.getRoutine(userId, id);
+        return ResponseEntity.ok(progressionService.suggestForRoutine(userId, routine));
     }
 
     @PostMapping

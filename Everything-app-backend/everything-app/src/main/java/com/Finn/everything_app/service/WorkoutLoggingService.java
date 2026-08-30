@@ -37,9 +37,12 @@ public class WorkoutLoggingService {
     private final ExerciseSetRepository setRepository;
     private final ExerciseRepository exerciseRepository;
     private final RoutineRepository routineRepository;
+    private final RoutineHabitService routineHabitService;
     private final UserRepository userRepository;
     private final WorkoutPlanService workoutPlanService;
     private final WorkoutLogMapper logMapper;
+    private final ProgressionService progressionService;
+    private final ExerciseNoteService exerciseNoteService;
     private final ApplicationEventPublisher eventPublisher;
 
     // ==================== START ====================
@@ -121,14 +124,22 @@ public class WorkoutLoggingService {
         Map<Long, Double> recordByExercise = new HashMap<>();
         Map<Long, Long> lastSessionByExercise = new HashMap<>();
 
-        for (ExerciseSet set : setRepository.findCompletedSetsForExercises(exerciseIds, userId)) {
+        List<ExerciseSet> completed = setRepository.findCompletedSetsForExercises(exerciseIds, userId);
+        Map<Long, List<ProgressionService.SessionPerformance>> historyByExercise =
+                progressionService.groupHistory(completed);
+        Map<Long, String> notesByExercise = exerciseNoteService.getAll(userId, exerciseIds);
+
+        for (ExerciseSet set : completed) {
             Long exerciseId = set.getExercise().getId();
             Long sessionId = set.getWorkoutSession().getId();
 
             // Die Liste ist nach Startzeit absteigend sortiert - die erste Einheit je Uebung
             // ist damit die zuletzt trainierte.
             Long kept = lastSessionByExercise.putIfAbsent(exerciseId, sessionId);
-            if (kept == null || kept.equals(sessionId)) {
+            // Nur Arbeitssaetze in die "vorher"-Spalte: sie steht Zeile fuer Zeile neben den
+            // Arbeitssaetzen von heute. Ein Aufwaermsatz an erster Stelle wuerde die ganze
+            // Spalte verschieben - und "45 kg x 8" neben einem 75-kg-Satz behaupten.
+            if ((kept == null || kept.equals(sessionId)) && isWorkSet(set)) {
                 previousByExercise.computeIfAbsent(exerciseId, k -> new ArrayList<>())
                         .add(logMapper.toSetDTO(set));
             }
@@ -145,6 +156,7 @@ public class WorkoutLoggingService {
             item.setName(exercise.getName());
             item.setImageUrl(exercise.getImageUrl());
             item.setImageUrlEnd(exercise.getImageUrlEnd());
+            item.setAnimationUrl(exercise.getAnimationUrl());
             item.setEquipment(exercise.getEquipment());
             item.setPrimaryMuscles(exercise.getPrimaryMuscles().stream()
                     .map(MuscleGroup::getSlug).toList());
@@ -164,6 +176,9 @@ public class WorkoutLoggingService {
             item.setSupersetGroup(re.getSupersetGroup());
             item.setPrevious(previousByExercise.getOrDefault(exercise.getId(), List.of()));
             item.setPersonalRecordWeight(recordByExercise.get(exercise.getId()));
+            item.setProgression(progressionService.suggest(re,
+                    historyByExercise.getOrDefault(exercise.getId(), List.of())));
+            item.setExerciseNote(notesByExercise.get(exercise.getId()));
             result.add(item);
         }
         dto.setPlannedExercises(result);
@@ -216,6 +231,13 @@ public class WorkoutLoggingService {
                 routine.setLastPerformedAt(now);
                 routine.setPerformCount((routine.getPerformCount() == null ? 0 : routine.getPerformCount()) + 1);
                 routineRepository.save(routine);
+
+                // Traegt das Training in die Gewohnheit der Routine ein, damit die Streak im
+                // Habit-Space mitlaeuft. Nach dem Ende der Einheit datiert, nicht nach "jetzt":
+                // ein nachtraeglich protokolliertes Training gehoert an seinen eigenen Tag,
+                // sonst haengt eine Woche alte Einheit die heutige Streak weiter.
+                LocalDateTime trainedAt = saved.getEndTime() != null ? saved.getEndTime() : now;
+                routineHabitService.markTrained(routine, trainedAt.toLocalDate());
             }
         }
 
@@ -269,6 +291,12 @@ public class WorkoutLoggingService {
                 .collect(Collectors.toMap(Exercise::getId, Function.identity()));
 
         List<ExerciseSet> toSave = new ArrayList<>();
+        // Abfall- und Rest-Pause-Saetze zeigen auf ihren Arbeitssatz. Dessen ID gibt es erst
+        // nach dem Speichern, deshalb wird die Verknuepfung unten in einem zweiten Durchgang
+        // aufgeloest - der Client schickt nur die Satz-Nummer innerhalb des Blocks.
+        Map<ExerciseSet, int[]> pendingParents = new LinkedHashMap<>();
+        Map<String, ExerciseSet> byBlockAndNumber = new HashMap<>();
+
         for (int blockIndex = 0; blockIndex < exercises.size(); blockIndex++) {
             FinishWorkoutRequest.LoggedExercise block = exercises.get(blockIndex);
             Exercise exercise = byId.get(block.getExerciseId());
@@ -301,9 +329,39 @@ public class WorkoutLoggingService {
                     set.setCompletedAt(dto.getCompletedAt() != null ? dto.getCompletedAt() : LocalDateTime.now());
                 }
                 toSave.add(set);
+                byBlockAndNumber.put(blockIndex + ":" + set.getSetNumber(), set);
+                if (dto.getParentSetNumber() != null) {
+                    pendingParents.put(set, new int[]{blockIndex, dto.getParentSetNumber()});
+                }
             }
         }
         setRepository.saveAll(toSave);
+        linkParents(pendingParents, byBlockAndNumber);
+    }
+
+    /**
+     * Zweiter Durchgang: aus der Satz-Nummer wird die ID des gespeicherten Arbeitssatzes.
+     *
+     * <p>Ein Verweis auf sich selbst oder auf eine Nummer, die es im Block nicht gibt, wird
+     * still verworfen - ein kaputter Zusatzsatz ist ein normaler Satz, aber kein Grund, ein
+     * fertig trainiertes Workout abzulehnen.
+     */
+    private void linkParents(Map<ExerciseSet, int[]> pending, Map<String, ExerciseSet> byNumber) {
+        if (pending.isEmpty()) {
+            return;
+        }
+        List<ExerciseSet> linked = new ArrayList<>();
+        pending.forEach((child, ref) -> {
+            ExerciseSet parent = byNumber.get(ref[0] + ":" + ref[1]);
+            if (parent == null || parent == child || parent.getId() == null) {
+                return;
+            }
+            child.setParentSetId(parent.getId());
+            linked.add(child);
+        });
+        if (!linked.isEmpty()) {
+            setRepository.saveAll(linked);
+        }
     }
 
     private Integer resolveDuration(FinishWorkoutRequest request, WorkoutSession session) {
@@ -364,12 +422,6 @@ public class WorkoutLoggingService {
     }
 
     @Transactional(readOnly = true)
-    public ExerciseHistoryEntryDTO getLastPerformance(Long userId, Long exerciseId) {
-        List<ExerciseHistoryEntryDTO> history = getExerciseHistory(userId, exerciseId, 1);
-        return history.isEmpty() ? null : history.get(0);
-    }
-
-    @Transactional(readOnly = true)
     public PersonalRecordDTO getPersonalRecords(Long userId, Long exerciseId) {
         Exercise exercise = exerciseRepository.findById(exerciseId)
                 .orElseThrow(() -> new ResourceNotFoundException("Übung nicht gefunden"));
@@ -418,6 +470,15 @@ public class WorkoutLoggingService {
         dto.setMaxSetVolumeKg(maxSetVolume);
         dto.setTotalSetsAllTime(sets.size());
         return dto;
+    }
+
+    /**
+     * Ein eigenstaendiger Arbeitssatz - kein Aufwaermsatz und kein Zusatzsatz, der an einem
+     * anderen haengt. Dieselbe Abgrenzung wie in {@code ProgressionService}.
+     */
+    private boolean isWorkSet(ExerciseSet set) {
+        return set.getParentSetId() == null
+                && SetType.countsTowardVolume(set.getSetType());
     }
 
     /** Epley-Formel fuer das geschaetzte Ein-Wiederholungs-Maximum. */

@@ -6,6 +6,7 @@ import '../../../models/gym/gym_models.dart';
 import '../../../providers/sports_provider.dart';
 import '../../../theme/lyfta_theme.dart';
 import '../widgets/body_activation_map.dart';
+import '../widgets/training_heatmap.dart';
 import '../widgets/gym_session_card.dart';
 
 class GymProfileTab extends StatefulWidget {
@@ -121,6 +122,17 @@ class _ProgressTab extends StatelessWidget {
               : LineChart(_chartData(series)),
         ),
         const SizedBox(height: 24),
+        Text('TRAININGSTAGE', style: LyftaTheme.label),
+        const SizedBox(height: 14),
+        Container(
+          padding: const EdgeInsets.all(14),
+          decoration: BoxDecoration(
+            color: LyftaTheme.surface,
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: TrainingHeatmap(sessions: sports.sessions),
+        ),
+        const SizedBox(height: 24),
         Text('KENNZAHLEN', style: LyftaTheme.label),
         const SizedBox(height: 12),
         _statTile(
@@ -138,7 +150,57 @@ class _ProgressTab extends StatelessWidget {
           'Standard-Pause',
           '${sports.defaultRestSeconds} Sekunden',
         ),
+        const SizedBox(height: 24),
+        Text('TRAINING', style: LyftaTheme.label),
+        const SizedBox(height: 12),
+        _switchTile(
+          Icons.whatshot_outlined,
+          'Aufwärmsätze automatisch',
+          'Legt beim Start die Rampe zum Arbeitsgewicht an.',
+          sports.autoWarmup,
+          sports.setAutoWarmup,
+        ),
+        _switchTile(
+          Icons.speed_outlined,
+          'RIR/RPE-Spalte',
+          'Gefühlte Anstrengung neben jedem Satz mitschreiben.',
+          sports.showRpe,
+          sports.setShowRpe,
+        ),
       ],
+    );
+  }
+
+  Widget _switchTile(IconData icon, String title, String subtitle, bool value,
+      ValueChanged<bool> onChanged) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 8),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
+      decoration: BoxDecoration(
+        color: LyftaTheme.surface,
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Row(
+        children: [
+          Icon(icon, size: 18, color: LyftaTheme.textTertiary),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(title, style: LyftaTheme.title.copyWith(fontSize: 14)),
+                const SizedBox(height: 2),
+                Text(subtitle, style: LyftaTheme.caption),
+              ],
+            ),
+          ),
+          Switch(
+            value: value,
+            onChanged: onChanged,
+            activeThumbColor: LyftaTheme.primary,
+          ),
+        ],
+      ),
     );
   }
 
@@ -266,6 +328,21 @@ class _BodyTabState extends State<_BodyTab> {
     ('3 Monate', 90),
   ];
 
+  /// Zwei Sichten auf dieselbe Grafik: was zuletzt *belastet* wurde und was davon noch
+  /// *nachwirkt*. Die erste beantwortet "habe ich genug für den Rücken getan", die zweite
+  /// "kann ich heute Beine machen" - dieselben Flächen, andere Frage.
+  bool _showRecovery = false;
+
+  @override
+  void initState() {
+    super.initState();
+    // Der Erholungsstand wird nicht mit dem Rest geladen: er greift auf acht Wochen
+    // Verlauf zu und wird nur hier gebraucht.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) widget.sports.loadRecovery();
+    });
+  }
+
   int _days = 7;
 
   void _select(int days) {
@@ -279,10 +356,31 @@ class _BodyTabState extends State<_BodyTab> {
   Widget build(BuildContext context) {
     final volumes = widget.sports.muscleVolumes.where((m) => m.share > 0).toList()
       ..sort((a, b) => b.weightedSets.compareTo(a.weightedSets));
+    final recovery = widget.sports.recovery;
 
     return ListView(
       padding: const EdgeInsets.fromLTRB(16, 18, 16, 100),
       children: [
+        SegmentedButton<bool>(
+          segments: const [
+            ButtonSegment(value: false, label: Text('Belastung')),
+            ButtonSegment(value: true, label: Text('Erholung')),
+          ],
+          selected: {_showRecovery},
+          showSelectedIcon: false,
+          onSelectionChanged: (v) => setState(() => _showRecovery = v.first),
+          // Gold ist im Space die Farbe für Bestleistungen; eine Umschaltung ist keine.
+          // Deshalb dieselbe Auszeichnung wie bei den Zeitraum-Chips darunter.
+          style: SegmentedButton.styleFrom(
+            backgroundColor: LyftaTheme.surfaceElevated,
+            foregroundColor: LyftaTheme.textSecondary,
+            selectedBackgroundColor: LyftaTheme.surfaceHighlight,
+            selectedForegroundColor: LyftaTheme.primary,
+            side: const BorderSide(color: LyftaTheme.divider),
+          ),
+        ),
+        const SizedBox(height: 16),
+        if (!_showRecovery)
         Row(
           children: _ranges
               .map((range) => Padding(
@@ -315,22 +413,92 @@ class _BodyTabState extends State<_BodyTab> {
         SizedBox(
           height: 420,
           child: BodyActivationMap(
-            activation: widget.sports.muscleActivation,
+            activation: _showRecovery
+                ? {for (final m in recovery) m.muscle: m.fatigue}
+                : widget.sports.muscleActivation,
           ),
         ),
         const SizedBox(height: 16),
-        const BodyActivationLegend(),
+        BodyActivationLegend(
+          low: _showRecovery ? 'erholt' : 'wenig',
+          high: _showRecovery ? 'ermüdet' : 'viel',
+        ),
         const SizedBox(height: 26),
-        Text('SÄTZE JE MUSKELGRUPPE', style: LyftaTheme.label),
-        const SizedBox(height: 12),
-        if (volumes.isEmpty)
+        if (_showRecovery) ...[
+          Text('ERHOLUNG JE MUSKELGRUPPE', style: LyftaTheme.label),
+          const SizedBox(height: 6),
           Text(
-            'Für diesen Zeitraum sind keine Sätze aufgezeichnet.',
-            style: LyftaTheme.subtitle,
-          )
-        else
-          ...volumes.map((m) => _MuscleBar(volume: m, max: volumes.first.weightedSets)),
+            'Rot heißt: noch ermüdet. Der Maßstab ist deine härteste Einheit der '
+            'letzten acht Wochen.',
+            style: LyftaTheme.caption,
+          ),
+          const SizedBox(height: 12),
+          if (recovery.every((m) => m.lastTrainedAt == null))
+            Text('Noch keine Einheit, an der sich etwas messen ließe.',
+                style: LyftaTheme.subtitle)
+          else
+            ...(recovery.toList()
+                  ..sort((a, b) => b.fatigue.compareTo(a.fatigue)))
+                .map((m) => _RecoveryBar(recovery: m)),
+        ] else ...[
+          Text('SÄTZE JE MUSKELGRUPPE', style: LyftaTheme.label),
+          const SizedBox(height: 12),
+          if (volumes.isEmpty)
+            Text(
+              'Für diesen Zeitraum sind keine Sätze aufgezeichnet.',
+              style: LyftaTheme.subtitle,
+            )
+          else
+            ...volumes.map((m) => _MuscleBar(volume: m, max: volumes.first.weightedSets)),
+        ],
       ],
+    );
+  }
+}
+
+/// Eine Zeile der Erholungsliste: wie viel noch nachwirkt und wann es vorbei ist.
+class _RecoveryBar extends StatelessWidget {
+  final GymMuscleRecovery recovery;
+
+  const _RecoveryBar({required this.recovery});
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: Text(recovery.label,
+                    style: LyftaTheme.caption
+                        .copyWith(color: LyftaTheme.textPrimary)),
+              ),
+              Text(
+                recovery.readyLabel,
+                style: LyftaTheme.caption.copyWith(
+                  color: recovery.isReady
+                      ? LyftaTheme.textSecondary
+                      : LyftaTheme.musclePrimary,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 6),
+          ClipRRect(
+            borderRadius: BorderRadius.circular(3),
+            child: LinearProgressIndicator(
+              value: recovery.fatigue.clamp(0.0, 1.0),
+              minHeight: 6,
+              backgroundColor: LyftaTheme.surfaceElevated,
+              // Dieselbe Farbcodierung wie die Grafik darüber: rot ist belasteter Muskel.
+              valueColor: const AlwaysStoppedAnimation(LyftaTheme.musclePrimary),
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

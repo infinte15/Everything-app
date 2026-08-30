@@ -13,20 +13,15 @@ class TasksScreen extends StatefulWidget {
   final String title;
   final String? spaceType;
 
-  const TasksScreen({
-    super.key,
-    this.title = 'Aufgaben',
-    this.spaceType,
-  });
+  const TasksScreen({super.key, this.title = 'Aufgaben', this.spaceType});
 
   @override
   State<TasksScreen> createState() => _TasksScreenState();
 }
 
-class _TasksScreenState extends State<TasksScreen>
-    with SingleTickerProviderStateMixin {
+class _TasksScreenState extends State<TasksScreen> with SingleTickerProviderStateMixin {
   late TabController _tabController;
-  
+
   // Filter & Sort State Options
   String _selectedCategoryFilter = 'All'; // 'All', 'Personal', 'Studium'
   String _selectedSortOption = 'datum_ab'; // 'datum_ab', 'datum_auf', 'prio_auf', 'prio_ab'
@@ -99,19 +94,27 @@ class _TasksScreenState extends State<TasksScreen>
                     children: [
                       Text(
                         'Filtern & Sortieren',
-                        style: GoogleFonts.manrope(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.white),
+                        style: GoogleFonts.manrope(
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.white,
+                        ),
                       ),
                       IconButton(
                         icon: const Icon(Icons.close, color: Colors.grey),
                         onPressed: () => Navigator.pop(context),
-                      )
+                      ),
                     ],
                   ),
                   const Divider(color: Color(0xFF222222)),
                   const SizedBox(height: 8),
                   Text(
                     'Kategorie',
-                    style: GoogleFonts.manrope(fontSize: 12, fontWeight: FontWeight.w600, color: Colors.grey),
+                    style: GoogleFonts.manrope(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                      color: Colors.grey,
+                    ),
                   ),
                   const SizedBox(height: 8),
                   Row(
@@ -125,7 +128,7 @@ class _TasksScreenState extends State<TasksScreen>
                           labelStyle: GoogleFonts.manrope(
                             color: isSelected ? Colors.white : Colors.grey,
                             fontSize: 13,
-                            fontWeight: FontWeight.w600
+                            fontWeight: FontWeight.w600,
                           ),
                           label: Text(cat == 'All' ? 'Alle' : cat),
                           selected: isSelected,
@@ -142,7 +145,11 @@ class _TasksScreenState extends State<TasksScreen>
                   const SizedBox(height: 16),
                   Text(
                     'Sortieren nach',
-                    style: GoogleFonts.manrope(fontSize: 12, fontWeight: FontWeight.w600, color: Colors.grey),
+                    style: GoogleFonts.manrope(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                      color: Colors.grey,
+                    ),
                   ),
                   const SizedBox(height: 8),
                   Wrap(
@@ -173,7 +180,7 @@ class _TasksScreenState extends State<TasksScreen>
       labelStyle: GoogleFonts.manrope(
         color: isSelected ? Colors.white : Colors.grey,
         fontSize: 12,
-        fontWeight: FontWeight.w500
+        fontWeight: FontWeight.w500,
       ),
       label: Text(label),
       selected: isSelected,
@@ -201,7 +208,11 @@ class _TasksScreenState extends State<TasksScreen>
         leading: const BackButton(color: Color(0xFFC2C1FF)),
         title: Text(
           widget.title,
-          style: GoogleFonts.spaceGrotesk(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 20),
+          style: GoogleFonts.spaceGrotesk(
+            color: Colors.white,
+            fontWeight: FontWeight.bold,
+            fontSize: 20,
+          ),
         ),
         actions: [
           IconButton(
@@ -366,11 +377,13 @@ class _TaskTile extends StatelessWidget {
             content: Text('„${task.title}" wirklich löschen?'),
             actions: [
               TextButton(
-                  onPressed: () => Navigator.pop(context, false),
-                  child: const Text('Abbrechen')),
+                onPressed: () => Navigator.pop(context, false),
+                child: const Text('Abbrechen'),
+              ),
               FilledButton(
-                  onPressed: () => Navigator.pop(context, true),
-                  child: const Text('Löschen')),
+                onPressed: () => Navigator.pop(context, true),
+                child: const Text('Löschen'),
+              ),
             ],
           ),
         );
@@ -386,179 +399,196 @@ class _TaskTile extends StatelessWidget {
         // at once" symptom this fixes.
         final deleted = await context.read<TaskProvider>().deleteTask(task.id!);
         if (!deleted && context.mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-            content: Text('❌ Could not delete task — please try again'),
-            behavior: SnackBarBehavior.floating,
-          ));
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('❌ Could not delete task — please try again'),
+              behavior: SnackBarBehavior.floating,
+            ),
+          );
         }
         return deleted;
       },
-      child: Card(
-        margin: const EdgeInsets.only(bottom: 8),
-        child: Padding(
-          padding: const EdgeInsets.all(12),
-          child: Row(
-            children: [
-              // Die originale farbige Prioritäts-Leiste
-              Container(
-                width: 4,
-                height: 50,
-                decoration: BoxDecoration(
-                  color: priorityColor,
-                  borderRadius: BorderRadius.circular(4),
+      // Das InkWell liegt INNERHALB des Dismissible um die Card, nicht aussen herum: aussen
+      // wuerde es die Wischgeste zum Erledigen und Loeschen abfangen.
+      child: InkWell(
+        onTap: () => showModalBottomSheet(
+          context: context,
+          isScrollControlled: true,
+          builder: (_) => CreateTaskSheet(existingTask: task, spaceType: task.spaceType),
+        ),
+        borderRadius: BorderRadius.circular(12),
+        child: Card(
+          margin: const EdgeInsets.only(bottom: 8),
+          child: Padding(
+            padding: const EdgeInsets.all(12),
+            child: Row(
+              children: [
+                // Die originale farbige Prioritäts-Leiste
+                Container(
+                  width: 4,
+                  height: 50,
+                  decoration: BoxDecoration(
+                    color: priorityColor,
+                    borderRadius: BorderRadius.circular(4),
+                  ),
                 ),
-              ),
-              const SizedBox(width: 12),
+                const SizedBox(width: 12),
 
-              // Die runde originale Checkbox
-              Checkbox(
-                value: isCompleted,
-                onChanged: (_) => context.read<TaskProvider>().completeTask(task.id!),
-                shape: const CircleBorder(),
-              ),
+                // Die runde originale Checkbox
+                Checkbox(
+                  value: isCompleted,
+                  onChanged: (_) => context.read<TaskProvider>().completeTask(task.id!),
+                  shape: const CircleBorder(),
+                ),
 
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      task.title,
-                      style: theme.textTheme.bodyMedium?.copyWith(
-                        fontWeight: FontWeight.w600,
-                        decoration: isCompleted ? TextDecoration.lineThrough : null,
-                        color: isCompleted ? Colors.grey : null,
-                      ),
-                    ),
-                    if (task.description != null && task.description!.isNotEmpty)
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
                       Text(
-                        task.description!,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: theme.textTheme.bodySmall?.copyWith(color: Colors.grey),
+                        task.title,
+                        style: theme.textTheme.bodyMedium?.copyWith(
+                          fontWeight: FontWeight.w600,
+                          decoration: isCompleted ? TextDecoration.lineThrough : null,
+                          color: isCompleted ? Colors.grey : null,
+                        ),
                       ),
-                    // Der Grund, warum die Aufgabe keinen Termin hat. Ohne diese Zeile blieb sie
-                    // ohne jede Erklärung liegen — sie sah aus wie jede andere offene Aufgabe.
-                    if (atRiskItem != null && !isCompleted) ...[
+                      if (task.description != null && task.description!.isNotEmpty)
+                        Text(
+                          task.description!,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: theme.textTheme.bodySmall?.copyWith(color: Colors.grey),
+                        ),
+                      // Der Grund, warum die Aufgabe keinen Termin hat. Ohne diese Zeile blieb sie
+                      // ohne jede Erklärung liegen — sie sah aus wie jede andere offene Aufgabe.
+                      if (atRiskItem != null && !isCompleted) ...[
+                        const SizedBox(height: 4),
+                        Row(
+                          children: [
+                            Icon(
+                              istUeberfaellig
+                                  ? Icons.error_outline_rounded
+                                  : istDeadlineRisiko
+                                  ? Icons.warning_amber_rounded
+                                  : Icons.schedule_rounded,
+                              size: 12,
+                              color: _atRiskFarbe(istUeberfaellig, istDeadlineRisiko),
+                            ),
+                            const SizedBox(width: 4),
+                            Expanded(
+                              child: Text(
+                                _atRiskText(atRiskItem, istUeberfaellig, istDeadlineRisiko),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: TextStyle(
+                                  fontSize: 11,
+                                  color: _atRiskFarbe(istUeberfaellig, istDeadlineRisiko),
+                                  fontWeight: istUeberfaellig
+                                      ? FontWeight.w800
+                                      : istDeadlineRisiko
+                                      ? FontWeight.w600
+                                      : FontWeight.w500,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
                       const SizedBox(height: 4),
                       Row(
                         children: [
-                          Icon(
-                            istUeberfaellig
-                                ? Icons.error_outline_rounded
-                                : istDeadlineRisiko
-                                    ? Icons.warning_amber_rounded
-                                    : Icons.schedule_rounded,
-                            size: 12,
-                            color: _atRiskFarbe(istUeberfaellig, istDeadlineRisiko),
-                          ),
-                          const SizedBox(width: 4),
-                          Expanded(
-                            child: Text(
-                              _atRiskText(atRiskItem, istUeberfaellig, istDeadlineRisiko),
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
+                          if (task.deadline != null) ...[
+                            Icon(
+                              Icons.access_time,
+                              size: 12,
+                              color: task.isOverdue ? AppTheme.errorColor : Colors.grey,
+                            ),
+                            const SizedBox(width: 4),
+                            Text(
+                              DateFormat('dd.MM.yyyy').format(task.deadline!),
                               style: TextStyle(
                                 fontSize: 11,
-                                color: _atRiskFarbe(istUeberfaellig, istDeadlineRisiko),
-                                fontWeight: istUeberfaellig
-                                    ? FontWeight.w800
-                                    : istDeadlineRisiko
-                                        ? FontWeight.w600
-                                        : FontWeight.w500,
+                                color: task.isOverdue ? AppTheme.errorColor : Colors.grey,
+                                fontWeight: task.isOverdue ? FontWeight.bold : FontWeight.normal,
                               ),
                             ),
-                          ),
+                            const SizedBox(width: 8),
+                          ],
+                          // Der Scheduler hat keinen Block vor der Deadline untergebracht. Ohne
+                          // diesen Hinweis waere der einzige Unterschied zu einer eingeplanten
+                          // Aufgabe, dass irgendwo im Kalender ein Block fehlt.
+                          if (!isCompleted && task.isUnschedulable) ...[
+                            Icon(Icons.event_busy_rounded, size: 12, color: AppTheme.errorColor),
+                            const SizedBox(width: 4),
+                            Text(
+                              'Nicht einplanbar',
+                              style: TextStyle(
+                                fontSize: 11,
+                                color: AppTheme.errorColor,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                          ],
+                          if (task.estimatedDurationMinutes > 0) ...[
+                            const Icon(Icons.timer_outlined, size: 12, color: Colors.grey),
+                            const SizedBox(width: 4),
+                            Text(
+                              '${task.estimatedDurationMinutes} Min.',
+                              style: const TextStyle(fontSize: 11, color: Colors.grey),
+                            ),
+                          ],
                         ],
                       ),
                     ],
-                    const SizedBox(height: 4),
-                    Row(
-                      children: [
-                        if (task.deadline != null) ...[
-                          Icon(
-                            Icons.access_time,
-                            size: 12,
-                            color: task.isOverdue ? AppTheme.errorColor : Colors.grey,
-                          ),
-                          const SizedBox(width: 4),
-                          Text(
-                            DateFormat('dd.MM.yyyy').format(task.deadline!),
-                            style: TextStyle(
-                              fontSize: 11,
-                              color: task.isOverdue ? AppTheme.errorColor : Colors.grey,
-                              fontWeight: task.isOverdue ? FontWeight.bold : FontWeight.normal,
-                            ),
-                          ),
-                          const SizedBox(width: 8),
-                        ],
-                        // Der Scheduler hat keinen Block vor der Deadline untergebracht. Ohne
-                        // diesen Hinweis waere der einzige Unterschied zu einer eingeplanten
-                        // Aufgabe, dass irgendwo im Kalender ein Block fehlt.
-                        if (!isCompleted && task.isUnschedulable) ...[
-                          Icon(Icons.event_busy_rounded,
-                              size: 12, color: AppTheme.errorColor),
-                          const SizedBox(width: 4),
-                          Text(
-                            'Nicht einplanbar',
-                            style: TextStyle(
-                              fontSize: 11,
-                              color: AppTheme.errorColor,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                          const SizedBox(width: 8),
-                        ],
-                        if (task.estimatedDurationMinutes > 0) ...[
-                          const Icon(Icons.timer_outlined, size: 12, color: Colors.grey),
-                          const SizedBox(width: 4),
-                          Text(
-                            '${task.estimatedDurationMinutes} Min.',
-                            style: const TextStyle(fontSize: 11, color: Colors.grey),
-                          ),
-                        ],
-                      ],
+                  ),
+                ),
+
+                const SizedBox(width: 8),
+
+                // Rechter Infoblock (Kategorie-Badge & Prioritäts-Kästchen)
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                      margin: const EdgeInsets.only(bottom: 6),
+                      decoration: BoxDecoration(
+                        color: isDark
+                            ? Colors.white.withValues(alpha: 0.1)
+                            : Colors.black.withValues(alpha: 0.05),
+                        borderRadius: BorderRadius.circular(4),
+                      ),
+                      child: Text(
+                        task.category,
+                        style: TextStyle(
+                          fontSize: 10,
+                          fontWeight: FontWeight.w600,
+                          color: isDark ? Colors.grey[300] : Colors.grey[700],
+                        ),
+                      ),
+                    ),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: priorityColor.withValues(alpha: 0.1),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Text(
+                        'P${task.priority}',
+                        style: TextStyle(
+                          color: priorityColor,
+                          fontSize: 11,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
                     ),
                   ],
                 ),
-              ),
-              
-              const SizedBox(width: 8),
-
-              // Rechter Infoblock (Kategorie-Badge & Prioritäts-Kästchen)
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.end,
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                    margin: const EdgeInsets.only(bottom: 6),
-                    decoration: BoxDecoration(
-                      color: isDark ? Colors.white.withValues(alpha: 0.1) : Colors.black.withValues(alpha: 0.05),
-                      borderRadius: BorderRadius.circular(4),
-                    ),
-                    child: Text(
-                      task.category,
-                      style: TextStyle(
-                        fontSize: 10,
-                        fontWeight: FontWeight.w600,
-                        color: isDark ? Colors.grey[300] : Colors.grey[700],
-                      ),
-                    ),
-                  ),
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                    decoration: BoxDecoration(
-                      color: priorityColor.withValues(alpha: 0.1),
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    child: Text(
-                      'P${task.priority}',
-                      style: TextStyle(color: priorityColor, fontSize: 11, fontWeight: FontWeight.bold),
-                    ),
-                  ),
-                ],
-              ),
-            ],
+              ],
+            ),
           ),
         ),
       ),
@@ -573,8 +603,9 @@ class _TaskSearchDelegate extends SearchDelegate<String> {
   _TaskSearchDelegate({required this.tasks});
 
   @override
-  List<Widget> buildActions(BuildContext context) =>
-      [IconButton(icon: const Icon(Icons.clear), onPressed: () => query = '')];
+  List<Widget> buildActions(BuildContext context) => [
+    IconButton(icon: const Icon(Icons.clear), onPressed: () => query = ''),
+  ];
 
   @override
   Widget buildLeading(BuildContext context) =>

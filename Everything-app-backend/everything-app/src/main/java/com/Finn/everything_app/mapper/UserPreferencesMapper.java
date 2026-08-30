@@ -16,8 +16,6 @@ public class UserPreferencesMapper {
         dto.setWorkdayEnd(prefs.getWorkdayEnd());
         dto.setPeakProductivityTime(prefs.getPeakProductivityTime());
         dto.setBreakDurationMinutes(prefs.getBreakDurationMinutes());
-        dto.setHoursBeforeBreak(prefs.getHoursBeforeBreak());
-        dto.setGroupSimilarTasks(prefs.getGroupSimilarTasks());
         dto.setMaxTasksPerDay(prefs.getMaxTasksPerDay());
         dto.setNotificationsEnabled(prefs.getNotificationsEnabled());
         dto.setReminderMinutesBefore(prefs.getReminderMinutesBefore());
@@ -31,7 +29,9 @@ public class UserPreferencesMapper {
         dto.setPersonalHoursEnd(prefs.getPersonalHoursEnd());
         dto.setDefaultMinChunkMinutes(prefs.getDefaultMinChunkMinutes());
         dto.setDefaultMaxChunkMinutes(prefs.getDefaultMaxChunkMinutes());
+        dto.setDeadlineBufferHours(prefs.getDeadlineBufferHours());
         dto.setAutoScheduleEnabled(prefs.getAutoScheduleEnabled());
+        dto.setTargetWeightKg(prefs.getTargetWeightKg());
         return dto;
     }
 
@@ -47,8 +47,6 @@ public class UserPreferencesMapper {
         prefs.setWorkdayEnd(dto.getWorkdayEnd());
         prefs.setPeakProductivityTime(dto.getPeakProductivityTime());
         prefs.setBreakDurationMinutes(dto.getBreakDurationMinutes());
-        prefs.setHoursBeforeBreak(dto.getHoursBeforeBreak());
-        prefs.setGroupSimilarTasks(dto.getGroupSimilarTasks());
         prefs.setMaxTasksPerDay(dto.getMaxTasksPerDay());
         prefs.setNotificationsEnabled(dto.getNotificationsEnabled());
         prefs.setReminderMinutesBefore(dto.getReminderMinutesBefore());
@@ -62,7 +60,9 @@ public class UserPreferencesMapper {
         prefs.setPersonalHoursEnd(dto.getPersonalHoursEnd());
         prefs.setDefaultMinChunkMinutes(dto.getDefaultMinChunkMinutes());
         prefs.setDefaultMaxChunkMinutes(dto.getDefaultMaxChunkMinutes());
+        prefs.setDeadlineBufferHours(dto.getDeadlineBufferHours());
         prefs.setAutoScheduleEnabled(dto.getAutoScheduleEnabled());
+        prefs.setTargetWeightKg(dto.getTargetWeightKg());
         return prefs;
     }
 }

@@ -30,6 +30,23 @@ class ApiConfig {
   /// Ergebnis des letzten Scheduler-Laufs — klein genug, um danach zu pollen.
   static const String scheduleStatus = '$baseUrl/calendar/schedule-status';
 
+  /// Dasselbe, aber die Antwort kommt erst, wenn wirklich neu geplant wurde.
+  ///
+  /// [since] ist der ROHE Zeitstempel des zuletzt gesehenen Laufs, so wie der Server ihn
+  /// geschrieben hat — bewusst nicht neu formatiert. Ein durch `DateTime.parse`/`toIso8601String`
+  /// gelaufener Wert verliert Stellen (Dart schneidet auf Mikrosekunden ab) und wäre damit minimal
+  /// kleiner als der gespeicherte: der Server hielte jeden alten Lauf für neuer als `since` und
+  /// antwortete sofort — die App liefe in eine Anfrageschleife.
+  static String scheduleStatusAwait([String? since]) => since == null
+      ? '$baseUrl/calendar/schedule-status/await'
+      : '$baseUrl/calendar/schedule-status/await?since=${Uri.encodeQueryComponent(since)}';
+
+  /// Muss GRÖSSER sein als `scheduler.await-timeout-ms` (25 s) im Backend.
+  ///
+  /// Sonst gewinnt der Client-Timeout das Rennen und die App sieht einen Socket-Fehler statt des
+  /// sauberen 204, das der Server ohnehin schicken wollte.
+  static const Duration longPollTimeout = Duration(seconds: 35);
+
   //USER / PREFERENCES ENDPOINTS
   static const String userPreferences = '$baseUrl/user/preferences';
   
@@ -112,10 +129,15 @@ class ApiConfig {
       '$baseUrl/sports/exercises/$id/history?limit=$limit';
   static String exerciseRecords(int id) => '$baseUrl/sports/exercises/$id/records';
 
+  /// Stehende Notiz zur Übung - GET und PUT auf derselben Adresse.
+  static String exerciseNote(int id) => '$baseUrl/sports/exercises/$id/note';
+
   // Routinen
   static const String routines = '$baseUrl/sports/routines';
   static String routineById(int id) => '$baseUrl/sports/routines/$id';
   static const String routinesReorder = '$baseUrl/sports/routines/reorder';
+  static String routineProgression(int id) =>
+      '$baseUrl/sports/routines/$id/progression';
 
   // Laufendes Training
   static const String workoutLog = '$baseUrl/sports/workouts';
@@ -126,6 +148,23 @@ class ApiConfig {
   // Auswertungen
   static const String gymWeeklyStats = '$baseUrl/sports/stats/week';
   static const String gymMuscleStats = '$baseUrl/sports/stats/muscles';
+  static const String gymRecovery = '$baseUrl/sports/stats/recovery';
+
+  // Körpergewicht
+  static const String bodyWeight = '$baseUrl/sports/bodyweight';
+  static String bodyWeightSince(String fromIso) =>
+      '$baseUrl/sports/bodyweight?from=$fromIso';
+  static String bodyWeightById(int id) => '$baseUrl/sports/bodyweight/$id';
+  static const String bodyWeightTarget = '$baseUrl/sports/bodyweight/target';
+
+  // Ausrüstungsprofile
+  static const String equipmentProfiles = '$baseUrl/sports/equipment-profiles';
+  static String equipmentProfileById(int id) =>
+      '$baseUrl/sports/equipment-profiles/$id';
+
+  /// 0 schaltet die Filterung ab - so heißt es auch im Backend.
+  static String equipmentProfileActivate(int id) =>
+      '$baseUrl/sports/equipment-profiles/$id/activate';
   
   //RECIPE ENDPOINTS
   static const String recipes = '$baseUrl/recipes';

@@ -180,4 +180,97 @@ class TaskControllerTest {
 
         assertEquals(1, taskRepository.findByUserId(testUser.getId()).size());
     }
+
+    /** Aufgabe mit Deadline und Notiz, wie sie das Bearbeiten-Sheet vorfindet. */
+    private Task gespeicherteAufgabeMitDeadline() {
+        Task task = new Task();
+        task.setUser(testUser);
+        task.setTitle("Abgabe");
+        task.setPriority(3);
+        task.setEstimatedDurationMinutes(60);
+        task.setStatus(TaskStatus.TODO);
+        task.setDeadline(LocalDateTime.now().plusDays(3));
+        task.setNotBefore(LocalDateTime.now().plusDays(1));
+        task.setDescription("Notiz");
+        return taskRepository.save(task);
+    }
+
+    private Map<String, Object> rumpfFuer(Task task) {
+        Map<String, Object> body = new HashMap<>();
+        body.put("id", task.getId());
+        body.put("title", task.getTitle());
+        body.put("priority", task.getPriority());
+        body.put("estimatedDurationMinutes", task.getEstimatedDurationMinutes());
+        // So schickt es das Frontend: Task.toJson sendet ALLE Felder, auch die leeren.
+        body.put("deadline", null);
+        body.put("notBefore", null);
+        body.put("description", null);
+        return body;
+    }
+
+    /**
+     * Der Regressionstest für die Patch-Konvention selbst.
+     *
+     * Ohne dieses Verhalten räumte {@code CalendarEventService.creditBlock} beim Abhaken eines
+     * Blocks die halbe Aufgabe leer — es patcht mit einem nackten {@code new Task()}, das nur
+     * Minuten und Status trägt.
+     */
+    @Test
+    void putTaskOhneClearFieldsLaesstDieDeadlineStehen() throws Exception {
+        Task task = gespeicherteAufgabeMitDeadline();
+
+        mockMvc.perform(put("/api/tasks/{id}", task.getId())
+                        .header("Authorization", "Bearer " + token)
+                        .contentType(APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(rumpfFuer(task))))
+                .andExpect(status().isOk());
+
+        Task danach = taskRepository.findById(task.getId()).orElseThrow();
+        assertNotNull(danach.getDeadline(), "null im Rumpf heißt unverändert, nicht leeren");
+        assertNotNull(danach.getNotBefore());
+        assertNotNull(danach.getDescription());
+    }
+
+    @Test
+    void putTaskMitClearFieldsLeertGenauDieseFelder() throws Exception {
+        Task task = gespeicherteAufgabeMitDeadline();
+
+        Map<String, Object> body = rumpfFuer(task);
+        body.put("clearFields", java.util.List.of("DEADLINE", "DESCRIPTION"));
+
+        mockMvc.perform(put("/api/tasks/{id}", task.getId())
+                        .header("Authorization", "Bearer " + token)
+                        .contentType(APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(body)))
+                .andExpect(status().isOk());
+
+        Task danach = taskRepository.findById(task.getId()).orElseThrow();
+        assertNull(danach.getDeadline());
+        assertNull(danach.getDescription());
+        // Nicht genannt = nicht angefasst. Ein "leert alles"-Fehler fiele hier auf.
+        assertNotNull(danach.getNotBefore());
+    }
+
+    /**
+     * Ein Tippfehler im Client muss laut scheitern.
+     *
+     * Als freier String hätte {@code clearFields} ihn stillschweigend geschluckt, und "das Löschen
+     * kommt einfach nicht an" ist ein Fehler, den man lange sucht. Deshalb ein Enum.
+     */
+    @Test
+    void putTaskMitUnbekanntemClearFieldGibt400() throws Exception {
+        Task task = gespeicherteAufgabeMitDeadline();
+
+        Map<String, Object> body = rumpfFuer(task);
+        body.put("clearFields", java.util.List.of("GIBT_ES_NICHT"));
+
+        mockMvc.perform(put("/api/tasks/{id}", task.getId())
+                        .header("Authorization", "Bearer " + token)
+                        .contentType(APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(body)))
+                .andExpect(status().is4xxClientError());
+
+        assertNotNull(taskRepository.findById(task.getId()).orElseThrow().getDeadline(),
+                "eine abgewiesene Anfrage darf nichts verändert haben");
+    }
 }
