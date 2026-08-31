@@ -72,6 +72,17 @@ public class SolveOutcome {
         return new SolveOutcome(status, List.of(), List.of());
     }
 
+    /**
+     * Kein verwertbarer Plan — aber die Liste dessen, was ohne Termin dasteht.
+     *
+     * Der Kalender bleibt in diesem Fall unverändert (siehe
+     * {@code SmartSchedulerService#generateOptimalSchedule}); die Meldung ist dann das Einzige,
+     * was der Nutzer überhaupt bekommt, und darf deshalb nicht leer sein.
+     */
+    public static SolveOutcome unusable(CpSolverStatus status, List<AtRiskItem> atRisk) {
+        return new SolveOutcome(status, List.of(), atRisk);
+    }
+
     /** Es gab schlicht nichts zu planen; das ist ein Erfolg, kein Fehler. */
     public static SolveOutcome empty() {
         return new SolveOutcome(CpSolverStatus.OPTIMAL, List.of(), List.of());

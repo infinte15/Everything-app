@@ -34,7 +34,16 @@ public interface TaskRepository extends JpaRepository<Task, Long> {
     // findTasksForAutoScheduling: seit dem Chunking soll das Pinnen eines einzelnen Blocks die
     // übrigen Blöcke beweglich lassen. Die gepinnte Zeit zieht der Scheduler selbst ab.
     // findTasksForAutoScheduling bleibt unverändert — /api/tasks/unscheduled hängt daran.
-    @Query("SELECT t FROM Task t WHERE t.user.id = :userId AND t.status = 'TODO'")
+    //
+    // IN_PROGRESS gehört zwingend dazu. Bis 31.08.2026 stand hier nur TODO, und das hieß: wer eine
+    // Aufgabe auf "in Arbeit" setzt, verliert damit JEDE geplante Zeit dafür — der Scheduler sah
+    // sie nicht mehr, löschte ihre Blöcke beim nächsten Lauf und meldete auch nichts, denn ohne
+    // Chunk gibt es auch kein AtRiskItem (siehe SmartSchedulerService#classifyAtRisk). Am
+    // Demo-Bestand war das "Kalender-Wochenansicht neu bauen": 180 offene Minuten, Deadline in
+    // sieben Tagen, null Blöcke, keine Warnung. Angefangene Arbeit ist genau die, deren Restzeit
+    // man am dringendsten verteidigt haben will; der Rest wird ohnehin über completedMinutes
+    // abgezogen. Erledigt wird über COMPLETED/CANCELLED, nicht über IN_PROGRESS.
+    @Query("SELECT t FROM Task t WHERE t.user.id = :userId AND t.status IN ('TODO', 'IN_PROGRESS')")
     List<Task> findSchedulableTasks(@Param("userId") Long userId);
 
     // Custom JPQL Query

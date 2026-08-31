@@ -3188,6 +3188,47 @@ class SmartSchedulerServiceTest {
     }
 
     /**
+     * Über der Aufnahmegrenze wird streng nach Priorität abgeschnitten — und der Rest gemeldet.
+     *
+     * <p>Die Grenze selbst ist eine Laufzeitmaßnahme (siehe {@code maxTaskChunks}): am echten
+     * Bestand mit 76 offenen Aufgaben brauchte allein das Presolve länger als Phase 1 überhaupt
+     * bekommt, der Lauf endete auf UNKNOWN und meldete NICHTS. Diese Größenordnung lässt sich hier
+     * nicht nachstellen — das Mockito-Modell ist um ein Vielfaches kleiner —, wohl aber die beiden
+     * Eigenschaften, an denen die Grenze steht oder fällt: sie schneidet unten ab, und was sie
+     * abschneidet, verschwindet nicht still.
+     */
+    @Test
+    void ueberDerAufnahmegrenzeFaelltDasUnwichtigsteWegUndWirdGemeldet() {
+        LocalDate morgen = TODAY.plusDays(1);
+        org.springframework.test.util.ReflectionTestUtils.setField(service, "maxTaskChunks", 3);
+
+        List<Task> tasks = new ArrayList<>();
+        for (int i = 0; i < 3; i++) {
+            tasks.add(makeTask(2600L + i, "wichtig " + i, 60, 5, morgen.plusDays(5).atTime(23, 59)));
+        }
+        for (int i = 0; i < 3; i++) {
+            tasks.add(makeTask(2610L + i, "nebensache " + i, 60, 1, morgen.plusDays(5).atTime(23, 59)));
+        }
+        when(taskService.getSchedulableTasks(1L)).thenReturn(tasks);
+
+        ScheduleResult result = service.generateOptimalSchedule(1L, morgen, morgen.plusDays(6));
+
+        Set<Long> verplant = result.getScheduledTasks().stream()
+                .map(i -> i.getTask().getId())
+                .collect(Collectors.toSet());
+        assertEquals(Set.of(2600L, 2601L, 2602L), verplant,
+                "die Grenze muss unten abschneiden, nicht irgendwo — verplant war " + verplant);
+
+        Set<Long> gemeldet = result.getAtRisk().stream()
+                .map(AtRiskItem::getTaskId)
+                .collect(Collectors.toSet());
+        assertEquals(Set.of(2610L, 2611L, 2612L), gemeldet,
+                "was über der Grenze liegt, muss gemeldet werden — sonst fehlt es lautlos");
+        result.getAtRisk().forEach(a -> assertEquals(60, a.getMinutes(),
+                "gemeldet wird die volle fehlende Zeit, nicht null"));
+    }
+
+    /**
      * Der Kern des Fehlalarms: Deadline hinter dem Nahbereich, davor ist es eng, dahinter frei.
      *
      * Vor dem Nachlauf fiel dieser Task heraus und wurde als WOULD_MISS_DEADLINE gemeldet —

@@ -239,6 +239,42 @@ public class SmartSchedulerService {
     /** Untergrenze für Phase 2, falls Phase 1 wider Erwarten ihren Deckel ausschöpft. */
     private static final double PHASE2_MIN_SECONDS = 1.0;
 
+    /**
+     * Wie viele Task-Chunks höchstens ins Hauptmodell dürfen.
+     *
+     * <p><b>Das ist eine Laufzeitgrenze, kein Geschmacksurteil.</b> Jeder Chunk kostet im Modell
+     * eine Boolean PRO ERLAUBTEM TAG (siehe {@link #makePlaceable}) — eine Aufgabe mit Deadline in
+     * drei Wochen bringt allein zwanzig davon mit. Am Demo-Bestand mit 76 offenen Aufgaben ergab
+     * das 1994 Variablen und 3832 Constraints, und damit brauchte das PRESOLVE allein 1,79s. Phase
+     * 1 hat einen Deckel von {@link #PHASE1_CAP_SECONDS} = 1,5s: der Löser kam nie zum Suchen. Der
+     * Lauf endete auf UNKNOWN, der Kalender blieb unverändert, und {@code atRisk} war LEER — der
+     * Nutzer erfuhr nicht einmal, dass nichts geplant wurde.
+     *
+     * <p><b>Mehr Zeit ist dafür keine Lösung.</b> Gemessen mit 6s Gesamtbudget lief Phase 2
+     * weiterhin ins Leere (sie fiel auf die Phase-1-Platzierung zurück), und der Drop-Zielwert von
+     * Phase 1 schwankte über die Läufe zwischen 63920 und 83320 — der Kalender hätte bei jedem
+     * Lauf anders ausgesehen. Es ist derselbe Befund wie in {@code scheduler.solver-time-limit-
+     * seconds}: bei zu großem Modell kauft Zeit nichts mehr, sie wird nur verbraucht.
+     *
+     * <p>Deshalb wird nicht das Budget vergrößert, sondern das Modell begrenzt. 50 ist gemessen,
+     * nicht geschätzt — derselbe Bestand, nur die Grenze verstellt, drei Läufe je Stufe:
+     *
+     * <pre>
+     *   Grenze   Phase 1     drop            Phase 2        gefährdet
+     *   40       0,44-0,57s  480 (stabil)    kommt durch    46
+     *   50       0,75-0,86s  480 (stabil)    kommt durch    38
+     *   60       1,52-1,54s  20680-24480     fällt zurück   34
+     *   80       1,52-1,55s  64760-70100     fällt zurück   32
+     * </pre>
+     *
+     * Die Kante liegt zwischen 50 und 60: darüber schöpft Phase 1 ihren Deckel aus, Phase 2
+     * bekommt nur noch {@link #PHASE2_MIN_SECONDS} und fällt auf die Phase-1-Platzierung zurück —
+     * und die ist von Lauf zu Lauf eine andere (schwankender {@code drop}). Der Nutzer sähe einen
+     * Kalender, der sich bei jedem Lauf umsortiert. Vier zusätzlich verplante Aufgaben sind das
+     * nicht wert. 50 lässt gut ein Drittel des Deckels als Reserve für langsamere Maschinen.
+     */
+    @Value("${scheduler.max-task-chunks:50}")
+    private int maxTaskChunks = 50;
 
     /**
      * Nachhol-Fenster für einen bereits überfälligen Task, in Tagen ab jetzt.
@@ -607,7 +643,14 @@ public class SmartSchedulerService {
                     outcome.getStatus());
             ScheduleResult failed = new ScheduleResult();
             failed.setSolverStatus(outcome.getStatus().name());
+            failed.setAtRisk(outcome.getAtRisk());
             failed.setMessage("Zeitplan konnte nicht neu berechnet werden — bestehende Termine bleiben erhalten.");
+            // Auch ein gescheiterter Lauf ist ein Lauf: ohne diesen Eintrag wartet der Long-Poll
+            // aus /schedule-status/await sein volles Zeitfenster ab, und die At-Risk-Liste eines
+            // HINTERGRUND-Laufs erreicht den Nutzer überhaupt nicht (siehe CalendarController).
+            // markScheduleRun bleibt bewusst aus — geschrieben wurde nichts, der Nachzügler-Sweep
+            // soll es später erneut versuchen.
+            lastRunStore.record(userId, outcome.getStatus().name(), outcome.getAtRisk(), 0, 0);
             return failed;
         }
 
@@ -1147,6 +1190,14 @@ public class SmartSchedulerService {
         Integer placedStartSlot;
         /** 0 = Hauptlauf, 1 = nachgerückt, 2 = in die gelockerten Zeiten gequetscht. */
         int reliefLevel;
+        /**
+         * Ob dieser Chunk überhaupt in ein Modell darf — siehe {@link #markiereAufnahmegrenze}.
+         *
+         * Ein nicht zugelassener Chunk bekommt weder im Hauptmodell noch in einem der Nachläufe
+         * ein Placeable. Er bleibt trotzdem in {@code chunks}: {@link #classifyAtRisk} liest ihn
+         * dort und meldet ihn. Genau das ist der Unterschied zum stillen Verschwinden.
+         */
+        boolean zugelassen = true;
     }
 
     /**
@@ -1754,6 +1805,53 @@ public class SmartSchedulerService {
     // CP-SAT
     // =========================================================================
 
+    /**
+     * Markiert die Aufgaben, die NICHT mehr ins Hauptmodell dürfen, wenn der Bestand größer ist als
+     * {@link #maxTaskChunks}.
+     *
+     * <p>Aufgenommen wird in genau der Reihenfolge, in der auch der Löser entscheiden würde, wenn
+     * die Zeit knapp wird: {@link #calculateTaskWeight} — strikt nach Priorität, die Deadline
+     * ordnet nur innerhalb der Stufe. Die Grenze schneidet damit nicht irgendwo, sondern unten.
+     *
+     * <p><b>Ganze Aufgaben, nicht einzelne Chunks.</b> Eine halb aufgenommene Aufgabe wäre die
+     * schlechteste aller Möglichkeiten: der Nutzer sähe zwei von vier Lernblöcken im Kalender und
+     * müsste der At-Risk-Liste entnehmen, dass die anderen beiden fehlen. Passt eine Gruppe nicht
+     * mehr vollständig, ist Schluss — nicht "die nächste, kleinere nehmen wir noch mit". Sonst
+     * überholte eine unwichtige Kleinigkeit eine wichtige große Aufgabe, und genau diese Umkehrung
+     * ist der Grund, warum Priorität im Modell ein strikter Rang ist und kein Faktor.
+     *
+     * <p>Überfälliges zählt hier nicht mit: das hat der Vorlauf bereits platziert
+     * ({@link #solveOverduePass}), es bekommt im Hauptmodell ohnehin kein Placeable.
+     */
+    private void markiereAufnahmegrenze(Map<Long, List<TaskChunk>> chunksByTask, Axis axis, int nowSlot,
+                                  LocalDate startDate) {
+        List<List<TaskChunk>> gruppen = chunksByTask.values().stream()
+                .filter(g -> !istUeberfaellig(g.get(0), axis, nowSlot))
+                .sorted(Comparator
+                        .comparingLong((List<TaskChunk> g) -> -calculateTaskWeight(g.get(0).task, startDate))
+                        .thenComparing(g -> g.get(0).task.getId()))
+                .collect(Collectors.toList());
+
+        int aufgenommen = 0;
+        boolean voll = false;
+        for (List<TaskChunk> g : gruppen) {
+            if (voll || aufgenommen + g.size() > maxTaskChunks) {
+                voll = true;
+                g.forEach(c -> c.zugelassen = false);
+                continue;
+            }
+            aufgenommen += g.size();
+        }
+
+        if (voll) {
+            long abgewiesen = chunksByTask.values().stream()
+                    .flatMap(List::stream).filter(c -> !c.zugelassen).count();
+            log.info("Aufnahmegrenze: {} von {} Chunks ins Modell, {} bleiben unverplant und "
+                            + "werden als gefährdet gemeldet (max-task-chunks={})",
+                    aufgenommen, aufgenommen + abgewiesen, abgewiesen, maxTaskChunks);
+        }
+    }
+
     private SolveOutcome solveWithCpSat(List<TaskChunk> chunks, List<HabitSlot> habitSlots,
                                         List<ProjectSlot> projectSlots,
                                         ScheduleInput input, Axis axis, UserPreferences prefs,
@@ -1839,9 +1937,17 @@ public class SmartSchedulerService {
         Map<Long, List<TaskChunk>> chunksByTask = chunks.stream()
                 .collect(Collectors.groupingBy(c -> c.task.getId(), LinkedHashMap::new, Collectors.toList()));
 
+        // Vor dem Bauen: passt der ganze Bestand überhaupt in ein Modell dieser Größe? Was nicht
+        // hineinpasst, wird hier markiert und weiter unten übersprungen.
+        markiereAufnahmegrenze(chunksByTask, axis, nowSlot, startDate);
+
         for (Map.Entry<Long, List<TaskChunk>> e : chunksByTask.entrySet()) {
             List<TaskChunk> group = e.getValue();
             Task task = group.get(0).task;
+
+            // Über der Aufnahmegrenze. Kein Placeable, kein Nachlauf — aber classifyAtRisk findet
+            // den Chunk am Ende mit placedStartSlot == null und meldet ihn.
+            if (!group.get(0).zugelassen) continue;
 
             // Überfälliges hat der Vorlauf bereits platziert; seine Zeit steckt schon als festes
             // Intervall in blocked. Ein zweites Placeable hier wäre nicht nur überflüssig, es
@@ -2242,6 +2348,20 @@ public class SmartSchedulerService {
 
         CpSolver solver = new CpSolver();
         solver.getParameters().setLogSearchProgress(false);
+
+        // Presolve-Probing aus.
+        //
+        // Das Presolve ist der einzige Teil des Laufs, der VOR der ersten Lösung liegt und trotzdem
+        // mit dem Modell wächst — und Probing ist darin der teuerste Posten. Am Bestand mit 76
+        // offenen Aufgaben (1994 Variablen) maß der Solver-Log: "Starting presolve at 0.00s",
+        // "Starting search at 1.80s". Phase 1 hat 1,5s. Der Löser kam also nie zum Suchen, obwohl
+        // die erste Lösung danach nach 0,6s stand und die Verbesserung nach ~3s flach lief.
+        //
+        // Mit Level 0 fällt genau dieser Vorlauf weg. Am normalen Bestand (16 Aufgaben, 205
+        // Intervalle) kostet das nichts — der Lauf erreicht weiterhin OPTIMAL. Zusammen mit
+        // maxTaskChunks ist es der Grund, warum ein voller Aufgabenberg den Lauf nicht mehr
+        // umkippt.
+        solver.getParameters().setCpModelProbingLevel(0);
         // Fester Zufallskeim. Er nimmt eine Quelle der Streuung heraus, macht den Lauf aber NICHT
         // reproduzierbar: das Zeitbudget ist eine Wanduhr-Grenze, und welcher der Worker seine
         // Lösung zuerst hat, hängt damit an der Maschinenlast. Gemessen lieferten fünf Läufe über
@@ -2266,8 +2386,13 @@ public class SmartSchedulerService {
         CpSolverStatus s1 = solver.solve(model);
         long phase1Ms = (System.nanoTime() - p1Start) / 1_000_000;
         if (s1 != CpSolverStatus.OPTIMAL && s1 != CpSolverStatus.FEASIBLE) {
-            log.warn("CP-SAT Phase 1 ohne Lösung: {}", s1);
-            return SolveOutcome.unusable(s1);
+            // Der Kalender bleibt stehen — das ist richtig so, ein veralteter Plan ist besser als
+            // ein leerer. Der Nutzer erfährt aber, WAS ohne Termin dasteht: bis 31.08.2026 kam
+            // dieser Fall mit leerer At-Risk-Liste zurück, und damit war der einzige sichtbare
+            // Unterschied zu einem erfolgreichen Lauf, dass sich nichts geändert hatte.
+            log.warn("CP-SAT Phase 1 ohne Lösung: {} — {} Chunks werden als gefährdet gemeldet",
+                    s1, chunks.size());
+            return SolveOutcome.unusable(s1, classifyAtRisk(chunks, axis, cutoff));
         }
         long bestDrop = Math.round(solver.objectiveValue());
 
@@ -3656,6 +3781,7 @@ public class SmartSchedulerService {
         // Überfälliges hat der Vorlauf; ohne Deadline ist nichts in Gefahr.
         List<TaskChunk> gefaehrdet = chunks.stream()
                 .filter(c -> c.placedStartSlot == null)
+                .filter(c -> c.zugelassen)
                 .filter(c -> c.task.getDeadline() != null)
                 .filter(c -> !istUeberfaellig(c, axis, nowSlot))
                 .collect(Collectors.toList());
@@ -4074,8 +4200,12 @@ public class SmartSchedulerService {
         // Platz gefunden hat, findet ihn hier niemand mehr. Ein überfälliger Chunk mit leerem
         // Fenster würde unten außerdem eine leere Obergrenze bekommen (die Deadline liegt hinter
         // uns) und lautlos gar kein Fenster erhalten.
+        //
+        // Die Aufnahmegrenze gilt auch hier. Ein Nachlauf, der alles aufnähme, was das Hauptmodell
+        // nicht mehr trägt, wäre genau das Modell, das eben zu groß war — nur mit weniger Zeit.
         List<TaskChunk> offen = chunks.stream()
                 .filter(c -> c.placedStartSlot == null)
+                .filter(c -> c.zugelassen)
                 .filter(c -> c.task.getDeadline() != null)
                 .filter(c -> !istUeberfaellig(c, axis, nowSlot))
                 .collect(Collectors.toList());
