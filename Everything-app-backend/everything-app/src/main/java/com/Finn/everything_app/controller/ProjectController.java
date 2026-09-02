@@ -23,7 +23,6 @@ import java.util.stream.Collectors;
 @RestController
 @RequestMapping("/api/projects")
 @RequiredArgsConstructor
-@CrossOrigin(origins = "*")
 public class ProjectController {
 
     /** Vorschau-Fenster der kommenden Projektbloecke, wenn der Aufrufer keins mitgibt. */

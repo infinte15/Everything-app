@@ -34,7 +34,6 @@ import java.util.stream.Collectors;
 @RestController
 @RequestMapping("/api/finance/bank")
 @RequiredArgsConstructor
-@CrossOrigin(origins = "*")
 @Slf4j
 public class BankController {
 

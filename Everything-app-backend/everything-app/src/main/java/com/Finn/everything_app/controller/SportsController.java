@@ -18,7 +18,6 @@ import java.util.stream.Collectors;
 @RestController
 @RequestMapping("/api/sports")
 @RequiredArgsConstructor
-@CrossOrigin(origins = "*")
 public class SportsController {
 
     private final WorkoutPlanService planService;

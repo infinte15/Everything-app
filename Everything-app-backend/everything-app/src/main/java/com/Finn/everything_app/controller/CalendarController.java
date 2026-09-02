@@ -23,7 +23,6 @@ import java.util.stream.Collectors;
 @RestController
 @RequestMapping("/api/calendar")
 @RequiredArgsConstructor
-@CrossOrigin(origins = "*")
 public class CalendarController {
 
     private final CalendarEventService calendarEventService;

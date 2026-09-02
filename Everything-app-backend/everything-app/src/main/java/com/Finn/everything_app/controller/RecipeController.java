@@ -33,7 +33,6 @@ import java.util.stream.Collectors;
 @RestController
 @RequestMapping("/api/recipes")
 @RequiredArgsConstructor
-@CrossOrigin(origins = "*")
 public class RecipeController {
 
     private final RecipeService recipeService;

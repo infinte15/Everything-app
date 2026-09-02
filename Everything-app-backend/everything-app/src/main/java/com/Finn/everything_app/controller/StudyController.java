@@ -19,7 +19,6 @@ import java.util.stream.Collectors;
 @RestController
 @RequestMapping("/api/study")
 @RequiredArgsConstructor
-@CrossOrigin(origins = "*")
 public class StudyController {
 
     /** Zeitraum von GET /flashcards/reviews ohne since-Parameter. */

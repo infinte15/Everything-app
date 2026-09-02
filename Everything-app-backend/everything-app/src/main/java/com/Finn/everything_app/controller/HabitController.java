@@ -18,7 +18,6 @@ import java.util.stream.Collectors;
 @RestController
 @RequestMapping("/api/habits")
 @RequiredArgsConstructor
-@CrossOrigin(origins = "*")
 public class HabitController {
 
     private final HabitService habitService;

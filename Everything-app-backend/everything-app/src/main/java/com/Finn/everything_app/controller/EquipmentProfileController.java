@@ -17,7 +17,6 @@ import java.util.List;
 @RestController
 @RequestMapping("/api/sports/equipment-profiles")
 @RequiredArgsConstructor
-@CrossOrigin(origins = "*")
 public class EquipmentProfileController {
 
     private final EquipmentProfileService service;

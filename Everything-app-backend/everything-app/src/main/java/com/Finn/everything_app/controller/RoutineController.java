@@ -25,7 +25,6 @@ import java.util.List;
 @RestController
 @RequestMapping("/api/sports/routines")
 @RequiredArgsConstructor
-@CrossOrigin(origins = "*")
 public class RoutineController {
 
     private final RoutineService routineService;

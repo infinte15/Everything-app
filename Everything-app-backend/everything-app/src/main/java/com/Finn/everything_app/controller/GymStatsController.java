@@ -17,7 +17,6 @@ import java.util.List;
 @RestController
 @RequestMapping("/api/sports/stats")
 @RequiredArgsConstructor
-@CrossOrigin(origins = "*")
 public class GymStatsController {
 
     private final WorkoutStatsService statsService;

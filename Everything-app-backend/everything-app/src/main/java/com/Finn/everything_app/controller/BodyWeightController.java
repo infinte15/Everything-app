@@ -17,7 +17,6 @@ import java.util.Map;
 @RestController
 @RequestMapping("/api/sports/bodyweight")
 @RequiredArgsConstructor
-@CrossOrigin(origins = "*")
 public class BodyWeightController {
 
     private final BodyWeightService bodyWeightService;
