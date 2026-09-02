@@ -1,0 +1,18 @@
+### Deployment-Geheimnisse ###
+# Enthaelt DB_PASSWORD, JWT_SECRET und den Cloudflare-Tunnel-Token.
+# Vorlage: .env.example
+.env
+.env.*
+!.env.example
+
+### Android-Signierung ###
+# Verlust bedeutet: kein Update mehr installierbar, nur Neuinstallation.
+# Gehoert als Anhang in Vaultwarden, nicht ins Repo.
+Everything-app-frontend/everything_app/android/key.properties
+*.jks
+*.keystore
+
+### Web-Build, den Caddy ausliefert ###
+# Landet per rsync auf dem Server, gehoert nicht ins Repo.
+deploy/web/*
+!deploy/web/.gitkeep

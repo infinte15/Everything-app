@@ -2,6 +2,7 @@ package com.Finn.everything_app.security;
 
 
 import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.security.authentication.AuthenticationManager;
@@ -22,6 +23,7 @@ import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 import java.util.Arrays;
+import java.util.List;
 
 
 @Configuration
@@ -33,26 +35,46 @@ public class SecurityConfig {
     private final JwtAuthenticationFilter jwtAuthFilter;
     private final UserDetailsService userDetailsService;
 
+    /** Schaltet zusammen mit {@code DevAuthController} den passwortlosen Dev-Login frei. */
+    @Value("${app.dev-login.enabled:false}")
+    private boolean devLoginEnabled;
+
+    /** Muss zum gleichnamigen Flag im {@code AuthController} passen. */
+    @Value("${app.registration.enabled:false}")
+    private boolean registrationEnabled;
+
+    /**
+     * Kommagetrennte Liste erlaubter Origins. Leer = gar keine Cross-Origin-Freigabe.
+     *
+     * <p>Im Produktionsbetrieb liegen Web-App und API hinter Caddy auf derselben Origin, dann
+     * braucht es CORS nicht. Die nativen Clients sind keine Browser und ignorieren CORS ohnehin.
+     */
+    @Value("${app.cors.allowed-origins:}")
+    private String allowedOrigins;
+
     @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
         http
                 .csrf(AbstractHttpConfigurer::disable)
                 .cors(cors -> cors.configurationSource(corsConfigurationSource()))
-                .authorizeHttpRequests(auth -> auth
-                        // Public Endpoints
-                        .requestMatchers(
-                                "/api/auth/register",
-                                "/api/auth/login",
-                                "/api/auth/dev-login",
-                                // Rücksprung aus dem Bank-Login: der Browser kommt ohne JWT zurück.
-                                // Die Zuordnung zum Nutzer läuft über den einmalig verwendbaren
-                                // state-Parameter, nicht über den Authorization-Header.
-                                "/api/finance/bank/callback",
-                                "/error")
-                        .permitAll()
+                .authorizeHttpRequests(auth -> {
+                    auth.requestMatchers("/api/auth/login", "/error").permitAll();
 
-                        // Alle anderen Endpoints benötigen Authentifizierung
-                        .anyRequest().authenticated())
+                    // Rücksprung aus dem Bank-Login: der Browser kommt ohne JWT zurück.
+                    // Die Zuordnung zum Nutzer läuft über den einmalig verwendbaren
+                    // state-Parameter, nicht über den Authorization-Header.
+                    auth.requestMatchers("/api/finance/bank/callback").permitAll();
+
+                    if (registrationEnabled) {
+                        auth.requestMatchers("/api/auth/register").permitAll();
+                    }
+                    if (devLoginEnabled) {
+                        auth.requestMatchers("/api/auth/dev-login").permitAll();
+                    }
+
+                    // Alle anderen Endpoints benötigen Authentifizierung
+                    auth.anyRequest().authenticated();
+                })
                 .sessionManagement(session -> session
                         .sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authenticationProvider(daoAuthenticationProvider())
@@ -90,14 +112,21 @@ public class SecurityConfig {
 
     @Bean
     public CorsConfigurationSource corsConfigurationSource() {
-        CorsConfiguration configuration = new CorsConfiguration();
-        configuration.setAllowedOrigins(Arrays.asList("*")); // Alle Origins erlaubt
-        configuration.setAllowedMethods(Arrays.asList("GET", "POST", "PUT", "DELETE", "OPTIONS"));
-        configuration.setAllowedHeaders(Arrays.asList("*"));
-        configuration.setAllowCredentials(false);
-
         UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
-        source.registerCorsConfiguration("/**", configuration);
+
+        if (allowedOrigins == null || allowedOrigins.isBlank()) {
+            return source;   // keine Regel registriert -> keine Freigabe
+        }
+
+        CorsConfiguration configuration = new CorsConfiguration();
+        configuration.setAllowedOriginPatterns(
+                Arrays.stream(allowedOrigins.split(",")).map(String::trim).filter(o -> !o.isEmpty()).toList());
+        configuration.setAllowedMethods(List.of("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
+        configuration.setAllowedHeaders(List.of("Authorization", "Content-Type"));
+        configuration.setAllowCredentials(false);
+        configuration.setMaxAge(3600L);
+
+        source.registerCorsConfiguration("/api/**", configuration);
         return source;
     }
 }

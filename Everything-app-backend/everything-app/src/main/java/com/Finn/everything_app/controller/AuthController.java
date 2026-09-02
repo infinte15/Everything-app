@@ -5,6 +5,7 @@ import com.Finn.everything_app.model.User;
 import com.Finn.everything_app.service.UserService;
 import com.Finn.everything_app.security.JwtUtil;
 import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.authentication.*;
@@ -16,16 +17,31 @@ import jakarta.validation.Valid;
 @RestController
 @RequestMapping("/api/auth")
 @RequiredArgsConstructor
-@CrossOrigin(origins = "*")  //Frontend-Zugriff
 public class AuthController {
 
     private final UserService userService;
     private final AuthenticationManager authenticationManager;
     private final JwtUtil jwtUtil;
 
+    /**
+     * Selbstregistrierung. In Produktion aus: die App hat genau einen Nutzer, und ein offener
+     * /register ist der zweite Weg an ein gueltiges Token vorbei am Passwort des Kontos.
+     *
+     * <p>Beim ersten Deploy einmal auf {@code true} starten, den eigenen Account anlegen, Flag
+     * zurueck auf {@code false}, Container neu starten.
+     */
+    @Value("${app.registration.enabled:false}")
+    private boolean registrationEnabled;
+
     //POST /api/auth/register  --> Registriere User
     @PostMapping("/register")
     public ResponseEntity<?> register(@Valid @RequestBody UserDTO userDTO) {
+        if (!registrationEnabled) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN).body(
+                    new ErrorResponse("Registrierung ist deaktiviert.")
+            );
+        }
+
         try {
             User user = userService.registerUser(
                     userDTO.getUsername(),
@@ -70,33 +86,6 @@ public class AuthController {
         } catch (BadCredentialsException e) {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(
                     new ErrorResponse("Ungültige Anmeldedaten")
-            );
-        }
-    }
-
-    //POST /api/auth/dev-login --> Auto-Login für Testing
-    @PostMapping("/dev-login")
-    public ResponseEntity<?> devLogin() {
-        try {
-            User user = null;
-            try {
-                user = userService.findByUsername("dev_tester");
-            } catch (Exception e) {
-                // User existiert nicht, erstellen wir ihn
-                user = userService.registerUser("dev_tester", "dev@tester.com", "devpassword123");
-            }
-
-            userService.updateLastLogin(user.getId());
-
-            String token = jwtUtil.generateToken(user.getUsername(), user.getId());
-
-            return ResponseEntity.ok(
-                    new LoginResponse(token, user.getId(), user.getUsername(), user.getEmail())
-            );
-
-        } catch (Exception e) {
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(
-                    new ErrorResponse("Fehler beim Dev-Login: " + e.getMessage())
             );
         }
     }

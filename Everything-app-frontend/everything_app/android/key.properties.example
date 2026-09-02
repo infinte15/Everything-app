@@ -1,0 +1,13 @@
+# Vorlage fuer android/key.properties (nicht eingecheckt).
+#
+# Keystore einmalig erzeugen:
+#   keytool -genkey -v -keystore ~/.everything-app/upload-keystore.jks \
+#     -keyalg RSA -keysize 2048 -validity 10000 -alias upload
+#
+# WICHTIG: upload-keystore.jks UND diese Datei sichern (Vaultwarden-Anhang).
+# Ohne den Schluessel laesst sich kein Update mehr installieren - nur
+# deinstallieren und neu installieren, und die lokalen Daten sind weg.
+storePassword=
+keyPassword=
+keyAlias=upload
+storeFile=/home/finn/.everything-app/upload-keystore.jks

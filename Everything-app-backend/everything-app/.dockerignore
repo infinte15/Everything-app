@@ -1,0 +1,10 @@
+# Gebaut wird im Container - lokale Artefakte wuerden den Cache nur invalidieren.
+target/
+logs/
+.mvn/wrapper/maven-wrapper.jar
+HELP.md
+
+# Sicherheitsnetz: die lokalen Dev-Zugangsdaten duerfen nicht ins Image.
+# Auf dem Server entsteht das Image aus einem git clone, dort existiert die Datei
+# ohnehin nicht - beim Bauen auf dem Entwicklungsrechner aber schon.
+application-secrets.properties

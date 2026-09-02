@@ -1,4 +1,4 @@
-package com.example.everything_app
+package de.finn.everythingapp
 
 import io.flutter.embedding.android.FlutterActivity
 

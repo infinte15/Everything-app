@@ -33,7 +33,11 @@ build/
 .vscode/
 
 
-src/main/resources/application.properties
+### Zugangsdaten ###
+# application.properties ist seit der Deployment-Vorbereitung eingecheckt und
+# geheimnisfrei - der Server baut das Image aus einem git clone und braucht sie.
+# Die beiden vertraulichen Werte liegen daneben:
+application-secrets.properties
 
 ### Laufzeit-Logs ###
 # Werden bei jedem Start neu geschrieben bzw. rotiert und tauchten sonst in jedem Diff auf.

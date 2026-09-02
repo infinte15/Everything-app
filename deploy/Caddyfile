@@ -1,0 +1,36 @@
+# Ein einziger Eintrittspunkt: cloudflared zeigt hierher, Caddy entscheidet,
+# was API ist und was Web-App. Kein TLS hier - das macht Cloudflare an der Kante,
+# und die Strecke Tunnel → Caddy verlaeuft im Docker-Netz.
+:80 {
+	encode gzip
+
+	handle /api/* {
+		reverse_proxy backend:8080 {
+			# Der Long-Poll auf /api/calendar/schedule-status/await parkt bis zu 25 s.
+			# Caddys Vorgabe wuerde ihn abschneiden, bevor der Server antwortet.
+			transport http {
+				response_header_timeout 60s
+			}
+		}
+	}
+
+	# Flutter-Web-Build. try_files schickt unbekannte Pfade an index.html,
+	# damit go_router-Deeplinks nach einem Neuladen nicht auf 404 laufen.
+	handle {
+		root * /srv/web
+		try_files {path} /index.html
+		file_server
+	}
+
+	header {
+		X-Content-Type-Options nosniff
+		X-Frame-Options DENY
+		Referrer-Policy no-referrer
+		-Server
+	}
+
+	log {
+		output stdout
+		format console
+	}
+}

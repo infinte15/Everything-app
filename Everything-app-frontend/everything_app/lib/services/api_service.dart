@@ -36,7 +36,7 @@ class ApiService {
     // Prepend base URL if it's just a path
     // Remove the '/api' from start of path if the base URL already ends with '/api'
     String path = url;
-    const base = ApiConfig.baseUrl; // e.g. http://localhost:8080/api
+    final base = ApiConfig.baseUrl; // z.B. https://app.deine-domain.de/api
     
     if (path.startsWith('/api')) {
       path = path.replaceFirst('/api', '');

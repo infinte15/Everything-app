@@ -1,34 +1,61 @@
 
-/// - Android Emulator: http://10.0.2.2:8080/api
-/// - Echtes Gerät im gleichen WLAN: http://DEINE_IP:8080/api
-/// - iOS Simulator: http://localhost:8080/api
+import 'package:flutter/foundation.dart' show kIsWeb;
+
+/// Zentrale Stelle für alle Backend-URLs.
+///
+/// Die Basis-URL wird nicht mehr fest verdrahtet, sondern beim Build gesetzt:
+///
+/// ```
+/// flutter build apk --release --dart-define=API_BASE_URL=https://app.deine-domain.de/api
+/// ```
+///
+/// Ohne `--dart-define` bleibt es bei `http://localhost:8080/api` — passend zum
+/// Entwicklungsbetrieb mit `adb reverse tcp:8080 tcp:8080` bzw. dem iOS-Simulator.
+/// Für den Android-Emulator oder ein Gerät ohne `adb reverse` stattdessen die
+/// LAN-Adresse mitgeben, z. B. `--dart-define=API_BASE_URL=http://10.0.2.2:8080/api`.
 class ApiConfig {
-  // Wir nutzen jetzt adb reverse tcp:8080 tcp:8080, daher funktioniert localhost auch auf dem echten Handy!
-  static const String baseUrl = 'http://localhost:8080/api';
+  static const String _compiledBaseUrl = String.fromEnvironment(
+    'API_BASE_URL',
+    defaultValue: 'http://localhost:8080/api',
+  );
+
+  /// Im Web liegen App und API hinter Caddy auf derselben Origin — die Adresse
+  /// steht also schon im Browser und muss nicht einkompiliert werden. Das spart
+  /// beim Web-Build das `--dart-define` und die ganze CORS-Frage gleich mit.
+  ///
+  /// Bewusst `Uri.base.origin` und nicht der relative Pfad `/api`: `package:http`
+  /// baut daraus eine absolute URL, und absolute URLs funktionieren in jedem
+  /// Client gleich.
+  ///
+  /// Sobald das hier ein Getter ist, können die Endpunkte darunter nicht mehr
+  /// `const` sein — deshalb sind sie alle zu Gettern geworden. Für die
+  /// aufrufenden Services ändert sich dadurch nichts.
+  static String get baseUrl =>
+      kIsWeb ? '${Uri.base.origin}/api' : _compiledBaseUrl;
   
   static const Duration timeout = Duration(seconds: 30);
   
   //AUTH ENDPOINTS
-  static const String login = '$baseUrl/auth/login';
-  static const String register = '$baseUrl/auth/register';
-  static const String devLogin = '$baseUrl/auth/dev-login';
+  static String get login => '$baseUrl/auth/login';
+  static String get register => '$baseUrl/auth/register';
+  static String get devLogin => '$baseUrl/auth/dev-login';
   
   //TASK ENDPOINTS 
-  static const String tasks = '$baseUrl/tasks';
+  static String get tasks => '$baseUrl/tasks';
   static String taskById(int id) => '$baseUrl/tasks/$id';
   static String tasksByStatus(String status) => '$baseUrl/tasks/status/$status';
-  static const String unscheduledTasks = '$baseUrl/tasks/unscheduled';
+  static String get unscheduledTasks => '$baseUrl/tasks/unscheduled';
   static String completeTask(int id) => '$baseUrl/tasks/$id/complete';
   
   //CALENDAR ENDPOINTS
-  static const String calendarEvents = '$baseUrl/calendar/events';
+  static String get calendarEvents => '$baseUrl/calendar/events';
   static String calendarEventById(int id) => '$baseUrl/calendar/events/$id';
   static String calendarEventPin(int id) => '$baseUrl/calendar/events/$id/pin';
   static String calendarEventComplete(int id) => '$baseUrl/calendar/events/$id/complete';
   static String calendarEventSkip(int id) => '$baseUrl/calendar/events/$id/skip';
-  static const String generateSchedule = '$baseUrl/calendar/generate-schedule';
+  static String get generateSchedule => '$baseUrl/calendar/generate-schedule';
   /// Ergebnis des letzten Scheduler-Laufs — klein genug, um danach zu pollen.
-  static const String scheduleStatus = '$baseUrl/calendar/schedule-status';
+  static String get scheduleStatus => '$baseUrl/calendar/schedule-status';
 
   /// Dasselbe, aber die Antwort kommt erst, wenn wirklich neu geplant wurde.
   ///
@@ -48,11 +75,11 @@ class ApiConfig {
   static const Duration longPollTimeout = Duration(seconds: 35);
 
   //USER / PREFERENCES ENDPOINTS
-  static const String userPreferences = '$baseUrl/user/preferences';
+  static String get userPreferences => '$baseUrl/user/preferences';
   
   //STUDY ENDPOINTS
   // Notizen
-  static const String studyNotes = '$baseUrl/study/notes';
+  static String get studyNotes => '$baseUrl/study/notes';
   static String studyNoteById(int id) => '$baseUrl/study/notes/$id';
   static String studyNotesByCourse(int courseId) =>
       '$baseUrl/study/notes/course/$courseId';
@@ -61,14 +88,14 @@ class ApiConfig {
   // Seitenbaum: verschieben (eine Seite an eine andere Stelle) und umsortieren (eine Ebene).
   static String studyNoteMove(int id) => '$baseUrl/study/notes/$id/move';
   static String studyNoteCourse(int id) => '$baseUrl/study/notes/$id/course';
-  static const String studyNotesReorder = '$baseUrl/study/notes/reorder';
+  static String get studyNotesReorder => '$baseUrl/study/notes/reorder';
 
   // Karteikarten
-  static const String flashcards = '$baseUrl/study/flashcards';
+  static String get flashcards => '$baseUrl/study/flashcards';
   static String flashcardById(int id) => '$baseUrl/study/flashcards/$id';
   static String flashcardsByDeck(int deckId) =>
       '$baseUrl/study/flashcards/deck/$deckId';
-  static const String dueFlashcards = '$baseUrl/study/flashcards/due';
+  static String get dueFlashcards => '$baseUrl/study/flashcards/due';
   static String reviewFlashcard(int id) =>
       '$baseUrl/study/flashcards/$id/review';
 
@@ -79,52 +106,52 @@ class ApiConfig {
           '?since=${Uri.encodeQueryComponent(since.toIso8601String())}';
 
   // Decks
-  static const String flashcardDecks = '$baseUrl/study/decks';
+  static String get flashcardDecks => '$baseUrl/study/decks';
   static String flashcardDeckById(int id) => '$baseUrl/study/decks/$id';
   static String flashcardDeckStats(int id) => '$baseUrl/study/decks/$id/stats';
 
   // Kurse / Module
-  static const String courses = '$baseUrl/study/courses';
+  static String get courses => '$baseUrl/study/courses';
   static String courseById(int id) => '$baseUrl/study/courses/$id';
   static String courseSemester(int id) => '$baseUrl/study/courses/$id/semester';
 
   // Stundenplan. Der ganze Plan auf einmal; angelegt und geändert wird unter dem Modul.
-  static const String courseSchedules = '$baseUrl/study/schedules';
+  static String get courseSchedules => '$baseUrl/study/schedules';
   static String schedulesOfCourse(int courseId) =>
       '$baseUrl/study/courses/$courseId/schedules';
   static String scheduleById(int courseId, int id) =>
       '$baseUrl/study/courses/$courseId/schedules/$id';
 
   // Semester
-  static const String semesters = '$baseUrl/study/semesters';
+  static String get semesters => '$baseUrl/study/semesters';
   static String semesterById(int id) => '$baseUrl/study/semesters/$id';
   static String semesterCurrent(int id) => '$baseUrl/study/semesters/$id/current';
-  static const String semesterReorder = '$baseUrl/study/semesters/reorder';
+  static String get semesterReorder => '$baseUrl/study/semesters/reorder';
 
   // Lernziele
-  static const String studyGoals = '$baseUrl/study/goals';
+  static String get studyGoals => '$baseUrl/study/goals';
   static String studyGoalById(int id) => '$baseUrl/study/goals/$id';
   static String studyGoalLog(int id) => '$baseUrl/study/goals/$id/log';
 
   // Noten
-  static const String grades = '$baseUrl/study/grades';
+  static String get grades => '$baseUrl/study/grades';
   static String gradeById(int id) => '$baseUrl/study/grades/$id';
   static String gradesByCourse(int courseId) =>
       '$baseUrl/study/grades/course/$courseId';
   
   //SPORTS ENDPOINTS
-  static const String workoutPlans = '$baseUrl/sports/plans';
+  static String get workoutPlans => '$baseUrl/sports/plans';
   static String workoutPlanById(int id) => '$baseUrl/sports/plans/$id';
-  static const String activeWorkoutPlan = '$baseUrl/sports/plans/active';
-  static const String workoutSessions = '$baseUrl/sports/sessions';
+  static String get activeWorkoutPlan => '$baseUrl/sports/plans/active';
+  static String get workoutSessions => '$baseUrl/sports/sessions';
   static String workoutSessionById(int id) => '$baseUrl/sports/sessions/$id';
-  static const String exercises = '$baseUrl/sports/exercises';
-  static const String exerciseSets = '$baseUrl/sports/sets';
+  static String get exercises => '$baseUrl/sports/exercises';
+  static String get exerciseSets => '$baseUrl/sports/sets';
 
   // Übungs-Katalog
   static String exerciseById(int id) => '$baseUrl/sports/exercises/$id';
-  static const String muscleGroups = '$baseUrl/sports/exercises/muscles';
-  static const String exerciseFilters = '$baseUrl/sports/exercises/filters';
+  static String get muscleGroups => '$baseUrl/sports/exercises/muscles';
+  static String get exerciseFilters => '$baseUrl/sports/exercises/filters';
   static String exerciseHistory(int id, {int limit = 20}) =>
       '$baseUrl/sports/exercises/$id/history?limit=$limit';
   static String exerciseRecords(int id) => '$baseUrl/sports/exercises/$id/records';
@@ -133,32 +160,32 @@ class ApiConfig {
   static String exerciseNote(int id) => '$baseUrl/sports/exercises/$id/note';
 
   // Routinen
-  static const String routines = '$baseUrl/sports/routines';
+  static String get routines => '$baseUrl/sports/routines';
   static String routineById(int id) => '$baseUrl/sports/routines/$id';
-  static const String routinesReorder = '$baseUrl/sports/routines/reorder';
+  static String get routinesReorder => '$baseUrl/sports/routines/reorder';
   static String routineProgression(int id) =>
       '$baseUrl/sports/routines/$id/progression';
 
   // Laufendes Training
-  static const String workoutLog = '$baseUrl/sports/workouts';
-  static const String startWorkout = '$baseUrl/sports/workouts/start';
+  static String get workoutLog => '$baseUrl/sports/workouts';
+  static String get startWorkout => '$baseUrl/sports/workouts/start';
   static String finishWorkout(int sessionId) =>
       '$baseUrl/sports/workouts/$sessionId/finish';
 
   // Auswertungen
-  static const String gymWeeklyStats = '$baseUrl/sports/stats/week';
-  static const String gymMuscleStats = '$baseUrl/sports/stats/muscles';
-  static const String gymRecovery = '$baseUrl/sports/stats/recovery';
+  static String get gymWeeklyStats => '$baseUrl/sports/stats/week';
+  static String get gymMuscleStats => '$baseUrl/sports/stats/muscles';
+  static String get gymRecovery => '$baseUrl/sports/stats/recovery';
 
   // Körpergewicht
-  static const String bodyWeight = '$baseUrl/sports/bodyweight';
+  static String get bodyWeight => '$baseUrl/sports/bodyweight';
   static String bodyWeightSince(String fromIso) =>
       '$baseUrl/sports/bodyweight?from=$fromIso';
   static String bodyWeightById(int id) => '$baseUrl/sports/bodyweight/$id';
-  static const String bodyWeightTarget = '$baseUrl/sports/bodyweight/target';
+  static String get bodyWeightTarget => '$baseUrl/sports/bodyweight/target';
 
   // Ausrüstungsprofile
-  static const String equipmentProfiles = '$baseUrl/sports/equipment-profiles';
+  static String get equipmentProfiles => '$baseUrl/sports/equipment-profiles';
   static String equipmentProfileById(int id) =>
       '$baseUrl/sports/equipment-profiles/$id';
 
@@ -167,11 +194,11 @@ class ApiConfig {
       '$baseUrl/sports/equipment-profiles/$id/activate';
   
   //RECIPE ENDPOINTS
-  static const String recipes = '$baseUrl/recipes';
+  static String get recipes => '$baseUrl/recipes';
   static String recipeById(int id) => '$baseUrl/recipes/$id';
   static String recipesByCategory(String category) =>
       '$baseUrl/recipes/category/${Uri.encodeComponent(category)}';
-  static const String favoriteRecipes = '$baseUrl/recipes/favorites';
+  static String get favoriteRecipes => '$baseUrl/recipes/favorites';
   static String recipeSearch(String query) =>
       '$baseUrl/recipes/search?query=${Uri.encodeQueryComponent(query)}';
   static String quickRecipes({int maxMinutes = 30}) =>
@@ -179,10 +206,10 @@ class ApiConfig {
   static String recipeFavorite(int id) => '$baseUrl/recipes/$id/favorite';
 
   // Entdecken-Reihen
-  static const String recentlyCookedRecipes = '$baseUrl/recipes/recently-cooked';
+  static String get recentlyCookedRecipes => '$baseUrl/recipes/recently-cooked';
   static String notCookedLately({int days = 30}) =>
       '$baseUrl/recipes/not-cooked-lately?days=$days';
-  static const String neverCookedRecipes = '$baseUrl/recipes/never-cooked';
+  static String get neverCookedRecipes => '$baseUrl/recipes/never-cooked';
   static String bestRatedRecipes({int minRating = 4}) =>
       '$baseUrl/recipes/best-rated?minRating=$minRating';
 
@@ -195,12 +222,12 @@ class ApiConfig {
   // Import. `importPreview` nimmt jede Adresse; welche der Server abrufen darf,
   // entscheidet er selbst. `importText` ruft nichts ab - der Text kommt aus der
   // Zwischenablage.
-  static const String recipeImportPreview = '$baseUrl/recipes/import/preview';
-  static const String recipeImportText = '$baseUrl/recipes/import/text';
-  static const String parseIngredients = '$baseUrl/recipes/ingredients/parse';
+  static String get recipeImportPreview => '$baseUrl/recipes/import/preview';
+  static String get recipeImportText => '$baseUrl/recipes/import/text';
+  static String get parseIngredients => '$baseUrl/recipes/ingredients/parse';
 
   // Wochenplan
-  static const String mealPlan = '$baseUrl/recipes/meal-plan';
+  static String get mealPlan => '$baseUrl/recipes/meal-plan';
   static String mealPlanRange(DateTime from, DateTime to) =>
       '$baseUrl/recipes/meal-plan?startDate=${isoDay(from)}&endDate=${isoDay(to)}';
   static String mealPlanOnDate(DateTime day) =>
@@ -212,9 +239,9 @@ class ApiConfig {
 
   // Einkaufsliste. Ohne Zeitraum-Parameter - die Liste ist ein Zustand, keine
   // Auswertung eines Zeitraums.
-  static const String shoppingList = '$baseUrl/recipes/shopping-list';
+  static String get shoppingList => '$baseUrl/recipes/shopping-list';
   static String shoppingItemById(int id) => '$baseUrl/recipes/shopping-list/$id';
-  static const String shoppingListChecked =
+  static String get shoppingListChecked =>
       '$baseUrl/recipes/shopping-list/checked';
   static String shoppingListFromMealPlan(DateTime from, DateTime to) =>
       '$baseUrl/recipes/shopping-list/from-meal-plan'
@@ -237,20 +264,20 @@ class ApiConfig {
 
 
   //FINANCE ENDPOINTS
-  static const String transactions = '$baseUrl/finance/transactions';
+  static String get transactions => '$baseUrl/finance/transactions';
   static String transactionById(int id) => '$baseUrl/finance/transactions/$id';
   static String transactionCategory(int id) =>
       '$baseUrl/finance/transactions/$id/category';
-  static const String budgets = '$baseUrl/finance/budgets';
+  static String get budgets => '$baseUrl/finance/budgets';
   static String budgetById(int id) => '$baseUrl/finance/budgets/$id';
-  static const String budgetProgress = '$baseUrl/finance/stats/budget-progress';
-  static const String financeStats = '$baseUrl/finance/stats/overview';
+  static String get budgetProgress => '$baseUrl/finance/stats/budget-progress';
+  static String get financeStats => '$baseUrl/finance/stats/overview';
   static String financeMonthlyStats(String month) =>
       '$baseUrl/finance/stats/monthly?month=$month';
 
   // Verträge. Liefert seit der Vertragserkennung echte Contracts und nicht mehr
   // Buchungen mit isRecurring=true.
-  static const String contracts = '$baseUrl/finance/contracts';
+  static String get contracts => '$baseUrl/finance/contracts';
   static String contractById(int id) => '$baseUrl/finance/contracts/$id';
   static String contractTransactions(int id) =>
       '$baseUrl/finance/contracts/$id/transactions';
@@ -262,21 +289,21 @@ class ApiConfig {
   //BANK ENDPOINTS
   static String bankAspsps(String country) =>
       '$baseUrl/finance/bank/aspsps?country=$country';
-  static const String bankConnect = '$baseUrl/finance/bank/connect';
-  static const String bankConnections = '$baseUrl/finance/bank/connections';
+  static String get bankConnect => '$baseUrl/finance/bank/connect';
+  static String get bankConnections => '$baseUrl/finance/bank/connections';
   static String bankConnectionById(int id) => '$baseUrl/finance/bank/connections/$id';
-  static const String bankAccounts = '$baseUrl/finance/bank/accounts';
+  static String get bankAccounts => '$baseUrl/finance/bank/accounts';
   static String bankAccountById(int id) => '$baseUrl/finance/bank/accounts/$id';
-  static const String bankSync = '$baseUrl/finance/bank/sync';
-  static const String bankStatus = '$baseUrl/finance/bank/status';
+  static String get bankSync => '$baseUrl/finance/bank/sync';
+  static String get bankStatus => '$baseUrl/finance/bank/status';
   
   //HABIT ENDPOINTS
-  static const String habits = '$baseUrl/habits';
+  static String get habits => '$baseUrl/habits';
   static String habitById(int id) => '$baseUrl/habits/$id';
   static String completeHabit(int id) => '$baseUrl/habits/$id/complete';
   
   //PROJECT ENDPOINTS
-  static const String projects = '$baseUrl/projects';
+  static String get projects => '$baseUrl/projects';
   static String projectById(int id) => '$baseUrl/projects/$id';
   static String projectTasks(int id) => '$baseUrl/projects/$id/tasks';
   /// Die vom Scheduler platzierten Projektbloecke als CalendarEvents.

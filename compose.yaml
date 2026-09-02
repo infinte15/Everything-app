@@ -1,0 +1,91 @@
+# ===========================================================================
+# Everything App - Homeserver-Stack
+#
+# Weder db noch backend haben ein "ports:". Sie sind ausschliesslich im internen
+# Docker-Netz erreichbar; der einzige Weg von aussen fuehrt ueber cloudflared →
+# caddy. Im Router ist kein Port freigegeben.
+#
+# Werte kommen aus .env neben dieser Datei (Vorlage: .env.example).
+#   docker compose up -d
+# ===========================================================================
+
+services:
+
+  db:
+    image: postgres:16
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: everything_app
+      POSTGRES_USER: ${DB_USER}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      # backend startet erst, wenn Postgres wirklich Anfragen annimmt - sonst
+      # scheitert Hibernate beim Verbindungsaufbau und der Container kreiselt.
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER} -d everything_app"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+  backend:
+    build: ./Everything-app-backend/everything-app
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      SPRING_PROFILES_ACTIVE: prod
+      DB_USER: ${DB_USER}
+      DB_PASSWORD: ${DB_PASSWORD}
+      JWT_SECRET: ${JWT_SECRET}
+      APP_DOMAIN: ${APP_DOMAIN}
+      # Beim allerersten Start einmalig auf true, Account anlegen, zurueck auf false.
+      APP_REGISTRATION_ENABLED: ${APP_REGISTRATION_ENABLED:-false}
+      EB_PROVIDER: ${EB_PROVIDER:-demo}
+      EB_APP_ID: ${EB_APP_ID:-}
+      TZ: Europe/Berlin
+    volumes:
+      # Der PSD2-Schluessel gehoert weder ins Repo noch ins Image. Liegt er nicht
+      # vor, laesst man EB_PROVIDER auf "demo" und kommentiert die Zeile aus.
+      - ${EB_PRIVATE_KEY_PATH:-/dev/null}:/run/secrets/enablebanking.pem:ro
+    healthcheck:
+      # Bewusst bash und nicht CMD-SHELL: /bin/sh ist auf Ubuntu dash und kennt
+      # /dev/tcp nicht - der Test waere dann immer rot. Ein blosser Port-Check
+      # reicht, das Projekt hat keinen Actuator.
+      test: ["CMD", "bash", "-c", "exec 3<>/dev/tcp/127.0.0.1/8080"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 90s
+
+  caddy:
+    image: caddy:2
+    restart: unless-stopped
+    depends_on: [backend]
+    volumes:
+      - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - ./deploy/web:/srv/web:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    ports:
+      # Nur an localhost gebunden: zum Testen vom Server aus, nicht aus dem LAN.
+      # Fuer den ersten APK-Test im WLAN (Kapitel 7.7) voruebergehend auf
+      # "8081:80" aendern - und danach wieder zurueck.
+      - "127.0.0.1:8081:80"
+
+  cloudflared:
+    image: cloudflare/cloudflared:latest
+    restart: unless-stopped
+    # Kein --autoupdate: Updates kommen ueber ein neues Image, nicht im laufenden
+    # Container. Sonst weicht das, was laeuft, unbemerkt vom Image ab.
+    command: tunnel --no-autoupdate run
+    environment:
+      TUNNEL_TOKEN: ${CF_TUNNEL_TOKEN}
+    depends_on: [caddy]
+
+volumes:
+  pgdata:
+  caddy_data:
+  caddy_config:
