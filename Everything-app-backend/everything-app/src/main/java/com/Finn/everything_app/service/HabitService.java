@@ -42,8 +42,17 @@ public class HabitService {
         return habitRepository.findByUserId(userId);
     }
 
+    /**
+     * Die Erledigungen kommen bewusst immer mit.
+     *
+     * <p>Jede Gewohnheit, die diese Methode verlaesst, kann anschliessend ohne offene Session
+     * zum DTO gemappt werden - was {@code updateHabit} genau tut, weil der Controller erst nach
+     * dem Ende der Transaktion mappt. Der Fetch-Join kostet an den Stellen, die die Sammlung
+     * nicht brauchen (Abhaken, Loeschen), praktisch nichts; die Alternative waere, sich an jeder
+     * Aufrufstelle zu merken, ob das Ergebnis noch als DTO herausgeht.
+     */
     public Habit getHabitById(Long id) {
-        return habitRepository.findById(id)
+        return habitRepository.findWithCompletionsById(id)
                 .orElseThrow(() -> new RuntimeException("Habit nicht gefunden"));
     }
 
