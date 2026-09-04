@@ -3,6 +3,7 @@ package com.Finn.everything_app.security;
 
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.http.HttpMethod;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.security.authentication.AuthenticationManager;
@@ -71,6 +72,18 @@ public class SecurityConfig {
                     if (devLoginEnabled) {
                         auth.requestMatchers("/api/auth/dev-login").permitAll();
                     }
+
+                    // Nero darf lesen und anlegen, aber nichts loeschen und nichts an Geld
+                    // oder Konto. Die Rolle kommt aus dem client-Claim im Token
+                    // (siehe JwtAuthenticationFilter); jedes App-Token traegt ROLE_APP und
+                    // faellt hier nicht auf.
+                    //
+                    // Bewusst eine Sperrliste und keine Freigabeliste: sonst muesste diese
+                    // Datei bei jedem neuen Nero-Werkzeug angefasst werden, und ein
+                    // vergessener Eintrag wuerde als stiller 403 auffallen statt als Fehler.
+                    auth.requestMatchers(HttpMethod.DELETE, "/api/**").hasRole("APP");
+                    auth.requestMatchers("/api/finance/**", "/api/user/**", "/api/auth/**")
+                            .hasRole("APP");
 
                     // Alle anderen Endpoints benötigen Authentifizierung
                     auth.anyRequest().authenticated();

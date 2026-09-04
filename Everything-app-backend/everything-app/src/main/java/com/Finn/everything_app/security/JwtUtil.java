@@ -25,17 +25,40 @@ public class JwtUtil {
         return Keys.hmacShaKeyFor(secret.getBytes());
     }
 
+    /** Wer kein client-Claim traegt, ist die App selbst. Gilt auch fuer alle Bestandstoken. */
+    public static final String CLIENT_APP = "app";
+
+    /** Nero, die Sprachschnittstelle. Laeuft unter derselben userId, darf aber weniger. */
+    public static final String CLIENT_NERO = "nero";
+
     //Generiere JWT Token
     public String generateToken(String username, Long userId) {
+        return generateToken(username, userId, CLIENT_APP, expiration);
+    }
+
+    /**
+     * Token fuer einen bestimmten Client mit eigener Laufzeit.
+     *
+     * <p>Die App hat genau einen Nutzer, und jede Entity haengt per Fremdschluessel an ihm - ein
+     * eigener technischer Nutzer fuer Nero haette also einen leeren Kalender. Nero laeuft deshalb
+     * unter derselben {@code userId} und unterscheidet sich nur ueber diesen Claim. Daraus leitet
+     * {@link JwtAuthenticationFilter} die Rolle ab, mit der {@link SecurityConfig} die
+     * gefaehrlichen Pfade sperrt.
+     *
+     * <p>Widerrufen laesst sich ein solches Token nur durch Rotation von {@code jwt.secret} -
+     * eine Sperrliste gibt es nicht. Das ist der Grund, warum Nero nicht loeschen darf.
+     */
+    public String generateToken(String username, Long userId, String client, long ttlMillis) {
         Map<String, Object> claims = new HashMap<>();
         claims.put("userId", userId);
-        return createToken(claims, username);
+        claims.put("client", client);
+        return createToken(claims, username, ttlMillis);
     }
 
     //Erstelle Token
-    private String createToken(Map<String, Object> claims, String subject) {
+    private String createToken(Map<String, Object> claims, String subject, long ttlMillis) {
         Date now = new Date();
-        Date expiryDate = new Date(now.getTime() + expiration);
+        Date expiryDate = new Date(now.getTime() + ttlMillis);
 
         return Jwts.builder()
                 .claims(claims)
@@ -55,6 +78,14 @@ public class JwtUtil {
     public Long extractUserId(String token) {
         Claims claims = extractAllClaims(token);
         return claims.get("userId", Long.class);
+    }
+
+    /**
+     * Extrahiere den Client. Fehlt der Claim, ist es ein Token aus der Zeit davor - also die App.
+     */
+    public String extractClient(String token) {
+        String client = extractAllClaims(token).get("client", String.class);
+        return (client == null || client.isBlank()) ? CLIENT_APP : client;
     }
 
     //Extrahiere Expiration Date
