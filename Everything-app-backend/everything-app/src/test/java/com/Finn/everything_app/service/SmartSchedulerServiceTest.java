@@ -57,12 +57,19 @@ class SmartSchedulerServiceTest {
     private final LocalDate TODAY = LocalDate.now();
 
     /**
-     * Muss mit {@code scheduler.solver-time-limit-seconds} in application.properties übereinstimmen.
+     * Wird AUS {@code application.properties} gelesen und steht nicht mehr als Zahl hier.
      *
-     * Als hier eine veraltete Zahl stand, sicherte der Zeitbudget-Test ein Budget ab, das im
-     * Betrieb längst nicht mehr galt — ein grüner Test über einen Zustand, den es nicht gab.
+     * <p>Der Kommentar an dieser Stelle verlangte schon immer "muss mit
+     * {@code scheduler.solver-time-limit-seconds} übereinstimmen" und warnte sogar ausdrücklich
+     * davor, was passiert, wenn es nicht stimmt. Es stimmte trotzdem nicht: hier stand 2.0,
+     * produktiv liefen 1.5. Der Test, der sich selbst als "das eigentliche Qualitätsgatter"
+     * beschreibt, gab dem Löser damit ein Drittel mehr Zeit, als der Nutzer je abwartet.
+     *
+     * <p>Ein Kommentar kann eine solche Kopplung nicht halten — deshalb gibt es die Kopie nicht
+     * mehr. Fehlt der Schlüssel, schlägt das Lesen fehl, statt still einen Vorgabewert zu nehmen.
      */
-    private static final double PRODUKTIONS_ZEITBUDGET_SEKUNDEN = 2.0;
+    private static final double PRODUKTIONS_ZEITBUDGET_SEKUNDEN =
+            SchedulerFixtures.produktionsBudgetSekunden();
 
     /**
      * Obergrenze für die Laufzeit-Tests. Der Löser schöpft sein Budget in Phase 2 immer aus, also
@@ -4290,7 +4297,15 @@ class SmartSchedulerServiceTest {
         long millis = (System.nanoTime() - t0) / 1_000_000;
 
         assertFalse(result.getScheduledTasks().isEmpty(), "der Bestand muss planbar sein");
-        assertTrue(millis < 4_000,
+        // Die Schranke stand auf 4000 ms und ist genau daran gelegentlich zerbrochen, ohne dass
+        // am Scheduler etwas falsch war: der Lauf besteht aus Phase 1 (Deckel 1,5 s) plus Phase 2
+        // bis zum Stillstand, und unter Last liegt diese Summe gemessen bei 4200 bis 4750 ms.
+        // Auf dem Originalcode fiel der Test in einer Messreihe von fuenf Laeufen einmal um.
+        //
+        // Die Aussage bleibt dieselbe und bleibt scharf: geprueft wird, dass der Lauf das Budget
+        // NICHT ausschoepft. Bei 8 s Budget ist 6 s dafuer immer noch ein klarer Nachweis — ohne
+        // den Abbruch braeuchte er die vollen acht.
+        assertTrue(millis < 6_000,
                 "Phase 2 soll auf dem Plateau abbrechen statt das 8s-Budget auszuschoepfen, "
                         + "brauchte aber " + millis + " ms");
     }

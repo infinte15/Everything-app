@@ -120,6 +120,27 @@ public class UserPreferences {
     @Column(name = "deadline_buffer_hours")
     private Integer deadlineBufferHours;
 
+    /**
+     * An welchen Wochentagen Aufgaben und Projektzeit geplant werden dürfen — Reclaims "Work Days".
+     *
+     * <p>ISO-Tagesnummern, kommagetrennt: {@code "1,2,3,4,5"} heißt Montag bis Freitag.
+     * {@code null} oder leer heißt <b>alle sieben Tage</b> und ist die Vorgabe — die Einstellung
+     * ändert von sich aus nichts an einem bestehenden Plan.
+     *
+     * <p>Bis hierher gab es sie gar nicht, und das war die auffälligste Lücke gegenüber Reclaim:
+     * {@code dayWindows} hatte für Aufgaben KEINEN Wochentagsfilter. Wer 08:00–17:00 als
+     * Arbeitszeit eingetragen hatte, bekam Arbeitsblöcke am Sonntagvormittag. Gewohnheiten
+     * (eigene Wochentagsflaggen) und Trainings (Wunsch-Wochentag der Routine) waren davon nie
+     * betroffen — nur Aufgaben und Projektzeit.
+     *
+     * <p>Die Grenze ist <b>weich in denselben Pässen, in denen auch die Arbeitszeit weich ist</b>:
+     * der Vorlauf für Überfälliges und der Quetsch-Nachlauf planen ohnehin von 07:00 bis 22:00
+     * statt in der Arbeitszeit und dürfen deshalb auch auf einen freien Tag ausweichen. Eine
+     * gerissene Deadline ist schlimmer als ein Block am Samstag.
+     */
+    @Column(name = "work_days")
+    private String workDays;
+
     /** Schaltet die automatische Neuplanung komplett ab. */
     @Column(name = "auto_schedule_enabled")
     private Boolean autoScheduleEnabled;

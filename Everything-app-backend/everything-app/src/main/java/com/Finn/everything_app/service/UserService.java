@@ -115,6 +115,10 @@ public class UserService {
         if (newPrefs.getMaxTaskMinutesPerDay() != null) existing.setMaxTaskMinutesPerDay(newPrefs.getMaxTaskMinutesPerDay());
         if (newPrefs.getMaxScheduledMinutesPerDay() != null) existing.setMaxScheduledMinutesPerDay(newPrefs.getMaxScheduledMinutesPerDay());
         if (newPrefs.getCoreHoursEnd() != null)         existing.setCoreHoursEnd(newPrefs.getCoreHoursEnd());
+        // Leerstring ist hier ein WERT ("alle sieben Tage"), nicht "nicht mitgeschickt" — siehe
+        // UserPreferencesDTO.workDays. Ohne diese Unterscheidung ließe sich eine einmal gesetzte
+        // Auswahl nie wieder entfernen.
+        if (newPrefs.getWorkDays() != null)             existing.setWorkDays(newPrefs.getWorkDays());
         if (newPrefs.getPersonalHoursStart() != null)   existing.setPersonalHoursStart(newPrefs.getPersonalHoursStart());
         if (newPrefs.getPersonalHoursEnd() != null)     existing.setPersonalHoursEnd(newPrefs.getPersonalHoursEnd());
         if (newPrefs.getDefaultMinChunkMinutes() != null) existing.setDefaultMinChunkMinutes(newPrefs.getDefaultMinChunkMinutes());

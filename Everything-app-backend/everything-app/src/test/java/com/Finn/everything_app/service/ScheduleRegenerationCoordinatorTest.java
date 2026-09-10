@@ -10,14 +10,11 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.ApplicationEventPublisher;
 
 import java.lang.reflect.Parameter;
-import java.nio.file.Files;
-import java.nio.file.Path;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Properties;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.junit.jupiter.api.Assumptions.assumeTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.*;
@@ -178,23 +175,18 @@ class ScheduleRegenerationCoordinatorTest {
      * <p>Geprüft wird gegen die im Konstruktor deklarierte Rückfallebene, nicht gegen eine hier
      * hartkodierte Zahl: sonst wären es wieder zwei Stellen, die auseinanderlaufen können.
      *
-     * <p><b>Warum die Datei fehlen darf.</b> {@code src/main/resources/application.properties}
-     * steht in {@code .gitignore} — sie enthält DB-Passwort und JWT-Schlüssel. Genau daher rührt
-     * die Regression: der Commit, der 400ms eingeführt hat, KONNTE die Datei nicht mitändern, weil
-     * sie nicht in der Versionsverwaltung liegt. Auf einem frischen Klon existiert sie nicht, und
-     * dann hat dieser Test nichts zu prüfen — er darf dort nicht rot werden, sondern muss sich
-     * enthalten.
+     * <p><b>Früher durfte die Datei fehlen</b> — {@code application.properties} stand in
+     * {@code .gitignore}, weil dort DB-Passwort und JWT-Schlüssel lagen, und genau daher rührte
+     * die Regression: der Commit, der 400 ms eingeführt hat, KONNTE die Datei nicht mitändern.
+     * Seit der Deployment-Vorbereitung ist sie versioniert (die Geheimnisse liegen in
+     * {@code application-secrets.properties} neben der pom.xml), und der Server baut sein Image
+     * aus einem git clone. Das {@code assumeTrue}, mit dem sich dieser Test damals enthalten
+     * musste, ist deshalb weg: es würde den Wächter heute nur noch stumm schalten, wenn jemand
+     * die Datei wieder aus der Versionsverwaltung nimmt.
      */
     @Test
     void ruhephaseImCodeUndInDenPropertiesStimmenUeberein() throws Exception {
-        Path datei = Path.of("src/main/resources/application.properties");
-        assumeTrue(Files.exists(datei),
-                "application.properties ist nicht versioniert und auf diesem Rechner nicht vorhanden");
-
-        Properties produktiv = new Properties();
-        try (var in = Files.newInputStream(datei)) {
-            produktiv.load(in);
-        }
+        Properties produktiv = SchedulerFixtures.produktivEinstellungen();
 
         for (String schluessel : List.of("scheduler.debounce-ms", "scheduler.max-delay-ms")) {
             String ausProperties = produktiv.getProperty(schluessel);
@@ -205,6 +197,36 @@ class ScheduleRegenerationCoordinatorTest {
                     .as("%s: application.properties und der @Value-Vorgabewert im Konstruktor "
                             + "von ScheduleRegenerationCoordinator laufen auseinander", schluessel)
                     .isEqualTo(vorgabewertAusKonstruktor(schluessel));
+        }
+    }
+
+    /**
+     * Jeder Scheduler-Schlüssel, den die Tests benutzen, steht auch in {@code application.properties}.
+     *
+     * <p>Die Ergänzung zum Wächter darüber. Dort wird eine Zahl gegen eine andere geprüft; hier
+     * geht es um den Fall davor — ein Schlüssel, den es in der Datei gar nicht (mehr) gibt. Dann
+     * greift stillschweigend der {@code @Value}-Vorgabewert im Code, und der kann etwas völlig
+     * anderes sein als das, was jemand in die Datei geschrieben zu haben glaubt.
+     *
+     * <p>Genau so ist das Zeitbudget auseinandergelaufen: Testkonstante 2.0, Datei 1.5, und der
+     * Kommentar an der Konstante behauptete Gleichstand.
+     */
+    @Test
+    void alleGetuntenSchedulerSchluesselStehenInDenProperties() {
+        Properties produktiv = SchedulerFixtures.produktivEinstellungen();
+
+        for (String schluessel : List.of(
+                "scheduler.solver-time-limit-seconds",
+                "scheduler.horizon-days",
+                "scheduler.max-task-day-vars",
+                "scheduler.max-task-chunks",
+                "scheduler.debounce-ms",
+                "scheduler.max-delay-ms")) {
+            assertThat(produktiv.getProperty(schluessel))
+                    .as("%s fehlt in application.properties — dann gilt im Betrieb der "
+                            + "@Value-Vorgabewert aus SmartSchedulerService, und der ist nirgends "
+                            + "sichtbar", schluessel)
+                    .isNotNull();
         }
     }
 

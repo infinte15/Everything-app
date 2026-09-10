@@ -3,6 +3,7 @@ package com.Finn.everything_app.dto;
 import com.Finn.everything_app.model.ProductivityPeakTime;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
+import jakarta.validation.constraints.Pattern;
 import lombok.Data;
 
 import java.time.LocalTime;
@@ -51,6 +52,17 @@ public class UserPreferencesDTO {
 
     /** Ende der Kernzeit; danach geplante Aufgaben kosten im Ziel (Abendstrafe). */
     private LocalTime coreHoursEnd;
+
+    /**
+     * Arbeitstage als ISO-Nummern, z. B. {@code "1,2,3,4,5"} für Montag bis Freitag.
+     *
+     * <p>{@code null} heißt "nicht mitgeschickt" und lässt die Einstellung unverändert; der
+     * LEERSTRING heißt "alle sieben Tage" und ist der Weg, sie wieder zu entfernen —
+     * {@code updatePreferences} übernimmt nur Felder ungleich null, mit {@code null} ließe sich
+     * eine einmal gesetzte Auswahl also nie wieder zurücknehmen.
+     */
+    @Pattern(regexp = "|[1-7](,[1-7])*", message = "Arbeitstage müssen ISO-Tagesnummern sein, z. B. 1,2,3,4,5")
+    private String workDays;
 
     /**
      * Privatzeiten — der Rahmen für Gewohnheiten und Trainings, getrennt von der Arbeitszeit.

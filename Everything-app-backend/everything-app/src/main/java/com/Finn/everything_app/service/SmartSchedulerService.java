@@ -233,8 +233,15 @@ public class SmartSchedulerService {
      * Deckel plus Rest bildet genau das ab: Phase 1 bekommt, was sie höchstens braucht, Phase 2
      * alles Übrige. Damit wird das Gesamtbudget zur ehrlichen Obergrenze eines Laufs — und erst
      * dadurch lässt es sich überhaupt sinnvoll senken.
+     *
+     * <p>Konfigurierbar, obwohl der Wert seit der Messung nie verstellt wurde: der Deckel ist die
+     * Kante, an der Phase 1 bei großem Bestand umkippt (siehe {@code scheduler.max-task-chunks}),
+     * und ein Test, der das nachstellen oder eine Referenzlösung ohne Deckel rechnen will, muss
+     * ihn anheben können. Ein {@code static final} ließe sich dafür nur über Reflexion auf ein
+     * finales Feld verbiegen — das geht seit Java 17 nicht mehr zuverlässig.
      */
-    private static final double PHASE1_CAP_SECONDS = 1.5;
+    @Value("${scheduler.phase1-cap-seconds:1.5}")
+    private double phase1CapSeconds = 1.5;
 
     /** Untergrenze für Phase 2, falls Phase 1 wider Erwarten ihren Deckel ausschöpft. */
     private static final double PHASE2_MIN_SECONDS = 1.0;
@@ -246,7 +253,7 @@ public class SmartSchedulerService {
      * eine Boolean PRO ERLAUBTEM TAG (siehe {@link #makePlaceable}) — eine Aufgabe mit Deadline in
      * drei Wochen bringt allein zwanzig davon mit. Am Demo-Bestand mit 76 offenen Aufgaben ergab
      * das 1994 Variablen und 3832 Constraints, und damit brauchte das PRESOLVE allein 1,79s. Phase
-     * 1 hat einen Deckel von {@link #PHASE1_CAP_SECONDS} = 1,5s: der Löser kam nie zum Suchen. Der
+     * 1 hat einen Deckel von {@link #phase1CapSeconds} = 1,5s: der Löser kam nie zum Suchen. Der
      * Lauf endete auf UNKNOWN, der Kalender blieb unverändert, und {@code atRisk} war LEER — der
      * Nutzer erfuhr nicht einmal, dass nichts geplant wurde.
      *
@@ -273,8 +280,40 @@ public class SmartSchedulerService {
      * Kalender, der sich bei jedem Lauf umsortiert. Vier zusätzlich verplante Aufgaben sind das
      * nicht wert. 50 lässt gut ein Drittel des Deckels als Reserve für langsamere Maschinen.
      */
-    @Value("${scheduler.max-task-chunks:50}")
-    private int maxTaskChunks = 50;
+    @Value("${scheduler.max-task-chunks:120}")
+    private int maxTaskChunks = 120;
+
+    /**
+     * Wie viele TAGES-BOOLEANS die Task-Chunks zusammen ins Hauptmodell einbringen dürfen.
+     *
+     * <p><b>Warum es diese Grenze zusätzlich zu {@link #maxTaskChunks} gibt.</b> Der Javadoc dort
+     * benennt die Kosten korrekt — "eine Boolean PRO ERLAUBTEM TAG" —, gezählt wurden aber Chunks.
+     * Beides ist nicht dasselbe, und der Unterschied ist groß: ein Chunk mit Deadline übermorgen
+     * kostet zwei Booleans, einer ohne Deadline vierzehn ({@link #taskHorizonDays}). Eine Grenze
+     * von 50 Chunks stand damit je nach Bestand für 100 oder für 700 Variablen — sie hat einmal
+     * zu früh und einmal zu spät zugeschlagen.
+     *
+     * <p>Gemessen am Bestand aus {@code SchedulerFixtures.bestand} (8 tägliche Gewohnheiten,
+     * 3 Trainings/Woche, 3 Projekte, 6 Vorlesungen, 31 Tage Horizont), Budget 1,5 s:
+     *
+     * <pre>
+     *   Aufgaben   Grenze 50 Chunks        ohne Grenze
+     *   50         44 geplant              50 geplant
+     *   80         45 geplant              77 geplant
+     *   120        44 geplant              UNKNOWN — gar nichts geplant
+     * </pre>
+     *
+     * Die alte Grenze verschenkte bei 80 offenen Aufgaben also 32 Aufgaben, die problemlos in den
+     * Horizont gepasst hätten, und meldete sie stattdessen als gefährdet — eine Warnung über
+     * etwas, das gar nicht geprüft worden war. Bei 120 rettete sie den Lauf dagegen komplett.
+     *
+     * <p>Die Kalibrierung steht in {@code SmartSchedulerLastTest#aufnahmegrenzeGegenVollesModell}
+     * und läuft auf Knopfdruck erneut. {@link #maxTaskChunks} bleibt als grobe zweite Decke
+     * stehen: sie deckelt die reine Anzahl der Intervalle im {@code addNoOverlap}, die von der
+     * Fensterbreite unabhängig ist.
+     */
+    @Value("${scheduler.max-task-day-vars:1200}")
+    private int maxTaskDayVars = 1200;
 
     /**
      * Nachhol-Fenster für einen bereits überfälligen Task, in Tagen ab jetzt.
@@ -651,6 +690,12 @@ public class SmartSchedulerService {
             // markScheduleRun bleibt bewusst aus — geschrieben wurde nichts, der Nachzügler-Sweep
             // soll es später erneut versuchen.
             lastRunStore.record(userId, outcome.getStatus().name(), outcome.getAtRisk(), 0, 0);
+            // Auch der gescheiterte Lauf bekommt seine SCHED-Zeile. Vorher endete genau der Fall,
+            // fuer dessen Diagnose die Messwerte da sind, OHNE eine einzige Zahl im Log: man sah
+            // nur die Warnung "keine Loesung" und wusste weder, wie gross das Modell war, noch
+            // wie lange Phase 1 gesucht hat, noch ob sie ueberhaupt zum Suchen kam.
+            logRunMetrics(userId, startDate, endDate, outcome, collectMs, solveMs, 0,
+                    (System.nanoTime() - runStart) / 1_000_000, statementsStart, 0, 0);
             return failed;
         }
 
@@ -733,12 +778,13 @@ public class SmartSchedulerService {
         long statements = statementsStart < 0 ? -1 : statementCount() - statementsStart;
         log.info("SCHED user={} tage={} totalMs={} collectMs={} solveMs={} p1Ms={} p2Ms={} "
                         + "persistMs={} intervalle={} placeables={} bloecke={}+{} drop={} obj={} "
-                        + "status={} p2Retry={} overdue={} relief={}+{} verdraengt={} "
+                        + "p1Status={} status={} p2Retry={} overdue={} relief={}+{} verdraengt={} "
                         + "statements={} atRisk={}",
                 userId, ChronoUnit.DAYS.between(startDate, endDate) + 1, totalMs, collectMs,
                 solveMs, outcome.getPhase1Ms(), outcome.getPhase2Ms(), persistMs,
                 outcome.getIntervals(), outcome.getPlaceables(), taskBlocks, restBlocks,
                 outcome.getDrop(), Math.round(outcome.getPlacementObjective()),
+                outcome.getPhase1Status(),
                 outcome.getStatus(), outcome.isPhase2Retried(), outcome.getOverduePlaced(),
                 outcome.getReliefCatchUp(), outcome.getReliefSqueeze(), outcome.getDisplaced(),
                 statements, outcome.getAtRisk().size());
@@ -1824,7 +1870,7 @@ public class SmartSchedulerService {
      * ({@link #solveOverduePass}), es bekommt im Hauptmodell ohnehin kein Placeable.
      */
     private void markiereAufnahmegrenze(Map<Long, List<TaskChunk>> chunksByTask, Axis axis, int nowSlot,
-                                  LocalDate startDate) {
+                                  LocalDate startDate, int taskLastDay, int deadlineBufferSlots) {
         List<List<TaskChunk>> gruppen = chunksByTask.values().stream()
                 .filter(g -> !istUeberfaellig(g.get(0), axis, nowSlot))
                 .sorted(Comparator
@@ -1833,23 +1879,51 @@ public class SmartSchedulerService {
                 .collect(Collectors.toList());
 
         int aufgenommen = 0;
+        int tagesVars   = 0;
         boolean voll = false;
         for (List<TaskChunk> g : gruppen) {
-            if (voll || aufgenommen + g.size() > maxTaskChunks) {
+            int kosten = tagesBooleans(g, axis, nowSlot, taskLastDay, deadlineBufferSlots);
+            if (voll || aufgenommen + g.size() > maxTaskChunks
+                     || tagesVars + kosten > maxTaskDayVars) {
                 voll = true;
                 g.forEach(c -> c.zugelassen = false);
                 continue;
             }
             aufgenommen += g.size();
+            tagesVars   += kosten;
         }
 
         if (voll) {
             long abgewiesen = chunksByTask.values().stream()
                     .flatMap(List::stream).filter(c -> !c.zugelassen).count();
-            log.info("Aufnahmegrenze: {} von {} Chunks ins Modell, {} bleiben unverplant und "
-                            + "werden als gefährdet gemeldet (max-task-chunks={})",
-                    aufgenommen, aufgenommen + abgewiesen, abgewiesen, maxTaskChunks);
+            log.info("Aufnahmegrenze: {} von {} Chunks ins Modell ({} Tages-Booleans), {} bleiben "
+                            + "unverplant und werden als gefährdet gemeldet "
+                            + "(max-task-day-vars={}, max-task-chunks={})",
+                    aufgenommen, aufgenommen + abgewiesen, tagesVars, abgewiesen,
+                    maxTaskDayVars, maxTaskChunks);
         }
+    }
+
+    /**
+     * Was eine Task-Gruppe das Modell an Tages-Booleans kostet.
+     *
+     * <p>Rechnet mit demselben {@link #taskBounds}, das gleich darauf die echten Fenster
+     * schneidet — eine zweite, ungefähre Schätzung wäre genau die Ungenauigkeit, wegen der die
+     * Grenze vorher am falschen Maß hing. Es ist eine Obergrenze: {@link #dayWindows} lässt
+     * zusätzlich Tage weg, an denen gar kein Fenster übrig bleibt.
+     */
+    private int tagesBooleans(List<TaskChunk> gruppe, Axis axis, int nowSlot, int taskLastDay,
+                              int deadlineBufferSlots) {
+        Task task = gruppe.get(0).task;
+        int earliest = nowSlot;
+        if (task.getNotBefore() != null) earliest = Math.max(earliest, axis.ceilSlot(task.getNotBefore()));
+        int restSlots = gruppe.stream().mapToInt(c -> Axis.slotsFor(c.durationMinutes)).sum();
+
+        TaskBounds bounds = taskBounds(task, axis, taskLastDay, nowSlot, earliest,
+                deadlineBufferSlots, restSlots);
+        int ersterTag = Math.max(0, earliest) / SLOTS_PER_DAY;
+        int tage = Math.max(1, bounds.lastDay() - ersterTag + 1);
+        return tage * gruppe.size();
     }
 
     private SolveOutcome solveWithCpSat(List<TaskChunk> chunks, List<HabitSlot> habitSlots,
@@ -1866,6 +1940,8 @@ public class SmartSchedulerService {
 
         CpModel model = new CpModel();
 
+        // Erlaubte Wochentage für Aufgaben und Projektzeit (null = alle sieben, siehe workDays).
+        List<Integer> arbeitstage = arbeitstage(prefs, axis);
         int workStartSlot = minuteOfDay(workStart(prefs)) / GRID;
         int workEndSlot   = minuteOfDay(workEnd(prefs)) / GRID;
         if (workEndSlot <= workStartSlot) workEndSlot = SLOTS_PER_DAY;   // defensiv gegen Fehlkonfiguration
@@ -1939,7 +2015,8 @@ public class SmartSchedulerService {
 
         // Vor dem Bauen: passt der ganze Bestand überhaupt in ein Modell dieser Größe? Was nicht
         // hineinpasst, wird hier markiert und weiter unten übersprungen.
-        markiereAufnahmegrenze(chunksByTask, axis, nowSlot, startDate);
+        markiereAufnahmegrenze(chunksByTask, axis, nowSlot, startDate, taskLastDay,
+                deadlineBufferSlots);
 
         for (Map.Entry<Long, List<TaskChunk>> e : chunksByTask.entrySet()) {
             List<TaskChunk> group = e.getValue();
@@ -1977,7 +2054,7 @@ public class SmartSchedulerService {
                 String name = "task" + task.getId() + "_c" + ci;
 
                 List<DayWindow> windows = dayWindows(axis, workStartSlot, workEndSlot, sizeSlots, earliest,
-                        null, bounds.lastDay(), bounds.latestEndSlot());
+                        arbeitstage, bounds.lastDay(), bounds.latestEndSlot());
                 Placeable p = makePlaceable(model, name, sizeSlots, c.durationMinutes, windows, gapSlots);
                 c.placeable = p;
                 allPlaceables.add(p);
@@ -2309,7 +2386,7 @@ public class SmartSchedulerService {
             // Voller Horizont wie Habits und Workouts: Projektzeit ist wiederkehrend und soll in
             // JEDER Woche im Kalender stehen, nicht nur im 14-Tage-Task-Fenster.
             List<DayWindow> windows = dayWindows(axis, workStartSlot, workEndSlot, sizeSlots, nowSlot,
-                    s.allowedDays, axis.totalDays - 1);
+                    schnitt(s.allowedDays, arbeitstage), axis.totalDays - 1);
             Placeable p = makePlaceable(model, name, sizeSlots, s.durationMinutes, windows, gapSlots);
             s.placeable = p;
             allPlaceables.add(p);
@@ -2378,10 +2455,76 @@ public class SmartSchedulerService {
         // Bewusst OHNE Startwert. Ein Hint "alles platzieren" liegt nahe, ist aber genau dann
         // unerfüllbar, wenn Phase 1 überhaupt gebraucht wird — CP-SAT verbrachte danach das ganze
         // Budget mit dem Reparieren und lieferte gar keine Lösung mehr (UNKNOWN statt FEASIBLE).
-        model.minimize(dropCost);
+        //
+        // Der Zielwert ist über einen eigenen IntVar auslesbar, weil Phase 1 seit dem
+        // Stabilitätsanker (gleich darunter) NICHT mehr reines dropCost minimiert:
+        // solver.objectiveValue() ist dann nicht mehr der Wert, den die Schranke von Phase 2
+        // braucht.
+        // Obergrenze ist die Summe ALLER Gewichte: dropCost = dropConst - Summe(w*present).
+        IntVar dropVar = model.newIntVar(0, dropConst, "dropCost");
+        model.addEquality(dropVar, dropCost);
+
+        // Der Stabilitätsanker VON PHASE 1 — der Grund, warum der Kalender oberhalb von etwa 20
+        // Aufgaben bei jedem Lauf komplett neu aussah.
+        //
+        // Die Totzone W_MOVE_FIXED steht ausschließlich im Ziel von Phase 2. Phase 1 minimierte
+        // dagegen nacktes dropCost und hatte damit keinerlei Meinung darüber, WELCHE der vielen
+        // gleich guten Belegungen sie zurückgibt. Solange sie Optimalität beweist, ist das egal
+        // (der Löser findet reproduzierbar dieselbe). Schöpft sie ihren Deckel dagegen aus — ab
+        // rund 50 Aufgaben bei realistischer Gewohnheitslast immer —, entscheidet die Maschinenlast,
+        // welcher Worker zuerst fertig wird, und die Antwort ist jedes Mal eine andere. Phase 2
+        // startet danach per Hint auf genau dieser wechselnden Tageszuordnung und kann sie in
+        // ihrer einen Sekunde nicht mehr einfangen.
+        //
+        // Gemessen am Bestand aus SchedulerFixtures, fünf Läufe OHNE jede Änderung an der
+        // Eingabe, Vorzustand zurückgespielt — Blöcke, die trotzdem woanders lagen:
+        //
+        //   10 Aufgaben:  12-20 von 260   (Phase 1 OPTIMAL, drop stabil)
+        //   20 Aufgaben:  21-28 von 270   (Phase 1 OPTIMAL, drop stabil)
+        //   50 Aufgaben: 246-266 von 272  (Phase 1 FEASIBLE, drop schwankt über 5 Werte)
+        //   80 Aufgaben: 246-252 von 263  (dito)
+        //
+        // Der Anker zählt schlicht, wie viele Items NICHT mehr an ihrem alten Tag liegen. Er ist
+        // strikt von dropCost dominiert (Faktor = Ankerzahl + 1, dieselbe berechnete
+        // Lexikografie wie in solveOverdueWindow und solveDeadlineRescuePass) und kann deshalb
+        // niemals dazu führen, dass eine Aufgabe zugunsten der Stabilität wegfällt. Er bricht nur
+        // den Gleichstand — und genau der war das Problem.
+        LinearExprBuilder ankerB = LinearExpr.newBuilder();
+        int anker = 0;
+        for (Placeable p : allPlaceables) {
+            if (p.previousSlot == null) continue;
+            BoolVar amAltenTag = p.inDay.get(p.previousSlot / SLOTS_PER_DAY);
+            if (amAltenTag == null) continue;   // alter Tag liegt nicht mehr im Fenster
+            ankerB.addTerm(amAltenTag, -1);
+            anker++;
+            // Und als STARTWERT. Der Anker allein reicht nicht: er bricht den Gleichstand unter
+            // gleich guten Belegungen, aber oberhalb des Deckels findet Phase 1 von Lauf zu Lauf
+            // Belegungen von unterschiedlicher GÜTE (der drop schwankte über fünf Läufe über fünf
+            // Werte) — dann gewinnt zu Recht die bessere, und der Anker kommt gar nicht zum Zug.
+            //
+            // Der letzte Plan ist als Startwert genau das, was fehlt: eine bereits gültige, gute
+            // Belegung. Der Löser hört bei Zeitablauf damit nicht mehr an einer zufälligen Stelle
+            // auf, sondern bei "letzter Plan, etwas verbessert".
+            //
+            // Das widerspricht dem Hinweis oben nur scheinbar. Verworfen wurde dort der Hint
+            // "platziere ALLES" — der ist genau dann unerfüllbar, wenn Phase 1 gebraucht wird, und
+            // CP-SAT verbrachte das Budget mit Reparieren. Dieser Hint ist das Gegenteil: er war
+            // im letzten Lauf nachweislich erfüllbar.
+            model.addHint(p.start, p.previousSlot);
+            model.addHint(p.present, 1);
+        }
+
+        if (anker > 0) {
+            model.minimize(LinearExpr.newBuilder()
+                    .addTerm(dropVar, anker + 1L)
+                    .add(ankerB.build())
+                    .build());
+        } else {
+            model.minimize(dropCost);
+        }
         solver.getParameters().setNumSearchWorkers(solverWorkersPhase1);
         solver.getParameters().setMaxTimeInSeconds(
-                Math.max(0.05, Math.min(PHASE1_CAP_SECONDS, solverTimeLimitSeconds)));
+                Math.max(0.05, Math.min(phase1CapSeconds, solverTimeLimitSeconds)));
         long p1Start = System.nanoTime();
         CpSolverStatus s1 = solver.solve(model);
         long phase1Ms = (System.nanoTime() - p1Start) / 1_000_000;
@@ -2392,9 +2535,12 @@ public class SmartSchedulerService {
             // Unterschied zu einem erfolgreichen Lauf, dass sich nichts geändert hatte.
             log.warn("CP-SAT Phase 1 ohne Lösung: {} — {} Chunks werden als gefährdet gemeldet",
                     s1, chunks.size());
-            return SolveOutcome.unusable(s1, classifyAtRisk(chunks, axis, cutoff));
+            SolveOutcome gescheitert = SolveOutcome.unusable(s1, classifyAtRisk(chunks, axis, cutoff));
+            gescheitert.setPhase1Status(s1);
+            gescheitert.setPhase1Ms(phase1Ms);
+            return gescheitert;
         }
-        long bestDrop = Math.round(solver.objectiveValue());
+        long bestDrop = solver.value(dropVar);
 
         // Phase 1 hat eine gültige Lösung. Sie wird JETZT festgehalten, bevor Phase 2 das Modell
         // anfasst: scheitert Phase 2, steht im Löser keine gültige Belegung mehr, und ohne diesen
@@ -2523,6 +2669,7 @@ public class SmartSchedulerService {
         outcome.setReliefSqueeze(relief2);
         outcome.setOverduePlaced(overduePlatziert);
         outcome.setDisplaced(verdraengt);
+        outcome.setPhase1Status(s1);
         outcome.setPhase1Ms(phase1Ms);
         outcome.setPhase2Ms(phase2Ms);
         outcome.setIntervals(allIntervals.size());
@@ -3197,9 +3344,12 @@ public class SmartSchedulerService {
      */
     private Map<String, Integer> previousStartSlots(ScheduleInput input, Axis axis,
                                                     List<TaskChunk> chunks) {
-        Map<Long, Long> chunkCountPerTask = chunks.stream()
+        // Die Chunks je Task IN IHRER REIHENFOLGE — nicht nur ihre Anzahl. Gebraucht werden die
+        // Dauern, um einen Anker nur dann zu setzen, wenn Block i wirklich noch derselbe Block ist.
+        Map<Long, List<TaskChunk>> chunksPerTask = chunks.stream()
                 .filter(c -> c.task != null && c.task.getId() != null)
-                .collect(Collectors.groupingBy(c -> c.task.getId(), Collectors.counting()));
+                .collect(Collectors.groupingBy(c -> c.task.getId(), LinkedHashMap::new,
+                        Collectors.toList()));
 
         Map<String, Integer> out = new HashMap<>();
         Map<Long, List<CalendarEvent>> byTask  = new HashMap<>();
@@ -3227,13 +3377,34 @@ public class SmartSchedulerService {
             }
         }
         byTask.forEach((taskId, evs) -> {
-            // Nur ankern, wenn die Zerlegung dieselbe geblieben ist — siehe Javadoc oben.
-            long jetzt = chunkCountPerTask.getOrDefault(taskId, 0L);
-            if (jetzt != evs.size()) return;
-
+            List<TaskChunk> gruppe = chunksPerTask.getOrDefault(taskId, List.of());
             evs.sort(Comparator.comparing(CalendarEvent::getStartTime));
-            for (int i = 0; i < evs.size(); i++) {
-                out.put("task:" + taskId + ":" + i, axis.floorSlot(evs.get(i).getStartTime()));
+
+            // Angekert wird der PRÄFIX, der noch passt — Block für Block, und beim ersten Block
+            // mit anderer Dauer ist Schluss.
+            //
+            // Vorher galt: stimmt die Blockzahl nicht exakt, fällt der Anker der ganzen Aufgabe
+            // weg ("lieber gar kein Anker als ein falscher"). Die Sorge ist berechtigt — bei
+            // geänderter Zerlegung zeigt Index i auf einen anderen Block —, die Regel war dafür
+            // aber viel zu grob: sie greift auch, wenn sich an der Zerlegung NICHTS geändert hat
+            // und die Aufgabe im letzten Lauf bloß nicht vollständig untergebracht wurde. Genau
+            // das ist bei vollem Kalender der Normalfall.
+            //
+            // Gemessen am Bestand aus SchedulerFixtures mit 50 Aufgaben: von rund 55 Task-Chunks
+            // behielten so nur etwa 12 ihren Anker. Die übrigen wanderten bei jedem Lauf frei
+            // umher, verdrängten dabei die (korrekt verankerten) Gewohnheiten — und am Ende lagen
+            // von 282 Blöcken über 200 woanders als beim Lauf davor, ohne dass sich an der
+            // Eingabe irgendetwas geändert hatte.
+            //
+            // Der Dauervergleich hält die ursprüngliche Zusicherung aufrecht: ein Anker entsteht
+            // nur dort, wo Block i nachweislich noch dieselbe Länge hat wie beim letzten Mal.
+            int k = Math.min(evs.size(), gruppe.size());
+            for (int i = 0; i < k; i++) {
+                CalendarEvent ev = evs.get(i);
+                if (ev.getEndTime() == null) break;
+                long dauer = ChronoUnit.MINUTES.between(ev.getStartTime(), ev.getEndTime());
+                if (dauer != gruppe.get(i).durationMinutes) break;
+                out.put("task:" + taskId + ":" + i, axis.floorSlot(ev.getStartTime()));
             }
         });
         // Anker für flexible Habits: pro Habit und ISO-Woche chronologisch durchnummeriert.
@@ -4259,8 +4430,12 @@ public class SmartSchedulerService {
                 earliest = Math.max(earliest, axis.ceilSlot(c.task.getNotBefore()));
             }
 
+            // CATCH_UP rechnet mit normaler Arbeitszeit und hält deshalb auch die Arbeitstage ein.
+            // SQUEEZE weicht ohnehin schon auf 07:00-22:00 aus — dann darf es auch der freie Tag
+            // sein: eine gerissene Deadline ist schlimmer als ein Block am Samstag.
             List<DayWindow> windows = dayWindows(axis, dayStartSlot, dayEndSlot, sizeSlots,
-                    earliest, null, lastDay, latestEnd);
+                    earliest, mode == ReliefMode.CATCH_UP ? arbeitstage(prefs, axis) : null,
+                    lastDay, latestEnd);
             if (windows.isEmpty()) {
                 placeables.add(null);
                 continue;
@@ -5029,6 +5204,53 @@ public class SmartSchedulerService {
             case EVENING   -> HabitWindow.EVENING;
         };
         return new int[]{ minuteOfDay(w.defaultStart()), minuteOfDay(w.defaultEnd()) };
+    }
+
+    /**
+     * Die Tagesindizes im Horizont, an denen Aufgaben und Projektzeit liegen dürfen.
+     *
+     * @return {@code null}, wenn alle sieben Tage erlaubt sind — dann wird gar nicht erst
+     *         gefiltert und das Modell bleibt exakt so groß wie vorher.
+     */
+    private List<Integer> arbeitstage(UserPreferences prefs, Axis axis) {
+        Set<DayOfWeek> erlaubt = arbeitstageAus(prefs.getWorkDays());
+        if (erlaubt == null || erlaubt.size() == 7) return null;
+
+        List<Integer> tage = new ArrayList<>();
+        for (int d = 0; d < axis.totalDays; d++) {
+            if (erlaubt.contains(axis.origin.toLocalDate().plusDays(d).getDayOfWeek())) tage.add(d);
+        }
+        return tage;
+    }
+
+    /**
+     * Parst {@code "1,2,3,4,5"} zu Wochentagen.
+     *
+     * <p>{@code null} bei leerer oder unbrauchbarer Angabe: die Einstellung darf den Scheduler
+     * niemals lahmlegen. Stünde dort Unsinn, wäre "alle Tage erlaubt" das einzig sichere
+     * Verhalten — ein leeres Ergebnis hieße "kein einziger Tag" und würde jede Aufgabe verwerfen.
+     */
+    private static Set<DayOfWeek> arbeitstageAus(String wert) {
+        if (wert == null || wert.isBlank()) return null;
+        Set<DayOfWeek> out = EnumSet.noneOf(DayOfWeek.class);
+        for (String teil : wert.split(",")) {
+            try {
+                int nummer = Integer.parseInt(teil.trim());
+                if (nummer >= 1 && nummer <= 7) out.add(DayOfWeek.of(nummer));
+            } catch (NumberFormatException ignored) {
+                // Einzelner unbrauchbarer Eintrag - der Rest gilt trotzdem.
+            }
+        }
+        return out.isEmpty() ? null : out;
+    }
+
+    /** Schnittmenge zweier Tageslisten; {@code null} heißt auf beiden Seiten "keine Einschränkung". */
+    private static List<Integer> schnitt(List<Integer> a, List<Integer> b) {
+        if (a == null) return b;
+        if (b == null) return a;
+        List<Integer> out = new ArrayList<>(a);
+        out.retainAll(b);
+        return out;
     }
 
     private LocalTime workStart(UserPreferences p) {

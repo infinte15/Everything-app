@@ -25,6 +25,17 @@ public class SolveOutcome {
     // dann nicht mehr eindeutig einem Lauf zuzuordnen.
     private long phase1Ms;
     private long phase2Ms;
+    /**
+     * Der Status, mit dem Phase 1 abgeschlossen hat.
+     *
+     * <p>{@link #status} ist der Status von Phase 2 (und nur bei deren Scheitern der von Phase 1).
+     * Damit war die teuerste Störung des Schedulers bisher unsichtbar: Kippt Phase 1 selbst um —
+     * am 31.08.2026 kam sie wegen des Presolves ab ~70 Aufgaben gar nicht mehr zum Suchen —, sieht
+     * man das im Log erst, wenn der ganze Lauf unbrauchbar ist. Steht hier dagegen dauerhaft
+     * {@code FEASIBLE} statt {@code OPTIMAL}, schöpft Phase 1 ihren Deckel aus und die Kante ist
+     * nah, obwohl der Lauf noch durchgeht.
+     */
+    private CpSolverStatus phase1Status;
     private int  intervals;
     private int  placeables;
     private long drop;
@@ -85,6 +96,8 @@ public class SolveOutcome {
 
     /** Es gab schlicht nichts zu planen; das ist ein Erfolg, kein Fehler. */
     public static SolveOutcome empty() {
-        return new SolveOutcome(CpSolverStatus.OPTIMAL, List.of(), List.of());
+        SolveOutcome leer = new SolveOutcome(CpSolverStatus.OPTIMAL, List.of(), List.of());
+        leer.setPhase1Status(CpSolverStatus.OPTIMAL);
+        return leer;
     }
 }

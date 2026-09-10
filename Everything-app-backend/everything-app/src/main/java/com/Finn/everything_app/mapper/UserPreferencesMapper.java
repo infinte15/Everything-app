@@ -25,6 +25,7 @@ public class UserPreferencesMapper {
         dto.setMaxTaskMinutesPerDay(prefs.getMaxTaskMinutesPerDay());
         dto.setMaxScheduledMinutesPerDay(prefs.getMaxScheduledMinutesPerDay());
         dto.setCoreHoursEnd(prefs.getCoreHoursEnd());
+        dto.setWorkDays(prefs.getWorkDays());
         dto.setPersonalHoursStart(prefs.getPersonalHoursStart());
         dto.setPersonalHoursEnd(prefs.getPersonalHoursEnd());
         dto.setDefaultMinChunkMinutes(prefs.getDefaultMinChunkMinutes());
@@ -56,6 +57,7 @@ public class UserPreferencesMapper {
         prefs.setMaxTaskMinutesPerDay(dto.getMaxTaskMinutesPerDay());
         prefs.setMaxScheduledMinutesPerDay(dto.getMaxScheduledMinutesPerDay());
         prefs.setCoreHoursEnd(dto.getCoreHoursEnd());
+        prefs.setWorkDays(dto.getWorkDays());
         prefs.setPersonalHoursStart(dto.getPersonalHoursStart());
         prefs.setPersonalHoursEnd(dto.getPersonalHoursEnd());
         prefs.setDefaultMinChunkMinutes(dto.getDefaultMinChunkMinutes());

@@ -63,6 +63,39 @@ class _SettingsScreenState extends State<SettingsScreen> {
     _patch((p) => p.copyWith(coreHoursEnd: picked));
   }
 
+  /// Einen Wochentag als Arbeitstag an- oder abschalten.
+  ///
+  /// `workDays == null` heisst "alle sieben Tage" — deshalb startet die Auswahl beim ersten
+  /// Antippen bei allen sieben und nimmt den angetippten Tag heraus, statt bei einer leeren
+  /// Menge zu beginnen.
+  ///
+  /// Wird der letzte Tag abgewaehlt, geht es zurueck auf null: "an keinem Tag planen" waere
+  /// keine sinnvolle Einstellung, sondern ein abgeschalteter Scheduler — dafuer gibt es den
+  /// eigenen Schalter weiter unten.
+  void _toggleWorkDay(int iso) {
+    final current = _draft;
+    if (current == null) return;
+
+    final aktiv = _arbeitstage(current.workDays);
+    if (!aktiv.remove(iso)) aktiv.add(iso);
+
+    final sortiert = aktiv.toList()..sort();
+    // Leerstring statt null: nur so nimmt das Backend die Aenderung an (es uebernimmt keine
+    // null-Felder), und nur so laesst sich die Auswahl ueberhaupt wieder zuruecknehmen.
+    _patch((p) => p.copyWith(workDays: sortiert.isEmpty ? '' : sortiert.join(',')));
+  }
+
+  /// `null` oder leer heisst alle sieben Tage.
+  static Set<int> _arbeitstage(String? wert) {
+    if (wert == null || wert.trim().isEmpty) return {1, 2, 3, 4, 5, 6, 7};
+    return wert
+        .split(',')
+        .map((t) => int.tryParse(t.trim()))
+        .whereType<int>()
+        .where((n) => n >= 1 && n <= 7)
+        .toSet();
+  }
+
   /// Gegenstueck zu [_pickTime] fuer die Privatzeiten.
   ///
   /// Bewusst eine eigene Methode statt eines dritten Parameters an [_pickTime]: die beiden
@@ -150,6 +183,13 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       label: 'Evenings start at',
                       value: _formatTime(draft.coreHoursEnd) ?? '18:00',
                       onTap: () => _pickCoreHoursEnd(context),
+                    ),
+                    // Betrifft nur Aufgaben und Projektzeit. Gewohnheiten und Trainings haengen
+                    // an den Privatzeiten und ihren eigenen Wochentagen — "ich arbeite nicht am
+                    // Wochenende" heisst nicht "ich meditiere nicht am Wochenende".
+                    _WorkDayPicker(
+                      aktiv: _arbeitstage(draft.workDays),
+                      onToggle: _toggleWorkDay,
                     ),
 
                     const SizedBox(height: 24),
@@ -374,6 +414,71 @@ class _SettingRow extends StatelessWidget {
             const Icon(Icons.chevron_right_rounded, size: 18, color: AppTheme.onSurfaceVariant),
           ],
         ),
+      ),
+    );
+  }
+}
+
+/// Auswahl der Arbeitstage — sieben Chips im Stil der uebrigen Einstellungszeilen.
+///
+/// Steht bewusst nicht als [_SettingRow] mit einem Dialog dahinter: die Auswahl ist der
+/// eigentliche Inhalt und soll ohne einen zweiten Tipp sichtbar sein.
+class _WorkDayPicker extends StatelessWidget {
+  final Set<int> aktiv;
+  final ValueChanged<int> onToggle;
+
+  const _WorkDayPicker({required this.aktiv, required this.onToggle});
+
+  static const _kuerzel = ['Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa', 'So'];
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 14),
+      margin: const EdgeInsets.only(bottom: 8),
+      decoration: BoxDecoration(
+        color: Theme.of(context).colorScheme.surfaceContainerHighest.withValues(alpha: 0.35),
+        borderRadius: BorderRadius.zero,
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text('Tasks only on',
+              style: TextStyle(fontFamily: 'Manrope', fontWeight: FontWeight.w600)),
+          const SizedBox(height: 10),
+          Row(
+            children: List.generate(7, (i) {
+              final iso = i + 1;
+              final an = aktiv.contains(iso);
+              return Expanded(
+                child: GestureDetector(
+                  onTap: () => onToggle(iso),
+                  child: Container(
+                    margin: EdgeInsets.only(right: i == 6 ? 0 : 6),
+                    padding: const EdgeInsets.symmetric(vertical: 10),
+                    alignment: Alignment.center,
+                    decoration: BoxDecoration(
+                      color: an ? AppTheme.primaryColor : Colors.transparent,
+                      border: Border.all(
+                        color: an ? AppTheme.primaryColor : AppTheme.onSurfaceVariant,
+                        width: 1,
+                      ),
+                    ),
+                    child: Text(
+                      _kuerzel[i],
+                      style: TextStyle(
+                        fontFamily: 'Manrope',
+                        fontWeight: FontWeight.w800,
+                        fontSize: 12,
+                        color: an ? Colors.black : AppTheme.onSurfaceVariant,
+                      ),
+                    ),
+                  ),
+                ),
+              );
+            }),
+          ),
+        ],
       ),
     );
   }

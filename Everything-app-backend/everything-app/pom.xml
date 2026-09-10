@@ -19,6 +19,12 @@
 	<description>Comprehensive productivity application with smart scheduling</description>
 
 	<properties>
+		<!--
+			Vorgabe fuer den Ausschluss getaggter Tests. Als Property und nicht direkt in der
+			Plugin-Konfiguration, weil ein fest eingetragener Wert dort NICHT per -D zu
+			ueberschreiben ist: die Plugin-Konfiguration gewinnt gegen die User-Property.
+		-->
+		<surefire.excludedGroups>benchmark</surefire.excludedGroups>
 		<java.version>17</java.version>
 		<maven.compiler.source>17</maven.compiler.source>
 		<maven.compiler.target>17</maven.compiler.target>
@@ -152,6 +158,19 @@
 	<build>
 		<plugins>
 			<!-- Spring Boot Maven Plugin -->
+			<!--
+				Die getaggten Lasttests (SmartSchedulerLastTest) laufen NICHT bei jedem
+				`mvn test` mit: sie messen Verteilungen ueber mehrere Solverlaeufe je
+				Bestandsgroesse und brauchen dafuer Minuten statt Sekunden. Lauf per
+				`./mvnw test -Dtest=SmartSchedulerLastTest -Dsurefire.excludedGroups=`.
+			-->
+			<plugin>
+				<groupId>org.apache.maven.plugins</groupId>
+				<artifactId>maven-surefire-plugin</artifactId>
+				<configuration>
+					<excludedGroups>${surefire.excludedGroups}</excludedGroups>
+				</configuration>
+			</plugin>
 			<plugin>
 				<groupId>org.springframework.boot</groupId>
 				<artifactId>spring-boot-maven-plugin</artifactId>

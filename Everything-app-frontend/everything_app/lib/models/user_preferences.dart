@@ -30,6 +30,17 @@ class UserPreferences {
   /// waere 21:00 bei einem Arbeitsende von 22:00 eine gleichwertige Lage.
   final TimeOfDay? coreHoursEnd;
 
+  /// An welchen Wochentagen Aufgaben und Projektzeit geplant werden duerfen ("Work Days").
+  ///
+  /// ISO-Tagesnummern, kommagetrennt: `"1,2,3,4,5"` heisst Montag bis Freitag. `null` heisst
+  /// alle sieben Tage — die Voreinstellung, damit die Einstellung von sich aus keinen
+  /// bestehenden Plan umschreibt.
+  ///
+  /// Zum Zuruecknehmen muss der LEERSTRING geschickt werden, nicht `null`: das Backend
+  /// uebernimmt nur Felder ungleich null, mit `null` liesse sich eine einmal gesetzte Auswahl
+  /// nie wieder entfernen (derselbe Fallstrick wie bei `TaskDTO.clearFields`).
+  final String? workDays;
+
   /// Privatzeiten — der Rahmen fuer Gewohnheiten und Trainings ("Personal Hours").
   ///
   /// Getrennt von den Arbeitszeiten, weil beides verschiedene Fragen beantwortet. Solange
@@ -64,6 +75,7 @@ class UserPreferences {
     this.maxTaskMinutesPerDay,
     this.maxScheduledMinutesPerDay,
     this.coreHoursEnd,
+    this.workDays,
     this.personalHoursStart,
     this.personalHoursEnd,
     this.defaultMinChunkMinutes,
@@ -106,6 +118,7 @@ class UserPreferences {
       maxTaskMinutesPerDay: json['maxTaskMinutesPerDay'],
       maxScheduledMinutesPerDay: json['maxScheduledMinutesPerDay'],
       coreHoursEnd: _parseTime(json['coreHoursEnd']),
+      workDays: json['workDays'] as String?,
       personalHoursStart: _parseTime(json['personalHoursStart']),
       personalHoursEnd: _parseTime(json['personalHoursEnd']),
       defaultMinChunkMinutes: json['defaultMinChunkMinutes'],
@@ -130,6 +143,7 @@ class UserPreferences {
       'maxTaskMinutesPerDay': maxTaskMinutesPerDay,
       'maxScheduledMinutesPerDay': maxScheduledMinutesPerDay,
       'coreHoursEnd': _formatTime(coreHoursEnd),
+      'workDays': workDays,
       'personalHoursStart': _formatTime(personalHoursStart),
       'personalHoursEnd': _formatTime(personalHoursEnd),
       'defaultMinChunkMinutes': defaultMinChunkMinutes,
@@ -153,6 +167,7 @@ class UserPreferences {
     int? maxTaskMinutesPerDay,
     int? maxScheduledMinutesPerDay,
     TimeOfDay? coreHoursEnd,
+    String? workDays,
     TimeOfDay? personalHoursStart,
     TimeOfDay? personalHoursEnd,
     int? defaultMinChunkMinutes,
@@ -175,6 +190,7 @@ class UserPreferences {
       maxTaskMinutesPerDay: maxTaskMinutesPerDay ?? this.maxTaskMinutesPerDay,
       maxScheduledMinutesPerDay: maxScheduledMinutesPerDay ?? this.maxScheduledMinutesPerDay,
       coreHoursEnd: coreHoursEnd ?? this.coreHoursEnd,
+      workDays: workDays ?? this.workDays,
       personalHoursStart: personalHoursStart ?? this.personalHoursStart,
       personalHoursEnd: personalHoursEnd ?? this.personalHoursEnd,
       defaultMinChunkMinutes: defaultMinChunkMinutes ?? this.defaultMinChunkMinutes,
