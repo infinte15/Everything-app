@@ -1,8 +1,8 @@
 package com.Finn.everything_app.service.bank;
 
 import com.Finn.everything_app.exception.BankConnectionException;
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.http.HttpHeaders;
@@ -71,10 +71,10 @@ public class EnableBankingClient implements BankDataProvider {
         List<AspspInfo> result = new ArrayList<>();
         for (JsonNode node : response.path("aspsps")) {
             result.add(new AspspInfo(
-                    node.path("name").asText(null),
-                    node.path("country").asText(null),
-                    node.path("logo").asText(null),
-                    node.path("group").path("name").asText(null),
+                    node.path("name").asString(null),
+                    node.path("country").asString(null),
+                    node.path("logo").asString(null),
+                    node.path("group").path("name").asString(null),
                     node.path("beta").asBoolean(false),
                     supportsRedirect(node),
                     // maximum_consent_validity kommt in Sekunden.
@@ -89,7 +89,7 @@ public class EnableBankingClient implements BankDataProvider {
      */
     private boolean supportsRedirect(JsonNode aspsp) {
         for (JsonNode method : aspsp.path("auth_methods")) {
-            if ("REDIRECT".equalsIgnoreCase(method.path("approach").asText(""))) {
+            if ("REDIRECT".equalsIgnoreCase(method.path("approach").asString(""))) {
                 return true;
             }
         }
@@ -116,8 +116,8 @@ public class EnableBankingClient implements BankDataProvider {
 
         JsonNode response = post("/auth", body, null);
         return new AuthStart(
-                response.path("url").asText(null),
-                response.path("authorization_id").asText(null));
+                response.path("url").asString(null),
+                response.path("authorization_id").asString(null));
     }
 
     @Override
@@ -126,7 +126,7 @@ public class EnableBankingClient implements BankDataProvider {
 
         List<SessionResult.ProviderAccount> accounts = new ArrayList<>();
         for (JsonNode node : response.path("accounts")) {
-            String hash = node.path("identification_hash").asText(null);
+            String hash = node.path("identification_hash").asString(null);
             if (hash == null) {
                 log.warn("Konto ohne identification_hash uebersprungen - ohne stabilen Schluessel "
                         + "waere es bei jeder Neu-Autorisierung ein neues Konto");
@@ -135,17 +135,17 @@ public class EnableBankingClient implements BankDataProvider {
             accounts.add(new SessionResult.ProviderAccount(
                     // uid darf fehlen (gesperrte oder aufgeloeste Konten) - dann ist das Konto
                     // sichtbar, aber nicht abrufbar.
-                    node.path("uid").asText(null),
+                    node.path("uid").asString(null),
                     hash,
-                    node.path("account_id").path("iban").asText(null),
-                    firstNonBlank(node.path("name").asText(null), node.path("product").asText(null)),
-                    node.path("currency").asText("EUR")));
+                    node.path("account_id").path("iban").asString(null),
+                    firstNonBlank(node.path("name").asString(null), node.path("product").asString(null)),
+                    node.path("currency").asString("EUR")));
         }
 
         LocalDateTime validUntil = parseOffsetDateTime(
-                response.path("access").path("valid_until").asText(null));
+                response.path("access").path("valid_until").asString(null));
 
-        return new SessionResult(response.path("session_id").asText(null), validUntil, accounts);
+        return new SessionResult(response.path("session_id").asString(null), validUntil, accounts);
     }
 
     // ==================== Kontodaten ====================
@@ -158,10 +158,10 @@ public class EnableBankingClient implements BankDataProvider {
         for (JsonNode node : response.path("balances")) {
             JsonNode amount = node.path("balance_amount");
             result.add(new BankBalance(
-                    node.path("balance_type").asText(null),
-                    node.path("name").asText(null),
-                    parseAmount(amount.path("amount").asText("0")),
-                    amount.path("currency").asText("EUR")));
+                    node.path("balance_type").asString(null),
+                    node.path("name").asString(null),
+                    parseAmount(amount.path("amount").asString("0")),
+                    amount.path("currency").asString("EUR")));
         }
         return result;
     }
@@ -195,7 +195,7 @@ public class EnableBankingClient implements BankDataProvider {
             // Eine leere Seite mit gesetztem Schluessel ist zulaessig - erst null beendet die Schleife.
             continuationKey = response.path("continuation_key").isNull()
                     ? null
-                    : response.path("continuation_key").asText(null);
+                    : response.path("continuation_key").asString(null);
             pages++;
         } while (continuationKey != null && pages < 200);
 
@@ -207,26 +207,26 @@ public class EnableBankingClient implements BankDataProvider {
 
     private BankTx toBankTx(JsonNode node) {
         JsonNode amount = node.path("transaction_amount");
-        String status = node.path("status").asText("");
-        String indicator = node.path("credit_debit_indicator").asText("");
+        String status = node.path("status").asString("");
+        String indicator = node.path("credit_debit_indicator").asString("");
 
-        LocalDate bookingDate = parseDate(node.path("booking_date").asText(null));
+        LocalDate bookingDate = parseDate(node.path("booking_date").asString(null));
         if (bookingDate == null) {
-            bookingDate = parseDate(node.path("value_date").asText(null));
+            bookingDate = parseDate(node.path("value_date").asString(null));
         }
         if (bookingDate == null) {
-            log.warn("Buchung ohne Datum uebersprungen: {}", node.path("entry_reference").asText("?"));
+            log.warn("Buchung ohne Datum uebersprungen: {}", node.path("entry_reference").asString("?"));
             return null;
         }
 
         return new BankTx(
-                node.path("entry_reference").asText(null),
+                node.path("entry_reference").asString(null),
                 "BOOK".equalsIgnoreCase(status),
                 "CRDT".equalsIgnoreCase(indicator),
-                Math.abs(parseAmount(amount.path("amount").asText("0"))),
-                amount.path("currency").asText("EUR"),
+                Math.abs(parseAmount(amount.path("amount").asString("0"))),
+                amount.path("currency").asString("EUR"),
                 bookingDate,
-                parseDate(node.path("value_date").asText(null)),
+                parseDate(node.path("value_date").asString(null)),
                 counterpartyOf(node, "CRDT".equalsIgnoreCase(indicator)),
                 remittanceOf(node));
     }
@@ -237,11 +237,11 @@ public class EnableBankingClient implements BankDataProvider {
      */
     private String counterpartyOf(JsonNode node, boolean income) {
         String name = income
-                ? node.path("debtor").path("name").asText(null)
-                : node.path("creditor").path("name").asText(null);
+                ? node.path("debtor").path("name").asString(null)
+                : node.path("creditor").path("name").asString(null);
         return firstNonBlank(name,
-                node.path("creditor").path("name").asText(null),
-                node.path("debtor").path("name").asText(null));
+                node.path("creditor").path("name").asString(null),
+                node.path("debtor").path("name").asString(null));
     }
 
     /** remittance_information ist ein Array von Zeilen, kein einzelner String. */
@@ -250,14 +250,14 @@ public class EnableBankingClient implements BankDataProvider {
         if (info.isArray() && !info.isEmpty()) {
             List<String> lines = new ArrayList<>();
             info.forEach(line -> {
-                String text = line.asText("").trim();
+                String text = line.asString("").trim();
                 if (!text.isEmpty()) {
                     lines.add(text);
                 }
             });
             return lines.isEmpty() ? null : String.join("\n", lines);
         }
-        return firstNonBlank(info.asText(null), node.path("note").asText(null));
+        return firstNonBlank(info.asString(null), node.path("note").asString(null));
     }
 
     // ==================== HTTP ====================
@@ -310,8 +310,8 @@ public class EnableBankingClient implements BankDataProvider {
         String detail = null;
         try {
             JsonNode body = objectMapper.readTree(e.getResponseBodyAsString());
-            errorCode = body.path("error").asText(null);
-            detail = firstNonBlank(body.path("detail").asText(null), body.path("message").asText(null));
+            errorCode = body.path("error").asString(null);
+            detail = firstNonBlank(body.path("detail").asString(null), body.path("message").asString(null));
         } catch (Exception ignored) {
             // Fehlerbody unlesbar - dann bleibt es beim Status.
         }

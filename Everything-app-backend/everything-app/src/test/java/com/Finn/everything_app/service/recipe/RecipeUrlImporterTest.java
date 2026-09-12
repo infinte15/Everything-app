@@ -3,7 +3,7 @@ package com.Finn.everything_app.service.recipe;
 import com.Finn.everything_app.dto.RecipeDTO;
 import com.Finn.everything_app.dto.RecipeImportPreviewDTO;
 import com.Finn.everything_app.exception.BadRequestException;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.core.io.ClassPathResource;

@@ -21,8 +21,8 @@ import static org.junit.jupiter.api.Assertions.*;
  *
  * <p>Die Regel steht vollständig in der WHERE-Klausel von {@code findSchedulableTasks} und ist
  * damit für einen Mockito-Test unsichtbar: dort liefert {@code taskService.getSchedulableTasks}
- * genau das, was der Test hineinlegt. Bis 31.08.2026 stand in der Abfrage nur {@code TODO}, und
- * die Folge war im Betrieb nicht zu übersehen und im Test nicht zu finden — wer eine Aufgabe auf
+ * genau das, was der Test hineinlegt. Bis 31.08.2026 fehlte {@code IN_PROGRESS} in der Abfrage,
+ * und die Folge war im Betrieb nicht zu übersehen und im Test nicht zu finden — wer eine Aufgabe auf
  * "in Arbeit" setzte, verlor jede geplante Zeit dafür, ohne eine Warnung zu bekommen: ohne Task
  * gibt es keinen Chunk, ohne Chunk kein {@code AtRiskItem}.
  */

@@ -41,8 +41,12 @@ final class SchedLog implements AutoCloseable {
         long   p2Ms()       { return zahl("p2Ms"); }
         long   persistMs()  { return zahl("persistMs"); }
         int    intervalle() { return (int) zahl("intervalle"); }
+        int    tagIntervalle() { return (int) zahl("tagIv"); }
         int    placeables() { return (int) zahl("placeables"); }
+        int    taskChunksImModell() { return (int) zahl("taskChunks"); }
         long   drop()       { return zahl("drop"); }
+        long   greedyDrop() { return zahl("greedyDrop"); }
+        boolean greedy()    { return Boolean.parseBoolean(felder.getOrDefault("greedy", "false")); }
         long   obj()        { return zahl("obj"); }
         String status()     { return felder.getOrDefault("status", "?"); }
         String p1Status()   { return felder.getOrDefault("p1Status", "?"); }

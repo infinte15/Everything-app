@@ -65,6 +65,7 @@ class SmartSchedulerSzenarienTest {
     @Mock TaskService               taskService;
     @Mock WorkoutPlanService        workoutPlanService;
     @Mock LastScheduleRunStore      lastRunStore;
+    @Mock EstimateCalibrationService estimateCalibration;
 
     @InjectMocks
     SmartSchedulerService service;
@@ -369,6 +370,37 @@ class SmartSchedulerSzenarienTest {
          * schlechter als ein veralteter", der Lauf gibt gar kein Ergebnis zurück — und der Test
          * prüfte plötzlich die Auslastung der Maschine statt die Meldungslogik.
          */
+        /**
+         * Eine Frist von morgen wird nicht von deadlinefreien Aufgaben aus dem Modell verdrängt.
+         *
+         * <p>Die Aufnahmegrenze sortierte nach {@code calculateTaskWeight} — strikt nach Priorität.
+         * Weil ein Prioritätsschritt 1000 wiegt und die Dringlichkeit höchstens 800 aufspannt, konnte
+         * eine Deadline eine Prioritätsstufe NIE überholen: vier deadlinefreie Prio-5-Aufgaben
+         * füllten die Grenze, und die Prio-2-Aufgabe mit Frist morgen bekam keinen einzigen Block,
+         * nur eine Meldung. Genau das soll ein Auto-Scheduler verhindern.
+         */
+        @Test
+        void eineFristMorgenVerdraengtDeadlinefreieAufgaben() {
+            prefs.setWorkdayStart(LocalTime.of(8, 0));
+            prefs.setWorkdayEnd(LocalTime.of(20, 0));
+            // So knapp, dass nur ein Teil des Bestands ins Modell passt.
+            setzeFeld("maxTaskChunks", 4);
+
+            List<Task> bestand = new ArrayList<>();
+            for (int i = 1; i <= 4; i++) {
+                bestand.add(unteilbar(task("Wichtig ohne Frist " + i, 60, 5, null)));
+            }
+            Task frist = unteilbar(task("Bewerbungsfrist", 60, 2, MORGEN.atTime(18, 0)));
+            bestand.add(frist);
+            when(taskService.getSchedulableTasks(1L)).thenReturn(bestand);
+
+            ScheduleResult r = lauf(MORGEN, MORGEN.plusDays(6));
+
+            assertTrue(titel(r.getScheduledTasks()).contains("Bewerbungsfrist"),
+                    "die Frist von morgen muss ins Modell kommen, geplant war aber "
+                            + titel(r.getScheduledTasks()) + " (gemeldet: " + r.getAtRisk() + ")");
+        }
+
         @Test
         void ohneDeadlineGibtEsKeineDeadlineWarnung() {
             prefs.setWorkdayEnd(LocalTime.of(9, 0));   // ein Block pro Tag
@@ -802,6 +834,76 @@ class SmartSchedulerSzenarienTest {
             }
         }
 
+        /**
+         * Ein gepinnter Vormittag reduziert das Tagesbudget.
+         *
+         * <p>Gepinnte Blöcke sperrten ihre ZEIT schon immer, zählten aber gegen keinen der drei
+         * Tagesdeckel: bei 240 Minuten Aufgabenzeit pro Tag und zwei selbst hingezogenen Blöcken à
+         * 120 Minuten durfte der Löser die volle Tagesration NOCH EINMAL obendrauf legen. Aus 240
+         * wurden 480.
+         */
+        @Test
+        void gepinnterVormittagReduziertDasTagesbudget() {
+            prefs.setWorkdayStart(LocalTime.of(8, 0));
+            prefs.setWorkdayEnd(LocalTime.of(20, 0));
+            prefs.setMaxTaskMinutesPerDay(240);
+
+            // Zwei gepinnte Blöcke à 120 Minuten schöpfen den Tagesdeckel bereits aus. Sie hängen
+            // an einer eigenen Aufgabe, die dadurch vollständig versorgt ist.
+            Task gezogen = unteilbar(task("Selbst gelegt", 240, 3, MORGEN.atTime(20, 0)));
+            List<CalendarEvent> gepinnt = List.of(
+                    gepinnterAufgabenblock(gezogen, MORGEN.atTime(8, 0), MORGEN.atTime(10, 0)),
+                    gepinnterAufgabenblock(gezogen, MORGEN.atTime(10, 0), MORGEN.atTime(12, 0)));
+            when(calendarEventService.getFixedEvents(eq(1L), any(), any())).thenReturn(gepinnt);
+
+            List<Task> offen = new ArrayList<>();
+            offen.add(gezogen);
+            for (int i = 1; i <= 4; i++) {
+                offen.add(unteilbar(task("Rest" + i, 60, 3, MORGEN.atTime(20, 0))));
+            }
+            when(taskService.getSchedulableTasks(1L)).thenReturn(offen);
+
+            ScheduleResult r = lauf(MORGEN, MORGEN);
+
+            long automatisch = r.getScheduledTasks().stream()
+                    .filter(i -> i.getStartTime().toLocalDate().equals(MORGEN))
+                    .mapToLong(i -> ChronoUnit.MINUTES.between(i.getStartTime(), i.getEndTime()))
+                    .sum();
+            assertEquals(0, automatisch,
+                    "der Deckel von 240 Minuten ist durch die gepinnten Blöcke aufgebraucht, "
+                            + "automatisch geplant wurden aber " + automatisch + " Minuten");
+        }
+
+        /**
+         * Und dasselbe für die BLOCKZAHL: ein gepinnter Aufgabenblock zählt als Block.
+         */
+        @Test
+        void einGepinnterBlockZaehltGegenMaxTasksPerDay() {
+            prefs.setWorkdayStart(LocalTime.of(8, 0));
+            prefs.setWorkdayEnd(LocalTime.of(20, 0));
+            prefs.setMaxTasksPerDay(1);
+
+            Task gezogen = unteilbar(task("Selbst gelegt", 60, 3, MORGEN.atTime(20, 0)));
+            when(calendarEventService.getFixedEvents(eq(1L), any(), any())).thenReturn(
+                    List.of(gepinnterAufgabenblock(gezogen, MORGEN.atTime(8, 0), MORGEN.atTime(9, 0))));
+
+            List<Task> offen = new ArrayList<>();
+            offen.add(gezogen);
+            for (int i = 1; i <= 3; i++) {
+                offen.add(unteilbar(task("Rest" + i, 60, 3, MORGEN.atTime(20, 0))));
+            }
+            when(taskService.getSchedulableTasks(1L)).thenReturn(offen);
+
+            ScheduleResult r = lauf(MORGEN, MORGEN);
+
+            long bloecke = r.getScheduledTasks().stream()
+                    .filter(i -> i.getStartTime().toLocalDate().equals(MORGEN))
+                    .count();
+            assertEquals(0, bloecke,
+                    "ein Block pro Tag ist erlaubt und liegt schon gepinnt da, geplant wurden aber "
+                            + bloecke + " weitere");
+        }
+
         /** Ein gepinnter Termin wird nie überplant. */
         @Test
         void gepinntesWirdNieUeberplant() {
@@ -1013,6 +1115,214 @@ class SmartSchedulerSzenarienTest {
     // ==================================================================
     // 8. Einstellungen und Robustheit
     // ==================================================================
+
+    // ==================================================================
+    // 8b. Sommerzeit — die Zeitachse ist eine Wanduhr
+    // ==================================================================
+
+    @Nested
+    @DisplayName("Sommerzeit")
+    class Sommerzeit {
+
+        /**
+         * Über die Frühjahrsumstellung wird kein fixer Termin überplant.
+         *
+         * <p>Die Achse rechnete mit {@code SLOTS_PER_DAY = 96}, also 1440 Minuten je Tag, die
+         * gesperrte Zeit eines echten Termins aber über die VERSTRICHENE Dauer seit Horizontbeginn.
+         * Am letzten Märzsonntag liegen zwischen 00:00 und 10:00 nur 540 statt 600 Minuten: der
+         * gesperrte Bereich landete vier Slots — eine Stunde — neben dem, was der Tagesindex-Weg für
+         * denselben Termin ausrechnete. Ergebnis an genau zwei Tagen im Jahr: ein geplanter Block
+         * überlappt einen fixen Termin.
+         */
+        @Test
+        void umDieFruehjahrsumstellungBleibtEinTerminUnangetastet() {
+            pruefeUmstellung(LocalDate.of(2027, 3, 28));
+        }
+
+        /** Dasselbe für den Oktobersonntag, der 1500 Minuten hat. */
+        @Test
+        void umDieHerbstumstellungBleibtEinTerminUnangetastet() {
+            pruefeUmstellung(LocalDate.of(2026, 10, 25));
+        }
+
+        /**
+         * Der Horizont ist bewusst GENAU der Umstellungstag und die Arbeitszeit bis auf die Minute
+         * gefüllt.
+         *
+         * <p>Ohne diese Enge sagt der Test nichts: bei einem Horizont über zwei Wochen weicht der
+         * Löser der umstrittenen Stunde einfach aus, und die Achse darf dann um eine Stunde daneben
+         * liegen, ohne dass es auffällt. Hier gibt es keine Ausweichmöglichkeit — neun Stunden
+         * Arbeitszeit, eine davon durch einen Termin gesperrt, und mehr Aufgaben als Platz. Jeder
+         * Block, der eine Stunde neben seinem gesperrten Bereich landet, MUSS den Termin treffen.
+         */
+        private void pruefeUmstellung(LocalDate umstellung) {
+            prefs.setWorkdayStart(LocalTime.of(8, 0));
+            prefs.setWorkdayEnd(LocalTime.of(18, 0));
+            prefs.setWorkDays("1,2,3,4,5,6,7");
+            prefs.setMaxTaskMinutesPerDay(600);
+            prefs.setMaxScheduledMinutesPerDay(600);
+
+            CalendarEvent termin = fixerBlock(umstellung.atTime(10, 0), umstellung.atTime(11, 0));
+            when(calendarEventService.getFixedEvents(eq(1L), any(), any())).thenReturn(List.of(termin));
+
+            // Zwölf Stundenblöcke auf neun freie Stunden: der Löser MUSS den Tag vollständig füllen.
+            List<Task> t = new ArrayList<>();
+            for (int i = 0; i < 12; i++) {
+                t.add(unteilbar(task("A" + i, 60, 3, umstellung.atTime(18, 0))));
+            }
+            when(taskService.getSchedulableTasks(1L)).thenReturn(t);
+
+            ScheduleResult r = lauf(umstellung, umstellung);
+
+            assertTrue(r.getScheduledTasks().size() >= 8,
+                    "der Tag muss gefüllt werden, sonst prüft der Test nichts — geplant waren "
+                            + r.getScheduledTasks().size() + " Blöcke");
+            for (ScheduledItem i : alleItems(r)) {
+                assertFalse(i.getStartTime().isBefore(termin.getEndTime())
+                                && i.getEndTime().isAfter(termin.getStartTime()),
+                        "überplant den Termin am Umstellungstag " + umstellung + ": "
+                                + i.getStartTime() + " – " + i.getEndTime());
+            }
+            assertKeineUeberlappung(r);
+        }
+
+        /**
+         * Jeder geplante Block liegt auf einem Viertelstundenraster und in der Arbeitszeit — auch
+         * über die Umstellung hinweg.
+         *
+         * <p>Das ist die Gegenprobe zum Termin-Test: dort könnte die Achse auch dadurch "richtig"
+         * aussehen, dass der Löser den Tag gar nicht benutzt. Hier wird geprüft, dass die Blöcke
+         * dort, wo sie liegen, sauber liegen.
+         */
+        @Test
+        void ueberDieUmstellungBleibenDieBloeckeImRaster() {
+            LocalDate umstellung = LocalDate.of(2027, 3, 28);
+            prefs.setWorkdayStart(LocalTime.of(8, 0));
+            prefs.setWorkdayEnd(LocalTime.of(18, 0));
+            prefs.setWorkDays("1,2,3,4,5,6,7");
+
+            List<Task> t = new ArrayList<>();
+            for (int i = 0; i < 20; i++) {
+                t.add(unteilbar(task("A" + i, 45, 3, umstellung.plusDays(5).atTime(18, 0))));
+            }
+            when(taskService.getSchedulableTasks(1L)).thenReturn(t);
+
+            ScheduleResult r = lauf(umstellung.minusDays(5), umstellung.plusDays(5));
+
+            assertFalse(r.getScheduledTasks().isEmpty(), "über die Umstellung muss geplant werden");
+            for (ScheduledItem i : alleItems(r)) {
+                assertEquals(0, i.getStartTime().getMinute() % 15,
+                        "Block nicht im Viertelstundenraster: " + i.getStartTime());
+                assertFalse(i.getStartTime().toLocalTime().isBefore(LocalTime.of(8, 0)),
+                        "Block vor Arbeitsbeginn: " + i.getStartTime());
+                assertFalse(i.getEndTime().toLocalTime().isAfter(LocalTime.of(18, 0)),
+                        "Block nach Arbeitsende: " + i.getEndTime());
+            }
+            assertKeineUeberlappung(r);
+        }
+    }
+
+    // ==================================================================
+    // 8c. Schätzkorrektur — die Ist-Zeit fließt zurück
+    // ==================================================================
+
+    @Nested
+    @DisplayName("Schätzkorrektur")
+    class Schaetzkorrektur {
+
+        @Test
+        void ohneStichprobenBleibtDieZerlegungUnveraendert() {
+            lenient().when(estimateCalibration.faktorFuer(1L))
+                    .thenReturn(EstimateCalibrationService.NEUTRAL);
+
+            Task t = unteilbar(task("Lernen", 120, 3, MORGEN.plusDays(3).atTime(17, 0)));
+            when(taskService.getSchedulableTasks(1L)).thenReturn(List.of(t));
+
+            ScheduleResult r = lauf(MORGEN, MORGEN.plusDays(5));
+
+            assertEquals(120, gesamtMinuten(r, "Lernen"));
+        }
+
+        /**
+         * Mit gelerntem Faktor 1,5 bekommt eine 120-Minuten-Aufgabe 180 Minuten.
+         *
+         * <p>Das ist der ganze Zweck: wer systematisch ein Drittel zu knapp schätzt, bekommt nicht
+         * eine falsch geschätzte Aufgabe, sondern zwanzig Blöcke um sie herum an der falschen Stelle.
+         */
+        @Test
+        void mitFaktorBekommtDieAufgabeMehrZeit() {
+            lenient().when(estimateCalibration.faktorFuer(1L)).thenReturn(1.5);
+
+            Task t = unteilbar(task("Lernen", 120, 3, MORGEN.plusDays(3).atTime(17, 0)));
+            when(taskService.getSchedulableTasks(1L)).thenReturn(List.of(t));
+
+            ScheduleResult r = lauf(MORGEN, MORGEN.plusDays(5));
+
+            assertEquals(180, gesamtMinuten(r, "Lernen"),
+                    "120 Minuten mal Faktor 1,5 sind 180");
+        }
+
+        /** Abgeschaltet heißt abgeschaltet — dann wird der Dienst nicht einmal gefragt. */
+        @Test
+        void abgeschaltetWirdNichtKorrigiert() {
+            prefs.setEstimateLearningEnabled(false);
+            lenient().when(estimateCalibration.faktorFuer(1L)).thenReturn(2.0);
+
+            Task t = unteilbar(task("Lernen", 120, 3, MORGEN.plusDays(3).atTime(17, 0)));
+            when(taskService.getSchedulableTasks(1L)).thenReturn(List.of(t));
+
+            ScheduleResult r = lauf(MORGEN, MORGEN.plusDays(5));
+
+            assertEquals(120, gesamtMinuten(r, "Lernen"));
+            org.mockito.Mockito.verify(estimateCalibration, org.mockito.Mockito.never())
+                    .faktorFuer(any());
+        }
+
+        /**
+         * Eine offene Aufgabe mit aufgebrauchter Schätzung wird GENAU EINMAL gemeldet.
+         *
+         * <p>Vorher verschwand sie lautlos: {@code chunkSizes} liefert bei Restdauer 0 keine Blöcke,
+         * also gibt es keinen Chunk, kein Placeable und keine Meldung — die Aufgabe stand weiter auf
+         * offen und war im Kalender nicht mehr zu sehen.
+         */
+        @Test
+        void eineAufgebrauchteSchaetzungWirdGemeldet() {
+            Task t = unteilbar(task("Aufgebraucht", 120, 3, MORGEN.plusDays(3).atTime(17, 0)));
+            t.setCompletedMinutes(120);
+            when(taskService.getSchedulableTasks(1L)).thenReturn(List.of(t));
+
+            ScheduleResult r = lauf(MORGEN, MORGEN.plusDays(5));
+
+            List<AtRiskItem> gemeldet = r.getAtRisk().stream()
+                    .filter(a -> AtRiskReason.ESTIMATE_EXHAUSTED.name().equals(
+                            String.valueOf(a.getReason())))
+                    .toList();
+            assertEquals(1, gemeldet.size(),
+                    "genau eine Meldung erwartet, bekommen: " + r.getAtRisk());
+            assertEquals(t.getId(), gemeldet.get(0).getTaskId());
+            assertTrue(r.getScheduledTasks().isEmpty(), "zu planen ist hier nichts mehr");
+        }
+
+        /** Und eine erledigte Aufgabe wird NICHT gemeldet — dort ist das der Normalfall. */
+        @Test
+        void eineErledigteAufgabeWirdNichtGemeldet() {
+            Task t = unteilbar(task("Fertig", 120, 3, MORGEN.plusDays(3).atTime(17, 0)));
+            t.setCompletedMinutes(120);
+            t.setStatus(TaskStatus.COMPLETED);
+            when(taskService.getSchedulableTasks(1L)).thenReturn(List.of(t));
+
+            ScheduleResult r = lauf(MORGEN, MORGEN.plusDays(5));
+
+            assertTrue(r.getAtRisk().isEmpty(), "erledigt ist kein Risiko: " + r.getAtRisk());
+        }
+
+        private int gesamtMinuten(ScheduleResult r, String titel) {
+            return (int) r.getScheduledTasks().stream()
+                    .filter(i -> i.getTask().getTitle().equals(titel))
+                    .mapToLong(i -> ChronoUnit.MINUTES.between(i.getStartTime(), i.getEndTime()))
+                    .sum();
+        }
+    }
 
     @Nested
     @DisplayName("Einstellungen und Robustheit")
@@ -1331,6 +1641,19 @@ class SmartSchedulerSzenarienTest {
         r.setPreferredWeekday(wunschtag.getValue());
         w.setRoutine(r);
         return w;
+    }
+
+    /** Ein gepinnter Block, der an einer Aufgabe hängt — was ein Drag-and-Drop hinterlässt. */
+    private CalendarEvent gepinnterAufgabenblock(Task task, LocalDateTime von, LocalDateTime bis) {
+        CalendarEvent e = fixerBlock(von, bis);
+        e.setTitle(task.getTitle());
+        e.setEventType(EventType.TASK);
+        e.setRelatedTask(task);
+        return e;
+    }
+
+    private void setzeFeld(String name, Object wert) {
+        org.springframework.test.util.ReflectionTestUtils.setField(service, name, wert);
     }
 
     private CalendarEvent fixerBlock(LocalDateTime von, LocalDateTime bis) {

@@ -1,7 +1,7 @@
 package com.Finn.everything_app.service.bank;
 
 import com.Finn.everything_app.exception.BankConnectionException;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.HttpStatus;

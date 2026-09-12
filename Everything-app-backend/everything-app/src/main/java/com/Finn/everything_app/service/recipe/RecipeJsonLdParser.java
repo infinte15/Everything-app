@@ -5,8 +5,8 @@ import com.Finn.everything_app.dto.RecipeImportPreviewDTO;
 import com.Finn.everything_app.dto.RecipeIngredientDTO;
 import com.Finn.everything_app.dto.RecipeStepDTO;
 import com.Finn.everything_app.exception.BadRequestException;
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.jsoup.nodes.Document;
@@ -252,11 +252,11 @@ public class RecipeJsonLdParser {
         if (typeNode == null) return false;
         if (typeNode.isArray()) {
             for (JsonNode entry : typeNode) {
-                if (type.equals(entry.asText())) return true;
+                if (type.equals(entry.asString())) return true;
             }
             return false;
         }
-        return type.equals(typeNode.asText());
+        return type.equals(typeNode.asString());
     }
 
     /**
@@ -276,8 +276,8 @@ public class RecipeJsonLdParser {
             }
             return null;
         }
-        if (imageNode.isTextual()) {
-            return RecipeFieldReader.trimTo(imageNode.asText(), 500);
+        if (imageNode.isString()) {
+            return RecipeFieldReader.trimTo(imageNode.asString(), 500);
         }
 
         String direct = firstText(imageNode, "contentUrl", "url");
@@ -286,11 +286,11 @@ public class RecipeJsonLdParser {
         }
 
         JsonNode reference = imageNode.get("@id");
-        if (reference != null && reference.isTextual()) {
-            String id = reference.asText();
+        if (reference != null && reference.isString()) {
+            String id = reference.asString();
             for (JsonNode node : graph) {
                 JsonNode nodeId = node.get("@id");
-                if (nodeId != null && id.equals(nodeId.asText())) {
+                if (nodeId != null && id.equals(nodeId.asString())) {
                     String url = firstText(node, "contentUrl", "url");
                     if (url != null) {
                         return RecipeFieldReader.trimTo(url, 500);
@@ -308,7 +308,7 @@ public class RecipeJsonLdParser {
         if (node == null) return result;
 
         for (JsonNode entry : node.isArray() ? node : objectMapper.createArrayNode().add(node)) {
-            String raw = entry.isTextual() ? entry.asText() : text(entry, "name");
+            String raw = entry.isString() ? entry.asString() : text(entry, "name");
             String line = RecipeFieldReader.stripHtml(raw);
             if (line == null || line.isBlank()) continue;
 
@@ -343,8 +343,8 @@ public class RecipeJsonLdParser {
         if (node == null || depth > 3) {
             return;
         }
-        if (node.isTextual()) {
-            for (String line : node.asText().split("\\R")) {
+        if (node.isString()) {
+            for (String line : node.asString().split("\\R")) {
                 addStep(result, line);
             }
             return;
@@ -408,7 +408,7 @@ public class RecipeJsonLdParser {
             JsonNode node = objectMapper.readTree(in).get("mapping");
             if (node != null) {
                 for (Map.Entry<String, JsonNode> field : node.properties()) {
-                    mapping.put(field.getKey().toLowerCase(Locale.GERMAN), field.getValue().asText());
+                    mapping.put(field.getKey().toLowerCase(Locale.GERMAN), field.getValue().asString());
                 }
             }
         } catch (IOException e) {
@@ -436,7 +436,7 @@ public class RecipeJsonLdParser {
         JsonNode value = node.get(field);
         if (value == null || value.isNull()) return null;
         if (value.isArray()) return firstText(value);
-        return value.isValueNode() ? value.asText() : null;
+        return value.isValueNode() ? value.asString() : null;
     }
 
     /** Erster brauchbarer Text aus einem Wert, der auch ein Array sein darf. */
@@ -450,7 +450,7 @@ public class RecipeJsonLdParser {
             return null;
         }
         if (node.isValueNode()) {
-            String value = node.asText();
+            String value = node.asString();
             return value == null || value.isBlank() ? null : value;
         }
         return text(node, "name");

@@ -47,6 +47,8 @@ class AtRiskItem {
         return 'Deadline nicht mehr zu halten';
       case 'OUTSIDE_HORIZON':
         return 'kommt später dran';
+      case 'ESTIMATE_EXHAUSTED':
+        return 'Zeit aufgebraucht — Schätzung anpassen';
       default:
         return 'konnte nicht eingeplant werden';
     }

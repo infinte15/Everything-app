@@ -9,8 +9,16 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+/**
+ * Die Einstellungen des angemeldeten Nutzers.
+ *
+ * <p>Der gemeinsame Pfad steht vollstaendig am {@code @RequestMapping} der Klasse, die Methoden
+ * tragen nur noch ihr Verb. Kommt hier einmal ein Endpunkt dazu, der NICHT unter
+ * {@code /preferences} liegt, muss der Pfad wieder aufgeteilt werden — die URLs bleiben davon
+ * unberuehrt, gemeint ist in beiden Formen {@code /api/user/preferences}.
+ */
 @RestController
-@RequestMapping("/api/user")
+@RequestMapping("/api/user/preferences")
 @RequiredArgsConstructor
 public class UserController {
 
@@ -21,12 +29,12 @@ public class UserController {
      * Bewusst getOrCreatePreferences: Nutzer, die vor der Einführung der Preferences angelegt
      * wurden, haben keine Zeile und würden sonst einen Fehler statt der Defaults bekommen.
      */
-    @GetMapping("/preferences")
+    @GetMapping
     public ResponseEntity<UserPreferencesDTO> getPreferences(@CurrentUser Long userId) {
         return ResponseEntity.ok(preferencesMapper.toDTO(userService.getOrCreatePreferences(userId)));
     }
 
-    @PutMapping("/preferences")
+    @PutMapping
     public ResponseEntity<UserPreferencesDTO> updatePreferences(
             @CurrentUser Long userId,
             @Valid @RequestBody UserPreferencesDTO dto) {

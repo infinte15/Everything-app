@@ -2,7 +2,7 @@ package com.Finn.everything_app.service.recipe;
 
 import com.Finn.everything_app.dto.RecipeImportPreviewDTO;
 import com.Finn.everything_app.exception.BadRequestException;
-import com.fasterxml.jackson.databind.JsonNode;
+import tools.jackson.databind.JsonNode;
 import lombok.extern.slf4j.Slf4j;
 import org.jsoup.nodes.Document;
 import org.jsoup.nodes.Element;
@@ -227,8 +227,8 @@ public class InstagramImporter {
         }
         for (String field : fields) {
             JsonNode value = node.get(field);
-            if (value != null && value.isTextual() && !value.asText().isBlank()) {
-                return value.asText();
+            if (value != null && value.isString() && !value.asString().isBlank()) {
+                return value.asString();
             }
         }
         return null;

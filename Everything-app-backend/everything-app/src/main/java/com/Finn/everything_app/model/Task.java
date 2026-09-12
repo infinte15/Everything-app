@@ -84,6 +84,22 @@ public class Task {
     @Column(name = "completed_minutes")
     private Integer completedMinutes;
 
+    /**
+     * Die ZUERST eingetragene Schätzung, unveränderlich — das Maß, gegen das sich die spätere
+     * Korrektur vergleichen lässt.
+     *
+     * <p>Ohne dieses Feld gibt es keine Ist-Zeit-Rückkopplung: {@code estimatedDurationMinutes}
+     * wird beim Nachbessern überschrieben, und danach ist nicht mehr zu erkennen, ob die Aufgabe
+     * von Anfang an sechs Stunden brauchte oder ob drei geschätzt und dann verdoppelt wurden.
+     * Genau dieses Verhältnis lernt {@link com.Finn.everything_app.service.EstimateCalibrationService}.
+     *
+     * <p>Bestandszeilen werden beim ersten Schreibzugriff aus {@code estimatedDurationMinutes}
+     * nachgezogen; bis dahin bleibt das Feld {@code null} und die Aufgabe zählt einfach nicht als
+     * Stichprobe.
+     */
+    @Column(name = "original_estimate_minutes")
+    private Integer originalEstimateMinutes;
+
     /** Frühestens ab diesem Zeitpunkt planen (Reclaims "start after"). */
     @Column(name = "not_before")
     private LocalDateTime notBefore;

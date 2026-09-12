@@ -5,11 +5,11 @@ import com.Finn.everything_app.repository.*;
 import com.google.ortools.Loader;
 import com.google.ortools.sat.*;
 import jakarta.persistence.EntityManagerFactory;
+import org.springframework.beans.factory.ObjectProvider;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.hibernate.SessionFactory;
 import org.hibernate.stat.Statistics;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -49,6 +49,17 @@ import java.util.stream.Collectors;
  *                  Items, Phase 2 optimiert die Platzierungsqualität unter der Nebenbedingung,
  *                  Phase 1 nicht zu verschlechtern. Ein einzelner gewichteter Summenterm ist hier
  *                  nicht robust: die nötige Drop-Strafe hängt von der Item-Anzahl ab.
+ *  - Boden       : vor Phase 1 baut {@link #greedyKonstruktion} in Millisekunden einen zulässigen
+ *                  First-Fit-Plan, der den Vorzustand an die erste Stelle setzt. Er dient als
+ *                  Startwert, als untere Schranke für Phase 1 (sie darf nie SCHLECHTER abliefern
+ *                  als er) und als Notausgang, wenn Phase 1 in ihrem Deckel gar nichts findet.
+ *                  Seitdem ist "der Kalender bleibt einfach stehen" kein Zustand mehr, den ein
+ *                  Nutzer erlebt, und der ausgelieferte Plan ist bei gesättigtem Bestand über
+ *                  mehrere Läufe derselbe.
+ *  - Disjunktion : ein globales {@code addNoOverlap}, ab {@code no-overlap-per-day-from}
+ *                  Task-Chunks stattdessen eines je Kalendertag. Beides ist äquivalent, weil kein
+ *                  Block über Mitternacht läuft; welches schneller ist, hängt gemessen an der
+ *                  Modellgröße.
  */
 @Service
 @RequiredArgsConstructor
@@ -72,14 +83,23 @@ public class SmartSchedulerService {
     private final TaskService                taskService;
     private final WorkoutPlanService         workoutPlanService;
     private final LastScheduleRunStore       lastRunStore;
+    private final EstimateCalibrationService estimateCalibration;
 
     /**
-     * Nur fürs Messen (siehe {@link #statementCount()}), deshalb per Feld und nicht über den
-     * Konstruktor: die Argumentliste oben ist ein Test-Kopplungspunkt, und ein Messinstrument
-     * hat dort nichts verloren. Im Mockito-Test bleibt das Feld null, der Zähler meldet dann -1.
+     * Nur fürs Messen (siehe {@link #statementCount()}) — und deshalb als {@link ObjectProvider}.
+     *
+     * <p>Das stand lange als {@code @Autowired(required = false)}-Feld hier, mit der Begründung, ein
+     * Messinstrument habe in der Konstruktor-Argumentliste nichts verloren (die ist ein
+     * Test-Kopplungspunkt, siehe oben). Die Sorge war berechtigt, das Mittel falsch: Feldinjektion
+     * verschweigt die Abhängigkeit, statt sie optional zu machen.
+     *
+     * <p>{@code ObjectProvider} sagt genau das, was gemeint ist — "wenn es die Fabrik gibt, gib sie
+     * mir" —, und bleibt trotzdem ein normales Konstruktor-Argument. Die Kopplung an die Tests
+     * kostet das nichts: die fünf Mockito-Klassen bauen über {@code @InjectMocks} mit
+     * Feld-Mocks, nicht über einen expliziten {@code new}-Aufruf. Ohne passenden Mock übergibt
+     * Mockito {@code null}, und darauf ist {@link #statementCount()} ohnehin vorbereitet.
      */
-    @Autowired(required = false)
-    private EntityManagerFactory entityManagerFactory;
+    private final ObjectProvider<EntityManagerFactory> entityManagerFactory;
 
     /**
      * Minuten pro Slot.
@@ -263,22 +283,14 @@ public class SmartSchedulerService {
      * Lauf anders ausgesehen. Es ist derselbe Befund wie in {@code scheduler.solver-time-limit-
      * seconds}: bei zu großem Modell kauft Zeit nichts mehr, sie wird nur verbraucht.
      *
-     * <p>Deshalb wird nicht das Budget vergrößert, sondern das Modell begrenzt. 50 ist gemessen,
-     * nicht geschätzt — derselbe Bestand, nur die Grenze verstellt, drei Läufe je Stufe:
+     * <p>Deshalb wird nicht das Budget vergrößert, sondern das Modell begrenzt.
      *
-     * <pre>
-     *   Grenze   Phase 1     drop            Phase 2        gefährdet
-     *   40       0,44-0,57s  480 (stabil)    kommt durch    46
-     *   50       0,75-0,86s  480 (stabil)    kommt durch    38
-     *   60       1,52-1,54s  20680-24480     fällt zurück   34
-     *   80       1,52-1,55s  64760-70100     fällt zurück   32
-     * </pre>
-     *
-     * Die Kante liegt zwischen 50 und 60: darüber schöpft Phase 1 ihren Deckel aus, Phase 2
-     * bekommt nur noch {@link #PHASE2_MIN_SECONDS} und fällt auf die Phase-1-Platzierung zurück —
-     * und die ist von Lauf zu Lauf eine andere (schwankender {@code drop}). Der Nutzer sähe einen
-     * Kalender, der sich bei jedem Lauf umsortiert. Vier zusätzlich verplante Aufgaben sind das
-     * nicht wert. 50 lässt gut ein Drittel des Deckels als Reserve für langsamere Maschinen.
+     * <p><b>Heute ist diese Grenze nur noch die grobe zweite Decke.</b> Die bindende ist
+     * {@link #maxTaskDayVars}, die nach Tages-Booleans zählt statt nach Chunks — die Messreihe steht
+     * dort. Was hier gedeckelt wird, ist die reine Anzahl der Intervalle in der Disjunktion, und die
+     * ist von der Fensterbreite unabhängig. Am Bestand aus {@code SchedulerFixtures} trägt das
+     * Modell bei 120 offenen Aufgaben rund 100 Chunks; 120 ist also bewusst über dem, was
+     * {@code maxTaskDayVars} durchlässt, und schlägt im Normalbetrieb nie zu.
      */
     @Value("${scheduler.max-task-chunks:120}")
     private int maxTaskChunks = 120;
@@ -294,23 +306,33 @@ public class SmartSchedulerService {
      * zu früh und einmal zu spät zugeschlagen.
      *
      * <p>Gemessen am Bestand aus {@code SchedulerFixtures.bestand} (8 tägliche Gewohnheiten,
-     * 3 Trainings/Woche, 3 Projekte, 6 Vorlesungen, 31 Tage Horizont), Budget 1,5 s:
+     * 3 Trainings/Woche, 3 Projekte, 6 Vorlesungen, 31 Tage Horizont), Budget 1,5 s — die frühere
+     * Messreihe zeigte, dass eine Grenze von 50 CHUNKS bei 80 offenen Aufgaben 32 Aufgaben
+     * verschenkte, die problemlos gepasst hätten, bei 120 aber den Lauf komplett rettete. Nach
+     * Tages-Booleans gezählt trifft sie an beiden Stellen richtig.
+     *
+     * <p><b>Nachgemessen am 12.09.2026</b>, nach Greedy-Boden und Tageszerlegung
+     * ({@code SmartSchedulerLastTest#aufnahmegrenzeGegenVollesModell}, ein Lauf je Stufe):
      *
      * <pre>
-     *   Aufgaben   Grenze 50 Chunks        ohne Grenze
-     *   50         44 geplant              50 geplant
-     *   80         45 geplant              77 geplant
-     *   120        44 geplant              UNKNOWN — gar nichts geplant
+     *   Aufgaben   Grenze   geplant   gefährdet   drop     Phase 1
+     *   80            900        67          68   11040    FEASIBLE
+     *   80           1200        80          59   15680    FEASIBLE
+     *   80           1800        80          59   15680    FEASIBLE
+     *   80           ohne        80          59   15680    FEASIBLE
+     *   120           900        74         135   17460    FEASIBLE
+     *   120          1200        92          88   43500    FEASIBLE
+     *   120          1800       103         107   75980    FEASIBLE
+     *   120          ohne       106         105   76040    FEASIBLE
      * </pre>
      *
-     * Die alte Grenze verschenkte bei 80 offenen Aufgaben also 32 Aufgaben, die problemlos in den
-     * Horizont gepasst hätten, und meldete sie stattdessen als gefährdet — eine Warnung über
-     * etwas, das gar nicht geprüft worden war. Bei 120 rettete sie den Lauf dagegen komplett.
-     *
-     * <p>Die Kalibrierung steht in {@code SmartSchedulerLastTest#aufnahmegrenzeGegenVollesModell}
-     * und läuft auf Knopfdruck erneut. {@link #maxTaskChunks} bleibt als grobe zweite Decke
-     * stehen: sie deckelt die reine Anzahl der Intervalle im {@code addNoOverlap}, die von der
-     * Fensterbreite unabhängig ist.
+     * <p><b>1200 bleibt, und zwar gemessen.</b> Bei 80 Aufgaben ist die Grenze bereits nicht mehr
+     * bindend — 1200, 1800 und "ohne" liefern identische Ergebnisse. Bei 120 verplant ein höherer
+     * Wert zwar MEHR Aufgaben (103 statt 92), das Ergebnis wird dabei aber deutlich schlechter:
+     * {@code drop} steigt von 43500 auf 75980 und die Zahl der gemeldeten Items von 88 auf 107. Die
+     * zusätzlich aufgenommenen Aufgaben verdrängen also mehr, als sie wert sind — genau die
+     * Abwägung, für die es das Drop-Gewicht gibt. Der naheliegende Schritt "nach dem Umbau die
+     * Grenze hochziehen" wäre hier eine Verschlechterung gewesen.
      */
     @Value("${scheduler.max-task-day-vars:1200}")
     private int maxTaskDayVars = 1200;
@@ -395,6 +417,147 @@ public class SmartSchedulerService {
      * feasibility_jump, quick_restart und den LP-Subsolvern auszahlt, die erst ab mehr Workern
      * überhaupt mitlaufen.
      */
+    /**
+     * Ab wie vielen Task-Chunks im Modell die Disjunktion JE TAG statt global formuliert wird;
+     * 0 = nie.
+     *
+     * <p><b>Die Idee.</b> Kein Block läuft über Mitternacht — das erzwingen die
+     * {@link DayWindow}-Schranken. Die globale Disjunktion ist damit äquivalent zu einer je
+     * Kalendertag, nur muss der globale Propagator jedes PAAR ausschließen, auch die
+     * offensichtlichen: bei 31 Tagen und ~450 Intervallen sind das ~100.000 Paare statt
+     * 31 × ~105 ≈ 3.300. Die Propagierung von {@code NoOverlap} wächst überlinear in der Zahl der
+     * Intervalle, und genau deshalb wurde damals der Horizont gekürzt (siehe {@code horizon-days}).
+     *
+     * <p><b>Warum es nicht geschenkt ist.</b> Jedes Item braucht dann ein Intervall PRO ERLAUBTEM
+     * TAG statt einem — ein Task-Chunk mit 14 erlaubten Tagen bekommt 14. Neue Booleans entstehen
+     * keine (die Präsenz-Literale sind die {@code inDay}-Variablen, die es längst gibt), aber das
+     * Modell wird größer.
+     *
+     * <p><b>Gemessen ist das ein TAUSCH, kein Gewinn</b>
+     * ({@code SmartSchedulerLastTest#noOverlapProTagGegenGlobal}, Bestand aus
+     * {@code SchedulerFixtures}, 31 Tage, Budget 1,5 s, drei Läufe je Stufe, Median):
+     *
+     * <pre>
+     *   Task-Chunks   global            pro Tag           Phase 1 global
+     *   34              480               2000            OPTIMAL  (pro Tag: FEASIBLE!)
+     *   46             4120               6100            FEASIBLE
+     *   58             4880               9460            FEASIBLE
+     *   69             8640               12180           FEASIBLE
+     *   79            13660               16860           FEASIBLE
+     *   89            20180               15680           FEASIBLE
+     *  100            59060               43500           FEASIBLE
+     * </pre>
+     *
+     * Unterhalb von ~80 Chunks ist die Zerlegung deutlich SCHLECHTER — bei 34 Chunks kostet sie
+     * sogar den Optimalitätsbeweis von Phase 1, weil das größere Modell den Deckel ausschöpft.
+     * Ab ~89 kippt es, und zwar klar: 22 % weniger liegen gebliebenes Gewicht bei 89 Chunks, 26 %
+     * bei 100. Genau dort, wo das Modell zu groß für sein Budget ist, greift die Zerlegung also —
+     * und nur dort. Deshalb eine Schwelle und kein Schalter.
+     *
+     * <p>80 ist die Kante aus der Tabelle, nicht ein runder Wert: bei 79 Chunks gewinnt global noch
+     * auf dem Median (13660 gegen 16860), bei 89 verliert es. Der Bereich dazwischen ist Rauschen,
+     * und die Schwelle liegt bewusst am oberen Rand davon — im Normalfall soll sich nichts ändern.
+     */
+    @Value("${scheduler.no-overlap-per-day-from:80}")
+    private int noOverlapPerDayFrom = 80;
+
+    /**
+     * Entscheidungsstrategie für Phase 1: erst die Präsenz-Literale, und die auf "platziert".
+     *
+     * <p>Phase 1 ist ein reines "was passt rein" und lief ohne jede Vorgabe — CP-SAT suchte frei
+     * über alle Variablen, obwohl die Reihenfolge hier trivial bekannt ist: absteigend nach
+     * Drop-Gewicht, also in genau der Reihenfolge, in der auch {@link #markiereAufnahmegrenze}
+     * aufnimmt. Mit der Vorgabe steht die erste brauchbare Lösung typischerweise deutlich früher,
+     * und das zählt bei dem Pass, dessen Abbruch am teuersten ist.
+     *
+     * <p>Bewusst NUR als Strategie und ohne {@code setSearchBranching(FIXED_SEARCH)}: das schaltet
+     * das Solver-Portfolio ab, und genau davon lebt Phase 2. Vor Phase 2 wird die Strategie deshalb
+     * auch wieder aus dem Modell entfernt.
+     *
+     * <p><b>Gemessen bringt sie nichts</b> ({@code SmartSchedulerLastTest#suchstrategieUndProbing},
+     * drei Läufe je Stufe, Median von {@code p1Ms} / {@code drop}):
+     *
+     * <pre>
+     *   Aufgaben   aus                 mit Strategie
+     *   20         850 ms / 480        840 ms / 480
+     *   50        1528 ms / 4700      1525 ms / 5560
+     *   80        1529 ms / 20180     1527 ms / 20180
+     *   120       1526 ms / 59060     1525 ms / 59060
+     * </pre>
+     *
+     * Weder die Zeit bis zur ersten Lösung noch das Ergebnis bewegen sich messbar — CP-SATs eigene
+     * Heuristik findet die Reihenfolge offenbar selbst. Der Schalter bleibt aus und steht hier, damit
+     * die Messung wiederholbar ist statt wiederholt erfunden zu werden.
+     */
+    @Value("${scheduler.phase1-decision-strategy:false}")
+    private boolean phase1DecisionStrategy = false;
+
+    /**
+     * Deterministisches Arbeitsbudget für Phase 1, in OR-Tools-Einheiten; 0 = aus.
+     *
+     * <p>Das Wanduhr-Budget macht Phase 1 nicht reproduzierbar, und der Stabilitätsanker hilft
+     * dagegen nur zur Hälfte: ein VERWORFENES Item hat keine Lage, die man halten könnte. Der
+     * Nutzer sieht bei zwei identischen Läufen also verschiedene {@code atRisk}-Listen. Ein
+     * deterministisches Budget behebt genau das — der Löser hört bei gleicher Eingabe immer an
+     * derselben Stelle auf, auch ohne Optimalitätsbeweis.
+     *
+     * <p>Die Wanduhr-Decke aus {@link #phase1CapSeconds} bleibt daneben stehen; was zuerst greift,
+     * gewinnt. Im Normalfall ist das das deterministische Budget (Phase 1 beweist Optimalität
+     * meist nach ~0,38 s), im Ausnahmefall die Wanduhr — dann verhält sich der Lauf wie heute.
+     *
+     * <p><b>Gemessen wirkt es nicht</b> ({@code SmartSchedulerLastTest#phase1Determinismus}, fünf
+     * identische Läufe je Stufe, gezählt werden die VERSCHIEDENEN {@code drop}-Werte):
+     *
+     * <pre>
+     *   Aufgaben   aus   0,1   0,25   0,5   0,75   1,0   2,0   4,0     p1Ms
+     *   20           1     1      1     1      1     1     1     1   ~900-1000
+     *   50           5     5      5     5      5     5     3     5       ~1520
+     *   80           1-3   1      1     3      2     2     2     3       ~1535
+     * </pre>
+     *
+     * {@code p1Ms} bleibt über ALLE Stufen am Wanduhr-Deckel von 1,5 s — das deterministische Limit
+     * greift also nie, auch nicht bei 0,1. Mit vier parallelen Suchthreads ist
+     * {@code max_deterministic_time} keine Wanduhr-Ersatzgrenze, und die Streuung kommt ohnehin
+     * daher, WELCHER Worker zuerst fertig wird.
+     *
+     * <p><b>Gelöst wurde das Problem anders</b>, nämlich über den Greedy-Boden (siehe
+     * {@link #greedyKonstruktion}): der Greedy ist vollständig deterministisch, und seit sein
+     * {@code drop} als untere Schranke gilt, ist der ausgelieferte {@code drop} bei gesättigtem
+     * Bestand über alle Läufe derselbe — bei 120 Aufgaben gemessen dreimal 59060 statt vorher
+     * 69860/73960. Der Schalter bleibt aus und steht hier nur noch für die Wiederholung der Messung.
+     *
+     * <p>Der frühere Hinweis, ein Versuch damit habe die Forked-VM im nativen Teil von OR-Tools
+     * abstürzen lassen, ließ sich in dieser Messreihe nicht reproduzieren.
+     */
+    @Value("${scheduler.phase1-deterministic-time:0}")
+    private double phase1DeterministicTime = 0;
+
+    /**
+     * Deterministisches Zeitlimit für das Presolve-Probing in Phase 2; 0 = Probing bleibt aus.
+     *
+     * <p>{@code setCpModelProbingLevel(0)} gilt für beide Phasen. Begründet ist es aber nur für
+     * Phase 1: dort maß der Solver-Log 1,8 s Presolve bei einem Deckel von 1,5 s. Phase 2 löst
+     * dasselbe Modell ein zweites Mal, diesmal unter der scharfen {@code dropCost}-Schranke — dort
+     * könnte Probing etwas finden, und mit einem deterministischen Limit nicht mehr entgleisen.
+     *
+     * <p><b>Gemessen ist es ein Rückschritt</b>
+     * ({@code SmartSchedulerLastTest#suchstrategieUndProbing}, Median von {@code p2Ms}):
+     *
+     * <pre>
+     *   Aufgaben   aus        mit Probing 0,2
+     *   20         1163 ms    1022 ms
+     *   50         1025 ms     642 ms
+     *   80         1035 ms     775 ms
+     *   120        1030 ms     977 ms
+     * </pre>
+     *
+     * Phase 2 hört FRÜHER auf, ohne dass sich {@code drop} oder {@code obj} verbessern — ab 50
+     * Aufgaben findet sie mit Probing genauso wenig wie ohne, nur schneller nichts. Die kürzere
+     * Zeit ist also kein Gewinn, sondern der Abbruch. Bleibt aus.
+     */
+    @Value("${scheduler.presolve-probing-seconds:0}")
+    private double presolveProbingSeconds = 0;
+
     @Value("${scheduler.solver-workers-phase1:4}")
     private int solverWorkersPhase1 = 4;
 
@@ -664,7 +827,13 @@ public class SmartSchedulerService {
         List<CalendarEvent> counted = dedupById(concat(committed, input.getSkippedEvents()));
 
         Map<Long, Integer> pinnedMinutes = pinnedMinutesPerTask(credited);
-        List<TaskChunk> chunks     = decomposeTasks(input.getTasks(), prefs, pinnedMinutes);
+        // Ist-Zeit-Rückkopplung: EINMAL je Lauf geholt, nicht je Aufgabe. Siehe
+        // EstimateCalibrationService; bei abgeschalteter Korrektur ist der Faktor exakt 1.
+        double schaetzFaktor = Boolean.FALSE.equals(prefs.getEstimateLearningEnabled())
+                ? EstimateCalibrationService.NEUTRAL
+                : estimateCalibration.faktorFuer(userId);
+        List<TaskChunk> chunks     = decomposeTasks(input.getTasks(), prefs, pinnedMinutes,
+                schaetzFaktor);
         List<HabitSlot> habitSlots = expandHabitSlots(input.getHabits(), prefs, startDate, endDate,
                 pinnedDatesPerHabit(counted));
         List<ProjectSlot> projectSlots = expandProjectSlots(input.getProjects(), startDate, endDate,
@@ -672,8 +841,20 @@ public class SmartSchedulerService {
 
         long solveStart = System.nanoTime();
         SolveOutcome outcome = solveWithCpSat(chunks, habitSlots, projectSlots, input, axis, prefs,
-                startDate, endDate, cutoff, taskLastDay);
+                startDate, endDate, cutoff, taskLastDay, credited);
         long solveMs = (System.nanoTime() - solveStart) / 1_000_000;
+
+        // Aufgaben mit aufgebrauchter Schätzung kennt der Löser nicht — sie haben gar keinen Chunk.
+        // Gemeldet werden sie trotzdem, und zwar auf BEIDEN Wegen: auch ein gescheiterter Lauf soll
+        // sagen, was offen ist. Die Liste wird dafür neu gebaut statt ergänzt, weil
+        // SolveOutcome.empty() eine unveränderliche liefert.
+        List<AtRiskItem> aufgebraucht = meldeAufgebrauchteSchaetzung(
+                input.getTasks(), pinnedMinutes, schaetzFaktor);
+        if (!aufgebraucht.isEmpty()) {
+            List<AtRiskItem> alle = new ArrayList<>(outcome.getAtRisk());
+            alle.addAll(aufgebraucht);
+            outcome.setAtRisk(alle);
+        }
 
         // Der entscheidende Unterschied zur alten Implementierung: gelöscht wird ERST, wenn eine
         // verwertbare Lösung vorliegt. Ein leerer Kalender ist schlechter als ein veralteter.
@@ -777,13 +958,17 @@ public class SmartSchedulerService {
                                long totalMs, long statementsStart, int taskBlocks, int restBlocks) {
         long statements = statementsStart < 0 ? -1 : statementCount() - statementsStart;
         log.info("SCHED user={} tage={} totalMs={} collectMs={} solveMs={} p1Ms={} p2Ms={} "
-                        + "persistMs={} intervalle={} placeables={} bloecke={}+{} drop={} obj={} "
+                        + "persistMs={} intervalle={} tagIv={} placeables={} taskChunks={} "
+                        + "bloecke={}+{} drop={} "
+                        + "greedyDrop={} greedy={} obj={} "
                         + "p1Status={} status={} p2Retry={} overdue={} relief={}+{} verdraengt={} "
                         + "statements={} atRisk={}",
                 userId, ChronoUnit.DAYS.between(startDate, endDate) + 1, totalMs, collectMs,
                 solveMs, outcome.getPhase1Ms(), outcome.getPhase2Ms(), persistMs,
-                outcome.getIntervals(), outcome.getPlaceables(), taskBlocks, restBlocks,
-                outcome.getDrop(), Math.round(outcome.getPlacementObjective()),
+                outcome.getIntervals(), outcome.getDayIntervals(), outcome.getPlaceables(),
+                outcome.getTaskChunksInModel(), taskBlocks, restBlocks,
+                outcome.getDrop(), outcome.getGreedyDrop(), outcome.isGreedyFallback(),
+                Math.round(outcome.getPlacementObjective()),
                 outcome.getPhase1Status(),
                 outcome.getStatus(), outcome.isPhase2Retried(), outcome.getOverduePlaced(),
                 outcome.getReliefCatchUp(), outcome.getReliefSqueeze(), outcome.getDisplaced(),
@@ -796,11 +981,17 @@ public class SmartSchedulerService {
      * Braucht {@code hibernate.generate_statistics=true}. Fehlt die Einstellung — oder läuft der
      * Service im Mockito-Test ganz ohne Spring-Kontext —, entfällt der Zähler stillschweigend;
      * er ist ein Messinstrument und darf einen Lauf niemals zum Scheitern bringen.
+     *
+     * <p>Drei Wege führen zu {@code -1}, und alle drei sind gutartig: kein Provider (Mockito-Test
+     * ohne Spring), ein Provider ohne Fabrik (kein JPA im Kontext), oder eine Fabrik ohne
+     * eingeschaltete Statistik.
      */
     private long statementCount() {
         if (entityManagerFactory == null) return -1;
+        EntityManagerFactory emf = entityManagerFactory.getIfAvailable();
+        if (emf == null) return -1;
         try {
-            Statistics stats = entityManagerFactory.unwrap(SessionFactory.class).getStatistics();
+            Statistics stats = emf.unwrap(SessionFactory.class).getStatistics();
             return stats.isStatisticsEnabled() ? stats.getPrepareStatementCount() : -1;
         } catch (Exception e) {
             return -1;
@@ -823,36 +1014,71 @@ public class SmartSchedulerService {
     // ZEITACHSE
     // =========================================================================
 
-    /** Rechnet zwischen LocalDateTime und Slot-Index um. */
+    /**
+     * Rechnet zwischen LocalDateTime und Slot-Index um — als reine WANDUHR-Achse.
+     *
+     * <p><b>Warum über den Tagesindex und nicht über die Dauer seit {@code origin}.</b> Die Achse
+     * setzt {@code SLOTS_PER_DAY = 96} fest, also 1440 Minuten je Tag. In {@code Europe/Berlin} hat
+     * der letzte Sonntag im März 1380 Minuten und der letzte im Oktober 1500. Solange man
+     * Tagesindex und Minute-im-Tag getrennt hält, ist das egal — und genau das tun {@link
+     * #dayWindows}, {@link #minuteOfDay} und jede andere Stelle im Modell.
+     *
+     * <p>{@code floorSlot}/{@code ceilSlot} rechneten dagegen über
+     * {@code ChronoUnit.SECONDS.between(origin, t)}, also über die ECHTE verstrichene Zeit. Zwischen
+     * Sonntag 00:00 und Sonntag 10:00 liegen am Umstellungstag nur 540 statt 600 Minuten: die
+     * gesperrte Zeit eines echten Kalendertermins landete vier Slots (= eine Stunde) neben dem, was
+     * der Tagesindex-Weg für denselben Termin ausrechnete. Folge an genau zwei Tagen im Jahr — ein
+     * geplanter Block überlappt einen fixen Termin um bis zu eine Stunde, oder eine Stunde
+     * Arbeitszeit fällt weg. Kein Datenverlust, aber die Art Fehler, bei der man zwei Stunden nach
+     * der Ursache sucht.
+     *
+     * <p>Seit die Umrechnung in BEIDE Richtungen über {@code (Tagesindex, Sekunde im Tag)} läuft,
+     * ist die Sommerzeit per Konstruktion kein Thema mehr: {@code LocalDateTime} kennt keine
+     * Zeitzone, und die Achse fragt sie auch nicht mehr nach einer Dauer. Ohne Umstellung im
+     * Horizont liefert sie bitgleich dieselben Werte wie vorher.
+     */
     private static final class Axis {
-        final LocalDateTime origin;
+        /** Der Nullpunkt des Tagesindex: Tag 0 des Horizonts. */
+        final LocalDate originDate;
         final int totalDays;
         final int horizonSlots;
 
         Axis(LocalDate startDate, int totalDays) {
-            this.origin       = startDate.atStartOfDay();
+            this.originDate   = startDate;
             this.totalDays    = totalDays;
             this.horizonSlots = totalDays * SLOTS_PER_DAY;
         }
 
-        // In Sekunden gerechnet, nicht in Minuten: ChronoUnit.MINUTES schneidet die angebrochene
+        // In Sekunden gerechnet, nicht in Minuten: eine Minutenrechnung schneidet die angebrochene
         // Minute ab, womit ein Termin, der um 10:45:34 endet, als "endet 10:45:00" gälte — der
         // Solver dürfte seine letzten Sekunden überplanen. Betrifft auch "jetzt", das immer
         // Sekundenbruchteile hat.
         private static final int SECONDS_PER_SLOT = GRID * 60;
 
         int floorSlot(LocalDateTime t) {
-            return (int) Math.floorDiv(ChronoUnit.SECONDS.between(origin, t), SECONDS_PER_SLOT);
+            return tagesBasis(t) + Math.floorDiv(t.toLocalTime().toSecondOfDay(), SECONDS_PER_SLOT);
         }
 
         /** Aufrunden — für untere Schranken, damit nicht in einen angebrochenen Slot geplant wird. */
         int ceilSlot(LocalDateTime t) {
-            long s = ChronoUnit.SECONDS.between(origin, t);
-            return (int) -Math.floorDiv(-s, SECONDS_PER_SLOT);
+            int sek = t.toLocalTime().toSecondOfDay();
+            return tagesBasis(t) + -Math.floorDiv(-sek, SECONDS_PER_SLOT);
+        }
+
+        /**
+         * Der erste Slot des Kalendertages von {@code t} — negativ für Zeitpunkte vor dem Horizont.
+         *
+         * <p>Die Sekunde-im-Tag ist nie negativ, deshalb bleibt die Aufteilung in Tagesbasis plus
+         * Rest auch links des Nullpunkts korrekt.
+         */
+        private int tagesBasis(LocalDateTime t) {
+            return (int) ChronoUnit.DAYS.between(originDate, t.toLocalDate()) * SLOTS_PER_DAY;
         }
 
         LocalDateTime timeOf(int slot) {
-            return origin.plusMinutes((long) slot * GRID);
+            return originDate.plusDays(Math.floorDiv(slot, SLOTS_PER_DAY))
+                    .atTime(LocalTime.ofSecondOfDay(
+                            (long) Math.floorMod(slot, SLOTS_PER_DAY) * SECONDS_PER_SLOT));
         }
 
         static int slotsFor(int minutes) {
@@ -900,6 +1126,20 @@ public class SmartSchedulerService {
          * seiner alten Lage halten soll.
          */
         Integer previousSlot;
+        /**
+         * Was es kostet, dieses Item zu verwerfen — dasselbe Gewicht, das in {@code dropCost} steht.
+         *
+         * <p>Am Placeable statt nur im Zielausdruck, damit {@link #greedyKonstruktion} in derselben
+         * Reihenfolge platziert, in der der Löser entscheiden würde. Sonst wären Vorschlag und
+         * Modell zwei verschiedene Meinungen darüber, was wichtig ist.
+         */
+        long dropWeight;
+        /**
+         * Untere Schranke von {@link #start} — der Wert, auf den ihn {@code makePlaceable}
+         * kanonisiert, wenn das Item verworfen wird. Ein Hint für ein verworfenes Item muss genau
+         * ihn nennen, sonst widerspricht er der Kanonisierung und CP-SAT verwirft den ganzen Hint.
+         */
+        int startLb;
     }
 
     private Placeable makePlaceable(CpModel model, String name, int sizeSlots, int realMinutes,
@@ -912,6 +1152,7 @@ public class SmartSchedulerService {
         int ub = windows.stream().mapToInt(DayWindow::hi).max().orElse(lb);
         p.present = model.newBoolVar("p_" + name);
         p.start   = model.newIntVar(lb, Math.max(lb, ub), "s_" + name);
+        p.startLb = lb;
         // Die Pause hängt am Intervall, nicht an einer eigenen Constraint pro Paar: das wäre
         // quadratisch in der Item-Anzahl. Das Tagesfenster oben rechnet weiterhin mit der echten
         // Größe, sonst würde die Pause am Feierabend stillschweigend Arbeitszeit wegnehmen.
@@ -966,22 +1207,30 @@ public class SmartSchedulerService {
      * aber im Hauptmodell kein Placeable mehr, und ohne diese Verrechnung hielte der Löser den Tag
      * für unberührt und legte die volle Tagesration NOCH EINMAL obendrauf. Aus "der Deckel gilt
      * für Überfälliges nicht" würde so "an einem Nachholtag gilt der Deckel überhaupt nicht mehr".
+     *
+     * <p><b>Gepinntes und Eingefrorenes zählt genauso mit</b> — siehe {@link #festeTagesLast}. Das
+     * fehlte, und es war der teuerste der drei Fälle: nicht ein Nachholtag, sondern jeder Tag, auf
+     * den der Nutzer selbst etwas gezogen hat.
      */
     private void addDailyLoadLimits(CpModel model, UserPreferences prefs, Axis axis,
-                                    List<TaskChunk> chunks, List<Placeable> allPlaceables) {
+                                    List<TaskChunk> chunks, List<Placeable> allPlaceables,
+                                    List<CalendarEvent> credited) {
         Set<Placeable> taskPlaceables = chunks.stream()
                 .map(c -> c.placeable)
                 .filter(Objects::nonNull)
                 .collect(Collectors.toCollection(java.util.LinkedHashSet::new));
 
-        // Was der Vorlauf an einem Tag bereits verplant hat, in Slots und Blöcken.
-        Map<Integer, Integer> vergebenSlots  = new HashMap<>();
-        Map<Integer, Integer> vergebenBloecke = new HashMap<>();
+        // Was an einem Tag bereits festliegt: [taskSlots, totalSlots, taskCount].
+        Map<Integer, int[]> vergeben = festeTagesLast(credited, axis);
+        // Dazu, was der Vorlauf gerade platziert hat — das steht in keinem Kalendereintrag.
         for (TaskChunk c : chunks) {
             if (c.placedStartSlot == null) continue;
             int tag = c.placedStartSlot / SLOTS_PER_DAY;
-            vergebenSlots.merge(tag, Axis.slotsFor(c.durationMinutes), Integer::sum);
-            vergebenBloecke.merge(tag, 1, Integer::sum);
+            int slots = Axis.slotsFor(c.durationMinutes);
+            int[] s = vergeben.computeIfAbsent(tag, k -> new int[3]);
+            s[0] += slots;
+            s[1] += slots;
+            s[2] += 1;
         }
 
         // Tag -> Items, die an diesem Tag liegen könnten.
@@ -1014,17 +1263,71 @@ public class SmartSchedulerService {
                 }
             }
 
-            int belegt  = vergebenSlots.getOrDefault(e.getKey(), 0);
-            int bloecke = vergebenBloecke.getOrDefault(e.getKey(), 0);
+            int[] belegt = vergeben.getOrDefault(e.getKey(), LEERE_TAGESLAST);
 
             if (anyTask) {
-                model.addLessOrEqual(taskLoad.build(), Math.max(0, taskCapSlots - belegt));
+                model.addLessOrEqual(taskLoad.build(), Math.max(0, taskCapSlots - belegt[0]));
                 if (maxTasksPerDay != null && maxTasksPerDay > 0) {
-                    model.addLessOrEqual(taskCount.build(), Math.max(0, maxTasksPerDay - bloecke));
+                    model.addLessOrEqual(taskCount.build(),
+                            Math.max(0, maxTasksPerDay - belegt[2]));
                 }
             }
-            model.addLessOrEqual(totalLoad.build(), Math.max(0, totalCapSlots - belegt));
+            model.addLessOrEqual(totalLoad.build(), Math.max(0, totalCapSlots - belegt[1]));
         }
+    }
+
+    /** Gemeinsamer Nullwert für die {@code [taskSlots, totalSlots, taskCount]}-Tripel. */
+    private static final int[] LEERE_TAGESLAST = new int[3];
+
+    /**
+     * Was an einem Horizonttag schon festliegt, je Tag als {@code [taskSlots, totalSlots, taskCount]}.
+     *
+     * <p>Gepinnte und eingefrorene Blöcke sperrten über {@link #collectBlockedSlots} zwar ihre
+     * ZEIT, gingen aber in keinen der Tagesdeckel ein. Die Deckel galten damit nur für die
+     * Placeables: bei {@code maxScheduledMinutesPerDay = 600} und vier manuell auf den Dienstag
+     * gezogenen Blöcken à 90 Minuten durfte der Löser die volle Tagesration NOCH EINMAL obendrauf
+     * legen — 960 verplante Minuten an einem Tag mit einem Deckel von 600. Dasselbe für
+     * {@code maxTasksPerDay}: gepinnte Aufgabenblöcke zählten nicht als Blöcke.
+     *
+     * <p><b>Nur Blöcke des Planers zählen</b> (Aufgabe, Gewohnheit, Training, Projektzeit), keine
+     * Fremdtermine und keine Vorlesungen. Der Deckel sagt „so viel darf der Planer an einem Tag
+     * legen", nicht „so voll darf ein Tag sein" — ein Tag mit sechs Stunden Vorlesung würde sonst
+     * schlagartig jede Aufgabenplanung abschalten, obwohl der Nutzer nichts dergleichen
+     * eingestellt hat. Fremde Termine wirken weiterhin über die gesperrte Zeit.
+     *
+     * <p>Gezählt wird der TATSÄCHLICH belegte Tag, nicht {@link #chargedDay(CalendarEvent)} — der
+     * Deckel misst, was an einem Kalendertag liegt. {@code chargedDay} beantwortet die andere
+     * Frage, welche Ausführung damit abgegolten ist (Wochenpensum).
+     *
+     * <p>Doppelt gebucht wird nichts: die Minuten eines gepinnten Aufgabenblocks hat
+     * {@link #pinnedMinutesPerTask} längst aus der Zerlegung herausgerechnet, dieser Chunk
+     * existiert also gar nicht mehr.
+     */
+    private Map<Integer, int[]> festeTagesLast(List<CalendarEvent> credited, Axis axis) {
+        Map<Integer, int[]> out = new HashMap<>();
+        for (CalendarEvent ev : nz(credited)) {
+            if (ev.getStartTime() == null || ev.getEndTime() == null) continue;
+            boolean istAufgabe = ev.getRelatedTask() != null;
+            if (!istAufgabe && ev.getRelatedHabit() == null && ev.getRelatedWorkout() == null
+                    && ev.getRelatedProject() == null) {
+                continue;
+            }
+            // floorDiv, nicht "/": ein Block von gestern 23 Uhr, der in den Horizont hineinragt,
+            // hat einen negativen Slot, und die Ganzzahldivision schöbe ihn auf Tag 0.
+            int tag = Math.floorDiv(axis.floorSlot(ev.getStartTime()), SLOTS_PER_DAY);
+            // pinnedCommitments kennt keine Horizontgrenze (siehe ScheduleInput) — ein Block
+            // dahinter hat hier keinen Tag, gegen den er zählen könnte.
+            if (tag < 0 || tag >= axis.totalDays) continue;
+            int slots = Axis.slotsFor((int) ChronoUnit.MINUTES.between(
+                    ev.getStartTime(), ev.getEndTime()));
+            int[] s = out.computeIfAbsent(tag, k -> new int[3]);
+            s[1] += slots;
+            if (istAufgabe) {
+                s[0] += slots;
+                s[2] += 1;
+            }
+        }
+        return out;
     }
 
     private IntVar gated(CpModel model, Placeable p, String name, LinearArgument expr, int max) {
@@ -1405,11 +1708,11 @@ public class SmartSchedulerService {
     }
 
     private List<TaskChunk> decomposeTasks(List<Task> tasks, UserPreferences prefs,
-                                           Map<Long, Integer> pinnedMinutes) {
+                                           Map<Long, Integer> pinnedMinutes, double schaetzFaktor) {
         List<TaskChunk> out = new ArrayList<>();
         for (Task t : nz(tasks)) {
             int pinned = pinnedMinutes.getOrDefault(t.getId(), 0);
-            List<Integer> sizes = chunkSizes(t, prefs, pinned);
+            List<Integer> sizes = chunkSizes(t, prefs, pinned, schaetzFaktor);
             for (int i = 0; i < sizes.size(); i++) {
                 TaskChunk c = new TaskChunk();
                 c.task            = t;
@@ -1428,10 +1731,9 @@ public class SmartSchedulerService {
      * unterschiedliche Aufteilungen liefert. 300 Min bei max 120 ergibt [100,100,100],
      * nicht [120,120,60] — gleichmäßiger und näher an Reclaims Verhalten.
      */
-    private List<Integer> chunkSizes(Task t, UserPreferences prefs, int pinnedMinutes) {
-        int remaining = nz(t.getEstimatedDurationMinutes(), 0)
-                - nz(t.getCompletedMinutes(), 0)
-                - Math.max(0, pinnedMinutes);
+    private List<Integer> chunkSizes(Task t, UserPreferences prefs, int pinnedMinutes,
+                                     double schaetzFaktor) {
+        int remaining = restMinuten(t, pinnedMinutes, schaetzFaktor);
         if (remaining <= 0) return List.of();
 
         int max = maxChunk(t, prefs);
@@ -1445,6 +1747,50 @@ public class SmartSchedulerService {
         int base = remaining / n, rest = remaining % n;
         for (int i = 0; i < n; i++) sizes.add(base + (i < rest ? 1 : 0));
         return sizes;
+    }
+
+    /**
+     * Wie viele Minuten dieser Aufgabe noch zu verplanen sind.
+     *
+     * <p>Der Schätzfaktor greift auf die SCHÄTZUNG, nicht auf den Rest: geleistete und gepinnte
+     * Minuten sind Tatsachen und werden nicht hochgerechnet. Andernfalls wüchse die Restdauer einer
+     * halb erledigten Aufgabe mit jedem abgehakten Block, statt zu schrumpfen.
+     */
+    private int restMinuten(Task t, int pinnedMinutes, double schaetzFaktor) {
+        int geschaetzt = nz(t.getEstimatedDurationMinutes(), 0);
+        if (schaetzFaktor > EstimateCalibrationService.NEUTRAL) {
+            geschaetzt = (int) Math.ceil(geschaetzt * schaetzFaktor);
+        }
+        return geschaetzt - nz(t.getCompletedMinutes(), 0) - Math.max(0, pinnedMinutes);
+    }
+
+    /**
+     * Offene Aufgaben, deren geschätzte Zeit aufgebraucht ist — und die deshalb keinen Block
+     * bekommen können.
+     *
+     * <p>{@link #chunkSizes} liefert für sie eine leere Liste, sie haben also keinen Chunk, kein
+     * Placeable und tauchen in {@link #classifyAtRisk} nicht auf. Vorher verschwanden sie damit
+     * LAUTLOS aus dem Kalender und standen weiter auf offen — kein Block, keine Meldung, kein
+     * Hinweis darauf, was zu tun wäre. Das ist der eine Fall, in dem der Planer nichts tun KANN und
+     * es deshalb sagen muss.
+     *
+     * <p>Erledigte Aufgaben sind ausgenommen: dort ist "Schätzung aufgebraucht" der Normalfall und
+     * genau der Grund, warum {@code CalendarEventService.creditBlock} sie abgeschlossen hat.
+     */
+    private List<AtRiskItem> meldeAufgebrauchteSchaetzung(List<Task> tasks,
+                                                          Map<Long, Integer> pinnedMinutes,
+                                                          double schaetzFaktor) {
+        List<AtRiskItem> out = new ArrayList<>();
+        for (Task t : nz(tasks)) {
+            if (t.getStatus() == TaskStatus.COMPLETED) continue;
+            if (nz(t.getEstimatedDurationMinutes(), 0) <= 0) continue;
+            int pinned = pinnedMinutes.getOrDefault(t.getId(), 0);
+            if (restMinuten(t, pinned, schaetzFaktor) > 0) continue;
+            // 0 Minuten offen: es fehlt keine Zeit, es fehlt eine Entscheidung des Nutzers.
+            out.add(AtRiskItem.forTask(t.getId(), t.getTitle(), 0,
+                    AtRiskReason.ESTIMATE_EXHAUSTED, null));
+        }
+        return out;
     }
 
     private int minChunk(Task t, UserPreferences p) {
@@ -1855,9 +2201,24 @@ public class SmartSchedulerService {
      * Markiert die Aufgaben, die NICHT mehr ins Hauptmodell dürfen, wenn der Bestand größer ist als
      * {@link #maxTaskChunks}.
      *
-     * <p>Aufgenommen wird in genau der Reihenfolge, in der auch der Löser entscheiden würde, wenn
-     * die Zeit knapp wird: {@link #calculateTaskWeight} — strikt nach Priorität, die Deadline
-     * ordnet nur innerhalb der Stufe. Die Grenze schneidet damit nicht irgendwo, sondern unten.
+     * <p><b>Zwei Durchgänge, und der erste geht nach der Deadline.</b> Aufgenommen wurde früher in
+     * genau der Reihenfolge, in der auch der Löser verwirft: {@link #calculateTaskWeight} — strikt
+     * nach Priorität, die Deadline ordnet nur innerhalb der Stufe. Für das VERWERFEN ist das
+     * richtig und in {@link #W_DROP_PRIO_STEP} begründet. Für die AUFNAHME war es falsch, weil es
+     * eine andere Frage ist: nicht "was fliegt raus, wenn der Kalender voll ist", sondern "was wird
+     * überhaupt betrachtet".
+     *
+     * <p>Weil ein Prioritätsschritt 1000 kostet und die Dringlichkeit höchstens 800 aufspannt,
+     * konnte eine Deadline eine Prioritätsstufe nie überholen. Bei {@code maxTaskChunks = 50} und
+     * vier deadlinefreien Aufgaben hoher Priorität (12+12+10+10 = 44 Chunks) verdrängten diese eine
+     * Prio-2-Aufgabe mit Frist MORGEN vollständig aus dem Modell: keine Blöcke, nur eine Meldung.
+     * Der Sinn eines Auto-Schedulers ist, dass genau das nicht passiert.
+     *
+     * <p>Deshalb kommt zuerst alles herein, dessen Deadline im Horizont liegt — nach Fälligkeit
+     * sortiert, unabhängig von der Priorität —, und erst danach füllt der Rest nach
+     * {@code calculateTaskWeight} auf. Beide Durchgänge teilen dieselben Zähler, die Modellgröße
+     * bleibt also hart bei {@code maxTaskChunks}/{@code maxTaskDayVars}; die Grenze schneidet nur
+     * nicht mehr an der falschen Stelle.
      *
      * <p><b>Ganze Aufgaben, nicht einzelne Chunks.</b> Eine halb aufgenommene Aufgabe wäre die
      * schlechteste aller Möglichkeiten: der Nutzer sähe zwei von vier Lernblöcken im Kalender und
@@ -1871,17 +2232,38 @@ public class SmartSchedulerService {
      */
     private void markiereAufnahmegrenze(Map<Long, List<TaskChunk>> chunksByTask, Axis axis, int nowSlot,
                                   LocalDate startDate, int taskLastDay, int deadlineBufferSlots) {
-        List<List<TaskChunk>> gruppen = chunksByTask.values().stream()
+        List<List<TaskChunk>> offen = chunksByTask.values().stream()
                 .filter(g -> !istUeberfaellig(g.get(0), axis, nowSlot))
-                .sorted(Comparator
-                        .comparingLong((List<TaskChunk> g) -> -calculateTaskWeight(g.get(0).task, startDate))
-                        .thenComparing(g -> g.get(0).task.getId()))
+                .collect(Collectors.toList());
+
+        Comparator<List<TaskChunk>> nachGewicht = Comparator
+                .comparingLong((List<TaskChunk> g) -> -calculateTaskWeight(g.get(0).task, startDate))
+                .thenComparing(g -> g.get(0).task.getId());
+        // Innerhalb des ersten Durchgangs ordnet die Fälligkeit, nicht das Gewicht. Der
+        // Gleichstandsbrecher bleibt das Gewicht, damit zwei Fristen am selben Tag in der
+        // Reihenfolge aufgenommen werden, in der der Löser sie auch behandeln würde.
+        Comparator<List<TaskChunk>> nachFrist = Comparator
+                .comparing((List<TaskChunk> g) -> g.get(0).task.getDeadline())
+                .thenComparing(nachGewicht);
+
+        List<List<TaskChunk>> mitFrist = offen.stream()
+                .filter(g -> hatFristImHorizont(g.get(0).task, axis))
+                .sorted(nachFrist)
+                .collect(Collectors.toList());
+        List<List<TaskChunk>> ohneFrist = offen.stream()
+                .filter(g -> !hatFristImHorizont(g.get(0).task, axis))
+                .sorted(nachGewicht)
                 .collect(Collectors.toList());
 
         int aufgenommen = 0;
         int tagesVars   = 0;
+        // Ein gemeinsamer Schalter über BEIDE Durchgänge, nicht einer je Durchgang: passt eine
+        // Gruppe nicht mehr vollständig, ist Schluss (siehe oben, "ganze Aufgaben"). Ein Reset
+        // zwischen den Durchgängen würde genau die Umkehrung wieder einführen, gegen die die Regel
+        // da ist — eine unwichtige Kleinigkeit rutscht in die Lücke, die eine wichtige große
+        // Aufgabe gerade nicht mehr gefüllt hat.
         boolean voll = false;
-        for (List<TaskChunk> g : gruppen) {
+        for (List<TaskChunk> g : concat(mitFrist, ohneFrist)) {
             int kosten = tagesBooleans(g, axis, nowSlot, taskLastDay, deadlineBufferSlots);
             if (voll || aufgenommen + g.size() > maxTaskChunks
                      || tagesVars + kosten > maxTaskDayVars) {
@@ -1902,6 +2284,16 @@ public class SmartSchedulerService {
                     aufgenommen, aufgenommen + abgewiesen, tagesVars, abgewiesen,
                     maxTaskDayVars, maxTaskChunks);
         }
+    }
+
+    /**
+     * Liegt die Deadline dieser Aufgabe noch im Planungshorizont?
+     *
+     * <p>Nur dann kann der Lauf sie überhaupt reißen lassen — eine Frist dahinter ordnet sich beim
+     * nächsten rollierenden Fenster ein und braucht den Vorrang aus Durchgang 1 nicht.
+     */
+    private boolean hatFristImHorizont(Task task, Axis axis) {
+        return task.getDeadline() != null && axis.floorSlot(task.getDeadline()) <= axis.horizonSlots;
     }
 
     /**
@@ -1930,7 +2322,7 @@ public class SmartSchedulerService {
                                         List<ProjectSlot> projectSlots,
                                         ScheduleInput input, Axis axis, UserPreferences prefs,
                                         LocalDate startDate, LocalDate endDate, LocalDateTime cutoff,
-                                        int taskLastDay) {
+                                        int taskLastDay, List<CalendarEvent> credited) {
 
         List<WorkoutSession> flexibleWorkouts = nz(input.getFlexibleWorkouts());
         if (chunks.isEmpty() && habitSlots.isEmpty() && flexibleWorkouts.isEmpty()
@@ -1990,9 +2382,12 @@ public class SmartSchedulerService {
                 previousStarts);
 
         List<IntervalVar> allIntervals = new ArrayList<>();
+        List<IntervalVar> blockedIntervals = new ArrayList<>();
         for (int i = 0; i < blocked.size(); i++) {
             int[] b = blocked.get(i);
-            allIntervals.add(model.newFixedInterval(b[0], b[1] - b[0], "blocked_" + i));
+            IntervalVar iv = model.newFixedInterval(b[0], b[1] - b[0], "blocked_" + i);
+            allIntervals.add(iv);
+            blockedIntervals.add(iv);
         }
 
         // Phase-1-Ziel: gewichtete Summe der VERWORFENEN Items. Der konstante Anteil bleibt im
@@ -2005,6 +2400,11 @@ public class SmartSchedulerService {
         List<Long>   qWeights = new ArrayList<>();
 
         List<Placeable> allPlaceables = new ArrayList<>();
+
+        // Dieselben Gruppen, die unten die CP-Constraints bekommen, noch einmal in der Form, die
+        // der Greedy-Vorschlag lesen kann — siehe greedyKonstruktion. Eingesammelt wird direkt
+        // dort, wo die Constraints entstehen, damit die beiden nicht auseinanderlaufen.
+        List<GreedyRegel> greedyRegeln = new ArrayList<>();
 
         // Wunschzeit je Gewohnheit (Minute ab Tagesbeginn) — Startwert für Phase 2, siehe unten.
         Map<Placeable, Integer> desiredMinuteOfDay = new HashMap<>();
@@ -2060,6 +2460,7 @@ public class SmartSchedulerService {
                 allPlaceables.add(p);
                 allIntervals.add(p.interval);
 
+                p.dropWeight = weight;
                 dropB.addTerm(p.present, -weight);
                 dropConst += weight;
 
@@ -2196,6 +2597,10 @@ public class SmartSchedulerService {
                     if (candidates > perDay) model.addLessOrEqual(sameDay.build(), perDay);
                 }
             }
+
+            greedyRegeln.add(GreedyRegel.kette(
+                    group.stream().map(c -> c.placeable).collect(Collectors.toList()),
+                    perDay != null && perDay > 0 ? perDay : 0));
         }
 
         addTaskOrderPreference(model, chunksByTask, startDate, qVars, qWeights);
@@ -2217,6 +2622,7 @@ public class SmartSchedulerService {
             allIntervals.add(p.interval);
 
             long weight = calculateHabitWeight(s.habit);
+            p.dropWeight = weight;
             dropB.addTerm(p.present, -weight);
             dropConst += weight;
 
@@ -2260,7 +2666,9 @@ public class SmartSchedulerService {
         for (List<HabitSlot> group : weekGroups.values()) {
             Set<Integer> days = new LinkedHashSet<>();
             group.forEach(s -> days.addAll(s.allowedDays));
-            addWeekGroupConstraints(model, group.stream().map(s -> s.placeable).toList(), days);
+            List<Placeable> ps = group.stream().map(s -> s.placeable).collect(Collectors.toList());
+            addWeekGroupConstraints(model, ps, days);
+            greedyRegeln.add(GreedyRegel.wochengruppe(ps));
         }
 
         // --- Flexible Workouts ---
@@ -2338,6 +2746,7 @@ public class SmartSchedulerService {
             allIntervals.add(p.interval);
             workoutPlaceables.put(w.getId(), p);
 
+            p.dropWeight = W_DROP_WORKOUT;
             dropB.addTerm(p.present, -W_DROP_WORKOUT);
             dropConst += W_DROP_WORKOUT;
 
@@ -2367,6 +2776,7 @@ public class SmartSchedulerService {
             // "Höchstens ein Training pro Tag" gilt über ALLE Einheiten der Woche - eine mit
             // Wunschtag und eine frei verschiebbare dürfen nicht auf denselben Tag fallen.
             addAtMostOnePerDay(model, e.getValue(), days);
+            greedyRegeln.add(GreedyRegel.einesProTag(e.getValue()));
 
             // Ordnung und Ruhetagsverteilung nur über die frei verschiebbaren: die anderen haben
             // ihren Tag vom Nutzer, und eine Ordnung über feste Tage wäre schnell unerfüllbar.
@@ -2374,6 +2784,7 @@ public class SmartSchedulerService {
             if (floating.size() > 1) {
                 addChronologicalOrder(model, floating);
                 addRestDayRule(model, floating, days, "wow" + e.getKey(), qVars, qWeights);
+                greedyRegeln.add(GreedyRegel.trainingswoche(floating));
             }
         }
 
@@ -2392,6 +2803,7 @@ public class SmartSchedulerService {
             allPlaceables.add(p);
             allIntervals.add(p.interval);
 
+            p.dropWeight = W_DROP_PROJECT;
             dropB.addTerm(p.present, -W_DROP_PROJECT);
             dropConst += W_DROP_PROJECT;
 
@@ -2413,13 +2825,25 @@ public class SmartSchedulerService {
         for (List<ProjectSlot> group : projectWeeks.values()) {
             Set<Integer> days = new LinkedHashSet<>();
             group.forEach(s -> days.addAll(s.allowedDays));
-            addWeekGroupConstraints(model, group.stream().map(s -> s.placeable).toList(), days);
+            List<Placeable> ps = group.stream().map(s -> s.placeable).collect(Collectors.toList());
+            addWeekGroupConstraints(model, ps, days);
+            greedyRegeln.add(GreedyRegel.wochengruppe(ps));
         }
 
-        // --- Kernconstraint: nichts überlappt ---
-        model.addNoOverlap(allIntervals.toArray(new IntervalVar[0]));
+        // Wie viele Task-Chunks das Modell wirklich trägt — die Größe, an der die Sättigung hängt
+        // und damit die Wahl der Disjunktion (siehe no-overlap-per-day-from).
+        int taskChunksImModell = (int) chunks.stream().filter(c -> c.placeable != null).count();
 
-        addDailyLoadLimits(model, prefs, axis, chunks, allPlaceables);
+        // --- Kernconstraint: nichts überlappt ---
+        boolean proTag = noOverlapPerDayFrom > 0 && taskChunksImModell >= noOverlapPerDayFrom;
+        int tagIntervalle = proTag
+                ? addNoOverlapProTag(model, allPlaceables, blocked, blockedIntervals, axis, gapSlots)
+                : 0;
+        if (!proTag) {
+            model.addNoOverlap(allIntervals.toArray(new IntervalVar[0]));
+        }
+
+        addDailyLoadLimits(model, prefs, axis, chunks, allPlaceables, credited);
 
         LinearExpr dropCost = dropB.add(dropConst).build();
 
@@ -2438,6 +2862,8 @@ public class SmartSchedulerService {
         // Intervalle) kostet das nichts — der Lauf erreicht weiterhin OPTIMAL. Zusammen mit
         // maxTaskChunks ist es der Grund, warum ein voller Aufgabenberg den Lauf nicht mehr
         // umkippt.
+        // Der Wert gilt hier für BEIDE Phasen; Phase 2 kann ihn unten wieder anheben, siehe
+        // scheduler.presolve-probing-seconds.
         solver.getParameters().setCpModelProbingLevel(0);
         // Fester Zufallskeim. Er nimmt eine Quelle der Streuung heraus, macht den Lauf aber NICHT
         // reproduzierbar: das Zeitbudget ist eine Wanduhr-Grenze, und welcher der Worker seine
@@ -2497,21 +2923,35 @@ public class SmartSchedulerService {
             if (amAltenTag == null) continue;   // alter Tag liegt nicht mehr im Fenster
             ankerB.addTerm(amAltenTag, -1);
             anker++;
-            // Und als STARTWERT. Der Anker allein reicht nicht: er bricht den Gleichstand unter
-            // gleich guten Belegungen, aber oberhalb des Deckels findet Phase 1 von Lauf zu Lauf
-            // Belegungen von unterschiedlicher GÜTE (der drop schwankte über fünf Läufe über fünf
-            // Werte) — dann gewinnt zu Recht die bessere, und der Anker kommt gar nicht zum Zug.
-            //
-            // Der letzte Plan ist als Startwert genau das, was fehlt: eine bereits gültige, gute
-            // Belegung. Der Löser hört bei Zeitablauf damit nicht mehr an einer zufälligen Stelle
-            // auf, sondern bei "letzter Plan, etwas verbessert".
-            //
-            // Das widerspricht dem Hinweis oben nur scheinbar. Verworfen wurde dort der Hint
-            // "platziere ALLES" — der ist genau dann unerfüllbar, wenn Phase 1 gebraucht wird, und
-            // CP-SAT verbrachte das Budget mit Reparieren. Dieser Hint ist das Gegenteil: er war
-            // im letzten Lauf nachweislich erfüllbar.
-            model.addHint(p.start, p.previousSlot);
-            model.addHint(p.present, 1);
+        }
+
+        // ---- Startwert: der Greedy-Vorschlag ----
+        //
+        // Er löst zwei Dinge auf einmal, und beide waren offene Punkte.
+        //
+        // ERSTENS den Startwert. Hier stand vorher der letzte Plan, Item für Item — ein
+        // Teil-Hint über die verankerten Items. Das war besser als nichts, aber nicht
+        // nachweislich zulässig: verschiebt sich ein Tagesfenster, überlappen zwei Anker
+        // einander, und CP-SAT verwirft dann den ganzen Hint statt ihn zu reparieren. Der
+        // Greedy-Vorschlag setzt den Vorzustand ebenfalls an die erste Stelle (siehe
+        // greedyKonstruktion), ist aber KONSTRUKTIV zulässig und vollständig — mit Präsenz-Literal
+        // auch für die Items, die er verwirft. Damit startet Phase 1 unter einer bekannten oberen
+        // Schranke, statt sie erst suchen zu müssen.
+        //
+        // Der Hinweis weiter oben bleibt gültig und widerspricht dem nicht: verworfen wurde dort
+        // der Hint "platziere ALLES", und der ist genau dann unerfüllbar, wenn Phase 1 überhaupt
+        // gebraucht wird. Dieser Hint behauptet nichts dergleichen, sondern nur "so viel geht
+        // sicher".
+        //
+        // ZWEITENS den Notausgang: findet Phase 1 nichts, wird dieser Plan ausgeliefert statt den
+        // Kalender stehen zu lassen. Siehe unten.
+        Map<Placeable, Integer> greedy = greedyKonstruktion(allPlaceables, greedyRegeln, blocked,
+                axis, prefs, gapSlots, chunks, credited);
+        long greedyDrop = greedyDropKosten(allPlaceables, greedy);
+        for (Placeable p : allPlaceables) {
+            Integer slot = greedy.get(p);
+            model.addHint(p.start, slot != null ? slot : p.startLb);
+            model.addHint(p.present, slot != null ? 1 : 0);
         }
 
         if (anker > 0) {
@@ -2522,105 +2962,204 @@ public class SmartSchedulerService {
         } else {
             model.minimize(dropCost);
         }
+        // Entscheidungsreihenfolge: erst entscheiden, WAS platziert wird, und zwar in der
+        // Reihenfolge des Drop-Gewichts. Siehe scheduler.phase1-decision-strategy.
+        if (phase1DecisionStrategy && !allPlaceables.isEmpty()) {
+            List<LinearArgument> praesenz = allPlaceables.stream()
+                    .sorted(Comparator.comparingLong((Placeable p) -> -p.dropWeight))
+                    .map(p -> (LinearArgument) p.present)
+                    .collect(Collectors.toList());
+            model.addDecisionStrategy(praesenz,
+                    DecisionStrategyProto.VariableSelectionStrategy.CHOOSE_FIRST,
+                    DecisionStrategyProto.DomainReductionStrategy.SELECT_MAX_VALUE);
+        }
+
         solver.getParameters().setNumSearchWorkers(solverWorkersPhase1);
         solver.getParameters().setMaxTimeInSeconds(
                 Math.max(0.05, Math.min(phase1CapSeconds, solverTimeLimitSeconds)));
+        if (phase1DeterministicTime > 0) {
+            solver.getParameters().setMaxDeterministicTime(phase1DeterministicTime);
+        }
         long p1Start = System.nanoTime();
         CpSolverStatus s1 = solver.solve(model);
         long phase1Ms = (System.nanoTime() - p1Start) / 1_000_000;
-        if (s1 != CpSolverStatus.OPTIMAL && s1 != CpSolverStatus.FEASIBLE) {
-            // Der Kalender bleibt stehen — das ist richtig so, ein veralteter Plan ist besser als
-            // ein leerer. Der Nutzer erfährt aber, WAS ohne Termin dasteht: bis 31.08.2026 kam
-            // dieser Fall mit leerer At-Risk-Liste zurück, und damit war der einzige sichtbare
-            // Unterschied zu einem erfolgreichen Lauf, dass sich nichts geändert hatte.
-            log.warn("CP-SAT Phase 1 ohne Lösung: {} — {} Chunks werden als gefährdet gemeldet",
-                    s1, chunks.size());
+        boolean greedyFallback = s1 != CpSolverStatus.OPTIMAL && s1 != CpSolverStatus.FEASIBLE;
+        if (greedyFallback && greedy.isEmpty()) {
+            // Weder der Löser noch der Greedy haben etwas — jetzt bleibt der Kalender stehen, und
+            // das ist richtig so: ein veralteter Plan ist besser als ein leerer. Der Nutzer erfährt
+            // aber, WAS ohne Termin dasteht: bis 31.08.2026 kam dieser Fall mit leerer
+            // At-Risk-Liste zurück, und damit war der einzige sichtbare Unterschied zu einem
+            // erfolgreichen Lauf, dass sich nichts geändert hatte.
+            log.warn("CP-SAT Phase 1 ohne Lösung: {} — auch der Greedy-Vorschlag ist leer, {} Chunks "
+                    + "werden als gefährdet gemeldet", s1, chunks.size());
             SolveOutcome gescheitert = SolveOutcome.unusable(s1, classifyAtRisk(chunks, axis, cutoff));
             gescheitert.setPhase1Status(s1);
             gescheitert.setPhase1Ms(phase1Ms);
+            gescheitert.setGreedyDrop(greedyDrop);
             return gescheitert;
         }
-        long bestDrop = solver.value(dropVar);
 
-        // Phase 1 hat eine gültige Lösung. Sie wird JETZT festgehalten, bevor Phase 2 das Modell
-        // anfasst: scheitert Phase 2, steht im Löser keine gültige Belegung mehr, und ohne diesen
-        // Schnappschuss wäre die bereits bewiesene Lösung verloren. Siehe unten.
-        Platzierung phase1Platzierung = schnappschuss(solver, allPlaceables);
+        long bestDrop;
+        double placementObjective;
+        long phase2Ms = 0;
+        boolean phase2Retried = false;
+        CpSolverStatus effective;
+        Platzierung platzierung;
 
-        // ---- Phase 2: Qualität, ohne Phase 1 zu verschlechtern ----
-        //
-        // Phase 2 bekommt den gesamten Rest des Budgets. Ein früherer Versuch, ihr die ungenutzte
-        // Zeit aus Phase 1 zuzuschlagen, galt als Rückschritt ("aus 6.6s wurden 10s, ohne dass
-        // sich am Zielwert etwas tat") — das war aber die Beobachtung, dass Phase 2 jede geschenkte
-        // Sekunde auch verbraucht, nicht dass sie sie verschwendet. Genau daraus folgt die heutige
-        // Aufteilung: nicht "Phase 2 bekommt weniger", sondern "das Gesamtbudget ist die ehrliche
-        // Obergrenze eines Laufs" — und die darf dann klein sein.
-        //
-        // Der Startwert kommt bewusst NICHT unverändert aus Phase 1: dort zählt nur, wie viel
-        // überhaupt untergebracht wird, die Uhrzeit ist völlig beliebig. Phase 2 müsste von dort
-        // aus die gute Lage erst suchen — und genau dafür reicht das knappe Zeitbudget nicht;
-        // im Versuch landete "Vor dem Schlafen lesen" nach 2 Sekunden um 15:45 und erst nach 20
-        // Sekunden um 21:30. Deshalb wird der Tag aus Phase 1 übernommen, die Uhrzeit darin aber
-        // auf die Wunschzeit gesetzt. Ein Hint ist unverbindlich: passt er nicht, verwirft CP-SAT
-        // ihn und sucht wie bisher weiter.
-        //
-        // Mitgegeben wird zusätzlich, WELCHE Items Phase 1 überhaupt platziert hat. Ohne die
-        // Präsenz-Literale ist der Hint unvollständig: der Löser kennt Startzeiten für Items, von
-        // denen er noch gar nicht weiß, ob sie vorkommen sollen. Vollständig ist er dagegen eine
-        // nachweislich zulässige Lösung — Phase 2 startet also nicht bei null, sondern hat vom
-        // ersten Moment an etwas, das sie nur noch verbessern muss.
-        model.clearHints();
-        for (Placeable p : allPlaceables) {
-            model.addHint(p.start, preferredHint(p, (int) solver.value(p.start), desiredMinuteOfDay));
-            model.addHint(p.present, solver.booleanValue(p.present) ? 1 : 0);
+        if (greedyFallback) {
+            // ---- Notausgang: der Greedy-Vorschlag wird ausgeliefert ----
+            //
+            // Vorher blieb hier der Kalender unverändert. Das ist als Vorsichtsmaßnahme richtig,
+            // war für den Nutzer aber von "kaputt" nicht zu unterscheiden: er ändert etwas, wartet
+            // auf den Long-Poll, und es passiert nichts.
+            //
+            // Der Greedy-Vorschlag ist schlechter platziert als eine gelöste Belegung — keine
+            // Wunschzeiten, kein Leistungshoch, keine Reihenfolge —, aber er ist ZULÄSSIG
+            // (siehe greedyKonstruktion) und er setzt den Vorzustand an die erste Stelle. Er kann
+            // den bestehenden Kalender also nicht unruhiger machen, als er ohnehin schon war.
+            //
+            // Der Status geht als FEASIBLE nach draußen, weil er das ist: ein gültiger Plan ohne
+            // Optimalitätsbeweis. Dass der LÖSER nichts gefunden hat, steht in phase1Status und in
+            // greedyFallback — beides in der SCHED-Zeile.
+            log.warn("CP-SAT Phase 1 ohne Lösung ({}), liefere den Greedy-Vorschlag: {} von {} Items "
+                    + "platziert, drop={}", s1, greedy.size(), allPlaceables.size(), greedyDrop);
+            platzierung        = ausGreedy(greedy);
+            effective          = CpSolverStatus.FEASIBLE;
+            bestDrop           = greedyDrop;
+            placementObjective = Double.NaN;
+        } else {
+            bestDrop = solver.value(dropVar);
+
+            // Phase 1 hat eine gültige Lösung. Sie wird JETZT festgehalten, bevor Phase 2 das Modell
+            // anfasst: scheitert Phase 2, steht im Löser keine gültige Belegung mehr, und ohne diesen
+            // Schnappschuss wäre die bereits bewiesene Lösung verloren. Siehe unten.
+            Platzierung phase1Platzierung = schnappschuss(solver, allPlaceables);
+
+            // ---- Der Startwert wird auch als SCHRANKE benutzt, nicht nur als Vorschlag ----
+            //
+            // Ein Hint ist unverbindlich, und bei großem Bestand ist das teuer: gemessen am
+            // Bestand aus SchedulerFixtures ließ Phase 1 bei 120 Aufgaben einen drop von 69860
+            // stehen, obwohl ihr eigener Startwert schon bei 59060 lag — CP-SAT hat den Hint in
+            // seinem Deckel nicht mehr zu einer Lösung vervollständigt und ist unter dem
+            // Startwert geblieben. Bis 80 Aufgaben ist der Löser dagegen klar besser:
+            //
+            //   Aufgaben   greedyDrop      drop (Phase 1)
+            //   20              2680                 480
+            //   50             11820           4500-5620
+            //   80             36860               20180
+            //   120            59060               69860   <-- hier gewinnt der Greedy
+            //
+            // Deshalb wird verglichen statt gehofft. Das Ergebnis ist eine harte Zusicherung:
+            // der ausgelieferte Plan lässt NIE mehr Gewicht liegen als ein First-Fit in
+            // Millisekunden. Für Phase 2 ändert sich dadurch nichts Grundsätzliches — sie
+            // optimiert die Lage weiterhin unter einer festen Drop-Schranke, nur ist die jetzt
+            // die bessere der beiden, und ihr Startwert stammt aus derselben Lösung.
+            boolean greedyBesser = greedyDrop < bestDrop;
+            if (greedyBesser) {
+                log.info("Phase 1 blieb unter ihrem Startwert (drop={} gegen greedyDrop={}), "
+                        + "der Greedy-Vorschlag gilt.", bestDrop, greedyDrop);
+                bestDrop = greedyDrop;
+                phase1Platzierung = ausGreedy(greedy);
+            }
+
+            // ---- Phase 2: Qualität, ohne Phase 1 zu verschlechtern ----
+            //
+            // Phase 2 bekommt den gesamten Rest des Budgets. Ein früherer Versuch, ihr die ungenutzte
+            // Zeit aus Phase 1 zuzuschlagen, galt als Rückschritt ("aus 6.6s wurden 10s, ohne dass
+            // sich am Zielwert etwas tat") — das war aber die Beobachtung, dass Phase 2 jede geschenkte
+            // Sekunde auch verbraucht, nicht dass sie sie verschwendet. Genau daraus folgt die heutige
+            // Aufteilung: nicht "Phase 2 bekommt weniger", sondern "das Gesamtbudget ist die ehrliche
+            // Obergrenze eines Laufs" — und die darf dann klein sein.
+            //
+            // Der Startwert kommt bewusst NICHT unverändert aus Phase 1: dort zählt nur, wie viel
+            // überhaupt untergebracht wird, die Uhrzeit ist völlig beliebig. Phase 2 müsste von dort
+            // aus die gute Lage erst suchen — und genau dafür reicht das knappe Zeitbudget nicht;
+            // im Versuch landete "Vor dem Schlafen lesen" nach 2 Sekunden um 15:45 und erst nach 20
+            // Sekunden um 21:30. Deshalb wird der Tag aus Phase 1 übernommen, die Uhrzeit darin aber
+            // auf die Wunschzeit gesetzt. Ein Hint ist unverbindlich: passt er nicht, verwirft CP-SAT
+            // ihn und sucht wie bisher weiter.
+            //
+            // Mitgegeben wird zusätzlich, WELCHE Items Phase 1 überhaupt platziert hat. Ohne die
+            // Präsenz-Literale ist der Hint unvollständig: der Löser kennt Startzeiten für Items, von
+            // denen er noch gar nicht weiß, ob sie vorkommen sollen. Vollständig ist er dagegen eine
+            // nachweislich zulässige Lösung — Phase 2 startet also nicht bei null, sondern hat vom
+            // ersten Moment an etwas, das sie nur noch verbessern muss.
+            model.clearHints();
+            // Die Phase-1-Strategie muss wieder weg: sie würde Phase 2 auf "erst die Präsenz, und die
+            // auf 1" festnageln, während dort die LAGE optimiert wird. Das Portfolio, von dem Phase 2
+            // lebt, käme dabei nicht mehr zum Zug.
+            if (phase1DecisionStrategy) {
+                model.getBuilder().clearSearchStrategy();
+            }
+            // Das deterministische Budget gilt nur für Phase 1. Ohne diese Zeile erbt Phase 2 es und
+            // hört mitten in der Feinarbeit auf, statt ihr Wanduhr-Budget zu nutzen.
+            if (phase1DeterministicTime > 0) {
+                solver.getParameters().clearMaxDeterministicTime();
+            }
+            if (presolveProbingSeconds > 0) {
+                solver.getParameters().setCpModelProbingLevel(2);   // CP-SAT-Standard
+                solver.getParameters().setPresolveProbingDeterministicTimeLimit(presolveProbingSeconds);
+            }
+            for (Placeable p : allPlaceables) {
+                // Quelle ist die Lösung, die oben gewonnen hat — sonst zeigte der Hint auf eine
+                // Belegung, die die Schranke dropCost <= bestDrop gar nicht mehr zulässt.
+                boolean vorhanden = greedyBesser
+                        ? greedy.containsKey(p)
+                        : solver.booleanValue(p.present);
+                int p1Slot = greedyBesser
+                        ? greedy.getOrDefault(p, p.startLb)
+                        : (int) solver.value(p.start);
+                model.addHint(p.start, preferredHint(p, p1Slot, desiredMinuteOfDay));
+                model.addHint(p.present, vorhanden ? 1 : 0);
+            }
+            model.addLessOrEqual(dropCost, bestDrop);
+            model.minimize(LinearExpr.weightedSum(
+                    qVars.toArray(new LinearArgument[0]),
+                    qWeights.stream().mapToLong(Long::longValue).toArray()));
+            solver.getParameters().setNumSearchWorkers(solverWorkersPhase2);
+            solver.getParameters().setMaxTimeInSeconds(
+                    Math.max(PHASE2_MIN_SECONDS, solverTimeLimitSeconds - phase1Ms / 1000.0));
+            // Kein setRelativeGapLimit: es lag hier kurzzeitig auf 2%, um das Budget nicht immer voll
+            // auszuschöpfen, kostet aber genau die Feinarbeit, für die Phase 2 da ist. Der Löser
+            // steigt aus, sobald er nah genug dran ist, und "nah genug" ist eine Viertelstunde
+            // Verschiebung: derselbe Projektblock landete ohne jede Änderung am Bestand einmal um
+            // 08:15 und im nächsten Lauf um 08:00. Für den Nutzer sieht das aus wie ein Kalender, der
+            // von selbst herumspringt — genau dagegen gibt es den Stabilitätsterm.
+            //
+            // Stattdessen wird auf STILLSTAND abgebrochen (siehe StallProbe): nicht "nah genug am
+            // Optimum", sondern "seit einer Weile nichts Nennenswertes mehr gefunden". Das ist der
+            // Unterschied, an dem der Gap-Limit-Versuch gescheitert ist — die Feinarbeit findet
+            // weiterhin statt, nur das Warten danach entfällt.
+            long p2Start = System.nanoTime();
+            CpSolverStatus s2 = solveMitStillstandsabbruch(solver, model);
+            phase2Ms = (System.nanoTime() - p2Start) / 1_000_000;
+            // Der Zielwert der Platzierung, fürs Log. Er ist die einzige Möglichkeit, die Wirkung des
+            // Zeitbudgets zu beurteilen: der Status bleibt bei realistischem Bestand immer FEASIBLE,
+            // aber der Zielwert zeigt, ab wann mehr Zeit nichts mehr bringt.
+            placementObjective = (s2 == CpSolverStatus.OPTIMAL || s2 == CpSolverStatus.FEASIBLE)
+                    ? solver.objectiveValue() : Double.NaN;
+
+            boolean phase2Brauchbar = s2 == CpSolverStatus.OPTIMAL || s2 == CpSolverStatus.FEASIBLE;
+            effective = phase2Brauchbar ? s2 : s1;
+
+            // Phase 2 gescheitert? Dann gilt die Lösung aus Phase 1 - schlechter platziert, aber
+            // vollständig gültig und bereits bewiesen.
+            //
+            // Früher wurde sie dafür NEU GELÖST (eine Sekunde, Hint aus Phase 1), weil extract() aus
+            // dem Löser liest. Das hielt nur, solange der Hint sofort wieder durchging: bei rund 75
+            // offenen Aufgaben schaffte der Wiederholungslauf es nicht mehr, der ganze Lauf endete
+            // auf UNKNOWN und der Kalender blieb stehen - ohne dass etwas als gefährdet gemeldet
+            // wurde. Ein größeres Zeitbudget half nicht, weil nicht die Suche das Problem war,
+            // sondern das Wegwerfen einer Lösung, die man schon hatte.
+            //
+            // Der Schnappschuss braucht weder Zeit noch Glück: er liest dieselben zwei Werte je
+            // Placeable, die extract() ohnehin abfragt.
+            phase2Retried = !phase2Brauchbar;
+            if (!phase2Brauchbar) {
+                log.warn("CP-SAT Phase 2 ohne Lösung ({}), nutze die Platzierung aus Phase 1.", s2);
+            }
+            platzierung = phase2Brauchbar ? ausLoeser(solver) : phase1Platzierung;
         }
-        model.addLessOrEqual(dropCost, bestDrop);
-        model.minimize(LinearExpr.weightedSum(
-                qVars.toArray(new LinearArgument[0]),
-                qWeights.stream().mapToLong(Long::longValue).toArray()));
-        solver.getParameters().setNumSearchWorkers(solverWorkersPhase2);
-        solver.getParameters().setMaxTimeInSeconds(
-                Math.max(PHASE2_MIN_SECONDS, solverTimeLimitSeconds - phase1Ms / 1000.0));
-        // Kein setRelativeGapLimit: es lag hier kurzzeitig auf 2%, um das Budget nicht immer voll
-        // auszuschöpfen, kostet aber genau die Feinarbeit, für die Phase 2 da ist. Der Löser
-        // steigt aus, sobald er nah genug dran ist, und "nah genug" ist eine Viertelstunde
-        // Verschiebung: derselbe Projektblock landete ohne jede Änderung am Bestand einmal um
-        // 08:15 und im nächsten Lauf um 08:00. Für den Nutzer sieht das aus wie ein Kalender, der
-        // von selbst herumspringt — genau dagegen gibt es den Stabilitätsterm.
-        //
-        // Stattdessen wird auf STILLSTAND abgebrochen (siehe StallProbe): nicht "nah genug am
-        // Optimum", sondern "seit einer Weile nichts Nennenswertes mehr gefunden". Das ist der
-        // Unterschied, an dem der Gap-Limit-Versuch gescheitert ist — die Feinarbeit findet
-        // weiterhin statt, nur das Warten danach entfällt.
-        long p2Start = System.nanoTime();
-        CpSolverStatus s2 = solveMitStillstandsabbruch(solver, model);
-        long phase2Ms = (System.nanoTime() - p2Start) / 1_000_000;
-        // Der Zielwert der Platzierung, fürs Log. Er ist die einzige Möglichkeit, die Wirkung des
-        // Zeitbudgets zu beurteilen: der Status bleibt bei realistischem Bestand immer FEASIBLE,
-        // aber der Zielwert zeigt, ab wann mehr Zeit nichts mehr bringt.
-        double placementObjective = (s2 == CpSolverStatus.OPTIMAL || s2 == CpSolverStatus.FEASIBLE)
-                ? solver.objectiveValue() : Double.NaN;
-
-        boolean phase2Brauchbar = s2 == CpSolverStatus.OPTIMAL || s2 == CpSolverStatus.FEASIBLE;
-        CpSolverStatus effective = phase2Brauchbar ? s2 : s1;
-
-        // Phase 2 gescheitert? Dann gilt die Lösung aus Phase 1 - schlechter platziert, aber
-        // vollständig gültig und bereits bewiesen.
-        //
-        // Früher wurde sie dafür NEU GELÖST (eine Sekunde, Hint aus Phase 1), weil extract() aus
-        // dem Löser liest. Das hielt nur, solange der Hint sofort wieder durchging: bei rund 75
-        // offenen Aufgaben schaffte der Wiederholungslauf es nicht mehr, der ganze Lauf endete
-        // auf UNKNOWN und der Kalender blieb stehen - ohne dass etwas als gefährdet gemeldet
-        // wurde. Ein größeres Zeitbudget half nicht, weil nicht die Suche das Problem war,
-        // sondern das Wegwerfen einer Lösung, die man schon hatte.
-        //
-        // Der Schnappschuss braucht weder Zeit noch Glück: er liest dieselben zwei Werte je
-        // Placeable, die extract() ohnehin abfragt.
-        boolean phase2Retried = !phase2Brauchbar;
-        if (!phase2Brauchbar) {
-            log.warn("CP-SAT Phase 2 ohne Lösung ({}), nutze die Platzierung aus Phase 1.", s2);
-        }
-        Platzierung platzierung = phase2Brauchbar ? ausLoeser(solver) : phase1Platzierung;
 
         log.info("CP-SAT {} | Intervalle: {} | Chunks: {} Habits: {} Workouts: {} Projekte: {} | drop={} obj={}",
                 effective, allIntervals.size(), chunks.size(), habitSlots.size(),
@@ -2652,8 +3191,10 @@ public class SmartSchedulerService {
                     c.placedStartSlot + Axis.slotsFor(c.durationMinutes) + gapSlots });
         }
 
-        int relief1 = solveReliefPass(ReliefMode.CATCH_UP, chunks, belegt, axis, prefs, nowSlot, gapSlots);
-        int relief2 = solveReliefPass(ReliefMode.SQUEEZE, chunks, belegt, axis, prefs, nowSlot, gapSlots);
+        int relief1 = solveReliefPass(ReliefMode.CATCH_UP, chunks, belegt, axis, prefs, nowSlot,
+                gapSlots, credited);
+        int relief2 = solveReliefPass(ReliefMode.SQUEEZE, chunks, belegt, axis, prefs, nowSlot,
+                gapSlots, credited);
 
         // ---- Letzte Stufe: verdrängen statt aufgeben ----
         //
@@ -2661,7 +3202,8 @@ public class SmartSchedulerService {
         // Kalender, sondern weil die Zeit an etwas Unwichtigeres vergeben ist. Genau dort greift
         // dieser Pass ein — und nur dort: er läuft ausschließlich für Aufgaben, deren Deadline
         // sonst reißt.
-        int verdraengt = solveDeadlineRescuePass(chunks, outcome, blocked, axis, prefs, nowSlot);
+        int verdraengt = solveDeadlineRescuePass(chunks, outcome, blocked, axis, prefs, nowSlot,
+                credited);
 
         outcome.getItems().addAll(buildTaskItems(chunks, axis, deadlineBufferSlots));
         outcome.getAtRisk().addAll(classifyAtRisk(chunks, axis, cutoff));
@@ -2673,11 +3215,369 @@ public class SmartSchedulerService {
         outcome.setPhase1Ms(phase1Ms);
         outcome.setPhase2Ms(phase2Ms);
         outcome.setIntervals(allIntervals.size());
+        outcome.setDayIntervals(tagIntervalle);
+        outcome.setTaskChunksInModel(taskChunksImModell);
         outcome.setPlaceables(allPlaceables.size());
         outcome.setDrop(bestDrop);
         outcome.setPlacementObjective(placementObjective);
         outcome.setPhase2Retried(phase2Retried);
+        outcome.setGreedyDrop(greedyDrop);
+        outcome.setGreedyFallback(greedyFallback);
         return outcome;
+    }
+
+    /**
+     * Zerlegt die globale Disjunktion in eine je Kalendertag. Siehe {@code no-overlap-per-day}.
+     *
+     * <p>Je Placeable und erlaubtem Tag entsteht eine INTERVALL-SICHT auf dieselbe Startvariable,
+     * deren Präsenz-Literal die bereits vorhandene {@code inDay}-Boolean ist. Neue Booleans kommen
+     * dadurch nicht ins Modell, und weil {@code inDay[d]} über das {@code addExactlyOne} aus
+     * {@link #makePlaceable} strikt stärker ist als {@code present}, ist die Sicht genau dann
+     * präsent, wenn das Item an diesem Tag liegt.
+     *
+     * <p><b>Die Äquivalenz hängt an einem Detail.</b> Ein Intervall ist
+     * {@code sizeSlots + gapSlots} lang, das Tagesfenster deckelt aber nur {@code start +
+     * sizeSlots} — die nachlaufende Pause kann über Mitternacht ragen. Eingetragen wird ein
+     * Intervall deshalb in jeden Topf, den es BERÜHREN kann, nicht nur in den seines Starttags.
+     * Zwei Items, die sich über so eine Tagesgrenze hinweg überlappen würden, liegen dann in
+     * mindestens einem gemeinsamen Topf. Dasselbe gilt für die gesperrten Bereiche, die ohnehin
+     * über mehrere Tage laufen können (Schlaf, mehrtägige Termine).
+     *
+     * <p>Das Intervall aus {@link #makePlaceable} bleibt in diesem Modus ohne Constraint stehen.
+     * Es wird nicht eingespart, weil es den einen Zweig vom anderen unterscheidbar halten würde:
+     * {@code allIntervals.size()} ist die Modellgröße, die beide Varianten vergleichbar macht, und
+     * CP-SATs Presolve entfernt ein Intervall, das in keiner Disjunktion vorkommt, ohnehin.
+     *
+     * @return wie viele Intervall-Sichten insgesamt entstanden sind — die Messgröße des Umbaus
+     */
+    private int addNoOverlapProTag(CpModel model, List<Placeable> allPlaceables, List<int[]> blocked,
+                                   List<IntervalVar> blockedIntervals, Axis axis, int gapSlots) {
+        Map<Integer, List<IntervalVar>> proTag = new LinkedHashMap<>();
+
+        for (int i = 0; i < blocked.size(); i++) {
+            int[] b = blocked.get(i);
+            for (int tag = b[0] / SLOTS_PER_DAY; tag <= (b[1] - 1) / SLOTS_PER_DAY; tag++) {
+                proTag.computeIfAbsent(tag, k -> new ArrayList<>()).add(blockedIntervals.get(i));
+            }
+        }
+
+        int sichten = 0;
+        for (Placeable p : allPlaceables) {
+            int laenge = p.sizeSlots + gapSlots;
+            for (Map.Entry<Integer, BoolVar> e : p.inDay.entrySet()) {
+                int tag = e.getKey();
+                IntervalVar iv = model.newOptionalFixedSizeIntervalVar(
+                        p.start, laenge, e.getValue(), "ivd" + tag + "_" + p.start.getName());
+                sichten++;
+                int[] fenster = p.dayBounds.get(tag);
+                int letzterTag = fenster == null
+                        ? tag
+                        : Math.min(axis.totalDays - 1, (fenster[1] + laenge - 1) / SLOTS_PER_DAY);
+                for (int t = tag; t <= letzterTag; t++) {
+                    proTag.computeIfAbsent(t, k -> new ArrayList<>()).add(iv);
+                }
+            }
+        }
+
+        for (List<IntervalVar> topf : proTag.values()) {
+            if (topf.size() > 1) model.addNoOverlap(topf.toArray(new IntervalVar[0]));
+        }
+        return sichten;
+    }
+
+    // =========================================================================
+    // GREEDY-VORSCHLAG
+    // =========================================================================
+
+    /**
+     * Eine Gruppenregel, wie {@link #greedyKonstruktion} sie einhalten muss.
+     *
+     * <p>Sie spiegelt genau die Constraints, die das CP-Modell für dieselbe Gruppe bekommt
+     * ({@link #addWeekGroupConstraints}, {@link #addRestDayRule}, die Symmetriebrechung der
+     * Task-Chunks, {@code maxChunksPerDay}). Der Grund für die Doppelung ist nicht Bequemlichkeit:
+     * der Greedy-Vorschlag ist nicht nur ein Startwert, sondern im Notfall die AUSGELIEFERTE Lösung
+     * — dann muss er zulässig sein und nicht bloß plausibel. Eingesammelt werden die Regeln deshalb
+     * an genau den Stellen, an denen auch die Constraints entstehen.
+     */
+    private static final class GreedyRegel {
+        final List<Placeable> mitglieder;
+        /** Höchstens ein Mitglied pro Tag (Wochengruppen von Habits, Trainings, Projekten). */
+        final boolean einesProTag;
+        /**
+         * Mitglieder liegen chronologisch in Listenreihenfolge, und zwar mit Präfix-Präsenz:
+         * passt Mitglied i nicht, fallen alle dahinter weg. Genau das erzwingt im Modell
+         * {@code addImplication(cur.present, prev.present)}.
+         */
+        final boolean chronologisch;
+        /** {@code > 0}: höchstens so viele Mitglieder pro Tag ({@code maxChunksPerDay}). */
+        final int maxProTag;
+        /** Ruhetagsabstand nach {@link #restDaysBetween(Placeable, Placeable)}. */
+        final boolean ruhetage;
+
+        private GreedyRegel(List<Placeable> mitglieder, boolean einesProTag, boolean chronologisch,
+                            int maxProTag, boolean ruhetage) {
+            this.mitglieder    = mitglieder;
+            this.einesProTag   = einesProTag;
+            this.chronologisch = chronologisch;
+            this.maxProTag     = maxProTag;
+            this.ruhetage      = ruhetage;
+        }
+
+        /** Die Chunks einer Aufgabe: chronologisch, höchstens {@code maxProTag} am Tag. */
+        static GreedyRegel kette(List<Placeable> mitglieder, int maxProTag) {
+            return new GreedyRegel(mitglieder, false, true, maxProTag, false);
+        }
+
+        /** Austauschbare Slots einer Woche (Habit, Projekt): einer pro Tag, chronologisch. */
+        static GreedyRegel wochengruppe(List<Placeable> mitglieder) {
+            return new GreedyRegel(mitglieder, true, true, 0, false);
+        }
+
+        /** Nur "einer pro Tag", ohne Ordnung — über ALLE Trainings einer Woche. */
+        static GreedyRegel einesProTag(List<Placeable> mitglieder) {
+            return new GreedyRegel(mitglieder, true, false, 0, false);
+        }
+
+        /** Die frei verschiebbaren Trainings einer Woche: chronologisch plus Ruhetage. */
+        static GreedyRegel trainingswoche(List<Placeable> mitglieder) {
+            return new GreedyRegel(mitglieder, true, true, 0, true);
+        }
+    }
+
+    /** Laufender Zustand einer {@link GreedyRegel} während der Konstruktion. */
+    private static final class GreedyStand {
+        /** Tag -> wie viele Mitglieder dort schon liegen. */
+        final Map<Integer, Integer> proTag = new HashMap<>();
+        /** Bereits platzierte Mitglieder mit ihrem Tag — für den Ruhetagsabstand. */
+        final List<Placeable> gelegt = new ArrayList<>();
+        final List<Integer>   gelegtTag = new ArrayList<>();
+    }
+
+    /**
+     * Ein zulässiger Plan in Millisekunden, per First-Fit — Startwert für Phase 1 und Notausgang.
+     *
+     * <p><b>Warum es ihn gibt.</b> Findet Phase 1 in ihrem Deckel keine Lösung, blieb der Kalender
+     * unverändert stehen. Das ist als Vorsichtsmaßnahme richtig — ein veralteter Plan schlägt einen
+     * leeren —, für den Nutzer aber von "kaputt" nicht zu unterscheiden: er ändert etwas, wartet,
+     * und es passiert nichts. Ein First-Fit-Plan ist schlechter als ein gelöster, aber er ist ein
+     * Plan.
+     *
+     * <p><b>Und warum er auch im Normalfall läuft.</b> Als Startwert für Phase 1 löst er das
+     * Hint-Paradox: ein Hint "platziere ALLES" ist genau dann unerfüllbar, wenn Phase 1 gebraucht
+     * wird (siehe dort). Dieser Hint behauptet nichts dergleichen, sondern nur "so viel geht
+     * sicher" — er ist konstruktiv zulässig. Phase 1 startet damit unter einer bekannten obereren
+     * Schranke statt sie erst suchen zu müssen. Zusätzlich fällt ein Referenzwert ab: steht
+     * {@code greedyDrop} in der SCHED-Zeile neben {@code drop}, ist "lohnt der Löser überhaupt"
+     * keine Glaubensfrage mehr.
+     *
+     * <p><b>Der Vorzustand kommt zuerst.</b> Jedes Item versucht seine bisherige Lage, bevor
+     * irgendetwas Neues gesucht wird. Deshalb ist der Vorschlag nie unruhiger als der letzte Plan
+     * — und genau das ist die Rechtfertigung dafür, ihn im Notfall auch auszuliefern.
+     *
+     * <p>Eingehalten werden: gesperrte Zeit, Tagesfenster und erlaubte Tage (beides steckt in
+     * {@code dayBounds}), die Mindestpause, die drei Tagesdeckel einschließlich des schon
+     * Festliegenden ({@link #festeTagesLast}) und alle Gruppenregeln aus {@link GreedyRegel}. Was
+     * NICHT eingehalten wird, ist irgendein Qualitätsmaß: Wunschzeiten, Leistungshoch und
+     * Reihenfolge interessieren hier nicht. Dafür ist Phase 2 da.
+     *
+     * @return Startslot je platziertem Placeable; wer fehlt, wurde verworfen.
+     */
+    private Map<Placeable, Integer> greedyKonstruktion(List<Placeable> allPlaceables,
+                                                      List<GreedyRegel> regeln, List<int[]> blocked,
+                                                      Axis axis, UserPreferences prefs, int gapSlots,
+                                                      List<TaskChunk> chunks,
+                                                      List<CalendarEvent> credited) {
+        boolean[] frei = new boolean[axis.horizonSlots];
+        Arrays.fill(frei, true);
+        for (int[] b : blocked) {
+            for (int s = Math.max(0, b[0]); s < Math.min(axis.horizonSlots, b[1]); s++) frei[s] = false;
+        }
+
+        // Tagesdeckel — dieselbe Rechnung wie addDailyLoadLimits, nur laufend mitgeführt.
+        Map<Integer, int[]> last = festeTagesLast(credited, axis);
+        Set<Placeable> taskPlaceables = new java.util.LinkedHashSet<>();
+        for (TaskChunk c : chunks) {
+            if (c.placeable != null) taskPlaceables.add(c.placeable);
+            if (c.placedStartSlot == null) continue;
+            int slots = Axis.slotsFor(c.durationMinutes);
+            int[] s = last.computeIfAbsent(c.placedStartSlot / SLOTS_PER_DAY, k -> new int[3]);
+            s[0] += slots;
+            s[1] += slots;
+            s[2] += 1;
+        }
+        int taskCapSlots = Axis.slotsFor(nz(prefs.getMaxTaskMinutesPerDay(), FALLBACK_MAX_TASK_MIN_PER_DAY));
+        int totalCapSlots = Axis.slotsFor(
+                nz(prefs.getMaxScheduledMinutesPerDay(), FALLBACK_MAX_SCHEDULED_MIN_PER_DAY));
+        int maxTasksPerDay = nz(prefs.getMaxTasksPerDay(), 0);
+
+        Map<Placeable, List<GreedyRegel>> proItem = new IdentityHashMap<>();
+        Map<GreedyRegel, GreedyStand> stand = new IdentityHashMap<>();
+        for (GreedyRegel r : regeln) {
+            stand.put(r, new GreedyStand());
+            for (Placeable p : r.mitglieder) {
+                proItem.computeIfAbsent(p, k -> new ArrayList<>()).add(r);
+            }
+        }
+
+        // Verarbeitungseinheiten: eine Kette wird als Ganzes abgearbeitet (Präfix-Präsenz), alles
+        // andere einzeln. Sortiert nach Drop-Gewicht des ersten Mitglieds, absteigend — stabil,
+        // damit gleich gewichtete Items in Modellreihenfolge bleiben und der Vorschlag über zwei
+        // unveränderte Läufe derselbe ist.
+        Map<Placeable, List<Placeable>> ketteVon = new IdentityHashMap<>();
+        for (GreedyRegel r : regeln) {
+            if (!r.chronologisch || r.mitglieder.size() < 2) continue;
+            for (Placeable p : r.mitglieder) ketteVon.putIfAbsent(p, r.mitglieder);
+        }
+        List<List<Placeable>> einheiten = new ArrayList<>();
+        Set<Placeable> gesehen = java.util.Collections.newSetFromMap(new IdentityHashMap<>());
+        for (Placeable p : allPlaceables) {
+            if (!gesehen.add(p)) continue;
+            List<Placeable> kette = ketteVon.get(p);
+            if (kette == null) {
+                einheiten.add(List.of(p));
+            } else {
+                gesehen.addAll(kette);
+                einheiten.add(kette);
+            }
+        }
+        einheiten.sort(Comparator.comparingLong(e -> -e.get(0).dropWeight));
+
+        Map<Placeable, Integer> lage = new IdentityHashMap<>();
+        for (List<Placeable> einheit : einheiten) {
+            int untergrenze = 0;
+            for (Placeable p : einheit) {
+                int slot = greedyPlatz(p, untergrenze, frei, gapSlots, axis, proItem, stand,
+                        last, taskPlaceables.contains(p), taskCapSlots, totalCapSlots, maxTasksPerDay);
+                // Präfix-Präsenz: passt dieser Block nicht, dürfen die dahinter auch nicht.
+                if (slot < 0) break;
+                lage.put(p, slot);
+                int laenge = p.sizeSlots + gapSlots;
+                for (int s = slot; s < Math.min(axis.horizonSlots, slot + laenge); s++) frei[s] = false;
+
+                int tag = slot / SLOTS_PER_DAY;
+                int slots = Axis.slotsFor(p.realMinutes);
+                int[] l = last.computeIfAbsent(tag, k -> new int[3]);
+                l[1] += slots;
+                if (taskPlaceables.contains(p)) {
+                    l[0] += slots;
+                    l[2] += 1;
+                }
+                for (GreedyRegel r : proItem.getOrDefault(p, List.of())) {
+                    GreedyStand st = stand.get(r);
+                    st.proTag.merge(tag, 1, Integer::sum);
+                    st.gelegt.add(p);
+                    st.gelegtTag.add(tag);
+                }
+                // Wie im Modell: prev.start + prev.sizeSlots <= cur.start. Die Pause steckt schon
+                // in der Belegung, deshalb hier bewusst OHNE gapSlots — sonst wäre der Greedy
+                // strenger als das Modell, für das er einen Startwert liefern soll.
+                untergrenze = slot + p.sizeSlots;
+            }
+        }
+        return lage;
+    }
+
+    /** Der erste Platz, den {@code p} nicht später als {@code untergrenze} bekommen kann, oder -1. */
+    private int greedyPlatz(Placeable p, int untergrenze, boolean[] frei, int gapSlots, Axis axis,
+                            Map<Placeable, List<GreedyRegel>> proItem,
+                            Map<GreedyRegel, GreedyStand> stand, Map<Integer, int[]> last,
+                            boolean istAufgabe, int taskCap, int totalCap, int maxTasksPerDay) {
+        int laenge = p.sizeSlots + gapSlots;
+
+        // Der Vorzustand zuerst — nur wenn er noch in ein erlaubtes Fenster fällt.
+        if (p.previousSlot != null && p.previousSlot >= untergrenze) {
+            int tag = p.previousSlot / SLOTS_PER_DAY;
+            int[] fenster = p.dayBounds.get(tag);
+            if (fenster != null && p.previousSlot >= fenster[0] && p.previousSlot <= fenster[1]
+                    && greedyTagOk(p, tag, proItem, stand, last, istAufgabe, taskCap, totalCap,
+                                   maxTasksPerDay)
+                    && greedyFrei(frei, p.previousSlot, p.sizeSlots, laenge, axis)) {
+                return p.previousSlot;
+            }
+        }
+
+        for (Map.Entry<Integer, int[]> e : p.dayBounds.entrySet()) {
+            int tag = e.getKey();
+            if ((tag + 1) * SLOTS_PER_DAY <= untergrenze) continue;
+            if (!greedyTagOk(p, tag, proItem, stand, last, istAufgabe, taskCap, totalCap,
+                             maxTasksPerDay)) {
+                continue;
+            }
+            for (int s = Math.max(e.getValue()[0], untergrenze); s <= e.getValue()[1]; s++) {
+                if (greedyFrei(frei, s, p.sizeSlots, laenge, axis)) return s;
+            }
+        }
+        return -1;
+    }
+
+    /**
+     * Ist {@code [von, von+laenge)} frei?
+     *
+     * <p>Die nachlaufende Pause darf über das Horizontende hinausragen — dahinter ist nichts mehr zu
+     * schützen, und genauso hält es das Modell (das Intervall endet dort einfach). Der Block selbst
+     * darf es nicht; dafür sorgt schon {@code dayBounds}, die Prüfung bleibt als Zusicherung.
+     */
+    private static boolean greedyFrei(boolean[] frei, int von, int kern, int laenge, Axis axis) {
+        if (von < 0 || von + kern > axis.horizonSlots) return false;
+        int ende = Math.min(axis.horizonSlots, von + laenge);
+        for (int s = von; s < ende; s++) {
+            if (!frei[s]) return false;
+        }
+        return true;
+    }
+
+    /** Ob Tagesdeckel und Gruppenregeln diesen Tag für {@code p} noch zulassen. */
+    private boolean greedyTagOk(Placeable p, int tag, Map<Placeable, List<GreedyRegel>> proItem,
+                                Map<GreedyRegel, GreedyStand> stand, Map<Integer, int[]> last,
+                                boolean istAufgabe, int taskCap, int totalCap, int maxTasksPerDay) {
+        int slots = Axis.slotsFor(p.realMinutes);
+        int[] l = last.getOrDefault(tag, LEERE_TAGESLAST);
+        if (l[1] + slots > totalCap) return false;
+        if (istAufgabe) {
+            if (l[0] + slots > taskCap) return false;
+            if (maxTasksPerDay > 0 && l[2] + 1 > maxTasksPerDay) return false;
+        }
+
+        for (GreedyRegel r : proItem.getOrDefault(p, List.of())) {
+            GreedyStand st = stand.get(r);
+            int schon = st.proTag.getOrDefault(tag, 0);
+            if (r.einesProTag && schon > 0) return false;
+            if (r.maxProTag > 0 && schon + 1 > r.maxProTag) return false;
+            if (!r.ruhetage) continue;
+            for (int i = 0; i < st.gelegt.size(); i++) {
+                if (Math.abs(tag - st.gelegtTag.get(i)) < restDaysBetween(p, st.gelegt.get(i))) {
+                    return false;
+                }
+            }
+        }
+        return true;
+    }
+
+    /** Was der Greedy-Vorschlag an Drop-Kosten stehen lässt — der Referenzwert für die SCHED-Zeile. */
+    private long greedyDropKosten(List<Placeable> allPlaceables, Map<Placeable, Integer> lage) {
+        long summe = 0;
+        for (Placeable p : allPlaceables) {
+            if (!lage.containsKey(p)) summe += p.dropWeight;
+        }
+        return summe;
+    }
+
+    /**
+     * Der Greedy-Vorschlag als {@link Platzierung} — dieselbe schmale Schnittstelle, die auch der
+     * Phase-1-Schnappschuss benutzt, damit {@link #extract} nichts davon merkt.
+     */
+    private static Platzierung ausGreedy(Map<Placeable, Integer> lage) {
+        return new Platzierung() {
+            @Override
+            public boolean vorhanden(Placeable p) {
+                return lage.containsKey(p);
+            }
+
+            @Override
+            public int startSlot(Placeable p) {
+                return lage.getOrDefault(p, 0);
+            }
+        };
     }
 
     /**
@@ -3947,7 +4847,7 @@ public class SmartSchedulerService {
      */
     private int solveDeadlineRescuePass(List<TaskChunk> chunks, SolveOutcome outcome,
                                         List<int[]> blocked, Axis axis, UserPreferences prefs,
-                                        int nowSlot) {
+                                        int nowSlot, List<CalendarEvent> credited) {
         // Nur Aufgaben, deren Termin in der Zukunft liegt und die noch Minuten schuldig sind.
         // Überfälliges hat der Vorlauf; ohne Deadline ist nichts in Gefahr.
         List<TaskChunk> gefaehrdet = chunks.stream()
@@ -3993,7 +4893,7 @@ public class SmartSchedulerService {
             // dem Kalender, je nachdem welcher zufällig zuerst drankommt.
             if (prioClamped(c.task) >= hoechstePrio) continue;
             verdraengbar.add(new Verdraengbar(null, c, c.placedStartSlot,
-                    Axis.slotsFor(c.durationMinutes), calculateTaskWeight(c.task, axis.origin.toLocalDate())));
+                    Axis.slotsFor(c.durationMinutes), calculateTaskWeight(c.task, axis.originDate)));
         }
 
         // Alles Übrige, was schon liegt, ist in diesem Modell fest.
@@ -4065,7 +4965,7 @@ public class SmartSchedulerService {
 
         model.addNoOverlap(intervals.toArray(new IntervalVar[0]));
         addRescueDayCaps(model, prefs, axis, chunks, outcome, gefaehrdet, gefaehrdetP,
-                verdraengbar, opferP);
+                verdraengbar, opferP, credited);
 
         // Lexikografisch, drei Stufen: die Deadline retten schlägt alles; danach so wenig wie
         // möglich (und so Billiges wie möglich) opfern; ganz zuletzt möglichst wenig verschieben.
@@ -4161,7 +5061,8 @@ public class SmartSchedulerService {
     private void addRescueDayCaps(CpModel model, UserPreferences prefs, Axis axis,
                                   List<TaskChunk> chunks, SolveOutcome outcome,
                                   List<TaskChunk> gefaehrdet, List<Placeable> gefaehrdetP,
-                                  List<Verdraengbar> verdraengbar, List<Placeable> opferP) {
+                                  List<Verdraengbar> verdraengbar, List<Placeable> opferP,
+                                  List<CalendarEvent> credited) {
         int taskCapSlots = Axis.slotsFor(nz(prefs.getMaxTaskMinutesPerDay(), FALLBACK_MAX_TASK_MIN_PER_DAY));
         int totalCapSlots = Axis.slotsFor(
                 nz(prefs.getMaxScheduledMinutesPerDay(), FALLBACK_MAX_SCHEDULED_MIN_PER_DAY));
@@ -4171,7 +5072,9 @@ public class SmartSchedulerService {
         Set<TaskChunk> beweglicheChunks = identitaetsMenge(verdraengbar, v -> v.chunk);
 
         // Sockel: was an einem Tag liegt und in diesem Modell nicht mehr bewegt werden kann.
-        Map<Integer, int[]> sockel = new HashMap<>();   // [taskSlots, totalSlots, taskCount]
+        // Gepinntes und Eingefrorenes gehört dazu (siehe festeTagesLast) — es steht in keinem
+        // ScheduledItem dieses Laufs und fehlte damit im Sockel.
+        Map<Integer, int[]> sockel = festeTagesLast(credited, axis);   // [taskSlots, totalSlots, taskCount]
         for (ScheduledItem item : outcome.getItems()) {
             if (beweglicheItems.contains(item)) continue;
             int start = axis.floorSlot(item.getStartTime());
@@ -4209,16 +5112,16 @@ public class SmartSchedulerService {
         }
 
         for (Map.Entry<Integer, LinearExprBuilder> e : taskLoad.entrySet()) {
-            int rest = taskCapSlots - sockel.getOrDefault(e.getKey(), new int[3])[0];
+            int rest = taskCapSlots - sockel.getOrDefault(e.getKey(), LEERE_TAGESLAST)[0];
             model.addLessOrEqual(e.getValue().build(), Math.max(0, rest));
         }
         for (Map.Entry<Integer, LinearExprBuilder> e : totalLoad.entrySet()) {
-            int rest = totalCapSlots - sockel.getOrDefault(e.getKey(), new int[3])[1];
+            int rest = totalCapSlots - sockel.getOrDefault(e.getKey(), LEERE_TAGESLAST)[1];
             model.addLessOrEqual(e.getValue().build(), Math.max(0, rest));
         }
         if (maxTasksPerDay != null && maxTasksPerDay > 0) {
             for (Map.Entry<Integer, LinearExprBuilder> e : taskCount.entrySet()) {
-                int rest = maxTasksPerDay - sockel.getOrDefault(e.getKey(), new int[3])[2];
+                int rest = maxTasksPerDay - sockel.getOrDefault(e.getKey(), LEERE_TAGESLAST)[2];
                 model.addLessOrEqual(e.getValue().build(), Math.max(0, rest));
             }
         }
@@ -4361,7 +5264,8 @@ public class SmartSchedulerService {
      * @return wie viele Chunks dieser Pass untergebracht hat
      */
     private int solveReliefPass(ReliefMode mode, List<TaskChunk> chunks, List<int[]> occupied,
-                                Axis axis, UserPreferences prefs, int nowSlot, int gapSlots) {
+                                Axis axis, UserPreferences prefs, int nowSlot, int gapSlots,
+                                List<CalendarEvent> credited) {
         // Nur künftige Deadlines. Ohne Deadline ist nichts in Gefahr — die Aufgabe kommt beim
         // nächsten Lauf wieder dran.
         //
@@ -4460,7 +5364,7 @@ public class SmartSchedulerService {
         if (placeables.stream().allMatch(Objects::isNull)) return 0;
 
         model.addNoOverlap(intervals.toArray(new IntervalVar[0]));
-        addReliefDayCaps(model, prefs, chunks, offen, placeables);
+        addReliefDayCaps(model, prefs, chunks, offen, placeables, credited, axis);
 
         // Lexikografisch über EIN Ziel: Platzieren schlägt Frühsein immer. Der Faktor ist die
         // exakte Obergrenze des Frühseins-Terms plus eins, also nicht geschätzt — ein zweiter
@@ -4519,12 +5423,21 @@ public class SmartSchedulerService {
      * müssen, und wird von genau dem einen Fall überschritten, für den er nie gedacht war.
      */
     private void addReliefDayCaps(CpModel model, UserPreferences prefs, List<TaskChunk> alleChunks,
-                                  List<TaskChunk> offen, List<Placeable> placeables) {
+                                  List<TaskChunk> offen, List<Placeable> placeables,
+                                  List<CalendarEvent> credited, Axis axis) {
         int capSlots = Axis.slotsFor(nz(prefs.getMaxTaskMinutesPerDay(), FALLBACK_MAX_TASK_MIN_PER_DAY));
         Integer maxTasksPerDay = prefs.getMaxTasksPerDay();
 
+        // Gepinntes und Eingefrorenes zählt hier genauso mit wie im Hauptmodell (siehe
+        // festeTagesLast). Ohne das holte der Nachlauf genau zurück, was der Hauptlauf gerade
+        // richtig begrenzt hat.
+        Map<Integer, int[]> fest = festeTagesLast(credited, axis);
         Map<Integer, Integer> slotsProTag = new HashMap<>();
         Map<Integer, Integer> bloeckeProTag = new HashMap<>();
+        fest.forEach((tag, s) -> {
+            slotsProTag.merge(tag, s[0], Integer::sum);
+            bloeckeProTag.merge(tag, s[2], Integer::sum);
+        });
         for (TaskChunk c : alleChunks) {
             if (c.placedStartSlot == null) continue;
             int tag = c.placedStartSlot / SLOTS_PER_DAY;
@@ -5218,7 +6131,7 @@ public class SmartSchedulerService {
 
         List<Integer> tage = new ArrayList<>();
         for (int d = 0; d < axis.totalDays; d++) {
-            if (erlaubt.contains(axis.origin.toLocalDate().plusDays(d).getDayOfWeek())) tage.add(d);
+            if (erlaubt.contains(axis.originDate.plusDays(d).getDayOfWeek())) tage.add(d);
         }
         return tage;
     }

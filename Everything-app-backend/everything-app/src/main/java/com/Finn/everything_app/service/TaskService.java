@@ -76,6 +76,7 @@ public class TaskService {
         if (task.getEstimatedDurationMinutes() == null) {
             task.setEstimatedDurationMinutes(60); // Standard
         }
+        merkeUrsprungsschaetzung(task);
 
         task.setProject(resolveProject(userId, task.getProject()));
 
@@ -139,6 +140,9 @@ public class TaskService {
             existing.setDeadline(updatedTask.getDeadline());
         }
         if (updatedTask.getEstimatedDurationMinutes() != null) {
+            // ERST merken, dann überschreiben: bei einer Bestandszeile ohne Ursprungswert ist der
+            // noch geltende Wert die ursprüngliche Schätzung, und nach der Zuweisung wäre sie weg.
+            merkeUrsprungsschaetzung(existing);
             existing.setEstimatedDurationMinutes(updatedTask.getEstimatedDurationMinutes());
         }
         if (updatedTask.getStatus() != null) {
@@ -284,6 +288,21 @@ public class TaskService {
             projectService.recalculateProjectStats(projectId);
         }
         eventPublisher.publishEvent(new ScheduleChangedEvent(this, userId));
+    }
+
+    /**
+     * Schreibt {@code originalEstimateMinutes} fest, falls es noch leer ist.
+     *
+     * <p>Einmalig und nie wieder: das Feld ist der Bezugspunkt der Schätzkorrektur (siehe
+     * {@link EstimateCalibrationService}). Würde es mitwandern, verglichen wir am Ende die
+     * korrigierte Schätzung mit sich selbst und lernten immer den Faktor 1.
+     */
+    private void merkeUrsprungsschaetzung(Task task) {
+        if (task.getOriginalEstimateMinutes() == null
+                && task.getEstimatedDurationMinutes() != null
+                && task.getEstimatedDurationMinutes() > 0) {
+            task.setOriginalEstimateMinutes(task.getEstimatedDurationMinutes());
+        }
     }
 
     @Transactional

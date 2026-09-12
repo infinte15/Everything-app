@@ -3,8 +3,8 @@ package com.Finn.everything_app.service.recipe;
 import com.Finn.everything_app.dto.RecipeDTO;
 import com.Finn.everything_app.dto.RecipeImportPreviewDTO;
 import com.Finn.everything_app.exception.BadRequestException;
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.core.io.ClassPathResource;
@@ -163,7 +163,7 @@ class RecipeJsonLdParserTest {
     // Totalverweigerung, den Rest tippt man in zwei Minuten.
     @Test
     void meldetFehlendeZutatenStattDenImportZuVerweigern() throws IOException {
-        var node = (com.fasterxml.jackson.databind.node.ObjectNode)
+        var node = (tools.jackson.databind.node.ObjectNode)
                 fixture.get("@graph").get(0);
         node.remove("recipeIngredient");
 

@@ -3,12 +3,12 @@ package com.Finn.everything_app.controller;
 import com.Finn.everything_app.security.JwtUtil;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
+import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.test.web.servlet.MvcResult;
 import org.springframework.test.web.servlet.MockMvc;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.databind.ObjectMapper;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.springframework.http.MediaType.APPLICATION_JSON;
@@ -45,7 +45,7 @@ class AuthEndpointsEnabledTest {
                 .andReturn();
 
         String token = objectMapper.readTree(result.getResponse().getContentAsString())
-                .get("token").asText();
+                .get("token").asString();
 
         // Nicht nur "irgendein String": das Token muss auch die Filterkette passieren.
         mockMvc.perform(get("/api/tasks").header("Authorization", "Bearer " + token))
@@ -65,7 +65,7 @@ class AuthEndpointsEnabledTest {
                 .andReturn();
 
         String token = objectMapper.readTree(result.getResponse().getContentAsString())
-                .get("token").asText();
+                .get("token").asString();
         assertEquals("neuling_test", jwtUtil.extractUsername(token));
     }
 }

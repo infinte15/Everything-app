@@ -35,7 +35,7 @@ public interface TaskRepository extends JpaRepository<Task, Long> {
     // übrigen Blöcke beweglich lassen. Die gepinnte Zeit zieht der Scheduler selbst ab.
     // findTasksForAutoScheduling bleibt unverändert — /api/tasks/unscheduled hängt daran.
     //
-    // IN_PROGRESS gehört zwingend dazu. Bis 31.08.2026 stand hier nur TODO, und das hieß: wer eine
+    // IN_PROGRESS gehört zwingend dazu. Bis 31.08.2026 fehlte es hier, und das hieß: wer eine
     // Aufgabe auf "in Arbeit" setzt, verliert damit JEDE geplante Zeit dafür — der Scheduler sah
     // sie nicht mehr, löschte ihre Blöcke beim nächsten Lauf und meldete auch nichts, denn ohne
     // Chunk gibt es auch kein AtRiskItem (siehe SmartSchedulerService#classifyAtRisk). Am

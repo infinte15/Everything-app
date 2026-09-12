@@ -3,7 +3,7 @@ package com.Finn.everything_app.seed;
 import com.Finn.everything_app.model.Exercise;
 import com.Finn.everything_app.model.MuscleGroup;
 import com.Finn.everything_app.repository.ExerciseRepository;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;

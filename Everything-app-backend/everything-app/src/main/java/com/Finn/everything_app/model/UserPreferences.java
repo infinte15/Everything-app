@@ -146,6 +146,21 @@ public class UserPreferences {
     private Boolean autoScheduleEnabled;
 
     /**
+     * Schätzkorrektur aus der Ist-Zeit; {@code null} gilt als AN.
+     *
+     * <p>Der Planer multipliziert die Restdauer jeder offenen Aufgabe mit dem Faktor, den
+     * {@code EstimateCalibrationService} aus den letzten abgeschlossenen Aufgaben gelernt hat. Das
+     * ist standardmäßig an, weil eine systematisch zu knappe Schätzung nicht die eine Aufgabe
+     * ruiniert, sondern den Plan um sie herum.
+     *
+     * <p>Abschaltbar bleibt es trotzdem: wer seine Aufgaben absichtlich als Zeitbudget und nicht als
+     * Schätzung einträgt ("zwei Stunden Vokabeln, egal wie weit ich komme"), will keine Korrektur —
+     * für ihn ist jede Aufgabe per Definition "zu klein geschätzt".
+     */
+    @Column(name = "estimate_learning_enabled")
+    private Boolean estimateLearningEnabled;
+
+    /**
      * Tag des letzten Scheduler-Laufs, damit das rollierende Planungsfenster nachgeholt werden
      * kann (siehe ScheduleRollForwardScheduler).
      *

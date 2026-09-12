@@ -8,7 +8,7 @@
 	<parent>
 		<groupId>org.springframework.boot</groupId>
 		<artifactId>spring-boot-starter-parent</artifactId>
-		<version>3.5.16</version>
+		<version>4.1.1</version>
 		<relativePath/>
 	</parent>
 
@@ -51,6 +51,16 @@
 		<dependency>
 			<groupId>org.springframework.boot</groupId>
 			<artifactId>spring-boot-starter-security</artifactId>
+		</dependency>
+
+		<!--
+			RestClient-Autokonfiguration (RestClient.Builder als Bean). Seit Spring Boot 4 ist sie
+			aus spring-boot-starter-web herausgeloest — ohne dieses Modul findet der Kontext den
+			Builder nicht mehr, den RecipeImportClientConfig und EnableBankingClient erwarten.
+		-->
+		<dependency>
+			<groupId>org.springframework.boot</groupId>
+			<artifactId>spring-boot-restclient</artifactId>
 		</dependency>
 
 		<!-- Spring Boot Validation -->
@@ -132,6 +142,18 @@
 		<dependency>
 			<groupId>org.springframework.security</groupId>
 			<artifactId>spring-security-test</artifactId>
+			<scope>test</scope>
+		</dependency>
+
+		<!--
+			MockMvc-Autokonfiguration (@AutoConfigureMockMvc). Seit Spring Boot 4 steckt sie nicht
+			mehr in spring-boot-starter-test, sondern in einem eigenen Modul je Web-Stack — der
+			Grund, warum der Paketname von org.springframework.boot.test.autoconfigure.web.servlet
+			auf org.springframework.boot.webmvc.test.autoconfigure gewechselt hat.
+		-->
+		<dependency>
+			<groupId>org.springframework.boot</groupId>
+			<artifactId>spring-boot-webmvc-test</artifactId>
 			<scope>test</scope>
 		</dependency>
 

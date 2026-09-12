@@ -155,7 +155,7 @@ public class DemoPlannerData {
 
         // Die eine Aufgabe, die tatsächlich auf IN_PROGRESS steht - damit der Status im
         // Filter und in der Liste vorkommt. Seit dem 31.08.2026 plant der Scheduler sie mit:
-        // findSchedulableTasks liest TODO UND IN_PROGRESS.
+        // findSchedulableTasks liest IN_PROGRESS mit, nicht nur unangefasste Aufgaben.
         Task kalender = task(user, "Kalender-Wochenansicht neu bauen", SpaceType.PROJECTS,
                 "Everything App", 4, today.plusDays(8).atTime(20, 0), 300, TaskStatus.IN_PROGRESS,
                 "Überlappende Termine nebeneinander statt übereinander zeichnen.");
@@ -241,8 +241,8 @@ public class DemoPlannerData {
      * Schon angefangen, aber noch offen — der Solver plant nur die Restzeit ein.
      *
      * <p>Angefangene Arbeit wird über {@code completedMinutes} abgebildet, der Status ist davon
-     * unabhängig: eine Aufgabe kann auf TODO stehen und trotzdem zur Hälfte erledigt sein. Beide
-     * Status werden geplant ({@code TaskRepository.findSchedulableTasks}).
+     * unabhängig: eine Aufgabe kann unangefasst gemeldet sein und trotzdem zur Hälfte erledigt
+     * sein. Beide offenen Status werden geplant ({@code TaskRepository.findSchedulableTasks}).
      */
     private void progress(Task task, int doneMinutes) {
         task.setCompletedMinutes(doneMinutes);

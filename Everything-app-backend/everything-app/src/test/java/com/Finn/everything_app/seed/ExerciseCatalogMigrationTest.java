@@ -173,7 +173,7 @@ class ExerciseCatalogMigrationTest {
      */
     @Test
     void everyLegacyAliasPointsAtAnExerciseThatActuallyExists() throws Exception {
-        new ExerciseCatalogSeeder(exerciseRepository, new com.fasterxml.jackson.databind.ObjectMapper())
+        new ExerciseCatalogSeeder(exerciseRepository, new tools.jackson.databind.ObjectMapper())
                 .run(null);
 
         Set<String> catalogue = exerciseRepository.findBySource(ExerciseCatalogSeeder.SOURCE).stream()

@@ -66,6 +66,7 @@ class SmartSchedulerEingabenTest {
     @Mock TaskService               taskService;
     @Mock WorkoutPlanService        workoutPlanService;
     @Mock LastScheduleRunStore      lastRunStore;
+    @Mock EstimateCalibrationService estimateCalibration;
 
     @InjectMocks
     SmartSchedulerService service;
@@ -289,7 +290,12 @@ class SmartSchedulerEingabenTest {
             "project",                                         // Zuordnung, keine Planungsregel
             "priority", "deadline", "estimatedDurationMinutes", // in SmartSchedulerSzenarienTest
             "completedMinutes", "minChunkMinutes", "maxChunkMinutes",
-            "splittable", "maxChunksPerDay", "notBefore");
+            "splittable", "maxChunksPerDay", "notBefore",
+            // Ist-Zeit-Rückkopplung: geprüft in SmartSchedulerSzenarienTest#Schätzkorrektur
+            // (beide Richtungen plus Abschalter) und in EstimateCalibrationServiceTest (der
+            // gelernte Faktor selbst). originalEstimateMinutes geht nicht direkt ins Modell ein —
+            // es ist der Bezugspunkt, aus dem der Faktor entsteht.
+            "originalEstimateMinutes", "estimateLearningEnabled");
 
     /**
      * Kein Planungsfeld ohne Entscheidung.

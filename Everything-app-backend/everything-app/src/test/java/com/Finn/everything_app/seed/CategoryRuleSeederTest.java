@@ -3,7 +3,7 @@ package com.Finn.everything_app.seed;
 import com.Finn.everything_app.model.CategoryRule;
 import com.Finn.everything_app.model.RuleSource;
 import com.Finn.everything_app.repository.CategoryRuleRepository;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;

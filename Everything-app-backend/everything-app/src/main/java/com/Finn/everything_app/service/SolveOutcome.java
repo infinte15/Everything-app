@@ -37,6 +37,23 @@ public class SolveOutcome {
      */
     private CpSolverStatus phase1Status;
     private int  intervals;
+    /**
+     * Intervall-SICHTEN der Tageszerlegung, oder 0 im globalen Modus.
+     *
+     * <p>Neben {@link #intervals} und nicht statt ihm: die eine Zahl sagt, wie groß das Modell
+     * logisch ist, die andere, was die Zerlegung an Sichten kostet. Nur beide zusammen machen die
+     * Messreihe zu {@code no-overlap-per-day} vergleichbar.
+     */
+    private int  dayIntervals;
+    /**
+     * Task-Chunks, die wirklich ein Placeable im Hauptmodell bekommen haben.
+     *
+     * <p>Nicht dasselbe wie {@link #placeables} (dort stecken Gewohnheiten, Trainings und
+     * Projektzeit mit drin) und nicht dasselbe wie die Zahl der offenen Aufgaben (die Zerlegung und
+     * die Aufnahmegrenze liegen dazwischen). Es ist die Größe, an der die Sättigung des Modells
+     * hängt — und damit die, an der {@code no-overlap-per-day-from} schaltet.
+     */
+    private int  taskChunksInModel;
     private int  placeables;
     private long drop;
     private double placementObjective = Double.NaN;
@@ -67,6 +84,25 @@ public class SolveOutcome {
      * sind.
      */
     private int displaced;
+
+    /**
+     * Drop-Kosten des Greedy-Vorschlags — der Referenzwert neben {@link #drop}.
+     *
+     * <p>Er macht die Frage "lohnt der Löser überhaupt" messbar: liegt {@code drop} nicht deutlich
+     * unter {@code greedyDrop}, hat CP-SAT für sein Zeitbudget nichts geliefert, was ein First-Fit
+     * in Millisekunden nicht auch gefunden hätte. Vorher war das eine Annahme.
+     */
+    private long greedyDrop;
+
+    /**
+     * Der ausgelieferte Plan kommt vom Greedy-Vorschlag, nicht vom Löser.
+     *
+     * <p>Heißt: Phase 1 hat in ihrem Deckel nichts gefunden (der Status steht in
+     * {@link #phase1Status}). Der Plan ist gültig, aber unoptimiert — kein Wunschfenster, kein
+     * Leistungshoch, keine Reihenfolge. Steht das hier regelmäßig, ist das Modell zu groß für sein
+     * Budget und nicht der Kalender zu voll.
+     */
+    private boolean greedyFallback;
 
     public SolveOutcome(CpSolverStatus status, List<ScheduledItem> items, List<AtRiskItem> atRisk) {
         this.status = status;

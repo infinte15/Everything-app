@@ -1,7 +1,7 @@
 package com.Finn.everything_app.service.recipe;
 
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.core.io.ClassPathResource;
@@ -75,7 +75,7 @@ public class IngredientAisleClassifier {
             if (aisles != null) {
                 for (Map.Entry<String, JsonNode> aisle : aisles.properties()) {
                     for (JsonNode keyword : aisle.getValue()) {
-                        collected.put(keyword.asText().toLowerCase(Locale.GERMAN), aisle.getKey());
+                        collected.put(keyword.asString().toLowerCase(Locale.GERMAN), aisle.getKey());
                     }
                 }
             }

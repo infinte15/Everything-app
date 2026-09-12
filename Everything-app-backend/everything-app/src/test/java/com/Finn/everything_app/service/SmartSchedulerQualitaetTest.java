@@ -69,6 +69,7 @@ class SmartSchedulerQualitaetTest {
     @Mock TaskService               taskService;
     @Mock WorkoutPlanService        workoutPlanService;
     @Mock LastScheduleRunStore      lastRunStore;
+    @Mock EstimateCalibrationService estimateCalibration;
 
     @InjectMocks
     SmartSchedulerService service;
