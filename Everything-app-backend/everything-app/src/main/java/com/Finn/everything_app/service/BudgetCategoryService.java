@@ -40,10 +40,7 @@ public class BudgetCategoryService {
     public List<BudgetCategory> getUserBudgets(Long userId) {
         List<BudgetCategory> budgets = budgetCategoryRepository.findByUserIdOrderByCreatedAtDesc(userId);
 
-        // Berechne aktuelle Ausgaben für jedes Budget
-        for (BudgetCategory budget : budgets) {
-            calculateBudgetStatus(budget);
-        }
+        calculateBudgetStatus(budgets);   // eine Abfrage je Zeitraum, nicht je Budget
 
         return budgets;
     }
@@ -59,9 +56,7 @@ public class BudgetCategoryService {
     public List<BudgetCategory> getActiveBudgets(Long userId) {
         List<BudgetCategory> budgets = budgetCategoryRepository.findByUserIdAndIsActiveTrue(userId);
 
-        for (BudgetCategory budget : budgets) {
-            calculateBudgetStatus(budget);
-        }
+        calculateBudgetStatus(budgets);
 
         return budgets;
     }
@@ -111,15 +106,39 @@ public class BudgetCategoryService {
 
     // HELPER METHODS
 
+    /** Ein Nutzer und ein Zeitraum — der Schlüssel, unter dem sich Budgets eine Abfrage teilen. */
+    private record Zeitraum(Long userId, LocalDate von, LocalDate bis) {}
+
+    /**
+     * Setzt den Ausgabenstand einer ganzen Liste — mit EINER Abfrage je verschiedenem Zeitraum.
+     *
+     * <p>Budgets laufen fast immer über denselben Monat. Je Budget einzeln gerechnet, holte jedes
+     * von ihnen dieselben Transaktionen des Zeitraums erneut aus der Datenbank, um daraus genau
+     * eine Kategorie aufzusummieren: bei zwölf Kategorien zwölf identische Abfragen über alle
+     * Buchungen des Monats. Gefiltert wird ohnehin in Java, also reicht ein Satz Transaktionen
+     * für alle Budgets desselben Zeitraums.
+     */
+    private void calculateBudgetStatus(List<BudgetCategory> budgets) {
+        Map<Zeitraum, List<FinanceTransaction>> proZeitraum = new HashMap<>();
+        for (BudgetCategory budget : budgets) {
+            Zeitraum z = new Zeitraum(budget.getUser().getId(),
+                    budget.getPeriodStart(), budget.getPeriodEnd());
+            calculateBudgetStatus(budget, proZeitraum.computeIfAbsent(z,
+                    k -> transactionRepository.findByUserIdAndTransactionDateBetween(
+                            k.userId(), k.von(), k.bis())));
+        }
+    }
+
     private void calculateBudgetStatus(BudgetCategory budget) {
-        // Hole alle Transaktionen in der Budget-Periode
-        List<FinanceTransaction> transactions = transactionRepository
+        calculateBudgetStatus(budget, transactionRepository
                 .findByUserIdAndTransactionDateBetween(
                         budget.getUser().getId(),
                         budget.getPeriodStart(),
                         budget.getPeriodEnd()
-                );
+                ));
+    }
 
+    private void calculateBudgetStatus(BudgetCategory budget, List<FinanceTransaction> transactions) {
         // Berechne Ausgaben für diese Kategorie
         double currentSpent = transactions.stream()
                 .filter(t -> "AUSGABE".equals(t.getType()))

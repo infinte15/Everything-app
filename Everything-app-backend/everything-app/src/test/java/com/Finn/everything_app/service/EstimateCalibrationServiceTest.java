@@ -6,16 +6,21 @@ import com.Finn.everything_app.repository.TaskRepository;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+
+import org.springframework.data.domain.Pageable;
 
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 /**
@@ -63,7 +68,7 @@ class EstimateCalibrationServiceTest {
     void einAusreisserVerschiebtDenMedianNicht() {
         List<Task> alle = new ArrayList<>(bauen(5, 60, 66));   // 1,1
         alle.add(task(60, 3000, TaskStatus.COMPLETED));        // 50-facher Ausreißer
-        when(taskRepository.findByUserIdAndStatus(eq(1L), eq(TaskStatus.COMPLETED))).thenReturn(alle);
+        when(taskRepository.findRecentCompletedWithEstimate(eq(1L), any())).thenReturn(alle);
 
         assertEquals(1.1, service.faktorFuer(1L), 0.001);
     }
@@ -87,7 +92,13 @@ class EstimateCalibrationServiceTest {
         assertEquals(EstimateCalibrationService.NEUTRAL, service.faktorFuer(1L), 0.001);
     }
 
-    /** Bestandszeilen ohne Ursprungswert sind keine Stichprobe — sie haben keinen Bezugspunkt. */
+    /**
+     * Bestandszeilen ohne Ursprungswert sind keine Stichprobe — sie haben keinen Bezugspunkt.
+     *
+     * <p>Die Abfrage filtert sie inzwischen selbst weg; der Service prüft trotzdem noch einmal.
+     * Das ist die billigere Seite des Irrtums: eine durchgerutschte Zeile ohne Bezugspunkt würde
+     * den Faktor für jede offene Aufgabe verstellen.
+     */
     @Test
     void bestandszeilenOhneUrsprungsschaetzungZaehlenNicht() {
         List<Task> alle = new ArrayList<>();
@@ -96,7 +107,7 @@ class EstimateCalibrationServiceTest {
             t.setOriginalEstimateMinutes(null);
             alle.add(t);
         }
-        when(taskRepository.findByUserIdAndStatus(eq(1L), eq(TaskStatus.COMPLETED))).thenReturn(alle);
+        when(taskRepository.findRecentCompletedWithEstimate(eq(1L), any())).thenReturn(alle);
 
         assertEquals(EstimateCalibrationService.NEUTRAL, service.faktorFuer(1L), 0.001);
     }
@@ -115,36 +126,37 @@ class EstimateCalibrationServiceTest {
             t.setEstimatedDurationMinutes(120);           // aber Schätzung verdoppelt
             alle.add(t);
         }
-        when(taskRepository.findByUserIdAndStatus(eq(1L), eq(TaskStatus.COMPLETED))).thenReturn(alle);
+        when(taskRepository.findRecentCompletedWithEstimate(eq(1L), any())).thenReturn(alle);
 
         assertEquals(2.0, service.faktorFuer(1L), 0.001);
     }
 
-    /** Nur die jüngsten Aufgaben zählen — wer besser schätzen lernt, soll das merken. */
+    /**
+     * Nur die jüngsten Aufgaben zählen — wer besser schätzen lernt, soll das merken.
+     *
+     * <p>Fenster und Sortierung liegen in der Abfrage, nicht im Service: geholt wurde vorher die
+     * gesamte Abschlusshistorie des Nutzers, um davon zwanzig Zeilen zu benutzen — bei JEDEM
+     * Scheduler-Lauf. Geprüft wird deshalb hier, dass der Service genau ein Fenster von
+     * {@code FENSTER} Zeilen anfordert; dass die DB daraus die jüngsten liefert, sagt das
+     * {@code ORDER BY ... DESC} in {@code TaskRepository#findRecentCompletedWithEstimate}.
+     */
     @Test
-    void nurDieJuengstenAufgabenZaehlen() {
-        List<Task> alle = new ArrayList<>();
-        // 20 alte Aufgaben mit Faktor 2, danach 20 neue mit Faktor 1: nur die neuen dürfen zählen.
-        for (int i = 0; i < 20; i++) {
-            Task alt = task(60, 120, TaskStatus.COMPLETED);
-            alt.setCompletedAt(LocalDateTime.now().minusDays(100 - i));
-            alle.add(alt);
-        }
-        for (int i = 0; i < 20; i++) {
-            Task neu = task(60, 60, TaskStatus.COMPLETED);
-            neu.setCompletedAt(LocalDateTime.now().minusDays(20 - i));
-            alle.add(neu);
-        }
-        when(taskRepository.findByUserIdAndStatus(eq(1L), eq(TaskStatus.COMPLETED))).thenReturn(alle);
+    void esWirdNurDasJuengsteFensterAngefordert() {
+        fertig(5, 60, 60);
 
-        assertEquals(EstimateCalibrationService.NEUTRAL, service.faktorFuer(1L), 0.001,
-                "die zwanzig alten Aufgaben mit Faktor 2 dürfen nicht mehr durchschlagen");
+        service.faktorFuer(1L);
+
+        ArgumentCaptor<Pageable> fenster = ArgumentCaptor.forClass(Pageable.class);
+        verify(taskRepository).findRecentCompletedWithEstimate(eq(1L), fenster.capture());
+        assertEquals(EstimateCalibrationService.FENSTER, fenster.getValue().getPageSize(),
+                "mehr als ein Fenster darf gar nicht erst geladen werden");
+        assertEquals(0, fenster.getValue().getPageNumber());
     }
 
     // ------------------------------------------------------------------
 
     private void fertig(int anzahl, int ursprung, int ist) {
-        when(taskRepository.findByUserIdAndStatus(eq(1L), eq(TaskStatus.COMPLETED)))
+        when(taskRepository.findRecentCompletedWithEstimate(eq(1L), any()))
                 .thenReturn(bauen(anzahl, ursprung, ist));
     }
 

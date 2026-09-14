@@ -1,5 +1,6 @@
 import 'package:flutter/foundation.dart';
 import 'package:intl/intl.dart';
+import '../config/api_config.dart';
 import '../models/habit.dart';
 import 'api_service.dart';
 
@@ -8,7 +9,7 @@ class HabitService {
 
   Future<List<Habit>> getAllHabits() async {
     try {
-      final response = await _apiService.get('/api/habits');
+      final response = await _apiService.get(ApiConfig.habits);
 
       if (_apiService.isSuccess(response)) {
         final List<dynamic> data = _apiService.parseResponse(response);
@@ -25,7 +26,7 @@ class HabitService {
   Future<Habit?> createHabit(Habit habit) async {
     try {
       final response = await _apiService.post(
-        '/api/habits',
+        ApiConfig.habits,
         habit.toJson(),
       );
 
@@ -44,7 +45,7 @@ class HabitService {
   Future<Habit?> updateHabit(Habit habit) async {
     try {
       final response = await _apiService.put(
-        '/api/habits/${habit.id}',
+        ApiConfig.habitById(habit.id!),
         habit.toJson(),
       );
 
@@ -63,8 +64,8 @@ class HabitService {
   Future<bool> toggleHabitComplete(int id, bool isCompleted, {DateTime? date}) async {
     try {
       final dateStr = date != null ? DateFormat('yyyy-MM-dd').format(date) : null;
-      final url = '/api/habits/$id/complete${dateStr != null ? '?date=$dateStr' : ''}';
-      
+      final url = ApiConfig.completeHabit(id, dateStr);
+
       final response = isCompleted 
           ? await _apiService.post(url, {})
           : await _apiService.delete(url);

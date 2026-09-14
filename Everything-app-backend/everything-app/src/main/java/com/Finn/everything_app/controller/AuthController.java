@@ -42,51 +42,45 @@ public class AuthController {
             );
         }
 
-        try {
-            User user = userService.registerUser(
-                    userDTO.getUsername(),
-                    userDTO.getEmail(),
-                    userDTO.getPassword()
-            );
+        // Vergebener Name oder vergebene Adresse kommen als BadRequestException heraus und werden
+        // vom GlobalExceptionHandler in die übliche ErrorResponse-Form gebracht — hier nichts zu
+        // fangen. Ein eigener catch-Block lieferte einen Körper ohne status/error/path.
+        User user = userService.registerUser(
+                userDTO.getUsername(),
+                userDTO.getEmail(),
+                userDTO.getPassword()
+        );
 
-            String token = jwtUtil.generateToken(user.getUsername(),user.getId());
+        String token = jwtUtil.generateToken(user.getUsername(), user.getId());
 
-            return ResponseEntity.status(HttpStatus.CREATED).body(
-                    new LoginResponse(token, user.getId(), user.getUsername(), user.getEmail())
-            );
-        } catch (RuntimeException e) {
-            return ResponseEntity.badRequest().body(
-                    new ErrorResponse(e.getMessage())
-            );
-        }
+        return ResponseEntity.status(HttpStatus.CREATED).body(
+                new LoginResponse(token, user.getId(), user.getUsername(), user.getEmail())
+        );
     }
 
     //POST /api/auth/login --> Login
     @PostMapping("/login")
     public ResponseEntity<?> login(@Valid @RequestBody LoginRequest loginRequest) {
-        try {
-            Authentication auth = authenticationManager.authenticate(
-                    new UsernamePasswordAuthenticationToken(
-                            loginRequest.getUsername(),
-                            loginRequest.getPassword()
-                    )
-            );
+        // BadCredentialsException läuft absichtlich durch: GlobalExceptionHandler beantwortet sie
+        // bereits mit 401 und der vollständigen ErrorResponse. Der frühere catch-Block hier gab
+        // stattdessen einen Körper ohne status/error/path zurück — ausgerechnet /api/auth/login
+        // wich damit als einziger Endpunkt von der gemeinsamen Fehlerform ab.
+        Authentication auth = authenticationManager.authenticate(
+                new UsernamePasswordAuthenticationToken(
+                        loginRequest.getUsername(),
+                        loginRequest.getPassword()
+                )
+        );
 
-            UserDetails userDetails = (UserDetails) auth.getPrincipal();
-            User user = userService.findByUsername(userDetails.getUsername());
+        UserDetails userDetails = (UserDetails) auth.getPrincipal();
+        User user = userService.findByUsername(userDetails.getUsername());
 
-            userService.updateLastLogin(user.getId());
+        userService.updateLastLogin(user.getId());
 
-            String token = jwtUtil.generateToken(user.getUsername(),user.getId());
+        String token = jwtUtil.generateToken(user.getUsername(), user.getId());
 
-            return ResponseEntity.ok(
-                    new LoginResponse(token, user.getId(), user.getUsername(), user.getEmail())
-            );
-
-        } catch (BadCredentialsException e) {
-            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(
-                    new ErrorResponse("Ungültige Anmeldedaten")
-            );
-        }
+        return ResponseEntity.ok(
+                new LoginResponse(token, user.getId(), user.getUsername(), user.getEmail())
+        );
     }
 }

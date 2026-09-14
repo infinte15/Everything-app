@@ -567,9 +567,6 @@ class _StudyWeekViewState extends State<_StudyWeekView> {
     super.dispose();
   }
 
-  bool _isSameDay(DateTime a, DateTime b) =>
-      a.year == b.year && a.month == b.month && a.day == b.day;
-
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -657,7 +654,7 @@ class _StudyWeekViewState extends State<_StudyWeekView> {
                   LayoutBuilder(builder: (ctx, constraints) {
                     final colW = constraints.maxWidth / widget.totalDaysToShow;
                     for (int c = 0; c < widget.days.length; c++) {
-                      if (_isSameDay(widget.days[c], DateTime.now())) {
+                      if (DateUtils.isSameDay(widget.days[c], DateTime.now())) {
                         return Stack(
                           children: [
                             Positioned(
@@ -755,7 +752,7 @@ class _StudyWeekViewState extends State<_StudyWeekView> {
                   }),
 
                   // Current time line (if page contains today)
-                  if (widget.days.any((d) => _isSameDay(d, DateTime.now())))
+                  if (widget.days.any((d) => DateUtils.isSameDay(d, DateTime.now())))
                     const _CurrentTimeLine(),
                 ],
               ),

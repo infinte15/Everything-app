@@ -846,15 +846,9 @@ public class SmartSchedulerService {
 
         // Aufgaben mit aufgebrauchter Schätzung kennt der Löser nicht — sie haben gar keinen Chunk.
         // Gemeldet werden sie trotzdem, und zwar auf BEIDEN Wegen: auch ein gescheiterter Lauf soll
-        // sagen, was offen ist. Die Liste wird dafür neu gebaut statt ergänzt, weil
-        // SolveOutcome.empty() eine unveränderliche liefert.
-        List<AtRiskItem> aufgebraucht = meldeAufgebrauchteSchaetzung(
-                input.getTasks(), pinnedMinutes, schaetzFaktor);
-        if (!aufgebraucht.isEmpty()) {
-            List<AtRiskItem> alle = new ArrayList<>(outcome.getAtRisk());
-            alle.addAll(aufgebraucht);
-            outcome.setAtRisk(alle);
-        }
+        // sagen, was offen ist.
+        outcome.getAtRisk().addAll(meldeAufgebrauchteSchaetzung(
+                input.getTasks(), pinnedMinutes, schaetzFaktor));
 
         // Der entscheidende Unterschied zur alten Implementierung: gelöscht wird ERST, wenn eine
         // verwertbare Lösung vorliegt. Ein leerer Kalender ist schlechter als ein veralteter.
@@ -1220,18 +1214,8 @@ public class SmartSchedulerService {
                 .filter(Objects::nonNull)
                 .collect(Collectors.toCollection(java.util.LinkedHashSet::new));
 
-        // Was an einem Tag bereits festliegt: [taskSlots, totalSlots, taskCount].
-        Map<Integer, int[]> vergeben = festeTagesLast(credited, axis);
-        // Dazu, was der Vorlauf gerade platziert hat — das steht in keinem Kalendereintrag.
-        for (TaskChunk c : chunks) {
-            if (c.placedStartSlot == null) continue;
-            int tag = c.placedStartSlot / SLOTS_PER_DAY;
-            int slots = Axis.slotsFor(c.durationMinutes);
-            int[] s = vergeben.computeIfAbsent(tag, k -> new int[3]);
-            s[0] += slots;
-            s[1] += slots;
-            s[2] += 1;
-        }
+        // Was an einem Tag bereits festliegt, samt Vorlauf: [taskSlots, totalSlots, taskCount].
+        Map<Integer, int[]> vergeben = tagesLastMitVorlauf(credited, chunks, axis);
 
         // Tag -> Items, die an diesem Tag liegen könnten.
         Map<Integer, List<Placeable>> perDay = new LinkedHashMap<>();
@@ -1326,6 +1310,33 @@ public class SmartSchedulerService {
                 s[0] += slots;
                 s[2] += 1;
             }
+        }
+        return out;
+    }
+
+    /**
+     * Tagesbelegung, mit der ein Modellaufbau startet: was ohnehin festliegt
+     * ({@link #festeTagesLast}) plus das, was ein Vorlauf schon platziert hat.
+     *
+     * <p>Letzteres steht in KEINEM Kalendereintrag — der Vorlauf schreibt erst am Ende des Laufs —
+     * und fehlt deshalb in {@code festeTagesLast}. Ohne diese Verrechnung hielte der Löser einen
+     * Nachholtag für unberührt und legte die volle Tagesration noch einmal obendrauf.
+     *
+     * <p>Eine Stelle statt zweier: {@link #addDailyLoadLimits} und {@link #greedyKonstruktion}
+     * bauen denselben Sockel und müssen sich immer einig sein, was "an diesem Tag schon vergeben"
+     * heißt — sonst begrenzt der Löser anders als der Greedy, der ihm den Startwert liefert.
+     * Die zurückgegebene Karte gehört dem Aufrufer und darf weiter ergänzt werden.
+     */
+    private Map<Integer, int[]> tagesLastMitVorlauf(List<CalendarEvent> credited,
+                                                    List<TaskChunk> chunks, Axis axis) {
+        Map<Integer, int[]> out = festeTagesLast(credited, axis);
+        for (TaskChunk c : chunks) {
+            if (c.placedStartSlot == null) continue;
+            int slots = Axis.slotsFor(c.durationMinutes);
+            int[] s = out.computeIfAbsent(c.placedStartSlot / SLOTS_PER_DAY, k -> new int[3]);
+            s[0] += slots;
+            s[1] += slots;
+            s[2] += 1;
         }
         return out;
     }
@@ -3393,17 +3404,11 @@ public class SmartSchedulerService {
             for (int s = Math.max(0, b[0]); s < Math.min(axis.horizonSlots, b[1]); s++) frei[s] = false;
         }
 
-        // Tagesdeckel — dieselbe Rechnung wie addDailyLoadLimits, nur laufend mitgeführt.
-        Map<Integer, int[]> last = festeTagesLast(credited, axis);
+        // Tagesdeckel — derselbe Sockel wie in addDailyLoadLimits, nur laufend mitgeführt.
+        Map<Integer, int[]> last = tagesLastMitVorlauf(credited, chunks, axis);
         Set<Placeable> taskPlaceables = new java.util.LinkedHashSet<>();
         for (TaskChunk c : chunks) {
             if (c.placeable != null) taskPlaceables.add(c.placeable);
-            if (c.placedStartSlot == null) continue;
-            int slots = Axis.slotsFor(c.durationMinutes);
-            int[] s = last.computeIfAbsent(c.placedStartSlot / SLOTS_PER_DAY, k -> new int[3]);
-            s[0] += slots;
-            s[1] += slots;
-            s[2] += 1;
         }
         int taskCapSlots = Axis.slotsFor(nz(prefs.getMaxTaskMinutesPerDay(), FALLBACK_MAX_TASK_MIN_PER_DAY));
         int totalCapSlots = Axis.slotsFor(

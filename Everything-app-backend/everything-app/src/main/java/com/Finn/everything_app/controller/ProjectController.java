@@ -7,8 +7,8 @@ import com.Finn.everything_app.mapper.CalendarEventMapper;
 import com.Finn.everything_app.mapper.ProjectMapper;
 import com.Finn.everything_app.mapper.TaskMapper;
 import com.Finn.everything_app.model.Project;
-import com.Finn.everything_app.repository.CalendarEventRepository;
 import com.Finn.everything_app.security.CurrentUser;
+import com.Finn.everything_app.service.CalendarEventService;
 import com.Finn.everything_app.service.ProjectService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.format.annotation.DateTimeFormat;
@@ -32,7 +32,7 @@ public class ProjectController {
     private final ProjectMapper projectMapper;
     private final TaskMapper taskMapper;
     private final CalendarEventMapper calendarEventMapper;
-    private final CalendarEventRepository calendarEventRepository;
+    private final CalendarEventService calendarEventService;
 
     @GetMapping
     public ResponseEntity<List<ProjectDTO>> getAllProjects(@CurrentUser Long userId) {
@@ -71,8 +71,8 @@ public class ProjectController {
         LocalDateTime start = from != null ? from : LocalDateTime.now();
         LocalDateTime end = to != null ? to : start.plusDays(DEFAULT_SESSION_WINDOW_DAYS);
 
-        return ResponseEntity.ok(calendarEventRepository
-                .findByUserIdAndRelatedProjectIdAndStartTimeBetweenOrderByStartTimeAsc(userId, id, start, end)
+        return ResponseEntity.ok(calendarEventService
+                .getEventsForProjectInRange(userId, id, start, end)
                 .stream()
                 .map(calendarEventMapper::toDTO)
                 .collect(Collectors.toList()));

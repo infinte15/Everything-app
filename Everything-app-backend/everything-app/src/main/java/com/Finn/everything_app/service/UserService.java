@@ -6,6 +6,7 @@ import com.Finn.everything_app.model.UserPreferences;
 import com.Finn.everything_app.event.ScheduleChangedEvent;
 import com.Finn.everything_app.repository.UserRepository;
 import com.Finn.everything_app.repository.UserPreferencesRepository;
+import com.Finn.everything_app.exception.BadRequestException;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -28,10 +29,10 @@ public class UserService {
     public User registerUser(String username, String email, String password){
 
         if(userRepository.existsByUsername(username)){
-            throw new RuntimeException("Username bereits vergeben");
+            throw new BadRequestException("Username bereits vergeben");
         }
         if(userRepository.existsByEmail(email)){
-            throw new RuntimeException("Email bereits vergeben");
+            throw new BadRequestException("Email bereits vergeben");
         }
 
         User user = new User();

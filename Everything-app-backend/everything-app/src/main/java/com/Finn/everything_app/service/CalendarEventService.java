@@ -49,6 +49,21 @@ public class CalendarEventService {
                 start);
     }
 
+    /**
+     * Die Blöcke EINES Projekts im Fenster — Quelle der Projekt-Vorschau.
+     *
+     * <p>Gehört neben die übrigen Bereichsabfragen und nicht in den Controller: ProjectController
+     * war die einzige Stelle im Code, die sich ein Repository direkt geholt hat. Jede künftige
+     * Regel darüber, welche Kalendereinträge ein Nutzer zu sehen bekommt, steht damit an einer
+     * Stelle statt an zweien.
+     */
+    public List<CalendarEvent> getEventsForProjectInRange(Long userId, Long projectId,
+                                                          LocalDateTime start, LocalDateTime end) {
+        return calendarEventRepository
+                .findByUserIdAndRelatedProjectIdAndStartTimeBetweenOrderByStartTimeAsc(
+                        userId, projectId, start, end);
+    }
+
     public boolean isTimeSlotFree(Long userId, LocalDateTime start, LocalDateTime end) {
         Long overlapping = calendarEventRepository.countOverlappingEvents(userId, start, end);
         return overlapping == 0;
@@ -404,17 +419,6 @@ public class CalendarEventService {
         event.setRelatedWorkout(workout);
 
         return calendarEventRepository.save(event);
-    }
-
-    @Transactional
-    public void deleteNonFixedEventsInRange(Long userId, LocalDateTime start, LocalDateTime end) {
-        List<CalendarEvent> events = getEventsInRange(userId, start, end);
-
-        for (CalendarEvent event : events) {
-            if (!event.getIsFixed()) {
-                calendarEventRepository.delete(event);
-            }
-        }
     }
 
     /**

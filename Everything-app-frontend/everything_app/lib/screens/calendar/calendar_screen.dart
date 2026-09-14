@@ -15,6 +15,9 @@ import '../../widgets/pointer_aware_draggable.dart';
 
 // ─── Constants ───────────────────────────────────────────────────────────────
 
+/// Mitte der endlosen PageView. Der Index ist ein Offset hierauf, nie ein Datum für sich.
+const int _kPageEpoch = 10000;
+
 const double kHourHeight = 64.0;
 const double kTimeGutterWidth = 52.0;
 const int kDayStart = 0;
@@ -118,7 +121,7 @@ class _CalendarScreenState extends State<CalendarScreen> {
   @override
   void initState() {
     super.initState();
-    _pageController = PageController(initialPage: 10000);
+    _pageController = PageController(initialPage: _kPageEpoch);
     final now = DateTime.now();
     // scroll to make current hour visible (~2 hours before now)
     _timelineOffset = ((now.hour - 2).clamp(0, 22)) * kHourHeight;
@@ -135,6 +138,29 @@ class _CalendarScreenState extends State<CalendarScreen> {
   void dispose() {
     _pageController.dispose();
     super.dispose();
+  }
+
+  /// Seitenindex der endlosen PageView → Datum, in der gerade aktiven Ansicht.
+  ///
+  /// Die Rechnung stand zweimal da — einmal im Blätter-Handler, einmal im itemBuilder —, und beide
+  /// Kopien müssen dieselbe sein: liefern sie verschiedene Daten, zeigt die Kopfzeile einen anderen
+  /// Zeitraum an als das Raster darunter.
+  ///
+  /// [monthDay] ist der eine Punkt, an dem sich die beiden Aufrufer unterscheiden dürfen: das
+  /// Raster baut auf dem Monatsersten auf, der Blätter-Handler behält den heutigen Tag im Zielmonat,
+  /// weil er damit zugleich die Auswahl setzt. Tages- und Wochenansicht berührt das nicht.
+  DateTime _dateForPage(int index, {int? monthDay}) {
+    final delta = index - _kPageEpoch;
+    final now = DateTime.now();
+
+    switch (_view) {
+      case _CalView.day:
+        return now.add(Duration(days: delta));
+      case _CalView.week:
+        return now.add(Duration(days: delta * 7));
+      case _CalView.month:
+        return DateTime(now.year, now.month + delta, monthDay ?? now.day);
+    }
   }
 void _navigate(int delta) {
   _pageController.animateToPage(
@@ -170,7 +196,7 @@ void _navigate(int delta) {
                 cal.setFocusedDay(now);
                 cal.loadEventsForMonth(now);
 
-                _pageController.jumpToPage(10000);
+                _pageController.jumpToPage(_kPageEpoch);
               },
             ),
             // Zwei schmale Bänder direkt unter dem Kopf: "wird gerade neu geplant" und
@@ -200,18 +226,8 @@ void _navigate(int delta) {
     onPageChanged: (index) {
       // Nur den Provider informieren, damit der Header (Monat/Jahr) sich aktualisiert
       final cal = context.read<CalendarProvider>();
-      final delta = index - 10000;
-      final now = DateTime.now(); // Basis ist heute
-      
-      DateTime targetDate;
-      if (_view == _CalView.day) {
-        targetDate = now.add(Duration(days: delta));
-      } else if (_view == _CalView.week) {
-        targetDate = now.add(Duration(days: delta * 7));
-      } else {
-        targetDate = DateTime(now.year, now.month + delta, now.day);
-      }
-      
+      final targetDate = _dateForPage(index);
+
       // Vor setFocusedDay lesen — danach ist der alte Monat weg.
       final previous = cal.focusedDay;
       cal.setSelectedDay(targetDate);
@@ -224,17 +240,7 @@ void _navigate(int delta) {
     },
     itemBuilder: (context, index) {
       final cal = context.watch<CalendarProvider>();
-      final delta = index - 10000;
-      final now = DateTime.now();
-
-      DateTime pageDate;
-      if (_view == _CalView.day) {
-        pageDate = now.add(Duration(days: delta));
-      } else if (_view == _CalView.week) {
-        pageDate = now.add(Duration(days: delta * 7));
-      } else {
-        pageDate = DateTime(now.year, now.month + delta, 1);
-      }
+      final pageDate = _dateForPage(index, monthDay: 1);
 
 
       return _view == _CalView.day
@@ -268,7 +274,7 @@ void _navigate(int delta) {
                   setState(() => _view = _CalView.day);
   
 
-                  _pageController.jumpToPage(10000 + differenceInDays);
+                  _pageController.jumpToPage(_kPageEpoch + differenceInDays);
                 },
       );
     },
@@ -762,7 +768,7 @@ class _WeekStrip extends StatelessWidget {
               children: List.generate(7, (i) {
                 final day = selectedWeekStart.add(Duration(days: i));
                 
-                final isToday = isSameDay(day, DateTime.now());
+                final isToday = DateUtils.isSameDay(day, DateTime.now());
                 return Expanded(
                   child: GestureDetector(
                     onTap: () => onDayTap(day),
@@ -825,9 +831,6 @@ class _WeekStrip extends StatelessWidget {
     );
   }
 }
-
-bool isSameDay(DateTime a, DateTime b) =>
-    a.year == b.year && a.month == b.month && a.day == b.day;
 
 // ─── Day Timeline ─────────────────────────────────────────────────────────────
 
@@ -1203,7 +1206,7 @@ class _TimelineGridState extends State<_TimelineGrid> {
                         LayoutBuilder(builder: (ctx2, constraints) {
                           final now = DateTime.now();
                           for (int c = 0; c < widget.columnDates.length; c++) {
-                            if (isSameDay(widget.columnDates[c], now)) {
+                            if (DateUtils.isSameDay(widget.columnDates[c], now)) {
                               final colW = constraints.maxWidth / widget.columns;
                               return Stack(
                                 children: [
@@ -1228,7 +1231,7 @@ class _TimelineGridState extends State<_TimelineGrid> {
                         final byColumn = <int, List<CalendarEvent>>{};
                         for (final event in widget.events) {
                           final colIdx = widget.columns > 1
-                              ? widget.columnDates.indexWhere((d) => isSameDay(d, event.startTime))
+                              ? widget.columnDates.indexWhere((d) => DateUtils.isSameDay(d, event.startTime))
                               : 0;
                           if (colIdx < 0) continue;
                           byColumn.putIfAbsent(colIdx, () => []).add(event);
@@ -1393,7 +1396,7 @@ class _DragIndicator extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final colIdx = columnDates.indexWhere((d) => isSameDay(d, hoverTime));
+    final colIdx = columnDates.indexWhere((d) => DateUtils.isSameDay(d, hoverTime));
     final left = colIdx < 0 ? 0.0 : colIdx * colW;
     final w = colIdx < 0 ? colW : colW;
     final top =
@@ -1697,6 +1700,18 @@ class _MonthView extends StatelessWidget {
     final rows = (totalCells / 7).ceil();
     const dayHeaders = ['Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa', 'Su'];
 
+    // Die Termine EINMAL nach Tag gruppieren statt in jeder Zelle neu zu suchen.
+    // getEventsForDay geht über den events-Getter, und der filtert und sortiert bei jedem Zugriff
+    // den kompletten geladenen Monat — bei bis zu 42 Zellen also 42 volle Durchläufe je Aufbau
+    // des Rasters, und das bei jedem Rebuild (Poll im Hintergrund, jedes Ziehen eines Blocks).
+    // Der Schlüssel ist der Tag im Monat; das Raster zeigt ohnehin nur den Monat von [selected].
+    final eventsByDay = <int, List<CalendarEvent>>{};
+    for (final e in cal.events) {
+      if (e.startTime.year == selected.year && e.startTime.month == selected.month) {
+        eventsByDay.putIfAbsent(e.startTime.day, () => []).add(e);
+      }
+    }
+
     final divider =
         Divider(height: 1, color: isDark ? const Color(0xFF2A2A38) : const Color(0xFFE8EAF0));
 
@@ -1774,6 +1789,7 @@ class _MonthView extends StatelessWidget {
                                       daysInMonth,
                                       cellH,
                                       cellW,
+                                      eventsByDay,
                                     ),
                                   ),
                                 ],
@@ -1805,13 +1821,15 @@ class _MonthView extends StatelessWidget {
     );
   }
 
-  Widget _buildCell(int idx, int startOffset, int daysInMonth, double cellH, double cellW) {
+  Widget _buildCell(int idx, int startOffset, int daysInMonth, double cellH, double cellW,
+      Map<int, List<CalendarEvent>> eventsByDay) {
     final dayNum = idx - startOffset + 1;
     if (dayNum < 1 || dayNum > daysInMonth) return const SizedBox.shrink();
     final day = DateTime(selected.year, selected.month, dayNum);
-    final isSel = isSameDay(day, selected);
-    final isToday = isSameDay(day, DateTime.now());
-    final evts = cal.getEventsForDay(day);
+    final now = DateTime.now();
+    final isSel = DateUtils.isSameDay(day, selected);
+    final isToday = DateUtils.isSameDay(day, now);
+    final evts = eventsByDay[dayNum] ?? const <CalendarEvent>[];
 
     // Schrift- und Punktgrößen richten sich nach der tatsächlichen Zellgröße —
     // auf einem kleinen Handy mit 6 Wochenzeilen bleibt sonst nichts übrig.
@@ -1822,7 +1840,6 @@ class _MonthView extends StatelessWidget {
 
     // Dringliche Aufgaben zuerst: in eine Zelle passen nur vier Punkte, und ein "heute faellig"
     // darf nicht ausgerechnet der sein, der wegen der Uhrzeit hinten runterfaellt.
-    final now = DateTime.now();
     final dotted = [...evts]..sort((a, b) =>
         (_isUrgent(b, now) ? 1 : 0).compareTo(_isUrgent(a, now) ? 1 : 0));
 

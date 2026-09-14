@@ -300,7 +300,12 @@ class ApiConfig {
   //HABIT ENDPOINTS
   static String get habits => '$baseUrl/habits';
   static String habitById(int id) => '$baseUrl/habits/$id';
-  static String completeHabit(int id) => '$baseUrl/habits/$id/complete';
+  /// Abhaken/Zurücknehmen, optional für einen bestimmten Tag (`yyyy-MM-dd`).
+  ///
+  /// Der Datums-Parameter gehört mit hierher: sonst steht der eine Teil der URL hier und der
+  /// andere im Service, und genau daran ist der Habit-Service schon einmal vorbeigelaufen.
+  static String completeHabit(int id, [String? date]) =>
+      '$baseUrl/habits/$id/complete${date != null ? '?date=$date' : ''}';
   
   //PROJECT ENDPOINTS
   static String get projects => '$baseUrl/projects';

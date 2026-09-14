@@ -7,6 +7,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
@@ -83,6 +84,53 @@ class SchedulableTaskRepositoryTest {
 
         assertEquals(1, planbar.size());
         assertEquals(eigene.getId(), planbar.get(0).getId());
+    }
+
+    /**
+     * Die Quelle der Schätzkorrektur liefert die JÜNGSTEN Zeilen, nicht irgendwelche.
+     *
+     * <p>Dieselbe Begründung wie oben für {@code findSchedulableTasks}: Fenster und Sortierung
+     * stehen seit dem Umbau in der Abfrage statt in Java, und für einen Mockito-Test auf
+     * {@code EstimateCalibrationService} sind sie damit unsichtbar — dort liefert das Mock genau
+     * das, was der Test hineinlegt. Stünde die Reihenfolge falsch herum, lernte der Planer
+     * dauerhaft aus den ÄLTESTEN Aufgaben und niemand würde es merken.
+     */
+    @Test
+    void schaetzkorrekturSiehtNurDieJuengstenAufgaben() {
+        Task alt  = abgeschlossen("alt",  60, LocalDateTime.now().minusDays(100));
+        Task neu  = abgeschlossen("neu",  60, LocalDateTime.now().minusDays(1));
+        Task mitte = abgeschlossen("mitte", 60, LocalDateTime.now().minusDays(50));
+
+        List<Task> fenster = taskRepository.findRecentCompletedWithEstimate(
+                nutzer.getId(), PageRequest.of(0, 2));
+
+        assertEquals(List.of(neu.getId(), mitte.getId()),
+                fenster.stream().map(Task::getId).toList(),
+                "jüngste zuerst, und nach zwei Zeilen ist Schluss");
+        assertFalse(fenster.stream().anyMatch(t -> t.getId().equals(alt.getId())));
+    }
+
+    /**
+     * Bestandszeilen ohne Ursprungsschätzung dürfen das Fenster nicht auffüllen — sie sind keine
+     * Stichprobe, und wer sie mitzählt, verschenkt genau so viele echte.
+     */
+    @Test
+    void zeilenOhneUrsprungsschaetzungFuellenDasFensterNicht() {
+        Task ohne = abgeschlossen("ohne", null, LocalDateTime.now().minusDays(1));
+        Task mit  = abgeschlossen("mit",   60, LocalDateTime.now().minusDays(2));
+
+        List<Task> fenster = taskRepository.findRecentCompletedWithEstimate(
+                nutzer.getId(), PageRequest.of(0, 20));
+
+        assertEquals(List.of(mit.getId()), fenster.stream().map(Task::getId).toList(),
+                "die jüngere Zeile ohne Bezugspunkt gehört gar nicht erst geladen: " + ohne.getId());
+    }
+
+    private Task abgeschlossen(String titel, Integer ursprung, LocalDateTime fertigAm) {
+        Task t = aufgabe(titel, TaskStatus.COMPLETED);
+        t.setOriginalEstimateMinutes(ursprung);
+        t.setCompletedAt(fertigAm);
+        return taskRepository.save(t);
     }
 
     private Task aufgabe(String titel, TaskStatus status) {

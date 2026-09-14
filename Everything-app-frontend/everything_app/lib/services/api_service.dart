@@ -33,20 +33,18 @@ class ApiService {
       return Uri.parse(url);
     }
     
-    // Prepend base URL if it's just a path
-    // Remove the '/api' from start of path if the base URL already ends with '/api'
+    // Relativer Pfad: Basis davor. Die Endpunkte kommen aus ApiConfig und sind bereits absolut,
+    // dieser Zweig ist also der Notnagel für einen von Hand geschriebenen Pfad.
+    //
+    // Ein führendes '/api' wurde hier früher noch abgeschnitten, weil die Basis-URL selbst auf
+    // '/api' endet und ein Service seine Pfade von Hand zusammensetzte. Dieser eine Aufrufer geht
+    // inzwischen über ApiConfig wie alle anderen; die Sonderbehandlung stand nur für ihn hier.
     String path = url;
-    final base = ApiConfig.baseUrl; // z.B. https://app.deine-domain.de/api
-    
-    if (path.startsWith('/api')) {
-      path = path.replaceFirst('/api', '');
-    }
-    
     if (!path.startsWith('/')) {
       path = '/$path';
     }
-    
-    return Uri.parse('$base$path');
+
+    return Uri.parse('${ApiConfig.baseUrl}$path');
   }
 
   /// Get Headers

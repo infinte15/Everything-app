@@ -3,6 +3,7 @@ package com.Finn.everything_app.repository;
 import com.Finn.everything_app.model.Task;
 import com.Finn.everything_app.model.TaskStatus;
 import com.Finn.everything_app.model.SpaceType;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
@@ -20,6 +21,24 @@ public interface TaskRepository extends JpaRepository<Task, Long> {
 
     // Offene Tasks mit Deadline
     List<Task> findByUserIdAndStatusAndDeadlineBefore(Long userId, TaskStatus status, LocalDateTime deadline);
+
+    /**
+     * Quelle der Schätzkorrektur: die jüngsten abgeschlossenen Aufgaben mit Ursprungsschätzung.
+     *
+     * <p>Sortiert und begrenzt in der DB, nicht in Java. Gebraucht werden nur die letzten
+     * {@code EstimateCalibrationService.FENSTER} Zeilen; geladen wurde vorher die GESAMTE
+     * Abschlusshistorie des Nutzers — bei jedem Scheduler-Lauf, also bei fast jeder Änderung an
+     * Aufgabe, Gewohnheit oder Kalender. Das wächst mit dem Alter des Kontos und nie mit dem, was
+     * davon verwendet wird.
+     *
+     * <p>{@code originalEstimateMinutes > 0} schließt auch NULL aus (SQL-Dreiwertlogik) und filtert
+     * damit die Bestandszeilen ohne Bezugspunkt weg — die hätten sonst das Fenster gefüllt, ohne
+     * eine Stichprobe beizusteuern. {@code NULLS LAST}, weil DESC in Postgres NULL sonst nach VORNE
+     * sortiert und ausgerechnet die Zeilen ohne Abschlusszeitpunkt die jüngsten verdrängt hätten.
+     */
+    @Query("SELECT t FROM Task t WHERE t.user.id = :userId AND t.status = 'COMPLETED' "
+            + "AND t.originalEstimateMinutes > 0 ORDER BY t.completedAt DESC NULLS LAST")
+    List<Task> findRecentCompletedWithEstimate(@Param("userId") Long userId, Pageable pageable);
 
     // Tasks nach Space
     List<Task> findByUserIdAndSpaceType(Long userId, SpaceType spaceType);

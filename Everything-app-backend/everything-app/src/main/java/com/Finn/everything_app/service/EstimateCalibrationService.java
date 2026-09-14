@@ -1,14 +1,13 @@
 package com.Finn.everything_app.service;
 
 import com.Finn.everything_app.model.Task;
-import com.Finn.everything_app.model.TaskStatus;
 import com.Finn.everything_app.repository.TaskRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 
 import java.util.ArrayList;
-import java.util.Comparator;
 import java.util.List;
 
 /**
@@ -72,12 +71,10 @@ public class EstimateCalibrationService {
     public double faktorFuer(Long userId) {
         List<Double> quotienten = new ArrayList<>();
 
-        List<Task> fertig = taskRepository.findByUserIdAndStatus(userId, TaskStatus.COMPLETED);
-        fertig.sort(Comparator.comparing(Task::getCompletedAt,
-                Comparator.nullsFirst(Comparator.naturalOrder())).reversed());
-
-        for (Task t : fertig) {
-            if (quotienten.size() >= FENSTER) break;
+        // Sortierung und Fenster liegen in der Abfrage; Bestandszeilen ohne Ursprungsschätzung
+        // filtert sie ebenfalls schon weg (siehe TaskRepository#findRecentCompletedWithEstimate).
+        for (Task t : taskRepository.findRecentCompletedWithEstimate(
+                userId, PageRequest.of(0, FENSTER))) {
             Integer ursprung = t.getOriginalEstimateMinutes();
             if (ursprung == null || ursprung <= 0) continue;   // Bestandszeile ohne Bezugspunkt
 

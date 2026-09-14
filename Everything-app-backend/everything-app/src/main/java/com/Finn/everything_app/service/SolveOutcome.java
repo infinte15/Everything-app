@@ -3,6 +3,7 @@ package com.Finn.everything_app.service;
 import com.google.ortools.sat.CpSolverStatus;
 import lombok.Data;
 
+import java.util.ArrayList;
 import java.util.List;
 
 /**
@@ -114,9 +115,15 @@ public class SolveOutcome {
         return status == CpSolverStatus.OPTIMAL || status == CpSolverStatus.FEASIBLE;
     }
 
-    /** Kein verwertbares Ergebnis — der bestehende Schedule bleibt unangetastet. */
+    /**
+     * Kein verwertbares Ergebnis — der bestehende Schedule bleibt unangetastet.
+     *
+     * <p>Die Listen sind hier wie überall sonst ERGÄNZBAR. Ein Outcome aus einer Fabrik sieht sonst
+     * aus wie eines aus {@code extract(...)}, verträgt aber kein {@code getAtRisk().addAll(...)} —
+     * und wer anhängen will, müsste erst wissen, woher sein Outcome stammt.
+     */
     public static SolveOutcome unusable(CpSolverStatus status) {
-        return new SolveOutcome(status, List.of(), List.of());
+        return new SolveOutcome(status, new ArrayList<>(), new ArrayList<>());
     }
 
     /**
@@ -127,12 +134,12 @@ public class SolveOutcome {
      * was der Nutzer überhaupt bekommt, und darf deshalb nicht leer sein.
      */
     public static SolveOutcome unusable(CpSolverStatus status, List<AtRiskItem> atRisk) {
-        return new SolveOutcome(status, List.of(), atRisk);
+        return new SolveOutcome(status, new ArrayList<>(), new ArrayList<>(atRisk));
     }
 
     /** Es gab schlicht nichts zu planen; das ist ein Erfolg, kein Fehler. */
     public static SolveOutcome empty() {
-        SolveOutcome leer = new SolveOutcome(CpSolverStatus.OPTIMAL, List.of(), List.of());
+        SolveOutcome leer = new SolveOutcome(CpSolverStatus.OPTIMAL, new ArrayList<>(), new ArrayList<>());
         leer.setPhase1Status(CpSolverStatus.OPTIMAL);
         return leer;
     }
