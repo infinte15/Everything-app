@@ -16,3 +16,7 @@ Everything-app-frontend/everything_app/android/key.properties
 # Landet per rsync auf dem Server, gehoert nicht ins Repo.
 deploy/web/*
 !deploy/web/.gitkeep
+
+### Arbeitsdateien ###
+tmp_stitch/
+analyze_out.txt

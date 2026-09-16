@@ -1,6 +1,21 @@
 # Ein einziger Eintrittspunkt: cloudflared zeigt hierher, Caddy entscheidet,
 # was API ist und was Web-App. Kein TLS hier - das macht Cloudflare an der Kante,
 # und die Strecke Tunnel → Caddy verlaeuft im Docker-Netz.
+{
+	servers {
+		# Ohne das ersetzt Caddy den eingehenden X-Forwarded-For durch die Adresse
+		# des direkten Absenders - und das ist der cloudflared-Container. Spring
+		# saehe dann fuer JEDE Anfrage dieselbe Docker-IP: das Limit im
+		# LoginRateLimitFilter gaelte fuer alle Clients gemeinsam, und wer durch
+		# Access kommt, koennte einen mit 10 falschen Logins pro Minute aussperren.
+		#
+		# Nur privaten Adressen glauben - von aussen erreicht niemand Caddy direkt.
+		# Tomcat wertet die Kette mit server.forward-headers-strategy=NATIVE von
+		# rechts aus und ueberspringt dabei Caddy und cloudflared.
+		trusted_proxies static private_ranges
+	}
+}
+
 :80 {
 	encode gzip
 

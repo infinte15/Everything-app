@@ -64,6 +64,7 @@ public class NeroTokenMinter implements ApplicationRunner {
         String token = jwtUtil.generateToken(
                 user.getUsername(),
                 user.getId(),
+                user.getTokenVersion(),
                 JwtUtil.CLIENT_NERO,
                 Duration.ofDays(tokenDays).toMillis());
 

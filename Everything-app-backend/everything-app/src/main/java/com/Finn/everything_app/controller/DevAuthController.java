@@ -39,7 +39,7 @@ public class DevAuthController {
         }
 
         userService.updateLastLogin(user.getId());
-        String token = jwtUtil.generateToken(user.getUsername(), user.getId());
+        String token = jwtUtil.generateToken(user.getUsername(), user.getId(), user.getTokenVersion());
 
         return ResponseEntity.ok(
                 new LoginResponse(token, user.getId(), user.getUsername(), user.getEmail()));

@@ -50,9 +50,10 @@ class NeroTokenScopeTest {
             return userRepository.save(fresh);
         });
 
-        appToken = jwtUtil.generateToken(user.getUsername(), user.getId());
+        appToken = jwtUtil.generateToken(user.getUsername(), user.getId(), user.getTokenVersion());
         neroToken = jwtUtil.generateToken(
-                user.getUsername(), user.getId(), JwtUtil.CLIENT_NERO, Duration.ofDays(365).toMillis());
+                user.getUsername(), user.getId(), user.getTokenVersion(),
+                JwtUtil.CLIENT_NERO, Duration.ofDays(365).toMillis());
     }
 
     /** Bestandstoken tragen keinen client-Claim - sie muessen weiter als App gelten. */

@@ -43,6 +43,26 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         return false;
     }
 
+    /**
+     * Der Ausschalter zur langen Token-Laufzeit: {@code POST /api/auth/logout-all} zaehlt
+     * {@code tokenVersion} am Nutzer hoch. Jedes vorher ausgestellte Token traegt dann einen
+     * kleineren Stand im {@code tv}-Claim und wird ab hier nicht mehr authentifiziert — ohne
+     * Sperrliste und ohne Wechsel von {@code jwt.secret}, der alle Geraete zugleich traefe.
+     *
+     * <p>Ein Token ohne {@code tv} (aus der Zeit vor dieser Aenderung) zaehlt als Stand 0 und
+     * bleibt gueltig, bis einmal widerrufen wurde.
+     */
+    private boolean tokenVersionIsCurrent(String jwt, UserDetails userDetails) {
+        if (!(userDetails instanceof AppUserDetails app)) {
+            return true;   // fremde UserDetails-Implementierung: nichts zu vergleichen
+        }
+        if (jwtUtil.extractTokenVersion(jwt) == app.getTokenVersion()) {
+            return true;
+        }
+        logger.warn("Token mit widerrufener tokenVersion abgelehnt: " + userDetails.getUsername());
+        return false;
+    }
+
     @Override
     protected void doFilterInternal(
             HttpServletRequest request,
@@ -72,8 +92,9 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
                 UserDetails userDetails = userDetailsService.loadUserByUsername(username);
 
-                // Validiere Token
-                if (jwtUtil.validateToken(jwt, userDetails.getUsername())) {
+                // Validiere Token — Signatur, Name, Ablauf und Widerrufs-Stand
+                if (jwtUtil.validateToken(jwt, userDetails.getUsername())
+                        && tokenVersionIsCurrent(jwt, userDetails)) {
 
                     // Die Rolle kommt aus dem Token, nicht aus der Datenbank: der User selbst
                     // traegt keine Rollen (CustomUserDetailsService liefert bewusst eine leere

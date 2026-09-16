@@ -26,6 +26,22 @@ public class User {
     @Column(nullable = false)
     private String passwordHash;
 
+    /**
+     * Zaehler fuer den Token-Widerruf. Jedes ausgestellte JWT traegt den Stand, der beim
+     * Ausstellen galt (Claim {@code tv}). {@code POST /api/auth/logout-all} zaehlt ihn hoch
+     * und entwertet damit in einem Schritt alle vorher ausgegebenen Token - ohne Sperrliste
+     * und ohne Wechsel von {@code jwt.secret}, der jeden Nutzer zugleich abmelden wuerde.
+     *
+     * <p>Das ist die Bedingung, unter der eine Laufzeit von 30 Tagen vertretbar ist: ein
+     * verlorenes Geraet laesst sich einzeln aussperren.
+     *
+     * <p>{@code columnDefinition} mit DEFAULT ist noetig, weil {@code ddl-auto=update} die
+     * Spalte sonst als NOT NULL ohne Vorgabewert an eine bereits gefuellte Tabelle haengt -
+     * und Postgres das mit "column contains null values" ablehnt.
+     */
+    @Column(name = "token_version", nullable = false, columnDefinition = "integer default 0")
+    private int tokenVersion = 0;
+
     @Column(name = "created_at")
     private LocalDateTime createdAt;
 

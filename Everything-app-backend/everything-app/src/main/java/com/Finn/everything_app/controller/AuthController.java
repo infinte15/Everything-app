@@ -3,6 +3,7 @@ package com.Finn.everything_app.controller;
 import com.Finn.everything_app.dto.*;
 import com.Finn.everything_app.model.User;
 import com.Finn.everything_app.service.UserService;
+import com.Finn.everything_app.security.CurrentUser;
 import com.Finn.everything_app.security.JwtUtil;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
@@ -51,7 +52,7 @@ public class AuthController {
                 userDTO.getPassword()
         );
 
-        String token = jwtUtil.generateToken(user.getUsername(), user.getId());
+        String token = jwtUtil.generateToken(user.getUsername(), user.getId(), user.getTokenVersion());
 
         return ResponseEntity.status(HttpStatus.CREATED).body(
                 new LoginResponse(token, user.getId(), user.getUsername(), user.getEmail())
@@ -77,10 +78,27 @@ public class AuthController {
 
         userService.updateLastLogin(user.getId());
 
-        String token = jwtUtil.generateToken(user.getUsername(), user.getId());
+        String token = jwtUtil.generateToken(user.getUsername(), user.getId(), user.getTokenVersion());
 
         return ResponseEntity.ok(
                 new LoginResponse(token, user.getId(), user.getUsername(), user.getEmail())
         );
+    }
+
+    /**
+     * Meldet alle Geraete ab: zaehlt {@code tokenVersion} am Nutzer hoch, womit jedes vorher
+     * ausgegebene Token ungueltig wird - das eigene eingeschlossen, und das von Nero ebenso.
+     *
+     * <p>Das ist der Gegenwert zur Laufzeit von 30 Tagen ({@code jwt.expiration}): bei einem
+     * verlorenen Geraet genuegt ein Aufruf. Ohne diesen Weg bliebe nur, {@code jwt.secret} zu
+     * tauschen und das Backend neu zu starten.
+     *
+     * <p>Erfordert ein App-Token: {@code SecurityConfig} gibt {@code /api/auth/**} nur fuer
+     * {@code ROLE_APP} frei, Nero kann sich also nicht selbst aussperren.
+     */
+    @PostMapping("/logout-all")
+    public ResponseEntity<Void> logoutAll(@CurrentUser Long userId) {
+        userService.revokeAllTokens(userId);
+        return ResponseEntity.noContent().build();
     }
 }

@@ -592,6 +592,8 @@ Expanded(
     children: [
       if (view == _CalView.day)
         Text(dateSubtitle, 
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
           style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500, letterSpacing: 2.0, color: theme.colorScheme.onSurfaceVariant, fontFamily: 'Manrope'))
       else ...[
         // Jahreszahl über dem Monat (nur in Woche/Monat Ansicht)
@@ -605,6 +607,13 @@ Expanded(
       const SizedBox(height: 4),
       if (view == _CalView.day)
         Text(dateTitle, 
+          // Einzeilig wie das Monatslabel im anderen Zweig: ohne maxLines umbricht
+          // "September 16" bei 320 px Breite und grosser System-Schrift ueber mehrere
+          // 36-px-Zeilen. Die Kopfzeile ist in der aeusseren Column (Zeile 181) NICHT
+          // flexibel - sie schiebt dann das Expanded darunter aus dem Bild, und der
+          // Kalender lief um gut 100 px ueber.
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
           style: const TextStyle(fontSize: 28, fontWeight: FontWeight.w800, letterSpacing: -2.0, color: Colors.white, fontFamily: 'Manrope', height: 1.0))
       else
         Text(dateSubtitle, 

@@ -80,8 +80,8 @@ class StudyControllerTest {
     void setUp() {
         owner    = ensureUser("study_owner");
         intruder = ensureUser("study_intruder");
-        ownerToken    = jwtUtil.generateToken(owner.getUsername(), owner.getId());
-        intruderToken = jwtUtil.generateToken(intruder.getUsername(), intruder.getId());
+        ownerToken    = jwtUtil.generateToken(owner.getUsername(), owner.getId(), owner.getTokenVersion());
+        intruderToken = jwtUtil.generateToken(intruder.getUsername(), intruder.getId(), intruder.getTokenVersion());
 
         course = new Course();
         course.setName("Analysis I");

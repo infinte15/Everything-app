@@ -59,7 +59,7 @@ class CalendarControllerTest {
             u.setCreatedAt(LocalDateTime.now());
             return userRepository.save(u);
         });
-        token = jwtUtil.generateToken(testUser.getUsername(), testUser.getId());
+        token = jwtUtil.generateToken(testUser.getUsername(), testUser.getId(), testUser.getTokenVersion());
     }
 
     @AfterEach

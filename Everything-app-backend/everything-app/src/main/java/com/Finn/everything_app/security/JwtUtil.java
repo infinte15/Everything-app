@@ -31,9 +31,12 @@ public class JwtUtil {
     /** Nero, die Sprachschnittstelle. Laeuft unter derselben userId, darf aber weniger. */
     public static final String CLIENT_NERO = "nero";
 
+    /** Wird ein Token ohne {@code tv}-Claim vorgelegt, gilt Stand 0 - siehe {@link #extractTokenVersion}. */
+    public static final int INITIAL_TOKEN_VERSION = 0;
+
     //Generiere JWT Token
-    public String generateToken(String username, Long userId) {
-        return generateToken(username, userId, CLIENT_APP, expiration);
+    public String generateToken(String username, Long userId, int tokenVersion) {
+        return generateToken(username, userId, tokenVersion, CLIENT_APP, expiration);
     }
 
     /**
@@ -45,13 +48,17 @@ public class JwtUtil {
      * {@link JwtAuthenticationFilter} die Rolle ab, mit der {@link SecurityConfig} die
      * gefaehrlichen Pfade sperrt.
      *
-     * <p>Widerrufen laesst sich ein solches Token nur durch Rotation von {@code jwt.secret} -
-     * eine Sperrliste gibt es nicht. Das ist der Grund, warum Nero nicht loeschen darf.
+     * <p>Widerrufen laesst sich auch dieses Token ueber {@code POST /api/auth/logout-all}: es
+     * zaehlt {@code tokenVersion} am Nutzer hoch und entwertet damit App- und Nero-Token
+     * zugleich. Eine Sperrliste einzelner Token gibt es weiterhin nicht - das bleibt der
+     * Grund, warum Nero nicht loeschen darf.
      */
-    public String generateToken(String username, Long userId, String client, long ttlMillis) {
+    public String generateToken(String username, Long userId, int tokenVersion,
+                                String client, long ttlMillis) {
         Map<String, Object> claims = new HashMap<>();
         claims.put("userId", userId);
         claims.put("client", client);
+        claims.put("tv", tokenVersion);
         return createToken(claims, username, ttlMillis);
     }
 
@@ -86,6 +93,16 @@ public class JwtUtil {
     public String extractClient(String token) {
         String client = extractAllClaims(token).get("client", String.class);
         return (client == null || client.isBlank()) ? CLIENT_APP : client;
+    }
+
+    /**
+     * Extrahiere den Widerrufs-Stand. Fehlt der Claim, ist es ein Token aus der Zeit davor -
+     * es zaehlt als Stand 0 und bleibt damit gueltig, solange am Nutzer nie widerrufen wurde.
+     * Nach dem ersten {@code logout-all} faellt es wie jedes andere alte Token heraus.
+     */
+    public int extractTokenVersion(String token) {
+        Integer tv = extractAllClaims(token).get("tv", Integer.class);
+        return tv == null ? INITIAL_TOKEN_VERSION : tv;
     }
 
     //Extrahiere Expiration Date

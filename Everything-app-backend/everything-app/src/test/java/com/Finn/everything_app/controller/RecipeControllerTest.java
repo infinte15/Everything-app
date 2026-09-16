@@ -73,8 +73,8 @@ class RecipeControllerTest {
     void setUp() {
         owner = ensureUser("recipe_controller_owner");
         stranger = ensureUser("recipe_controller_stranger");
-        ownerToken = jwtUtil.generateToken(owner.getUsername(), owner.getId());
-        strangerToken = jwtUtil.generateToken(stranger.getUsername(), stranger.getId());
+        ownerToken = jwtUtil.generateToken(owner.getUsername(), owner.getId(), owner.getTokenVersion());
+        strangerToken = jwtUtil.generateToken(stranger.getUsername(), stranger.getId(), stranger.getTokenVersion());
     }
 
     @AfterEach

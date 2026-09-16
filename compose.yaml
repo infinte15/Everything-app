@@ -14,6 +14,8 @@ services:
   db:
     image: postgres:16
     restart: unless-stopped
+    # Auf dem Optiplex laufen daneben Nextcloud, Vaultwarden und spaeter Nero.
+    mem_limit: 1g
     environment:
       POSTGRES_DB: everything_app
       POSTGRES_USER: ${DB_USER}
@@ -32,6 +34,11 @@ services:
   backend:
     build: ./Everything-app-backend/everything-app
     restart: unless-stopped
+    # Pflicht, nicht Kosmetik: -XX:MaxRAMPercentage=70 im Dockerfile bezieht sich
+    # ohne Limit auf den ganzen Host - 70 % von 16 GB waeren ~11 GB Heap-Obergrenze.
+    # 2 GB x 70 % ~ 1,4 GB Heap, der Rest bleibt fuer Metaspace, Threads und die
+    # nativen OR-Tools-Bibliotheken. Exit 137 beim Backend = zu knapp, dann 3g.
+    mem_limit: 2g
     depends_on:
       db:
         condition: service_healthy
@@ -40,6 +47,10 @@ services:
       DB_USER: ${DB_USER}
       DB_PASSWORD: ${DB_PASSWORD}
       JWT_SECRET: ${JWT_SECRET}
+      # Vorgabe 30 Tage. Widerrufen laesst sich ein Token vorzeitig ueber
+      # POST /api/auth/logout-all (zaehlt tokenVersion hoch), im Notfall ueber
+      # einen Wechsel von JWT_SECRET.
+      JWT_EXPIRATION: ${JWT_EXPIRATION:-2592000000}
       APP_DOMAIN: ${APP_DOMAIN}
       # Beim allerersten Start einmalig auf true, Account anlegen, zurueck auf false.
       APP_REGISTRATION_ENABLED: ${APP_REGISTRATION_ENABLED:-false}
@@ -61,9 +72,15 @@ services:
       start_period: 90s
 
   caddy:
-    image: caddy:2
+    # Fest gepinnt aus demselben Grund wie --no-autoupdate unten: was laeuft, soll
+    # nicht beim naechsten "docker compose pull" unbemerkt vom Image abweichen.
+    image: caddy:2.11.4
     restart: unless-stopped
-    depends_on: [backend]
+    depends_on:
+      # Nicht nur "gestartet": sonst liefert Caddy waehrend des Spring-Starts
+      # noch ein paar Sekunden lang 502.
+      backend:
+        condition: service_healthy
     volumes:
       - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
       - ./deploy/web:/srv/web:ro
@@ -76,7 +93,7 @@ services:
       - "127.0.0.1:8081:80"
 
   cloudflared:
-    image: cloudflare/cloudflared:latest
+    image: cloudflare/cloudflared:2026.9.1
     restart: unless-stopped
     # Kein --autoupdate: Updates kommen ueber ein neues Image, nicht im laufenden
     # Container. Sonst weicht das, was laeuft, unbemerkt vom Image ab.

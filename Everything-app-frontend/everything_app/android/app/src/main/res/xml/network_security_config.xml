@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Ersetzt android:usesCleartextTraffic="true" im Manifest.
+
+    Die alte Einstellung galt fuer die ganze App und damit auch fuer jedes verteilte
+    Release-APK - unverschluesseltes HTTP waere zu jeder Adresse erlaubt gewesen. Gebraucht
+    wird es aber nur an einer Stelle: beim LAN-Test gegen den Homeserver (DEPLOYMENT.md
+    Schritt 5), bevor Domain und Tunnel stehen. Im Betrieb laeuft alles ueber HTTPS.
+
+    TODO vor dem LAN-Test: 192.168.x.x durch die feste IP des Homeservers ersetzen.
+    Die IP im Router reservieren - sonst ist die Ausnahme nach dem naechsten
+    DHCP-Wechsel wertlos, und der Test scheitert mit "Cleartext HTTP traffic not permitted".
+-->
+<network-security-config>
+    <!-- Standard: nur HTTPS -->
+    <base-config cleartextTrafficPermitted="false"/>
+
+    <!-- Ausnahme ausschliesslich fuer den Homeserver im eigenen Netz -->
+    <domain-config cleartextTrafficPermitted="true">
+        <domain includeSubdomains="false">192.168.x.x</domain>
+    </domain-config>
+</network-security-config>

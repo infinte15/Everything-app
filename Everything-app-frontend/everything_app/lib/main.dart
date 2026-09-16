@@ -16,6 +16,7 @@ import 'providers/finance_provider.dart';
 import 'providers/habit_provider.dart';
 import 'providers/project_provider.dart';
 import 'providers/preferences_provider.dart';
+import 'widgets/biometric_gate.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -62,6 +63,12 @@ class MyApp extends StatelessWidget {
         darkTheme: AppTheme.darkTheme,
         themeMode: ThemeMode.system,
         
+        // Die Sperre sitzt im builder und damit INNERHALB des MaterialApp: nur dort hat
+        // der Sperrbildschirm Theme und Directionality. Ueber der MaterialApp haette er
+        // beides nicht.
+        builder: (context, child) =>
+            BiometricGate(child: child ?? const SizedBox.shrink()),
+
         routerConfig: router,
       ),
     );

@@ -84,16 +84,67 @@ crontab -e
 # 0 3 * * * /srv/everything-app/scripts/ea-backup.sh >> /var/log/ea-backup.log 2>&1
 ```
 
+Zwei Voraussetzungen, ohne die der Cron-Lauf **stumm** scheitert:
+
+```bash
+sudo usermod -aG docker "$USER"        # danach ab- und wieder anmelden
+sudo touch /var/log/ea-backup.log
+sudo chown "$USER": /var/log/ea-backup.log
+```
+
+Fehlt die Logdatei, scheitert die Shell an der Umleitung, *bevor* sie das Skript
+startet: keine Meldung, kein Backup. Fehlt die Gruppe `docker`, hat der Cron-Lauf
+keinen Zugriff auf den Docker-Socket — interaktiv mit `sudo` faellt das nicht auf.
+
+Genau so pruefen, wie Cron es ausfuehrt:
+
+```bash
+env -i HOME="$HOME" PATH=/usr/bin:/bin \
+  /bin/sh -c '/srv/everything-app/scripts/ea-backup.sh >> /var/log/ea-backup.log 2>&1'
+echo $?                              # 0
+tail -n 3 /var/log/ea-backup.log     # "Backup: ... (xx K)"
+```
+
+Gesichert wird auf die externe USB-Platte (`BACKUP_MOUNT`, Vorgabe `/mnt/backup`),
+nicht auf die System-SSD — dort liegt schon das `pgdata`-Volume, und ein
+Plattenausfall naehme sonst Datenbank und Backup zugleich mit. Das Skript bricht
+ab, wenn dort nichts eingehaengt ist; `deploy.sh` damit auch. Das ist gewollt,
+solange `ddl-auto=update` laeuft. Mountpoint in `/etc/fstab` mit `nofail`
+eintragen, sonst haengt der Boot ohne Platte.
+
+```bash
+sudo umount /mnt/backup
+./scripts/ea-backup.sh; echo $?    # 1, mit Fehlermeldung
+sudo mount -a
+./scripts/ea-backup.sh; echo $?    # 0
+```
+
 **Und einen Restore testen.** Ein Backup, das nie zurückgespielt wurde, ist eine
 Vermutung:
 
 ```bash
+cd /srv/everything-app
+set -a; source .env; set +a          # sonst ist $DB_USER in deiner Shell leer
 ./scripts/ea-backup.sh
+
+LATEST=$(ls -t /mnt/backup/everything-app/ea-*.sql.gz | head -1)
+echo "Teste Restore von $LATEST"
+
 docker compose exec db createdb -U "$DB_USER" restore_test
-gunzip -c /srv/backup/everything-app/ea-*.sql.gz | \
-  docker compose exec -T db psql -U "$DB_USER" -d restore_test
+gunzip -c "$LATEST" | \
+  docker compose exec -T db psql -U "$DB_USER" -d restore_test -v ON_ERROR_STOP=1
+
+# Stichprobe - ohne sie sieht auch ein halber Restore gruen aus
+docker compose exec db psql -U "$DB_USER" -d restore_test -c '\dt' | head
+docker compose exec db psql -U "$DB_USER" -d restore_test -c 'select count(*) from users;'
+
 docker compose exec db dropdb -U "$DB_USER" restore_test
 ```
+
+Drei Fallstricke, die der Block absichtlich vermeidet: ohne `source .env` ist
+`$DB_USER` leer, `ea-*.sql.gz` ohne `ls -t | head -1` spielt *alle* Backups auf
+einmal ein, und ohne `ON_ERROR_STOP=1` laeuft `psql` bei Fehlern weiter — der
+Test sieht dann gruen aus, obwohl Daten fehlen.
 
 ---
 
@@ -111,6 +162,18 @@ flutter build apk --release --dart-define=API_BASE_URL=http://192.168.x.x:8081/a
 ```
 
 Danach die Portbindung wieder auf `127.0.0.1` zurücksetzen.
+
+Unverschluesseltes HTTP ist dafuer nur noch fuer **eine** Adresse erlaubt:
+`android/app/src/main/res/xml/network_security_config.xml` hat
+`android:usesCleartextTraffic="true"` ersetzt, das vorher fuer die ganze App und
+damit fuer jedes verteilte Release-APK galt.
+
+> **Vor dem Test:** in dieser Datei `192.168.x.x` durch die feste IP des
+> Homeservers ersetzen und die IP im Router reservieren. Sonst scheitert der
+> Login mit `Cleartext HTTP traffic ... not permitted`.
+
+Gegenprobe mit derselben APK gegen eine andere `http`-Adresse — die muss genau
+daran scheitern.
 
 ---
 
@@ -142,15 +205,27 @@ Reines Dashboard-Thema, siehe Kapitel 5 des Plans. Kurzfassung:
 
 ## 7. Tunnel scharfschalten — jetzt erst
 
-```yaml
-ingress:
-  - hostname: app.deine-domain.de
-    service: http://caddy:80
-  - service: http_status:404
-```
+Der Tunnel laeuft als `cloudflared` im Compose-Stack und wird ueber `TUNNEL_TOKEN`
+**remote** verwaltet. Ein Token-Tunnel liest **keine** lokale `config.yml` — die
+Route gehoert ins Dashboard:
+
+Zero Trust → Networks → Tunnels → (App-Tunnel) → Public Hostname:
+
+| Feld | Wert |
+|------|------|
+| Subdomain | `app` |
+| Domain | `deine-domain.de` |
+| Service Type | `HTTP` |
+| URL | `caddy:80` |
+
+Dafuer einen **eigenen** Tunnel anlegen und nicht den Token des bestehenden
+Tunnels fuer Vaultwarden und Nextcloud wiederverwenden: sonst haengen zwei
+Connectoren mit unterschiedlichen Docker-Netzen am selben Tunnel, und Anfragen
+landen zufaellig bei dem, der `caddy` gar nicht aufloesen kann.
 
 ```bash
 docker compose up -d cloudflared
+docker compose logs cloudflared | grep -i "registered tunnel connection"
 ```
 
 Der Tunnel zeigt auf **Caddy**, nicht direkt auf Spring. Caddy entscheidet, was
@@ -188,18 +263,43 @@ Anhang in Vaultwarden:
 - `/srv/everything-app/.env`
 - `~/.everything-app/upload-keystore.jks` und `android/key.properties`
 - `~/.everything-app/enablebanking.pem`
-- die Cloudflare-Tunnel-Credentials
+- die Cloudflare-Tunnel-Credentials — bei einem Token-Tunnel ist das der
+  `CF_TUNNEL_TOKEN` aus der `.env`; eine separate JSON-Datei gibt es nicht
 
 ---
+
+### Notfall: Geraet verloren
+
+`jwt.expiration` steht auf 30 Tage. Tragbar ist das, weil sich einzelne Geraete
+aussperren lassen, ohne alle anderen mitzunehmen:
+
+```bash
+# Von einem Geraet, das noch angemeldet ist (oder per curl mit gueltigem Token):
+curl -X POST https://app.deine-domain.de/api/auth/logout-all \
+  -H "Authorization: Bearer $TOKEN"
+# 204 - danach ist JEDES vorher ausgegebene Token wertlos, auch das von Nero.
+```
+
+Das zaehlt `tokenVersion` am Nutzer hoch; der `JwtAuthenticationFilter` vergleicht
+den Stand bei jeder Anfrage mit dem `tv`-Claim im Token. Danach auf den eigenen
+Geraeten einmal neu anmelden.
+
+Der haertere Weg bleibt daneben bestehen, falls das Passwort selbst kompromittiert
+ist — er meldet ebenfalls alles ab und braucht einen Neustart:
+
+```bash
+sed -i "s|^JWT_SECRET=.*|JWT_SECRET=$(openssl rand -base64 48)|" .env   # | als Trenner: Base64 enthaelt / und +
+docker compose up -d backend
+```
 
 ## 10. Offene Punkte
 
 | Punkt | Stand |
 |-------|-------|
 | Objekt-Autorisierung (Kap. 10.2) | **23 Endpunkte prüfen den Besitzer nicht** — siehe unten |
-| `tokenVersion` für Token-Widerruf | offen, im Plan als „Später" eingeordnet |
+| `tokenVersion` für Token-Widerruf | **umgesetzt** — Spalte an `User`, `tv`-Claim im JWT, Pruefung im `JwtAuthenticationFilter`, `POST /api/auth/logout-all`; siehe Notfall-Ablauf oben |
 | Flyway statt `ddl-auto=update` | offen; bis dahin schützt das Backup vor jedem Deploy |
-| Biometrie (`local_auth`) | offen |
+| Biometrie (`local_auth`) | **umgesetzt** — App-weite Sperre (`lib/widgets/biometric_gate.dart`), Geraete-PIN als Ausweichweg, Linux und Web bewusst ohne Gate |
 | Settings-Screen für die API-URL zur Laufzeit | offen; bislang ein Build pro Umgebung |
 | `state`-Parameter im Bank-Callback (Kap. 10.1) | **geprüft, in Ordnung** |
 

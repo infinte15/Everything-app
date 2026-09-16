@@ -72,6 +72,14 @@ android {
     }
 }
 
+dependencies {
+    // local_auth zeigt seinen Dialog ueber androidx.biometric; dessen Theme-Attribute
+    // stammen aus AppCompat, und LaunchTheme/NormalTheme erben seit der Umstellung davon
+    // (res/values/styles.xml). Ohne diese Abhaengigkeit loesen die Theme-Verweise beim
+    // Zusammenfuehren der Ressourcen nicht auf und der Build bricht ab.
+    implementation("androidx.appcompat:appcompat:1.7.0")
+}
+
 flutter {
     source = "../.."
 }

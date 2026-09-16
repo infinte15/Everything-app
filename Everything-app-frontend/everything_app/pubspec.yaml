@@ -71,6 +71,13 @@ dependencies:
   # Nutzer könnte nicht prüfen, wem er seine Zugangsdaten gibt.
   url_launcher: ^6.2.0
 
+  # Biometrie-Sperre beim Start und nach laengerer Pause im Hintergrund.
+  # Der Grund ist nicht das Passwort, sondern das Token: nach dem Login liegt ein
+  # 30 Tage gueltiges JWT im sicheren Speicher, die App startet also ohne Anmeldung
+  # durch. Ohne Sperre waere ein entsperrt liegengelassenes Handy ein offener Zugang
+  # zu Finanzen, Kalender und Notizen.
+  local_auth: ^3.0.2
+
 
   # The following adds the Cupertino Icons font to your application.
   # Use with the CupertinoIcons class for iOS style icons.

@@ -83,6 +83,25 @@ public class UserService {
         userRepository.save(user);
     }
 
+    /**
+     * Entwertet alle ausgegebenen Token dieses Nutzers, indem der Widerrufs-Stand hochgezaehlt
+     * wird. Der {@link com.Finn.everything_app.security.JwtAuthenticationFilter} vergleicht ihn
+     * bei jeder Anfrage mit dem {@code tv}-Claim.
+     *
+     * <p>Das ist der Notausschalter zur Laufzeit von 30 Tagen: bei einem verlorenen Geraet
+     * genuegt ein Aufruf, statt {@code jwt.secret} zu tauschen und das Backend neu zu starten.
+     * Auch das Nero-Token faellt damit heraus - es haengt am selben Nutzer.
+     *
+     * @return der neue Stand
+     */
+    @Transactional
+    public int revokeAllTokens(Long userId){
+        User user = findById(userId);
+        user.setTokenVersion(user.getTokenVersion() + 1);
+        userRepository.save(user);
+        return user.getTokenVersion();
+    }
+
     public UserPreferences getUserPreferences(Long userId){
         return userPreferencesRepository.findByUserId(userId)
                 .orElseThrow(()-> new RuntimeException("Preferences nicht gefunden"));
