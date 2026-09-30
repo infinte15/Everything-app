@@ -35,7 +35,7 @@ public class DemoBankDataProvider implements BankDataProvider {
     /** Fester Startwert: zwei Laeufe muessen dieselbe Historie ergeben, sonst wackeln die Tests. */
     private static final long SEED = 20260806L;
 
-    private static final int HISTORY_MONTHS = 14;
+    private static final int HISTORY_MONTHS = 19;
     private static final String DEMO_ASPSP = "Demo-Bank (Testdaten)";
     private static final String DEMO_HASH = "demo-0000-1111-2222-3333";
 
