@@ -191,7 +191,9 @@ class FinanceForecastServiceTest {
     void ueberfaelligerVertragFaelltNichtWeg() {
         konto(1000.00);
         LocalDate monatsende = heute.withDayOfMonth(heute.lengthOfMonth());
-        if (heute.isEqual(monatsende)) {
+        // Faellt die zweite Faelligkeit (gestern + 30 Tage) noch in den Monat, zaehlt der Service
+        // zwei Zahlungen - dann gilt die Annahme "genau eine" dieses Tests nicht.
+        if (heute.isEqual(monatsende) || !heute.plusDays(29).isAfter(monatsende)) {
             return;
         }
         // Fällig war gestern, die Bank hat noch nicht gebucht.
